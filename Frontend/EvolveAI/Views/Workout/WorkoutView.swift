@@ -466,3 +466,4 @@ struct ExerciseLibraryRow: View {
     WorkoutView()
         .environmentObject(WorkoutManager())
 }
+

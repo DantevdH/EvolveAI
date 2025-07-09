@@ -5,6 +5,9 @@ import Foundation
 struct UserProfile {
     // Properties for GoalsStep
     var primaryGoal: String = ""
+
+    var primaryGoalDescription: String = ""
+    var coach: Coach = CoachProvider.allCoaches[0]
     
     // Properties for ExperienceStep
     var experienceLevel: String = ""
@@ -18,7 +21,17 @@ struct UserProfile {
     
     // Properties for PersonalInfoStep
     var age: Int = 30
-    var weight: Double = 150.0
+
+    var weight: Double = 70.0
+    var weightUnit: String = "kg"
     var height: Double = 70.0
+    var heightUnit: String = "cm"
     var gender: String = ""
+    
+    var hasLimitations: Bool = false
+    var limitationsDescription: String = ""
+    
+    var trainingSchedule = ""
+    
+    var finalChatNotes = ""
 }
