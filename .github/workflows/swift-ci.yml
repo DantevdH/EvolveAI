@@ -40,7 +40,7 @@ jobs:
     - name: Run Swift Tests
       run: |
         xcodebuild test \
-          -project EvolveAI.xcodeproj \
+          -project frontend/EvolveAI.xcodeproj \
           -scheme EvolveAI \
           -destination 'platform=iOS Simulator,name=iPhone 14' \
           CODE_SIGN_IDENTITY="" \
