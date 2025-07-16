@@ -7,7 +7,15 @@
 
 import Foundation
 
-class NetworkService {
+
+/// A protocol for the network service to allow for mocking.
+/// By using a protocol, we can inject a "fake" version of the network service
+/// during tests, so we don't have to make real network calls.
+protocol NetworkServiceProtocol {
+    func getAllCoaches(completion: @escaping (Result<[Coach], Error>) -> Void)
+}
+
+class NetworkService: NetworkServiceProtocol {
     let baseURL = "http://127.0.0.1:8000/api"
     
     struct AuthResponse: Codable {
