@@ -11,7 +11,7 @@ struct EvolveAIApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView() // pages are shown in ContectView. This is the route or a traffic controller
+            ContentView(userManager: userManager)
                 .environmentObject(userManager)
                 .environmentObject(workoutManager)
                 .environmentObject(nutritionManager)
