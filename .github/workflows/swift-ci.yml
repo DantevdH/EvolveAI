@@ -32,6 +32,9 @@ jobs:
       with:
         xcode-version: 'latest'
 
+    - name: List available simulators
+      run: xcrun simctl list devices
+
     # 3. Run the tests using xcodebuild
     # IMPORTANT: Replace the following placeholders:
     #   - 'YourSchemeName': The name of your project's scheme (e.g., 'MyApp').
