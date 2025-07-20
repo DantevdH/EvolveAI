@@ -11,7 +11,7 @@ struct EvolveAIApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView(userManager: userManager)
+            InitialiseView(userManager: userManager)
                 .environmentObject(userManager)
                 .environmentObject(workoutManager)
                 .environmentObject(nutritionManager)

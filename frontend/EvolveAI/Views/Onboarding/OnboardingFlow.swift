@@ -46,24 +46,24 @@ struct OnboardingFlow: View {
 
                             ExperienceStep(viewModel: viewModel).tag(1)
 
-                            PersonalInfoStep(userProfile: userProfileBinding).tag(2)
+                            PersonalInfoStep(viewModel: viewModel).tag(2)
 
                             GoalsStep(
-                                userProfile: userProfileBinding,
+                                viewModel: viewModel,
                                 availableCoaches: viewModel.availableCoaches,
                                 onCoachSelected: { coach in
                                     viewModel.selectedCoach = coach
                                 }
                             ).tag(3)
 
-                            ScheduleStep(userProfile: userProfileBinding).tag(4)
+                            ScheduleStep(viewModel: viewModel).tag(4)
 
-                            EquipmentStep(userProfile: userProfileBinding).tag(5)
+                            EquipmentStep(viewModel: viewModel).tag(5)
 
-                            LimitationsStep(userProfile: userProfileBinding).tag(6)
+                            LimitationsStep(viewModel: viewModel).tag(6)
 
                             FinalChatStep(
-                                userProfile: userProfileBinding,
+                                viewModel: viewModel,
                                 coach: viewModel.selectedCoach,
                                 onReadyToGenerate: viewModel.completeOnboarding
                             ).tag(7)

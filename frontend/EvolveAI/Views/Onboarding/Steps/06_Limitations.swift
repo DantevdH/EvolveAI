@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct LimitationsStep: View {
-    @Binding var userProfile: UserProfile
+    @ObservedObject var viewModel: OnboardingViewModel
     
     private let characterLimit = 300
     
@@ -30,18 +30,18 @@ struct LimitationsStep: View {
                     .padding(.horizontal, 40)
                 
                 // Custom Toggle for Yes/No
-                LimitationToggle(hasLimitations: $userProfile.hasLimitations)
+                LimitationToggle(hasLimitations: $viewModel.userProfile.hasLimitations)
                     .padding(.top)
 
                 // Conditional TextEditor for describing limitations
-                if userProfile.hasLimitations {
+                if viewModel.userProfile.hasLimitations {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Please describe your limitations")
                             .font(.headline)
                             .foregroundColor(.white)
                         
                         ZStack(alignment: .topLeading) {
-                            TextEditor(text: $userProfile.limitationsDescription)
+                            TextEditor(text: $viewModel.userProfile.limitationsDescription)
                                 .scrollContentBackground(.hidden)
                                 .padding(8)
                                 .frame(minHeight: 150)
@@ -52,14 +52,14 @@ struct LimitationsStep: View {
                                     RoundedRectangle(cornerRadius: 12)
                                         .stroke(Color.white.opacity(0.2), lineWidth: 1)
                                 )
-                                .onChange(of: userProfile.limitationsDescription) {
-                                    let newValue = userProfile.limitationsDescription
+                                .onChange(of: viewModel.userProfile.limitationsDescription) {
+                                    let newValue = viewModel.userProfile.limitationsDescription
                                     if newValue.count > characterLimit {
-                                        userProfile.limitationsDescription = String(newValue.prefix(characterLimit))
+                                        viewModel.userProfile.limitationsDescription = String(newValue.prefix(characterLimit))
                                     }
                                 }
                             
-                            if userProfile.limitationsDescription.isEmpty {
+                            if viewModel.userProfile.limitationsDescription.isEmpty {
                                 Text("e.g., 'Bad lower back', 'Recovering from a knee injury'")
                                     .foregroundColor(.white.opacity(0.4))
                                     .padding(16)
@@ -68,7 +68,7 @@ struct LimitationsStep: View {
                         }
                         
                         // Character count indicator
-                        Text("\(userProfile.limitationsDescription.count) / \(characterLimit)")
+                        Text("\(viewModel.userProfile.limitationsDescription.count) / \(characterLimit)")
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.6))
                             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -79,7 +79,7 @@ struct LimitationsStep: View {
                 
                 Spacer()
             }
-            .animation(.easeInOut, value: userProfile.hasLimitations)
+            .animation(.easeInOut, value: viewModel.userProfile.hasLimitations)
         }
         .background(Color.black.opacity(0.001))
         .onTapGesture {

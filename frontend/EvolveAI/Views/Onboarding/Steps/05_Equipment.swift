@@ -8,14 +8,7 @@
 import SwiftUI
 
 struct EquipmentStep: View {
-    @Binding var userProfile: UserProfile
-    
-    private let equipmentOptions = [
-        ("Full Gym", "figure.strengthtraining.functional"),
-        ("Home Gym", "house.fill"),
-        ("Dumbbells Only", "dumbbell.fill"),
-        ("Bodyweight Only", "figure.run")
-    ]
+    @ObservedObject var viewModel: OnboardingViewModel
     
     var body: some View {
         VStack(spacing: 20) {
@@ -35,13 +28,13 @@ struct EquipmentStep: View {
             Spacer()
             
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 20) {
-                ForEach(equipmentOptions, id: \.0) { equipment in
+                ForEach(viewModel.equipmentOptions, id: \.0) { equipment in
                     EquipmentCard(
                         title: equipment.0,
                         icon: equipment.1,
-                        isSelected: userProfile.equipment == equipment.0
+                        isSelected: viewModel.userProfile.equipment == equipment.0
                     ) {
-                        userProfile.equipment = equipment.0
+                        viewModel.userProfile.equipment = equipment.0
                     }
                 }
             }

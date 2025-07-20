@@ -1,155 +1,221 @@
 import SwiftUI
 
+
+import SwiftUI
+
 struct FinalChatStep: View {
-    // This binding is still needed to save the user's final notes.
-    @Binding var userProfile: UserProfile
+    @ObservedObject var viewModel: OnboardingViewModel
     
-    // FIX 1: The Coach is now passed in directly. It's optional in case of an error.
     let coach: Coach?
-    
-    // This closure will be called when the user is ready to generate the schedule.
     var onReadyToGenerate: () -> Void
     
-    // Enum to manage the different states of the chat
-    private enum ChatPhase {
-        case initial, awaitingChoice, userTyping, finished
-    }
-    
-    // State variables to manage the chat flow
-    @State private var messages: [ChatMessage] = []
-    @State private var currentMessage: String = ""
-    @State private var chatPhase: ChatPhase = .initial
-    @State private var isCoachTyping: Bool = false
-
-    var body: some View {
-        // FIX 2: The guard now checks the 'coach' property passed into the view.
-        guard let coach = self.coach else {
-            return AnyView(Text("Please select a goal first to meet your coach.").foregroundColor(.white))
-        }
-        
-        return AnyView(
-            VStack(spacing: 0) {
-                // This part now works correctly with the unwrapped coach.
-                ChatHeaderView(coach: coach)
-                
-                // Chat history
-                ScrollViewReader { scrollViewProxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 16) {
-                            ForEach(messages) { message in
-                                MessageRow(message: message, coach: coach)
-                                    .id(message.id)
-                            }
-                            if isCoachTyping {
-                                TypingIndicatorRow(coach: coach)
-                                    .id("typingIndicator")
-                            }
-                        }
-                        .padding()
-                    }
-                    .onChange(of: messages.count) {
-                        if let lastMessage = messages.last {
-                            withAnimation { scrollViewProxy.scrollTo(lastMessage.id, anchor: .bottom) }
-                        }
-                    }
-                    .onChange(of: isCoachTyping) {
-                        if isCoachTyping {
-                            withAnimation { scrollViewProxy.scrollTo("typingIndicator", anchor: .bottom) }
-                        }
-                    }
-                }
-                
-                // Footer is now conditional based on the chat phase
-                VStack(spacing: 0) {
-                    Divider()
-                    chatFooter
-                        .animation(.easeInOut, value: chatPhase)
-                }
-            }
-            .background(Color.black.opacity(0.95).ignoresSafeArea())
-            .onAppear { startChat(with: coach) }
-        )
-    }
-    
-    // A computed view for the dynamic chat footer
+    // 1. Use @ViewBuilder on the body to allow conditional logic (if/else)
+    //    without needing to wrap views in AnyView. This is much more efficient.
     @ViewBuilder
-    private var chatFooter: some View {
-        switch chatPhase {
-        case .initial:
-            Color.clear.frame(height: 70)
-            
-        case .awaitingChoice:
-            HStack(spacing: 12) {
-                Button("No, I'm ready!") { chatPhase = .finished }
-                    .buttonStyle(SecondaryButtonStyle())
-                Button("Yes, there's more") { chatPhase = .userTyping }
-                    .buttonStyle(PrimaryButtonStyle())
-            }
-            .padding()
-            
-        case .userTyping:
-            HStack(spacing: 12) {
-                TextField("", text: $currentMessage, prompt: Text("Add any final notes...").foregroundColor(.gray).italic())
-                    .foregroundColor(.white)
-                    .padding(12)
-                    .background(Color.white.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                
-                Button(action: sendMessage) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title)
-                        .foregroundColor(.evolvePrimary)
+    var body: some View {
+        if let coach = coach {
+            // The main view when a coach is available
+            chatView(for: coach)
+        } else {
+            // The fallback view when the coach is nil
+            missingCoachView
+        }
+    }
+    
+    // 2. The main chat interface is extracted into its own helper view.
+    private func chatView(for coach: Coach) -> some View {
+        VStack(spacing: 0) {
+            ChatHeaderView(coach: coach)
+            chatHistoryView(for: coach)
+            chatFooterView // This helper was already here, just renamed for clarity
+        }
+        .background(Color.black.opacity(0.95).ignoresSafeArea())
+        .onAppear { viewModel.startChat(with: coach) }
+    }
+    
+    // 3. The ScrollView and its logic are now in a dedicated helper.
+    private func chatHistoryView(for coach: Coach) -> some View {
+        ScrollViewReader { scrollViewProxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(viewModel.messages) { message in
+                        MessageRow(message: message, coach: coach)
+                            .id(message.id)
+                    }
+                    if viewModel.isCoachTyping {
+                        TypingIndicatorRow(coach: coach)
+                            .id("typingIndicator")
+                    }
                 }
-                .disabled(currentMessage.isEmpty)
-            }
-            .padding()
-            
-        case .finished:
-            Button("Create My Schedule", action: onReadyToGenerate)
-                .buttonStyle(PrimaryButtonStyle())
                 .padding()
-        }
-    }
-    
-    // --- Logic functions to drive the chat state ---
-    
-    private func startChat(with coach: Coach) {
-        guard messages.isEmpty else { return }
-        
-        isCoachTyping = true
-        // First message
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            isCoachTyping = false
-            let welcomeMessage = "Hi, nice to meet you! Or as I always say, *\(coach.tagline)*"
-            messages.append(ChatMessage(text: welcomeMessage, isFromCoach: true))
-            
-            // Second message
-            isCoachTyping = true
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                isCoachTyping = false
-                let secondMessage = "I've reviewed your profile and I'm excited to get started! Before I build your plan, is there anything else about your fitness I should know?"
-                messages.append(ChatMessage(text: secondMessage, isFromCoach: true))
-                chatPhase = .awaitingChoice
+            }
+            .onChange(of: viewModel.messages.count) {
+                if let lastMessageId = viewModel.messages.last?.id {
+                    withAnimation { scrollViewProxy.scrollTo(lastMessageId, anchor: .bottom) }
+                }
+            }
+            .onChange(of: viewModel.isCoachTyping) { _, isTyping in
+                if isTyping {
+                    withAnimation { scrollViewProxy.scrollTo("typingIndicator", anchor: .bottom) }
+                }
             }
         }
     }
-    
-    private func sendMessage() {
-        guard !currentMessage.isEmpty else { return }
-        
-        userProfile.finalChatNotes = currentMessage
-        messages.append(ChatMessage(text: currentMessage, isFromCoach: false))
-        currentMessage = ""
-        
-        isCoachTyping = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            isCoachTyping = false
-            let finalMessage = "Got it. I have everything I need. Let's create your plan!"
-            messages.append(ChatMessage(text: finalMessage, isFromCoach: true))
-            chatPhase = .finished
+
+    // 4. The footer is cleaner, with the Divider moved inside it.
+    @ViewBuilder
+    private var chatFooterView: some View {
+        VStack(spacing: 0) {
+            Divider()
+            
+            // The animation is applied directly to the content that changes.
+            Group {
+                switch viewModel.chatPhase {
+                case .initial:
+                    Color.clear.frame(height: 70)
+                    
+                case .awaitingChoice:
+                    HStack(spacing: 12) {
+                        Button("No, I'm ready!") { viewModel.chatPhase = .finished }
+                            // .buttonStyle(...)
+                        Button("Yes, there's more") { viewModel.chatPhase = .userTyping }
+                            // .buttonStyle(...)
+                    }
+                    .padding()
+                    
+                case .userTyping:
+                    HStack(spacing: 12) {
+                        TextField("", text: $viewModel.currentMessage, prompt: Text("Add any final notes...").foregroundColor(.gray).italic())
+                            .foregroundColor(.white)
+                            .padding(12)
+                            .background(Color.white.opacity(0.1))
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        
+                        Button(action: viewModel.sendMessage) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.title)
+                                // .foregroundColor(.evolvePrimary)
+                        }
+                        .disabled(viewModel.currentMessage.isEmpty)
+                    }
+                    .padding()
+                    
+                case .finished:
+                    Button("Create My Schedule", action: onReadyToGenerate)
+                        // .buttonStyle(...)
+                        .padding()
+                }
+            }
+            .animation(.easeInOut, value: viewModel.chatPhase)
         }
+    }
+    
+    // A simple helper for the fallback UI.
+    private var missingCoachView: some View {
+        Text("Please select a goal first to meet your coach.")
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.black.opacity(0.95).ignoresSafeArea())
     }
 }
+
+//struct FinalChatStep: View {
+//    // This binding is still needed to save the user's final notes.
+//    @ObservedObject var viewModel: OnboardingViewModel
+//    
+//    let coach: Coach?
+//    var onReadyToGenerate: () -> Void
+//    
+//    
+//    var body: some View {
+//        guard let coach = self.coach else {
+//            return AnyView(Text("Please select a goal first to meet your coach.").foregroundColor(.white))
+//        }
+//        
+//        return AnyView(
+//            VStack(spacing: 0) {
+//                // This part now works correctly with the unwrapped coach.
+//                ChatHeaderView(coach: coach)
+//                
+//                // Chat history
+//                ScrollViewReader { scrollViewProxy in
+//                    ScrollView {
+//                        VStack(alignment: .leading, spacing: 16) {
+//                            ForEach(viewModel.messages) { message in
+//                                MessageRow(message: message, coach: coach)
+//                                    .id(message.id)
+//                            }
+//                            if viewModel.isCoachTyping {
+//                                TypingIndicatorRow(coach: coach)
+//                                    .id("typingIndicator")
+//                            }
+//                        }
+//                        .padding()
+//                    }
+//                    .onChange(of: viewModel.messages.count) {
+//                        if let lastMessage = viewModel.messages.last {
+//                            withAnimation { scrollViewProxy.scrollTo(lastMessage.id, anchor: .bottom) }
+//                        }
+//                    }
+//                    .onChange(of: viewModel.isCoachTyping) {
+//                        if viewModel.isCoachTyping {
+//                            withAnimation { scrollViewProxy.scrollTo("typingIndicator", anchor: .bottom) }
+//                        }
+//                    }
+//                }
+//                
+//                // Footer is now conditional based on the chat phase
+//                VStack(spacing: 0) {
+//                    Divider()
+//                    chatFooter
+//                        .animation(.easeInOut, value: viewModel.chatPhase)
+//                }
+//            }
+//            .background(Color.black.opacity(0.95).ignoresSafeArea())
+//            .onAppear { viewModel.startChat(with: coach) }
+//        )
+//    }
+//    
+//    // A computed view for the dynamic chat footer
+//    @ViewBuilder
+//    private var chatFooter: some View {
+//        switch viewModel.chatPhase {
+//        case .initial:
+//            Color.clear.frame(height: 70)
+//            
+//        case .awaitingChoice:
+//            HStack(spacing: 12) {
+//                Button("No, I'm ready!") { viewModel.chatPhase = .finished }
+//                    .buttonStyle(SecondaryButtonStyle())
+//                Button("Yes, there's more") { viewModel.chatPhase = .userTyping }
+//                    .buttonStyle(PrimaryButtonStyle())
+//            }
+//            .padding()
+//            
+//        case .userTyping:
+//            HStack(spacing: 12) {
+//                TextField("", text: $viewModel.currentMessage, prompt: Text("Add any final notes...").foregroundColor(.gray).italic())
+//                    .foregroundColor(.white)
+//                    .padding(12)
+//                    .background(Color.white.opacity(0.1))
+//                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+//                
+//                Button(action: viewModel.sendMessage) {
+//                    Image(systemName: "arrow.up.circle.fill")
+//                        .font(.title)
+//                        .foregroundColor(.evolvePrimary)
+//                }
+//                .disabled(viewModel.currentMessage.isEmpty)
+//            }
+//            .padding()
+//            
+//        case .finished:
+//            Button("Create My Schedule", action: onReadyToGenerate)
+//                .buttonStyle(PrimaryButtonStyle())
+//                .padding()
+//        }
+//    }
+//}
 
 // --- SUPPORTING DUMMY CODE FOR PREVIEW ---
 
@@ -250,16 +316,16 @@ struct TypingIndicatorBubble: View {
     }
 }
 
-struct FinalChatStep_Previews: PreviewProvider {
-    static var previews: some View {
-        // FIX 3: The preview now passes the coach directly.
-        let dummyCoach = Coach(name: "Coach Forge", goal: "Bodybuilding", iconName: "dumbbell.fill", tagline: "Sculpting strength, building legends.", primaryColorHex: "#FF9500")
-        
-        FinalChatStep(
-            userProfile: .constant(UserProfile()),
-            coach: dummyCoach
-        ) {
-            print("Ready to generate!")
-        }
-    }
-}
+//struct FinalChatStep_Previews: PreviewProvider {
+//    static var previews: some View {
+//        // FIX 3: The preview now passes the coach directly.
+//        let dummyCoach = Coach(name: "Coach Forge", goal: "Bodybuilding", iconName: "dumbbell.fill", tagline: "Sculpting strength, building legends.", primaryColorHex: "#FF9500")
+//        
+//        FinalChatStep(
+//            userProfile: .constant(viewModel.UserProfile()),
+//            coach: dummyCoach
+//        ) {
+//            print("Ready to generate!")
+//        }
+//    }
+//}
