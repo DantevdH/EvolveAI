@@ -77,9 +77,9 @@ struct FinalChatStep: View {
                 case .awaitingChoice:
                     HStack(spacing: 12) {
                         Button("No, I'm ready!") { viewModel.chatPhase = .finished }
-                            // .buttonStyle(...)
+                             .buttonStyle(PrimaryButtonStyle())
                         Button("Yes, there's more") { viewModel.chatPhase = .userTyping }
-                            // .buttonStyle(...)
+                             .buttonStyle(PrimaryButtonStyle())
                     }
                     .padding()
                     
@@ -102,7 +102,7 @@ struct FinalChatStep: View {
                     
                 case .finished:
                     Button("Create My Schedule", action: onReadyToGenerate)
-                        // .buttonStyle(...)
+                         .buttonStyle(PrimaryButtonStyle())
                         .padding()
                 }
             }
