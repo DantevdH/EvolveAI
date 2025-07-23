@@ -44,13 +44,21 @@ struct WeeklySchedule: Codable, Identifiable {
     }
 }
 
-struct WorkoutPlan: Codable {
+struct WorkoutPlan: Codable, Identifiable, Equatable {
+    // An ID is necessary for SwiftUI to uniquely identify this view's state.
+    // If your API provides an ID, use that instead of UUID().
+    let id = UUID()
     let title: String
     let summary: String
     let weeklySchedules: [WeeklySchedule]
 
     enum CodingKeys: String, CodingKey {
+        // We exclude `id` from Codable as it's a client-side property.
         case title, summary
         case weeklySchedules = "weekly_schedules"
+    }
+    
+    static func == (lhs: WorkoutPlan, rhs: WorkoutPlan) -> Bool {
+        lhs.id == rhs.id
     }
 }

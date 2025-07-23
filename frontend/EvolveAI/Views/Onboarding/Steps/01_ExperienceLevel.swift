@@ -1,21 +1,10 @@
-//
-//  01_ExperienceLevel.swift
-//  EvolveAI
-//
-//  Created by Dante van der Heijden on 09/07/2025.
-//
-
+// Remove the old ExperienceViewModel completely.
 import SwiftUI
 
 struct ExperienceStep: View {
-    @Binding var userProfile: UserProfile
-    
-    private let levels = [
-        ("Beginner", "Just starting my fitness journey"),
-        ("Intermediate", "I workout regularly with some experience"),
-        ("Advanced", "I'm experienced with training and nutrition")
-    ]
-    
+    // It now observes the main OnboardingViewModel directly.
+    @ObservedObject var viewModel: OnboardingViewModel
+
     var body: some View {
         VStack(spacing: 30) {
             Spacer()
@@ -23,44 +12,72 @@ struct ExperienceStep: View {
             Text("Experience Level")
                 .font(.largeTitle)
                 .fontWeight(.bold)
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
             
-            Text("Help us tailor your program")
+            Text("This sets your starting point")
                 .font(.subheadline)
-                .foregroundColor(.white)
+                .italic()
+                .foregroundStyle(.white)
+            
+            Spacer()
             
             VStack(spacing: 16) {
-                ForEach(levels, id: \.0) { level in
+                // Loop over the levels from the shared ViewModel
+                ForEach(viewModel.levels) { level in
                     ExperienceCard(
-                        title: level.0,
-                        description: level.1,
-                        isSelected: userProfile.experienceLevel == level.0
+                        title: level.title,
+                        description: level.description,
+                        infoText: level.infoText, // Pass the new info text here
+                        isSelected: viewModel.userProfile.experienceLevel == level.rawValue
                     ) {
-                        userProfile.experienceLevel = level.0
+                        // Call the selection method on the shared ViewModel
+                        viewModel.selectExperienceLevel(level)
                     }
                 }
             }
             .padding(.horizontal)
             
             Spacer()
+            Spacer()
         }
     }
 }
 
+
 struct ExperienceCard: View {
     let title: String
     let description: String
+    let infoText: String
     let isSelected: Bool
     let action: () -> Void
+    
+    // State for the popover
+    @State private var showingInfoPopover = false
     
     var body: some View {
         Button(action: action) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.white)
+                    HStack {
+                        Text(title)
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                        
+                        // Info icon button
+                        Button {
+                            showingInfoPopover = true
+                        } label: {
+                            Image(systemName: "info.circle")
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+                        .popover(isPresented: $showingInfoPopover) {
+                            Text(infoText)
+                                .font(.subheadline)
+                                .padding()
+                                .presentationCompactAdaptation(.popover)
+                        }
+                    }
                     
                     Text(description)
                         .font(.subheadline)
@@ -70,19 +87,19 @@ struct ExperienceCard: View {
                 Spacer()
                 
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? .black : .evolvePrimary)
+                    .foregroundColor(isSelected ? .black : .evolvePrimary) // Original color
                     .font(.title2)
             }
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.evolvePrimary : Color.evolveCard)
+                    .fill(isSelected ? Color.evolvePrimary : Color.evolveCard) // Original color
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(isSelected ? Color.clear : Color.evolvePrimary.opacity(0.3), lineWidth: 1)
+                            .stroke(isSelected ? Color.clear : Color.evolvePrimary.opacity(0.3), lineWidth: 1) // Original color
                     )
             )
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(.plain)
     }
 }

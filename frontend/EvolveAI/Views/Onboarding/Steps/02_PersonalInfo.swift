@@ -7,43 +7,10 @@
 
 import SwiftUI
 
-// A custom styled gender selector
-struct GenderSelector: View {
-    @Binding var selection: String
-    private let options = ["Male", "Female", "Other"]
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Gender")
-                .font(.headline)
-                .foregroundColor(.white.opacity(0.8))
-            
-            HStack(spacing: 12) {
-                ForEach(options, id: \.self) { option in
-                    Button(action: {
-                        selection = option
-                    }) {
-                        Text(option)
-                            .fontWeight(.bold)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(GenderButtonStyle(isSelected: selection == option))
-                }
-            }
-        }
-    }
-}
 
-#if canImport(UIKit)
-extension View {
-    func hideKeyboard() {
-        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-    }
-}
-#endif
 
 struct PersonalInfoStep: View {
-    @Binding var userProfile: UserProfile
+    @ObservedObject var viewModel: OnboardingViewModel
     
     var body: some View {
         ScrollView {
@@ -64,32 +31,31 @@ struct PersonalInfoStep: View {
                 
                 VStack(spacing: 20) {
                     StyledTextField(title: "Age", value: Binding(
-                        get: { String(userProfile.age) },
-                        set: { userProfile.age = Int($0) ?? userProfile.age }
+                        get: { String(viewModel.userProfile.age) },
+                        set: { viewModel.userProfile.age = Int($0) ?? viewModel.userProfile.age }
                     ), unit: "years")
                     
-                    // --- MODIFICATION: Uses new onChange syntax for correct conversion ---
                     MeasurementField(
                         title: "Weight",
-                        value: $userProfile.weight,
-                        unit: $userProfile.weightUnit,
+                        value: $viewModel.userProfile.weight,
+                        unit: $viewModel.userProfile.weightUnit,
                         units: ["kg", "lbs"]
                     )
-                    .onChange(of: userProfile.weightUnit) { oldValue, newValue in
-                        userProfile.weight = convertWeight(value: userProfile.weight, from: oldValue, to: newValue)
+                    .onChange(of: viewModel.userProfile.weightUnit) { oldValue, newValue in
+                        viewModel.userProfile.weight = viewModel.convertWeight(value: viewModel.userProfile.weight, from: oldValue, to: newValue)
                     }
                     
                     MeasurementField(
                         title: "Height",
-                        value: $userProfile.height,
-                        unit: $userProfile.heightUnit,
+                        value: $viewModel.userProfile.height,
+                        unit: $viewModel.userProfile.heightUnit,
                         units: ["cm", "in"]
                     )
-                    .onChange(of: userProfile.heightUnit) { oldValue, newValue in
-                        userProfile.height = convertHeight(value: userProfile.height, from: oldValue, to: newValue)
+                    .onChange(of: viewModel.userProfile.heightUnit) { oldValue, newValue in
+                        viewModel.userProfile.height = viewModel.convertHeight(value: viewModel.userProfile.height, from: oldValue, to: newValue)
                     }
                     
-                    GenderSelector(selection: $userProfile.gender)
+                    GenderSelector(selection: $viewModel.userProfile.gender)
                 }
                 .padding()
                 
@@ -100,19 +66,6 @@ struct PersonalInfoStep: View {
         .onTapGesture {
             hideKeyboard()
         }
-    }
-    
-    // --- NEW: Corrected helper functions for unit conversion ---
-    private func convertWeight(value: Double, from oldUnit: String, to newUnit: String) -> Double {
-        if oldUnit == "lbs" && newUnit == "kg" { return value * 0.453592 }
-        if oldUnit == "kg" && newUnit == "lbs" { return value / 0.453592 }
-        return value
-    }
-    
-    private func convertHeight(value: Double, from oldUnit: String, to newUnit: String) -> Double {
-        if oldUnit == "in" && newUnit == "cm" { return value * 2.54 }
-        if oldUnit == "cm" && newUnit == "in" { return value / 2.54 }
-        return value
     }
 }
 
@@ -207,4 +160,37 @@ struct UnitToggle: View {
 }
 
 
+// A custom styled gender selector
+struct GenderSelector: View {
+    @Binding var selection: String
+    private let options = ["Male", "Female", "Other"]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Gender")
+                .font(.headline)
+                .foregroundColor(.white.opacity(0.8))
+            
+            HStack(spacing: 12) {
+                ForEach(options, id: \.self) { option in
+                    Button(action: {
+                        selection = option
+                    }) {
+                        Text(option)
+                            .fontWeight(.bold)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(GenderButtonStyle(isSelected: selection == option))
+                }
+            }
+        }
+    }
+}
 
+#if canImport(UIKit)
+extension View {
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
+#endif

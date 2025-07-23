@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ScheduleStep: View {
-    @Binding var userProfile: UserProfile
+    @ObservedObject var viewModel: OnboardingViewModel
     
     var body: some View {
         VStack(spacing: 30) {
@@ -26,14 +26,14 @@ struct ScheduleStep: View {
             VStack(spacing: 20) {
                 ScheduleSelector(
                     title: "Days per week",
-                    value: $userProfile.daysPerWeek,
+                    value: $viewModel.userProfile.daysPerWeek,
                     range: 1...7,
                     unit: "Days"
                 )
                 
                 ScheduleSelector(
                     title: "Minutes per session",
-                    value: $userProfile.minutesPerSession,
+                    value: $viewModel.userProfile.minutesPerSession,
                     range: 15...120,
                     step: 5,
                     unit: "Min"

@@ -8,20 +8,9 @@
 import SwiftUI
 
 struct GoalsStep: View {
-    @Binding var userProfile: UserProfile
+    @ObservedObject var viewModel: OnboardingViewModel
     let availableCoaches: [Coach]
     var onCoachSelected: (Coach) -> Void
-    
-    // --- MODIFIED: More accurate icons and descriptions ---
-    private let goals = [
-        ("Improve Endurance", "figure.run", "Enhance stamina for long-distance activities."),
-        ("Bodybuilding", "dumbbell.fill", "Maximize muscle growth and definition."),
-        ("Increase Strength", "flame.fill", "Focus on increasing raw power and lifting heavier."),
-        ("General Fitness", "heart.fill", "Maintain overall health and well-being."),
-        ("Weight Loss", "scalemass.fill", "Burn fat and improve body composition."),
-        ("Power & Speed", "trophy.fill", "Boost speed, agility, and sport-specific skills.")
-    ]
-    
     private let characterLimit = 300
     
     var body: some View {
@@ -38,18 +27,18 @@ struct GoalsStep: View {
                     .foregroundColor(.white.opacity(0.8))
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 16) {
-                    ForEach(goals, id: \.0) { goal in
+                    ForEach(viewModel.goals, id: \.0) { goal in
                         GoalCard(
                             title: goal.0,
                             icon: goal.1,
                             description: goal.2,
-                            isSelected: userProfile.primaryGoal == goal.0
+                            isSelected: viewModel.userProfile.primaryGoal == goal.0
                         ) {
                             // When a new goal is selected, reset the description
-                            if userProfile.primaryGoal != goal.0 {
-                                userProfile.primaryGoalDescription = ""
+                            if viewModel.userProfile.primaryGoal != goal.0 {
+                                viewModel.userProfile.primaryGoalDescription = ""
                             }
-                            userProfile.primaryGoal = goal.0
+                            viewModel.userProfile.primaryGoal = goal.0
                             if let coach = availableCoaches.first(where: { $0.goal == goal.0 }) {
                                     onCoachSelected(coach)
                                 }
@@ -60,18 +49,17 @@ struct GoalsStep: View {
                 }
                 .padding(.horizontal)
                 
-                if !userProfile.primaryGoal.isEmpty {
+                if !viewModel.userProfile.primaryGoal.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Describe your goal (optional)")
                             .font(.headline)
                             .foregroundColor(.white)
                         
-                        // --- MODIFICATION: Replaced TextField with TextEditor for multi-line, expanding input ---
                         ZStack(alignment: .topLeading) {
-                            TextEditor(text: $userProfile.primaryGoalDescription)
-                                .scrollContentBackground(.hidden) // Allows custom background
+                            TextEditor(text: $viewModel.userProfile.primaryGoalDescription)
+                                .scrollContentBackground(.hidden)
                                 .padding(8)
-                                .frame(minHeight: 120) // Set a larger initial height
+                                .frame(minHeight: 120)
                                 .background(Color.white.opacity(0.1))
                                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                                 .foregroundColor(.white)
@@ -79,17 +67,17 @@ struct GoalsStep: View {
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                                         .stroke(Color.white.opacity(0.2), lineWidth: 1)
                                 )
-                                // --- MODIFICATION: Updated onChange syntax ---
-                                .onChange(of: userProfile.primaryGoalDescription) {
+                               
+                                .onChange(of: viewModel.userProfile.primaryGoalDescription) {
                                     // The old and new values are no longer passed directly in the closure
-                                    let newValue = userProfile.primaryGoalDescription
+                                    let newValue = viewModel.userProfile.primaryGoalDescription
                                     if newValue.count > characterLimit {
-                                        userProfile.primaryGoalDescription = String(newValue.prefix(characterLimit))
+                                        viewModel.userProfile.primaryGoalDescription = String(newValue.prefix(characterLimit))
                                     }
                                 }
                             
                             // Custom placeholder for the TextEditor
-                            if userProfile.primaryGoalDescription.isEmpty {
+                            if viewModel.userProfile.primaryGoalDescription.isEmpty {
                                 Text("e.g., 'Run a 5k without stopping'")
                                     .foregroundColor(.white.opacity(0.4))
                                     .padding(16)
@@ -98,9 +86,9 @@ struct GoalsStep: View {
                         }
                         
                         // Character count indicator
-                        Text("\(userProfile.primaryGoalDescription.count) / \(characterLimit)")
+                        Text("\(viewModel.userProfile.primaryGoalDescription.count) / \(characterLimit)")
                             .font(.caption)
-                            .foregroundColor(userProfile.primaryGoalDescription.count > characterLimit ? .red : .white.opacity(0.6))
+                            .foregroundColor(viewModel.userProfile.primaryGoalDescription.count > characterLimit ? .red : .white.opacity(0.6))
                             .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                     .padding(.horizontal)
@@ -112,7 +100,7 @@ struct GoalsStep: View {
                 // from being hidden behind the navigation buttons.
                 Spacer(minLength: 100)
             }
-            .animation(.easeInOut, value: userProfile.primaryGoal)
+            .animation(.easeInOut, value: viewModel.userProfile.primaryGoal)
         }
     }
 }
