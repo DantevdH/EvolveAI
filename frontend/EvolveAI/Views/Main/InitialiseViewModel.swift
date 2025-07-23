@@ -20,7 +20,14 @@ class InitialiseViewModel: ObservableObject {
     }
     
     // The property is still private(set) for the main app logic.
-    @Published private(set) var viewState: ViewState
+    // Add the didSet block here
+    @Published private(set) var viewState: ViewState {
+        didSet {
+            // This print statement will now run every time the viewState changes,
+            // without causing any UI errors.
+            print("App state changed to: \(viewState)")
+        }
+    }
     
     private var cancellables = Set<AnyCancellable>()
     

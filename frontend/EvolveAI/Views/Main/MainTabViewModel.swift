@@ -10,6 +10,11 @@ import Combine
 
 // MARK: - View Model
 
+import SwiftUI
+import Combine
+
+// MARK: - View Model
+
 class MainTabViewModel: ObservableObject {
     
     // 1. A single, robust enum to represent all possible UI states.
@@ -20,7 +25,8 @@ class MainTabViewModel: ObservableObject {
             case (.loading, .loading):
                 return true
             case (.loaded(let lhsPlan), .loaded(let rhsPlan)):
-                return lhsPlan.id == rhsPlan.id // Assuming WorkoutPlan is identifiable
+                // Make sure your WorkoutPlan model is Equatable, comparing by ID is best.
+                return lhsPlan.id == rhsPlan.id
             case (.error(let lhsMessage), .error(let rhsMessage)):
                 return lhsMessage == rhsMessage
             default:
@@ -53,44 +59,50 @@ class MainTabViewModel: ObservableObject {
     
     // The public interface for the View to trigger a refresh.
     func fetchWorkoutPlan() {
-        // Prevent redundant fetches.
-        guard viewState != .loading else { return }
+        // Prevent redundant fetches if already loading.
+        guard !workoutManager.isLoading else { return }
         
         guard let authToken = userManager.authToken else {
             self.viewState = .error(message: "Authentication token not found.")
             return
         }
         
-        // The ViewModel now controls the loading state.
-        self.viewState = .loading
+        // The WorkoutManager is now the single source of truth for loading state.
         workoutManager.fetchWorkoutPlan(authToken: authToken)
     }
     
     private func setupSubscriptions() {
-        workoutManager.$workoutPlan
-            .combineLatest(workoutManager.$isLoading, workoutManager.$errorMessage)
+        workoutManager.objectWillChange
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] (plan, isLoading, errorMessage) in
-                guard let self = self else { return }
-                
-                // 5. All presentation logic is now cleanly contained in the ViewModel.
-                if isLoading {
-                    self.viewState = .loading
-                    return
-                }
-                
-                if let errorMessage = errorMessage {
-                    self.viewState = .error(message: errorMessage)
-                    return
-                }
-                
-                if let plan = plan {
-                    self.viewState = .loaded(plan: plan)
-                } else {
-                    // This case handles when loading is false but there's no plan and no error.
-                    self.viewState = .error(message: "Could not load your workout plan.")
-                }
+            .sink { [weak self] _ in
+                self?.updateViewState()
             }
             .store(in: &cancellables)
+    }
+
+    /// This function contains the corrected logic to determine the view state.
+    private func updateViewState() {
+        // Priority 1: If there's an explicit error message, always show it.
+        if let errorMessage = workoutManager.errorMessage {
+            self.viewState = .error(message: errorMessage)
+            return
+        }
+        
+        // Priority 2: If a plan has been loaded, show it.
+        // This ensures that even if a background refresh is happening, the user still sees their data.
+        if let plan = workoutManager.workoutPlan {
+            self.viewState = .loaded(plan: plan)
+            return
+        }
+        
+        // Priority 3: If there's no plan yet and we are actively loading, show the spinner.
+        if workoutManager.isLoading {
+            self.viewState = .loading
+            return
+        }
+        
+        // Fallback: If not loading, no error, and still no plan, then we show the generic error.
+        // This state is now only reached after the network request has definitively finished without success.
+        self.viewState = .error(message: "Could not load your workout plan.")
     }
 }
