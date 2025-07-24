@@ -34,7 +34,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('week_number', models.IntegerField()),
-                ('daily_workouts', models.ManyToManyField(to='workoutplan.dailyworkout')),
+                ('daily_workouts', models.ManyToManyField(to='training.dailyworkout')),
             ],
         ),
         migrations.CreateModel(
@@ -43,8 +43,8 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('sets', models.IntegerField()),
                 ('reps', models.CharField(max_length=50)),
-                ('daily_workout', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='workoutplan.dailyworkout')),
-                ('exercise', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='workoutplan.exercise')),
+                ('daily_workout', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='training.dailyworkout')),
+                ('exercise', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='training.exercise')),
             ],
             options={
                 'unique_together': {('daily_workout', 'exercise')},
@@ -53,16 +53,16 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='dailyworkout',
             name='exercises',
-            field=models.ManyToManyField(through='workoutplan.WorkoutExercise', to='workoutplan.exercise'),
+            field=models.ManyToManyField(through='training.WorkoutExercise', to='training.exercise'),
         ),
         migrations.CreateModel(
-            name='WorkoutPlan',
+            name='training',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('title', models.CharField(max_length=200)),
                 ('summary', models.TextField()),
                 ('user_profile', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='users.userprofile')),
-                ('weekly_schedules', models.ManyToManyField(to='workoutplan.weeklyschedule')),
+                ('weekly_schedules', models.ManyToManyField(to='training.weeklyschedule')),
             ],
         ),
     ]

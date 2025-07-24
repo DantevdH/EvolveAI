@@ -93,12 +93,21 @@ class UserManager: ObservableObject {
     /// Generates the initial workout plan and marks onboarding as complete.
     /// This is the sole responsibility of the UserManager.
     func completeOnboardingAndGeneratePlan(for profile: UserProfile, completion: @escaping (Bool) -> Void) {
+
+         #if DEBUG
+              print("--- App is running in DEBUG mode. Not calling OpenAI model ---")
+             self.isOnboardingComplete = true
+             self.saveOnboardingStatus(isComplete: true)
+             completion(true)
+         #endif
+
         guard let token = authToken else {
             print("Error: Auth token missing for plan generation.")
             completion(false)
             return
         }
-            
+        
+        print("--- Performing REAL network call to generate workout plan... ---")
         networkService.generateWorkoutPlan(for: profile, authToken: token) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {

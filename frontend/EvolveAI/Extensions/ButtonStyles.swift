@@ -188,3 +188,18 @@ struct StyledTextField: View {
         }
     }
 }
+
+struct MainButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(Color.evolvePrimary)
+            .foregroundStyle(Color.evolveText)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
+            .shadow(color: .evolvePrimary.opacity(0.4), radius: configuration.isPressed ? 4 : 8, x: 0, y: 4)
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
+}

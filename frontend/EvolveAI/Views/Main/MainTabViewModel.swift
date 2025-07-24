@@ -8,13 +8,6 @@
 import SwiftUI
 import Combine
 
-// MARK: - View Model
-
-import SwiftUI
-import Combine
-
-// MARK: - View Model
-
 class MainTabViewModel: ObservableObject {
     
     // 1. A single, robust enum to represent all possible UI states.
@@ -61,7 +54,17 @@ class MainTabViewModel: ObservableObject {
     func fetchWorkoutPlan() {
         // Prevent redundant fetches if already loading.
         guard !workoutManager.isLoading else { return }
-        
+
+        // This block is ONLY compiled for Debug builds (i.e., when running from Xcode,
+        // including Previews). It will be completely removed from your final App Store release.
+        #if DEBUG
+        print("--- ViewModel is in DEBUG mode, bypassing real auth token check. ---")
+        workoutManager.fetchWorkoutPlan(authToken: "DEBUG_MOCK_TOKEN")
+        return
+        #endif
+
+        // --- Real Authentication Check for RELEASE builds ---
+        // This code will only run for your final App Store (Release) builds.
         guard let authToken = userManager.authToken else {
             self.viewState = .error(message: "Authentication token not found.")
             return

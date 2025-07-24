@@ -14,38 +14,58 @@
 
 import Foundation
 
-/// Manages the state of the user's workout plan for the main application views.
 class WorkoutManager: ObservableObject {
     
-    // MARK: - Published Properties
-    
-    /// The user's workout plan. The UI will update whenever this changes.
     @Published var workoutPlan: WorkoutPlan?
-    
-    /// A flag to indicate when a network operation is in progress.
     @Published var isLoading = false
-    
-    /// An optional string to hold error messages for the UI to display.
     @Published var errorMessage: String?
     
-    // MARK: - Dependencies
-    
     private let networkService: NetworkServiceProtocol
-    
-    // MARK: - Initializer
-    
+
     // We can inject a mock service for testing, but default to the real one.
     init(networkService: NetworkServiceProtocol = NetworkService()) {
         self.networkService = networkService
     }
     
-    // MARK: - Public Methods
-    
     /// Fetches the existing workout plan for the authenticated user from the server.
-    /// This is the primary function of the WorkoutManager.
+    /// In DEBUG mode, this will return a mock plan after a 5-second delay.
     func fetchWorkoutPlan(authToken: String) {
-        isLoading = true
-        errorMessage = nil
+        // This is the primary fix for the "Publishing changes" warning.
+        // We defer the state update to the next run loop.
+        DispatchQueue.main.async { [weak self] in
+            self?.isLoading = true
+            self?.errorMessage = nil
+        }
+        
+        // This block is ONLY compiled for Debug builds.
+        #if DEBUG
+        print("--- App is running in DEBUG mode ---")
+        let useMockDataForDebug = true // Toggle this to test the real network call in debug.
+
+        if useMockDataForDebug {
+            print("--- Loading MOCK workout plan in 2 seconds... ---")
+            // Simulate a network delay
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+                print("--- Mock plan loaded. ---")
+                self?.isLoading = false
+                self?.workoutPlan = mockWorkoutPlan // Assign mock data
+            }
+        } else {
+            // This 'else' block allows you to test the real network call while still in debug mode.
+            // It calls the same function defined in the #else block below.
+            performRealNetworkCall(authToken: authToken)
+        }
+
+        // The #else provides a completely separate code path for Release builds.
+        #else
+        // This is the only code that will be included in your final App Store build.
+        performRealNetworkCall(authToken: authToken)
+        #endif
+    }
+
+    // Helper function to avoid duplicating the network logic.
+    private func performRealNetworkCall(authToken: String) {
+        print("--- Performing REAL network call to fetch workout plan... ---")
         
         networkService.getWorkoutPlan(authToken: authToken) { [weak self] result in
             DispatchQueue.main.async {
