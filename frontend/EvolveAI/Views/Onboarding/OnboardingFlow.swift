@@ -1,44 +1,47 @@
 import SwiftUI
 
 struct OnboardingFlow: View {
+    @EnvironmentObject var userManager: UserManager
     @StateObject var viewModel: OnboardingViewModel
 
-    // The total number of steps in the onboarding flow (0-7)
     private let totalSteps = 8
 
-    init(networkService: NetworkServiceProtocol = NetworkService()) {
-        _viewModel = StateObject(wrappedValue: OnboardingViewModel(networkService: networkService))
+    init(userManager: UserManager, networkService: NetworkServiceProtocol = NetworkService()) {
+        _viewModel = StateObject(wrappedValue: OnboardingViewModel(userManager: userManager, networkService: networkService))
     }
-
-    private var userProfileBinding: Binding<UserProfile> {
-        Binding(
-            get: { viewModel.userProfile },
-            set: { viewModel.userProfile = $0 }
-        )
-    }
-    
-    
 
     var body: some View {
+        // Use the ViewModel's state to decide which view to show
         if viewModel.isGenerating {
+            // This view is now purely for display, receiving the data it needs
             AIGeneratingView(
-                userProfile: viewModel.userProfile,
                 coach: viewModel.selectedCoach
             )
+            .alert("Generation Failed", isPresented: $viewModel.showErrorAlert) {
+                Button("Retry", role: .cancel) {
+                    viewModel.completeOnboarding()
+                }
+            } message: {
+                Text(viewModel.errorMessage ?? "An unknown error occurred. Please check your connection and try again.")
+            }
+
         } else {
+            // The main onboarding steps
             NavigationView {
                 ZStack {
                     Color.evolveBackground.ignoresSafeArea()
 
                     VStack(spacing: 0) {
+                        // Progress Bar
                         if viewModel.currentStep > 0 {
                             ProgressBarView(currentStep: viewModel.currentStep, totalSteps: totalSteps)
                                 .padding(.horizontal)
                                 .padding(.top)
                         } else {
-                            Spacer()
+                            Spacer() // Pushes the WelcomeStep content to the center
                         }
 
+                        // Onboarding Steps in a TabView
                         TabView(selection: $viewModel.currentStep) {
                             WelcomeStep {
                                 withAnimation(.easeInOut) { viewModel.nextStep() }
@@ -65,11 +68,13 @@ struct OnboardingFlow: View {
                             FinalChatStep(
                                 viewModel: viewModel,
                                 coach: viewModel.selectedCoach,
-                                onReadyToGenerate: viewModel.completeOnboarding
+                                onReadyToGenerate: viewModel.completeOnboarding // The final action
                             ).tag(7)
+                            
                         }
                         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
 
+                        // Navigation Buttons
                         if viewModel.currentStep > 0 && viewModel.currentStep < totalSteps - 1 {
                             HStack {
                                 if viewModel.currentStep > 1 {
@@ -78,9 +83,7 @@ struct OnboardingFlow: View {
                                     }
                                     .buttonStyle(SecondaryButtonStyle())
                                 }
-
                                 Spacer()
-
                                 Button("Next") {
                                     withAnimation { viewModel.nextStep() }
                                 }
@@ -122,6 +125,7 @@ struct ProgressBarView: View {
 }
 
 #Preview {
-    OnboardingFlow()
-        .environmentObject(UserManager())
+    // CORRECTED: Provide a UserManager instance to the initializer.
+    OnboardingFlow(userManager: UserManager())
+        // .environmentObject(UserManager())
 }

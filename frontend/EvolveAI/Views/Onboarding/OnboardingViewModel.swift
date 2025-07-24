@@ -9,16 +9,23 @@ import SwiftUI
 
 class OnboardingViewModel: ObservableObject {
     @Published var currentStep = 0
-    @Published var userProfile = UserProfile()
     @Published var isGenerating = false
+    @Published var errorMessage: String?
+    @Published var showErrorAlert = false
+
+    // MARK: - Published Properties (Onboarding Data)
+    @Published var userProfile = UserProfile()
     @Published var selectedCoach: Coach?
     @Published var availableCoaches: [Coach] = []
 
+    // MARK: - Dependencies
+    let userManager: UserManager
     let networkService: NetworkServiceProtocol
     
     let levels = ExperienceLevel.allCases
     
-    init(networkService: NetworkServiceProtocol = NetworkService()) {
+    init(userManager: UserManager, networkService: NetworkServiceProtocol = NetworkService()) {
+        self.userManager = userManager
         self.networkService = networkService
     }
 
@@ -52,21 +59,55 @@ class OnboardingViewModel: ObservableObject {
     }
     
     func completeOnboarding() {
-        withAnimation {
-            self.isGenerating = true
+
+        #if DEBUG
+            self.userManager.fetchUserProfile()
+            return
+        #endif
+
+        guard let authToken = userManager.authToken else {
+            self.errorMessage = "Authentication token is missing. Please restart the app."
+            self.showErrorAlert = true
+            return
+        }
+        
+        // 1. Set the state to true, which makes the UI show the AIGeneratingView.
+        self.isGenerating = true
+        
+        // 2. Call the network service with the data this ViewModel has collected.
+        networkService.generateWorkoutPlan(for: self.userProfile, authToken: authToken) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    // 3. On success, tell the UserManager to refresh its state.
+                    // This will cause the main InitialiseView to dismiss the
+                    // entire onboarding flow automatically.
+                    print("Plan generated successfully! Fetching user profile...")
+                    self?.userManager.fetchUserProfile()
+                    
+                case .failure(let error):
+                    // 4. On failure, stop the animation and set error properties to show an alert.
+                    print("Failed to generate plan: \(error.localizedDescription)")
+                    self?.isGenerating = false
+                    self?.errorMessage = error.localizedDescription
+                    self?.showErrorAlert = true
+                }
+            }
         }
     }
     
     
     func fetchCoaches() {
-        if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
+        #if DEBUG
             self.availableCoaches = mockCoaches
+            print("DEBUG: Using mock coaches.")
             return
-        }
+        #endif
 
         self.networkService.getAllCoaches { result in
             if case .success(let coaches) = result {
                 self.availableCoaches = coaches
+                print("Fetched \(coaches.count) coaches successfully.")
             } else {
                 print("Failed to fetch coaches.")
             }

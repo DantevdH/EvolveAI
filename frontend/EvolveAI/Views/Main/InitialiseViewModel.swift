@@ -33,14 +33,14 @@ class InitialiseViewModel: ObservableObject {
     
     // MARK: - Main Initializer
     // This is the initializer your actual app will use.
-    init(userManager: UserManager) {
-        // Set the initial state
+    init(userManager: UserManager) { // Also, this init should likely only take userManager
+        // 1. Give all properties an initial value FIRST. This fixes the error.
         self.viewState = .loading
         
-        // Set up the reactive subscriptions
+        // 2. Now that everything is initialized, you can safely call methods.
         setupSubscriptions(userManager: userManager)
         
-        // Trigger the initial check
+        // 3. Start the check.
         userManager.checkAuthenticationState()
     }
     
@@ -54,21 +54,18 @@ class InitialiseViewModel: ObservableObject {
                     self.viewState = .loading
                 } else if userManager.authToken == nil {
                     self.viewState = .loggedOut
-                } else if !userManager.isOnboardingComplete {
+                } else if userManager.userProfile == nil {
+                    // If there's a token but no profile, they need to create a profile.
                     self.viewState = .needsOnboarding
                 } else {
+                    // A profile exists! The user is considered "logged in".
+                    // The MainTabView will now handle fetching/checking for the workout plan.
                     self.viewState = .loggedIn
                 }
             }
             .store(in: &cancellables)
     }
     
-    
-    // MARK: - Preview/Testing Initializer
-    // 1. We add a new initializer specifically for development.
-    // 2. The #if DEBUG flag ensures this code is ONLY included in
-    //    Debug builds (like Previews) and is completely removed
-    //    from your final App Store release.
     #if DEBUG
     init(forPreviewing viewState: ViewState) {
         self.viewState = viewState

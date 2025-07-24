@@ -41,6 +41,7 @@ protocol NetworkServiceProtocol {
     func getAllCoaches(completion: @escaping (Result<[Coach], Error>) -> Void)
     func generateWorkoutPlan(for profile: UserProfile, authToken: String, completion: @escaping (Result<Void, Error>) -> Void)
     func getWorkoutPlan(authToken: String, completion: @escaping (Result<WorkoutPlan, Error>) -> Void)
+    func getUserProfile(authToken: String, completion: @escaping (Result<UserProfile, Error>) -> Void)
 }
 
 
@@ -78,8 +79,26 @@ class NetworkService: NetworkServiceProtocol {
     }
     
     func getAllCoaches(completion: @escaping (Result<[Coach], Error>) -> Void) {
-        performRequest(endpoint: "/coaches/", method: "GET", completion: completion)
-    }
+            guard let url = URL(string: "\(baseURL)/coaches/") else {
+                // Handle invalid URL error
+                return
+            }
+
+            URLSession.shared.dataTask(with: url) { data, _, error in
+                DispatchQueue.main.async {
+                    if let data = data {
+                        do {
+                            let coaches = try JSONDecoder().decode([Coach].self, from: data)
+                            completion(.success(coaches))
+                        } catch {
+                            completion(.failure(error))
+                        }
+                    } else if let error = error {
+                        completion(.failure(error))
+                    }
+                }
+            }.resume()
+        }
 
     func generateWorkoutPlan(for profile: UserProfile, authToken: String, completion: @escaping (Result<Void, Error>) -> Void) {
         guard let body = try? jsonEncoder.encode(profile) else {
@@ -101,6 +120,12 @@ class NetworkService: NetworkServiceProtocol {
 
     func getWorkoutPlan(authToken: String, completion: @escaping (Result<WorkoutPlan, Error>) -> Void) {
         performRequest(endpoint: "/workoutplan/detail/", method: "GET", authToken: authToken, completion: completion)
+    }
+
+    func getUserProfile(authToken: String, completion: @escaping (Result<UserProfile, Error>) -> Void) {
+        // This assumes your backend has an endpoint like "/users/me/" that returns
+        // the profile of the authenticated user.
+        performRequest(endpoint: "/users/me/", method: "GET", authToken: authToken, completion: completion)
     }
     
     

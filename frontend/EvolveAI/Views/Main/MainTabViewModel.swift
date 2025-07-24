@@ -19,6 +19,7 @@ class MainTabViewModel: ObservableObject {
                 return true
             case (.loaded(let lhsPlan), .loaded(let rhsPlan)):
                 // Make sure your WorkoutPlan model is Equatable, comparing by ID is best.
+                print("Comparing plans: \(lhsPlan.id) == \(rhsPlan.id)")
                 return lhsPlan.id == rhsPlan.id
             case (.error(let lhsMessage), .error(let rhsMessage)):
                 return lhsMessage == rhsMessage
@@ -29,6 +30,7 @@ class MainTabViewModel: ObservableObject {
         
         case loading
         case loaded(plan: WorkoutPlan)
+        case noPlan
         case error(message: String)
     }
     
@@ -42,11 +44,8 @@ class MainTabViewModel: ObservableObject {
     init(userManager: UserManager, workoutManager: WorkoutManager) {
         self.userManager = userManager
         self.workoutManager = workoutManager
-        
-        // 3. The ViewModel subscribes to changes from the manager.
+        // All properties are now initialized, so it's safe to use self.
         setupSubscriptions()
-        
-        // 4. The ViewModel, not the View, triggers the initial data fetch.
         fetchWorkoutPlan()
     }
     
@@ -58,9 +57,9 @@ class MainTabViewModel: ObservableObject {
         // This block is ONLY compiled for Debug builds (i.e., when running from Xcode,
         // including Previews). It will be completely removed from your final App Store release.
         #if DEBUG
-        print("--- ViewModel is in DEBUG mode, bypassing real auth token check. ---")
-        workoutManager.fetchWorkoutPlan(authToken: "DEBUG_MOCK_TOKEN")
-        return
+            print("--- ViewModel is in DEBUG mode, bypassing real auth token check. ---")
+            workoutManager.fetchWorkoutPlan(authToken: "DEBUG_MOCK_TOKEN")
+            return
         #endif
 
         // --- Real Authentication Check for RELEASE builds ---
@@ -84,28 +83,32 @@ class MainTabViewModel: ObservableObject {
     }
 
     /// This function contains the corrected logic to determine the view state.
-    private func updateViewState() {
-        // Priority 1: If there's an explicit error message, always show it.
+   private func updateViewState() {
         if let errorMessage = workoutManager.errorMessage {
+            print("Error state: \(errorMessage)")
             self.viewState = .error(message: errorMessage)
             return
         }
-        
-        // Priority 2: If a plan has been loaded, show it.
-        // This ensures that even if a background refresh is happening, the user still sees their data.
+
         if let plan = workoutManager.workoutPlan {
-            self.viewState = .loaded(plan: plan)
+            print("WorkoutPlan loaded. isEmpty: \(plan.isEmpty)")
+            if plan.isEmpty {
+                self.viewState = .noPlan
+            } else {
+                print("Setting viewState to .loaded")
+                self.viewState = .loaded(plan: plan)
+                print(self.viewState)
+            }
             return
         }
-        
-        // Priority 3: If there's no plan yet and we are actively loading, show the spinner.
+
         if workoutManager.isLoading {
+            print("Still loading...")
             self.viewState = .loading
             return
         }
-        
-        // Fallback: If not loading, no error, and still no plan, then we show the generic error.
-        // This state is now only reached after the network request has definitively finished without success.
-        self.viewState = .error(message: "Could not load your workout plan.")
+
+        print("No plan and not loading.")
+        self.viewState = .noPlan
     }
 }

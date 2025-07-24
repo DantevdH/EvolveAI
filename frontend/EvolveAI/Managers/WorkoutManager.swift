@@ -5,19 +5,12 @@
 //  Created by Dante van der Heijden on 12/07/2025.
 //
 
-//
-//  WorkoutManager.swift
-//  EvolveAI
-//
-//  Created by Dante van der Heijden on 12/07/2025.
-//
-
 import Foundation
 
 class WorkoutManager: ObservableObject {
     
     @Published var workoutPlan: WorkoutPlan?
-    @Published var isLoading = false
+    @Published var isLoading: Bool = false
     @Published var errorMessage: String?
     
     private let networkService: NetworkServiceProtocol
@@ -47,12 +40,13 @@ class WorkoutManager: ObservableObject {
             // Simulate a network delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
                 print("--- Mock plan loaded. ---")
-                self?.isLoading = false
                 self?.workoutPlan = mockWorkoutPlan // Assign mock data
+                self?.isLoading = false // Ensure loading is cleared
+
+                print("--- workout plan empty \(self?.workoutPlan?.isEmpty ?? true) ---")
             }
         } else {
             // This 'else' block allows you to test the real network call while still in debug mode.
-            // It calls the same function defined in the #else block below.
             performRealNetworkCall(authToken: authToken)
         }
 

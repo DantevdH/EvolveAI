@@ -39,6 +39,10 @@ struct WorkoutPlan: Codable, Identifiable, Equatable {
     let summary: String
     let user_profile: UserProfile
     let weekly_schedules: [WeeklySchedule]
+
+    var isEmpty: Bool {
+        return weekly_schedules.isEmpty
+    }
     
     static func == (lhs: WorkoutPlan, rhs: WorkoutPlan) -> Bool {
         lhs.id == rhs.id

@@ -24,13 +24,23 @@ struct MainTabView: View {
         
         Group {
             // The View is now a simple "renderer" for the ViewModel's state.
+
             switch viewModel.viewState {
             case .loading:
                 loadingView
                 
             case .loaded(let plan):
                 loadedView(with: plan)
-                
+
+            case .noPlan:
+                // AIGeneratingView() TODO: link back to AI generation view
+                Text("No workout plan available. Please generate one.")
+                    .foregroundColor(.evolveText)
+                    .padding()
+                    .background(Color.evolveCard)
+                    .cornerRadius(10)
+                    .padding()
+
             case .error(let message):
                 errorView(with: message)
             }
@@ -69,6 +79,7 @@ struct MainTabView: View {
     
     private func errorView(with message: String) -> some View {
         ErrorView(message: message, retryAction: {
+            print("Retrying fetchWorkoutPlan...")
             viewModel.fetchWorkoutPlan() // The View tells the ViewModel to act.
         })
     }
