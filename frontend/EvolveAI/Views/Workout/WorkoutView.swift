@@ -54,7 +54,7 @@ struct WorkoutView: View {
 //                        Text(tab.0)
 //                            .font(.caption)
 //                    }
-//                    .foregroundColor(selectedTab == index ? .evolveBlue : .secondary)
+//                    .foregroundColor(selectedTab == index ? .evolvePrimary : .secondary)
 //                    .frame(maxWidth: .infinity)
 //                    .padding(.vertical, 12)
 //                }
@@ -143,7 +143,7 @@ struct WorkoutView: View {
 //                )
 //                .overlay(
 //                    Circle()
-//                        .stroke(isToday ? Color.evolveBlue : Color.clear, lineWidth: 2)
+//                        .stroke(isToday ? Color.evolvePrimary : Color.clear, lineWidth: 2)
 //                )
 //        }
 //        .frame(maxWidth: .infinity)
@@ -153,7 +153,7 @@ struct WorkoutView: View {
 //        if isCompleted {
 //            return .green
 //        } else if hasWorkout {
-//            return isToday ? .evolveBlue : .gray.opacity(0.3)
+//            return isToday ? .evolvePrimary : .gray.opacity(0.3)
 //        } else {
 //            return .clear
 //        }
@@ -230,7 +230,7 @@ struct WorkoutView: View {
 //            
 //            Text(sets)
 //                .font(.caption)
-//                .foregroundColor(.evolveBlue)
+//                .foregroundColor(.evolvePrimary)
 //            
 //            Text("•")
 //                .foregroundColor(.secondary)
@@ -275,7 +275,7 @@ struct WorkoutView: View {
 //            VStack(alignment: .leading, spacing: 2) {
 //                Text(day)
 //                    .font(.caption)
-//                    .foregroundColor(.evolveBlue)
+//                    .foregroundColor(.evolvePrimary)
 //                
 //                Text(workout)
 //                    .font(.subheadline)
@@ -299,7 +299,7 @@ struct WorkoutView: View {
 //            
 //            Image(systemName: "play.circle")
 //                .font(.system(size: 64))
-//                .foregroundColor(.evolveBlue)
+//                .foregroundColor(.evolvePrimary)
 //            
 //            Text("No Active Workout")
 //                .font(.title2)
@@ -410,7 +410,7 @@ struct WorkoutView: View {
 //                .padding(.vertical, 8)
 //                .background(
 //                    RoundedRectangle(cornerRadius: 20)
-//                        .fill(isSelected ? Color.evolveBlue : Color.evolveCard)
+//                        .fill(isSelected ? Color.evolvePrimary : Color.evolveCard)
 //                )
 //        }
 //        .buttonStyle(PlainButtonStyle())
@@ -430,7 +430,7 @@ struct WorkoutView: View {
 //                HStack {
 //                    Text(exercise.category)
 //                        .font(.caption)
-//                        .foregroundColor(.evolveBlue)
+//                        .foregroundColor(.evolvePrimary)
 //                    
 //                    Text("•")
 //                        .foregroundColor(.secondary)
@@ -453,7 +453,7 @@ struct WorkoutView: View {
 //            Button(action: {}) {
 //                Image(systemName: "play.circle.fill")
 //                    .font(.title2)
-//                    .foregroundColor(.evolveBlue)
+//                    .foregroundColor(.evolvePrimary)
 //            }
 //        }
 //        .padding()

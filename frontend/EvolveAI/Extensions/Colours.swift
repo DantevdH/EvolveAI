@@ -41,13 +41,14 @@ extension Color {
     // A secondary dark color for card backgrounds to make them stand out.
     static let evolveCard = Color(red: 0.1, green: 0.1, blue: 0.15)
     
-    // A vibrant, electric blue for accents, buttons, and highlights.
-    static let evolveBlue = Color(red: 0.2, green: 0.5, blue: 1.0)
-    
     static let evolvePrimary = Color(hex:"#932322")
     
-    // You can add more custom colors here as your app grows.
-    static let evolveGreen = Color(red: 0.1, green: 0.9, blue: 0.4)
+    /// A neutral, muted color for inactive UI elements.
+    static let evolveMuted = Color(white: 0.7)
+    
+    /// A clean white color for primary text.
+    static let evolveText = Color.white
+    
 }
 
 

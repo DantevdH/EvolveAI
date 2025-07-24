@@ -7,30 +7,33 @@ struct DashboardView: View {
     
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Header
-                    DashboardHeader()
-                    
-                    // Quick Stats
-                    QuickStatsView()
-                    
-                    // Today's Workout
-                    TodaysWorkoutCard()
-                    
-                    // Progress Overview
-                    ProgressOverviewCard()
-                    
-                    // Nutrition Summary
-                    NutritionSummaryCard()
-                    
-                    // AI Insights
-                    AIInsightsCard()
+            
+            ZStack{
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // Header
+                        DashboardHeader()
+                        
+                        // Quick Stats
+                        QuickStatsView()
+                        
+                        // Today's Workout
+                        TodaysWorkoutCard()
+                        
+                        // Progress Overview
+                        ProgressOverviewCard()
+                        
+                        // Nutrition Summary
+                        NutritionSummaryCard()
+                        
+                        // AI Insights
+                        AIInsightsCard()
+                    }
+                    .padding()
                 }
-                .padding()
+                .background(Color.evolveBackground)
+                .navigationBarHidden(true)
             }
-            .background(Color.evolveBackground)
-            .navigationBarHidden(true)
         }
     }
 }
@@ -56,7 +59,7 @@ struct DashboardHeader: View {
             Button(action: {}) {
                 Image(systemName: "person.crop.circle.fill")
                     .font(.title)
-                    .foregroundColor(.evolveBlue)
+                    .foregroundColor(.evolvePrimary)
             }
         }
     }
@@ -75,7 +78,7 @@ struct DashboardHeader: View {
 struct QuickStatsView: View {
     var body: some View {
         HStack(spacing: 16) {
-            StatCard(title: "Streak", value: "7", subtitle: "days", color: .evolveBlue)
+            StatCard(title: "Streak", value: "7", subtitle: "days", color: .evolvePrimary)
             StatCard(title: "This Week", value: "4", subtitle: "workouts", color: .green)
             StatCard(title: "Goal", value: "75%", subtitle: "complete", color: .orange)
         }
@@ -145,7 +148,7 @@ struct TodaysWorkoutCard: View {
                 
                 Image(systemName: "figure.strengthtraining.functional")
                     .font(.system(size: 32))
-                    .foregroundColor(.evolveBlue)
+                    .foregroundColor(.evolvePrimary)
             }
             
             // Exercise Preview
@@ -171,7 +174,7 @@ struct ExercisePreviewDot: View {
     
     var body: some View {
         Circle()
-            .fill(isActive ? Color.evolveBlue : Color.gray.opacity(0.3))
+            .fill(isActive ? Color.evolvePrimary : Color.gray.opacity(0.3))
             .frame(width: 8, height: 8)
     }
 }
@@ -191,14 +194,14 @@ struct ProgressOverviewCard: View {
                     // View all progress action
                 }
                 .font(.subheadline)
-                .foregroundColor(.evolveBlue)
+                .foregroundColor(.evolvePrimary)
             }
             
             // Simple progress chart placeholder
             HStack(alignment: .bottom, spacing: 8) {
                 ForEach(0..<7) { index in
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.evolveBlue.opacity(0.7))
+                        .fill(Color.evolvePrimary.opacity(0.7))
                         .frame(width: 24, height: CGFloat.random(in: 20...60))
                 }
             }
@@ -225,7 +228,7 @@ struct NutritionSummaryCard: View {
                 
                 Text("1,847 / 2,200 cal")
                     .font(.subheadline)
-                    .foregroundColor(.evolveBlue)
+                    .foregroundColor(.evolvePrimary)
             }
             
             // Macro breakdown
@@ -281,7 +284,7 @@ struct AIInsightsCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "brain.head.profile")
-                    .foregroundColor(.evolveBlue)
+                    .foregroundColor(.evolvePrimary)
                 
                 Text("AI Insights")
                     .font(.headline)
@@ -302,7 +305,7 @@ struct AIInsightsCard: View {
                 .fill(Color.evolveCard)
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.evolveBlue.opacity(0.3), lineWidth: 1)
+                        .stroke(Color.evolvePrimary.opacity(0.3), lineWidth: 1)
                 )
         )
     }

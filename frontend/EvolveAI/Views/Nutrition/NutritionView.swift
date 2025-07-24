@@ -53,7 +53,7 @@ struct NutritionTabBar: View {
                         Text(tab.0)
                             .font(.caption)
                     }
-                    .foregroundColor(selectedTab == index ? .evolveBlue : .secondary)
+                    .foregroundColor(selectedTab == index ? .evolvePrimary : .secondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                 }

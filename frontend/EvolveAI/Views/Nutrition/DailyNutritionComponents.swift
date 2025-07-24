@@ -25,7 +25,7 @@ struct CalorieOverviewCard: View {
                 Circle()
                     .trim(from: 0.0, to: CGFloat(min(self.progress, 1.0)))
                     .stroke(style: StrokeStyle(lineWidth: 12, lineCap: .round, lineJoin: .round))
-                    .foregroundColor(Color.evolveBlue)
+                    .foregroundColor(Color.evolvePrimary)
                     .rotationEffect(Angle(degrees: 270.0))
                 
                 VStack {
