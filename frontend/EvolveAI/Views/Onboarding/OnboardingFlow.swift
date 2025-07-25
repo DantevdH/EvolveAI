@@ -1,17 +1,16 @@
 import SwiftUI
 
 struct OnboardingFlow: View {
+
+    let onComplete: () -> Void
     @StateObject var viewModel: OnboardingViewModel
 
     // The total number of steps in the onboarding flow (0-7)
     private let totalSteps = 8
 
-    init(networkService: NetworkServiceProtocol = NetworkService(), userManager: UserManager, workoutManager: WorkoutManager) {
-        _viewModel = StateObject(wrappedValue: OnboardingViewModel(
-            networkService: networkService,
-            userManager: userManager, 
-            workoutManager: workoutManager
-        ))
+    init(userManager: UserManagerProtocol, onComplete: @escaping () -> Void) {
+        _viewModel = StateObject(wrappedValue: OnboardingViewModel(userManager: userManager))
+        self.onComplete = onComplete // Store the action
     }
 
     private var userProfileBinding: Binding<UserProfile> {
@@ -24,14 +23,16 @@ struct OnboardingFlow: View {
     
 
     var body: some View {
-        if viewModel.isGenerating {
-            AIGeneratingView(
-                userProfile: viewModel.userProfile,
-                coach: viewModel.selectedCoach,
-                onComplete: viewModel.completeOnboarding
-            )
+        // 👉 If we are generating, show a simple loading view.
+        // This removes the complex TabView from the hierarchy.
+        if viewModel.userManager.isLoading {
+            ZStack {
+                Color.evolveBackground.ignoresSafeArea()
+                ProgressView("Finalizing Your Profile...")
+                    .progressViewStyle(CircularProgressViewStyle(tint: .evolvePrimary))
+                    .foregroundStyle(Color.evolveText)
+            }
         } else {
-            NavigationView {
                 ZStack {
                     Color.evolveBackground.ignoresSafeArea()
 
@@ -70,7 +71,9 @@ struct OnboardingFlow: View {
                             FinalChatStep(
                                 viewModel: viewModel,
                                 coach: viewModel.selectedCoach,
-                                onReadyToGenerate: viewModel.completeOnboarding
+                                onReadyToGenerate: {
+                                    viewModel.completeOnboarding(onSuccess: self.onComplete)
+                                }
                             ).tag(7)
                         }
                         .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
@@ -95,12 +98,22 @@ struct OnboardingFlow: View {
                             .padding()
                         }
                     }
+
+                    if viewModel.showErrorAlert {
+                        ErrorView(
+                            message: viewModel.errorMessage,
+                            retryAction: {
+                                viewModel.showErrorAlert = false
+                                // Optionally retry onboarding or plan generation
+                            }
+                        )
+                        .background(Color.black.opacity(0.7).ignoresSafeArea())
+                    }
                 }
-                .navigationBarHidden(true)
+                // .navigationBarHidden(true)
                 .onAppear(perform: viewModel.fetchCoaches)
             }
         }
-    }
 }
 
 struct ProgressBarView: View {
@@ -126,7 +139,7 @@ struct ProgressBarView: View {
     }
 }
 
-#Preview {
-    OnboardingFlow(userManager: UserManager(), workoutManager: WorkoutManager())
-        .environmentObject(UserManager())
-}
+// #Preview {
+//     OnboardingFlow(userManager: UserManager())
+//         .environmentObject(UserManager())
+// }
