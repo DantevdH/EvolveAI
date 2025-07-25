@@ -6,8 +6,12 @@ struct OnboardingFlow: View {
     // The total number of steps in the onboarding flow (0-7)
     private let totalSteps = 8
 
-    init(networkService: NetworkServiceProtocol = NetworkService()) {
-        _viewModel = StateObject(wrappedValue: OnboardingViewModel(networkService: networkService))
+    init(networkService: NetworkServiceProtocol = NetworkService(), userManager: UserManager, workoutManager: WorkoutManager) {
+        _viewModel = StateObject(wrappedValue: OnboardingViewModel(
+            networkService: networkService,
+            userManager: userManager, 
+            workoutManager: workoutManager
+        ))
     }
 
     private var userProfileBinding: Binding<UserProfile> {
@@ -23,7 +27,8 @@ struct OnboardingFlow: View {
         if viewModel.isGenerating {
             AIGeneratingView(
                 userProfile: viewModel.userProfile,
-                coach: viewModel.selectedCoach
+                coach: viewModel.selectedCoach,
+                onComplete: viewModel.completeOnboarding
             )
         } else {
             NavigationView {
@@ -122,6 +127,6 @@ struct ProgressBarView: View {
 }
 
 #Preview {
-    OnboardingFlow()
+    OnboardingFlow(userManager: UserManager(), workoutManager: WorkoutManager())
         .environmentObject(UserManager())
 }

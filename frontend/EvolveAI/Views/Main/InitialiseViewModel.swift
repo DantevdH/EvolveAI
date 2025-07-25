@@ -50,13 +50,20 @@ class InitialiseViewModel: ObservableObject {
             .sink { [weak self] _ in
                 guard let self = self else { return }
 
+                // Follow the flow diagram logic
                 if userManager.isLoading {
                     self.viewState = .loading
                 } else if userManager.authToken == nil {
+                    // No auth token -> show login
                     self.viewState = .loggedOut
+                } else if userManager.userProfile == nil {
+                    // Has token but no profile -> show onboarding
+                    self.viewState = .needsOnboarding
                 } else if !userManager.isOnboardingComplete {
+                    // Has profile but onboarding not complete -> show onboarding
                     self.viewState = .needsOnboarding
                 } else {
+                    // Everything is complete -> show main app
                     self.viewState = .loggedIn
                 }
             }

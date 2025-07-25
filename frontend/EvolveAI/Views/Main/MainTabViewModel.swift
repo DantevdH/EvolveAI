@@ -59,7 +59,7 @@ class MainTabViewModel: ObservableObject {
         // including Previews). It will be completely removed from your final App Store release.
         #if DEBUG
         print("--- ViewModel is in DEBUG mode, bypassing real auth token check. ---")
-        workoutManager.fetchWorkoutPlan(authToken: "DEBUG_MOCK_TOKEN")
+        workoutManager.fetchPlan(authToken: "DEBUG_MOCK_TOKEN")
         return
         #endif
 
@@ -71,7 +71,7 @@ class MainTabViewModel: ObservableObject {
         }
         
         // The WorkoutManager is now the single source of truth for loading state.
-        workoutManager.fetchWorkoutPlan(authToken: authToken)
+        workoutManager.fetchPlan(authToken: authToken)
     }
     
     private func setupSubscriptions() {

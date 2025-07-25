@@ -29,7 +29,7 @@ struct InitialiseView: View {
             case .loggedOut:
                 LoginView()
             case .needsOnboarding:
-                OnboardingFlow()
+                OnboardingFlow(userManager: userManager, workoutManager: workoutManager)
             case .loggedIn:
                 // This still requires the EnvironmentObjects to be passed down.
                 MainTabView(userManager: userManager, workoutManager: workoutManager)

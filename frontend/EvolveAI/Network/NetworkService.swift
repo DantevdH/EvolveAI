@@ -38,9 +38,12 @@ enum NetworkError: LocalizedError {
 /// The public-facing API remains unchanged.
 protocol NetworkServiceProtocol {
     func login(credentials: [String: String], completion: @escaping (Result<String, Error>) -> Void)
+    func getUserProfile(authToken: String, completion: @escaping (Result<UserProfile, Error>) -> Void)
+    func saveUserProfile(_ profile: UserProfile, authToken: String, completion: @escaping (Result<Void, Error>) -> Void)
     func getAllCoaches(completion: @escaping (Result<[Coach], Error>) -> Void)
     func generateWorkoutPlan(for profile: UserProfile, authToken: String, completion: @escaping (Result<Void, Error>) -> Void)
-    func getWorkoutPlan(authToken: String, completion: @escaping (Result<WorkoutPlan, Error>) -> Void)
+    func getWorkoutPlan(authToken: String, completion: @escaping (Result<WorkoutPlanResponse, Error>) -> Void)
+    func updateProgress(updates: [ExerciseProgressUpdate], authToken: String, completion: @escaping (Result<Void, Error>) -> Void)
 }
 
 
@@ -77,6 +80,26 @@ class NetworkService: NetworkServiceProtocol {
         }
     }
     
+    func getUserProfile(authToken: String, completion: @escaping (Result<UserProfile, Error>) -> Void) {
+        performRequest(endpoint: "/users/profile/", method: "GET", authToken: authToken, completion: completion)
+    }
+    
+    func saveUserProfile(_ profile: UserProfile, authToken: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let body = try? jsonEncoder.encode(profile) else {
+            completion(.failure(NetworkError.decodingError(NSError())))
+            return
+        }
+        
+        performRequest(endpoint: "/users/profile/", method: "PUT", body: body, authToken: authToken) { (result: Result<Data?, Error>) in
+            switch result {
+            case .success:
+                completion(.success(())) // Return a Void success
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+    
     func getAllCoaches(completion: @escaping (Result<[Coach], Error>) -> Void) {
         performRequest(endpoint: "/coaches/", method: "GET", completion: completion)
     }
@@ -99,8 +122,27 @@ class NetworkService: NetworkServiceProtocol {
         }
     }
 
-    func getWorkoutPlan(authToken: String, completion: @escaping (Result<WorkoutPlan, Error>) -> Void) {
+    func getWorkoutPlan(authToken: String, completion: @escaping (Result<WorkoutPlanResponse, Error>) -> Void) {
+
         performRequest(endpoint: "/workoutplan/detail/", method: "GET", authToken: authToken, completion: completion)
+    }
+    
+    func updateProgress(updates: [ExerciseProgressUpdate], authToken: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        let requestBody = ProgressUpdateRequest(updates: updates)
+        
+        guard let body = try? jsonEncoder.encode(requestBody) else {
+            completion(.failure(NetworkError.decodingError(NSError())))
+            return
+        }
+        
+        performRequest(endpoint: "/workoutplan/progress/", method: "POST", body: body, authToken: authToken) { (result: Result<Data?, Error>) in
+            switch result {
+            case .success:
+                completion(.success(()))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
     }
     
     

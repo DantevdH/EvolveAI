@@ -55,7 +55,7 @@ struct MainTabView: View {
         ZStack(alignment: .bottom) {
             TabView(selection: $selectedTab) {
                 DashboardView().tag(0)
-                WorkoutView(plan: plan).tag(1)
+                WorkoutView(workoutPlan: plan).tag(1)
                 NutritionView().tag(2)
 //                ProfileView().tag(3)
             }
@@ -118,37 +118,48 @@ struct MainTabView: View {
 }
 
 
-#Preview("Loaded State") {
-    let userManager = UserManager()
-    let workoutManager = WorkoutManager()
-    workoutManager.workoutPlan = mockWorkoutPlan
-    workoutManager.isLoading = false
-    
-    return MainTabView(userManager: userManager, workoutManager: workoutManager)
-        .environmentObject(userManager)
-        .environmentObject(workoutManager)
-        .background(Color.evolveBackground.ignoresSafeArea())
-}
-
-#Preview("Error State") {
-    let userManager = UserManager()
-    let workoutManager = WorkoutManager()
-    workoutManager.isLoading = false
-    workoutManager.errorMessage = "Network connection timed out."
-    
-    return MainTabView(userManager: userManager, workoutManager: workoutManager)
-        .environmentObject(userManager)
-        .environmentObject(workoutManager)
-        .background(Color.evolveBackground)
-}
-
-#Preview("Loading State") {
-    let userManager = UserManager()
-    let workoutManager = WorkoutManager()
-    workoutManager.isLoading = true
-    
-    return MainTabView(userManager: userManager, workoutManager: workoutManager)
-        .environmentObject(userManager)
-        .environmentObject(workoutManager)
-        .background(Color.evolveBackground)
-}
+//#Preview("Loaded State") {
+//    let userManager = UserManager()
+//    let workoutManager = WorkoutManager()
+//    // Updated to use the new workoutPlanResponse structure
+//    let mockProgress = WorkoutProgress(
+//        id: 1,
+//        currentWeek: 1,
+//        currentDayIndex: 0,
+//        startDate: "2025-01-01",
+//        lastUpdated: "2025-01-01T10:00:00Z"
+//    )
+//    workoutManager.workoutPlanResponse = WorkoutPlanResponse(
+//        workoutPlan: mockWorkoutPlan,
+//        progress: mockProgress
+//    )
+//    workoutManager.isLoading = false
+//    
+//    MainTabView(userManager: userManager, workoutManager: workoutManager)
+//        .environmentObject(userManager)
+//        .environmentObject(workoutManager)
+//        .background(Color.evolveBackground.ignoresSafeArea())
+//}
+//
+//#Preview("Error State") {
+//    let userManager = UserManager()
+//    let workoutManager = WorkoutManager()
+//    workoutManager.isLoading = false
+//    workoutManager.errorMessage = "Network connection timed out."
+//    
+//    MainTabView(userManager: userManager, workoutManager: workoutManager)
+//        .environmentObject(userManager)
+//        .environmentObject(workoutManager)
+//        .background(Color.evolveBackground)
+//}
+//
+//#Preview("Loading State") {
+//    let userManager = UserManager()
+//    let workoutManager = WorkoutManager()
+//    workoutManager.isLoading = true
+//    
+//    MainTabView(userManager: userManager, workoutManager: workoutManager)
+//        .environmentObject(userManager)
+//        .environmentObject(workoutManager)
+//        .background(Color.evolveBackground)
+//}

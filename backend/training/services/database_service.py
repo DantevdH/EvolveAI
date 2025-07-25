@@ -1,6 +1,12 @@
 from typing import Dict, Any
 from users.models import UserProfile
-from training.models import WorkoutPlan, Exercise, DailyWorkout, WeeklySchedule, WorkoutExercise
+from training.models import (
+    WorkoutPlan,
+    Exercise,
+    DailyWorkout,
+    WeeklySchedule,
+    WorkoutExercise,
+)
 from training.schemas import WorkoutPlanSchema
 
 
@@ -13,10 +19,10 @@ class WorkoutPlanDatabaseService:
     def create_workout_plan(self, workout_plan: WorkoutPlanSchema) -> WorkoutPlan:
         """
         Create a complete workout plan in the database from Pydantic model.
-        
+
         Args:
             workout_plan: Validated Pydantic workout plan schema
-            
+
         Returns:
             WorkoutPlan: Created Django model instance
         """
@@ -27,7 +33,7 @@ class WorkoutPlanDatabaseService:
         db_workout_plan = WorkoutPlan.objects.create(
             user_profile=self.user_profile,
             title=workout_plan.title,
-            summary=workout_plan.summary
+            summary=workout_plan.summary,
         )
 
         # Create weekly schedules
@@ -67,7 +73,7 @@ class WorkoutPlanDatabaseService:
         # Get or create the base exercise
         exercise, created = Exercise.objects.get_or_create(
             name=exercise_schema.name,
-            defaults={'description': f'Exercise: {exercise_schema.name}'}
+            defaults={"description": f"Exercise: {exercise_schema.name}"},
         )
 
         # Create the workout-specific exercise details
@@ -75,5 +81,5 @@ class WorkoutPlanDatabaseService:
             daily_workout=daily_workout,
             exercise=exercise,
             sets=exercise_schema.sets,
-            reps=exercise_schema.reps
+            reps=exercise_schema.reps,
         )
