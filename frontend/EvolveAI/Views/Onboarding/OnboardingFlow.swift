@@ -23,95 +23,77 @@ struct OnboardingFlow: View {
     
 
     var body: some View {
-        // 👉 If we are generating, show a simple loading view.
-        // This removes the complex TabView from the hierarchy.
-        if viewModel.userManager.isLoading {
             ZStack {
                 Color.evolveBackground.ignoresSafeArea()
-                ProgressView("Finalizing Your Profile...")
-                    .progressViewStyle(CircularProgressViewStyle(tint: .evolvePrimary))
-                    .foregroundStyle(Color.evolveText)
-            }
-        } else {
-                ZStack {
-                    Color.evolveBackground.ignoresSafeArea()
 
-                    VStack(spacing: 0) {
-                        if viewModel.currentStep > 0 {
-                            ProgressBarView(currentStep: viewModel.currentStep, totalSteps: totalSteps)
-                                .padding(.horizontal)
-                                .padding(.top)
-                        } else {
-                            Spacer()
-                        }
-
-                        TabView(selection: $viewModel.currentStep) {
-                            WelcomeStep {
-                                withAnimation(.easeInOut) { viewModel.nextStep() }
-                            }.tag(0)
-
-                            ExperienceStep(viewModel: viewModel).tag(1)
-
-                            PersonalInfoStep(viewModel: viewModel).tag(2)
-
-                            GoalsStep(
-                                viewModel: viewModel,
-                                availableCoaches: viewModel.availableCoaches,
-                                onCoachSelected: { coach in
-                                    viewModel.selectedCoach = coach
-                                }
-                            ).tag(3)
-
-                            ScheduleStep(viewModel: viewModel).tag(4)
-
-                            EquipmentStep(viewModel: viewModel).tag(5)
-
-                            LimitationsStep(viewModel: viewModel).tag(6)
-
-                            FinalChatStep(
-                                viewModel: viewModel,
-                                coach: viewModel.selectedCoach,
-                                onReadyToGenerate: {
-                                    viewModel.completeOnboarding(onSuccess: self.onComplete)
-                                }
-                            ).tag(7)
-                        }
-                        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-
-                        if viewModel.currentStep > 0 && viewModel.currentStep < totalSteps - 1 {
-                            HStack {
-                                if viewModel.currentStep > 1 {
-                                    Button("Back") {
-                                        withAnimation { viewModel.previousStep() }
-                                    }
-                                    .buttonStyle(SecondaryButtonStyle())
-                                }
-
-                                Spacer()
-
-                                Button("Next") {
-                                    withAnimation { viewModel.nextStep() }
-                                }
-                                .buttonStyle(NextButtonStyle())
-                                .disabled(viewModel.isNextButtonDisabled)
-                            }
-                            .padding()
-                        }
+                VStack(spacing: 0) {
+                    if viewModel.currentStep > 0 {
+                        ProgressBarView(currentStep: viewModel.currentStep, totalSteps: totalSteps)
+                            .padding(.horizontal)
+                            .padding(.top)
+                    } else {
+                        Spacer()
                     }
 
-                    if viewModel.showErrorAlert {
-                        ErrorView(
-                            message: viewModel.errorMessage,
-                            retryAction: {
-                                viewModel.showErrorAlert = false
-                                // Optionally retry onboarding or plan generation
+                    TabView(selection: $viewModel.currentStep) {
+                        WelcomeStep {
+                            withAnimation(.easeInOut) { viewModel.nextStep() }
+                        }.tag(0)
+
+                        ExperienceStep(viewModel: viewModel).tag(1)
+
+                        PersonalInfoStep(viewModel: viewModel).tag(2)
+
+                        GoalsStep(
+                            viewModel: viewModel,
+                        ).tag(3)
+
+                        ScheduleStep(viewModel: viewModel).tag(4)
+
+                        EquipmentStep(viewModel: viewModel).tag(5)
+
+                        LimitationsStep(viewModel: viewModel).tag(6)
+
+                        FinalChatStep(
+                            viewModel: viewModel,
+                            coach: viewModel.selectedCoach,
+                            onReadyToGenerate: {
+                                viewModel.completeOnboarding(onSuccess: self.onComplete)
                             }
-                        )
-                        .background(Color.black.opacity(0.7).ignoresSafeArea())
+                        ).tag(7)
+                    }
+                    .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+
+                    if viewModel.currentStep > 0 && viewModel.currentStep < totalSteps - 1 {
+                        HStack {
+                            if viewModel.currentStep > 1 {
+                                Button("Back") {
+                                    withAnimation { viewModel.previousStep() }
+                                }
+                                .buttonStyle(SecondaryButtonStyle())
+                            }
+
+                            Spacer()
+
+                            Button("Next") {
+                                withAnimation { viewModel.nextStep() }
+                            }
+                            .buttonStyle(NextButtonStyle())
+                            .disabled(viewModel.isNextButtonDisabled)
+                        }
+                        .padding()
                     }
                 }
-                // .navigationBarHidden(true)
-                .onAppear(perform: viewModel.fetchCoaches)
+
+                if viewModel.showErrorAlert {
+                    ErrorView(
+                        message: viewModel.errorMessage,
+                        retryAction: {
+                            viewModel.showErrorAlert = false
+                        }
+                    )
+                    .background(Color.black.opacity(0.7).ignoresSafeArea())
+                }
             }
         }
 }

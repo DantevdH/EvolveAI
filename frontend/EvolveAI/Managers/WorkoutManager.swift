@@ -19,6 +19,11 @@ class WorkoutManager: ObservableObject {
     private var updateTimer: Timer?
     private let updateDelay: TimeInterval = 2.0 // 2 seconds delay for batch updates
     
+    @Published var coaches: [Coach] = []
+    @Published var selectedCoach: Coach? = nil
+    @Published var isCoachesLoading = false
+    @Published var coachesErrorMessage: String? = nil
+    
     private let networkService: NetworkServiceProtocol
     private var cancellables = Set<AnyCancellable>()
 
@@ -27,12 +32,6 @@ class WorkoutManager: ObservableObject {
         workoutPlanResponse?.workoutPlan
     }
     
-    // No more progress or currentWeek; use local calculation if needed
-    
-    // var currentWeek: Int {
-    //     // Always reflect the real week since plan start, not UI selection
-    //     workoutPlan?.createdAt.weeksSince(Date()) ?? 1
-    // }
     
     var canModifyWeek: Bool {
         // Can only modify current week or future weeks
@@ -41,6 +40,10 @@ class WorkoutManager: ObservableObject {
 
     init(networkService: NetworkServiceProtocol = AppEnvironment.networkService) {
         self.networkService = networkService
+    }
+    
+    deinit {
+        print("[DEINIT] WorkoutManager deinitialized: \(Unmanaged.passUnretained(self).toOpaque())")
     }
     
     /// Fetches the existing workout plan for the authenticated user from the server.
@@ -115,17 +118,54 @@ class WorkoutManager: ObservableObject {
             self?.flushPendingUpdates(authToken: authToken)
         }
     }
-    
-    /// Updates the current week
-    // func updateCurrentWeek(_ week: Int, authToken: String, completion: @escaping (Bool) -> Void) {
-    //     // Do not update currentWeek based on UI navigation. Only update if server/logic says so.
-    //     print("[DEBUG] updateCurrentWeek: called with week = \(week), but currentWeek is always based on progress/startDate.")
-    //     completion(true)
-    // }
-    
+
     /// Legacy method name for backward compatibility
     func fetchWorkoutPlan(authToken: String) {
         fetchPlan(authToken: authToken)
+    }
+    
+    /// Fetches the list of coaches and selects the one matching the user's goal.
+    func fetchCoaches(userGoal: String, completion: @escaping (Bool) -> Void) {
+        print("[WorkoutManager] fetchCoaches called with userGoal: \(userGoal)")
+        print("[WorkoutManager] Using networkService: \(type(of: networkService))")
+
+        DispatchQueue.main.async { [weak self] in
+            self?.isCoachesLoading = true
+            self?.coachesErrorMessage = nil
+        }
+        
+        print("[WorkoutManager] About to call networkService.getAllCoaches")
+        networkService.getAllCoaches { [weak self] result in
+            print("[WorkoutManager] getAllCoaches completion called")
+            print("[WorkoutManager] Self is nil: \(self == nil)")
+            
+            DispatchQueue.main.async {
+                print("[WorkoutManager] getAllCoaches completion - on main queue")
+                guard let self = self else {
+                    print("[WorkoutManager] Self is nil in main queue, cannot proceed")
+                    return
+                }
+                
+                self.isCoachesLoading = false
+                switch result {
+                case .success(let coaches):
+                    print("[WorkoutManager] Fetched coaches: \(coaches.count)")
+                    print("[WorkoutManager] First coach (if any): \(coaches.first)")
+
+                    print("[WorkoutManager] getAllCoaches success with \(coaches.count) coaches")
+                    self.coaches = coaches
+                    self.selectedCoach = mockCoaches[0]  // This line might be problematic
+                    print("[WorkoutManager] selectedCoach set, calling completion(true)")
+                    completion(self.selectedCoach != nil)
+                case .failure(let error):
+                    print("[WorkoutManager] getAllCoaches failure: \(error)")
+                    self.coaches = []
+                    self.selectedCoach = nil
+                    self.coachesErrorMessage = error.localizedDescription
+                    completion(false)
+                }
+            }
+        }
     }
     
     // MARK: - Private Methods

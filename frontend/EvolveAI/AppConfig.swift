@@ -1,17 +1,9 @@
-import Foundation
-
 enum AppEnvironment {
-    /// Set this to true to use mock network service, false for real backend
-    static var useMockNetwork: Bool {
+    static let networkService: NetworkServiceProtocol = {
         #if DEBUG
-        // You can also use UserDefaults or a launch argument for runtime toggling
-        return true // Change to false to use real backend in debug
+        return MockNetworkService()
         #else
-        return false
+        return NetworkService()
         #endif
-    }
-    
-    static var networkService: NetworkServiceProtocol {
-        useMockNetwork ? MockNetworkService() : NetworkService()
-    }
-} 
+    }()
+}
