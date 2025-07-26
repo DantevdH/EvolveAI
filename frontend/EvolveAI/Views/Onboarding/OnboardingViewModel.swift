@@ -13,17 +13,17 @@ class OnboardingViewModel: ObservableObject {
     @Published var isGenerating = false
     @Published var selectedCoach: Coach?
     @Published var availableCoaches: [Coach] = []
+    @Published var showErrorAlert = false
+    @Published var errorMessage = ""
 
     private let networkService: NetworkServiceProtocol
-    private let userManager: UserManager
-    private let workoutManager: WorkoutManager
+    let userManager: UserManagerProtocol
     
     let levels = ExperienceLevel.allCases
     
-    init(networkService: NetworkServiceProtocol = NetworkService(), userManager: UserManager, workoutManager: WorkoutManager) {
+    init(networkService: NetworkServiceProtocol = NetworkService(), userManager: UserManagerProtocol) {
         self.networkService = networkService
         self.userManager = userManager
-        self.workoutManager = workoutManager
     }
 
     func nextStep() {
@@ -55,11 +55,8 @@ class OnboardingViewModel: ObservableObject {
         }
     }
     
-    /// Completes onboarding following the new flow diagram:
-    /// 1. Save user profile via UserManager
-    /// 2. Create workout plan via WorkoutManager
-    /// 3. Fetch the created plan
-    func completeOnboarding() {
+    /// Completes onboarding following the new flow diagram
+    func completeOnboarding(onSuccess: @escaping () -> Void) {
         withAnimation {
             self.isGenerating = true
         }
@@ -69,31 +66,15 @@ class OnboardingViewModel: ObservableObject {
             guard let self = self, success else {
                 DispatchQueue.main.async {
                     self?.isGenerating = false
-                    // Handle error - you might want to show an alert here
-                    print("Failed to complete onboarding")
+                    self?.errorMessage = "Failed to complete onboarding"
+                    self?.showErrorAlert = true
                 }
                 return
             }
             
-            // Step 2: Create workout plan
-            guard let authToken = self.userManager.authToken else {
-                DispatchQueue.main.async {
-                    self.isGenerating = false
-                    print("No auth token available")
-                }
-                return
-            }
-            
-            self.workoutManager.createPlan(for: self.userProfile, authToken: authToken) { [weak self] planSuccess in
-                DispatchQueue.main.async {
-                    self?.isGenerating = false
-                    if !planSuccess {
-                        // Handle plan creation error
-                        print("Failed to create workout plan")
-                    }
-                    // Success is handled automatically by the published properties
-                    // which will trigger the InitialiseView to switch to MainTabView
-                }
+            DispatchQueue.main.async {
+                self.isGenerating = false
+                onSuccess()
             }
         }
     }
