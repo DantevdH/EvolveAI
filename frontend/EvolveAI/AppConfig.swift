@@ -24,7 +24,10 @@ enum AppEnvironment {
         let scenario = arguments.first { arg in
             arg.hasPrefix("--scenario-")
         }?.replacingOccurrences(of: "--scenario-", with: "") ?? "new-user"
+        print("LAUNCH ARGUMENTS: \(arguments)")
+        print("DETECTED SCENARIO: \(scenario)")
         print("Development scenario detected: \(scenario)")
+        print("Setting backend scenario to: \(scenario)")
         networkService.setScenarioIfNeeded { success in
             if success {
                 print("[AppConfig] Scenario set successfully on backend.")

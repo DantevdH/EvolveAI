@@ -23,5 +23,5 @@ urlpatterns = [
     path("api/users/", include("users.urls")),
     path("api/workoutplan/", include("training.urls")),
     path("api/coaches/", include("coaches.urls")),
-    path("api/scenarios/", include("training.scenario_urls")),  # Add scenario endpoints
+    path("api/scenarios/", include("mock.scenario_urls")),  # Add scenario endpoints
 ]

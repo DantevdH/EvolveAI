@@ -3,24 +3,37 @@ import SwiftUI
 // main atribute makes it the first file our app runs
 // it creates the main window and injects your shared data managers
 
+protocol NetworkServiceFactory {
+    func makeNetworkService() -> NetworkServiceProtocol
+}
+
+struct ProductionNetworkServiceFactory: NetworkServiceFactory {
+    func makeNetworkService() -> NetworkServiceProtocol {
+        NetworkService(baseURL: AppEnvironment.apiBaseURL)
+    }
+}
+
 @main
 struct EvolveAIApp: App {
-    @StateObject private var userManager = UserManager()
-    @StateObject private var workoutManager = WorkoutManager()
-    @StateObject private var nutritionManager = NutritionManager()
+    @StateObject private var userManager: UserManager
+    @StateObject private var workoutManager: WorkoutManager
+    @StateObject private var nutritionManager: NutritionManager
     @StateObject private var appViewModel: AppViewModel
     
+    // No-argument initializer for SwiftUI
     init() {
-        // Only run app initialization if not in test environment
+        self.init(factory: ProductionNetworkServiceFactory())
+    }
+
+    // Dependency injection via factory
+    init(factory: NetworkServiceFactory) {
         #if DEBUG
-        if !ProcessInfo.processInfo.environment.keys.contains("XCTestConfigurationFilePath") {
-            AppEnvironment.printConfiguration()
-            AppEnvironment.initializeDevelopmentScenario()
-        }
+        AppEnvironment.printConfiguration()
+        AppEnvironment.initializeDevelopmentScenario()
         #endif
-        
-        let userManager = UserManager()
-        let workoutManager = WorkoutManager()
+        let service = factory.makeNetworkService()
+        let userManager = UserManager(networkService: service)
+        let workoutManager = WorkoutManager(networkService: service)
         _userManager = StateObject(wrappedValue: userManager)
         _workoutManager = StateObject(wrappedValue: workoutManager)
         _nutritionManager = StateObject(wrappedValue: NutritionManager())

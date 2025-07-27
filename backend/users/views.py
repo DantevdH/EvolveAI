@@ -7,14 +7,13 @@ from rest_framework.authentication import TokenAuthentication
 from django.conf import settings
 from .models import UserProfile
 from .serializers import UserProfileSerializer
-from training.scenario_auth import ScenarioAwareAuthentication, ScenarioAwarePermission
-from training.scenario_mixin import ScenarioMixin
-from training.scenario_manager import ScenarioManager
-from training.scenario_views import MOCK_USER_PROFILE
+from mock.scenario_auth import ScenarioAwareAuthentication, ScenarioAwarePermission
+from mock.scenario_mixin import ScenarioMixin
+from mock.scenario_manager import ScenarioManager, Scenario
+from mock.scenario_views import MOCK_USER_PROFILE
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.authtoken.models import Token
 from django.contrib.auth.models import User
-
 # Create your views here.
 
 
@@ -80,7 +79,7 @@ def scenario_aware_login(request):
     """
     Scenario-aware login endpoint. Always returns a mock token for mock scenarios.
     """
-    from training.scenario_manager import ScenarioManager, Scenario
+    
     scenario = ScenarioManager.get_current_scenario(request)
     if scenario:
         if ScenarioManager.should_return_network_error(scenario):

@@ -7,8 +7,8 @@ from rest_framework import status
 class Scenario(Enum):
     """Enum for all available scenarios"""
     NEW_USER = "new-user"
-    EXISTING_USER = "existing-user"
-    ONBOARDED_USER = "onboarded-user"
+    NEEDS_ONBOARDING = "needs-onboarding"
+    NEEDS_PLAN = "needs-plan"
     USER_WITH_PLAN = "user-with-plan"
     NETWORK_ERROR = "network-error"
 
@@ -33,22 +33,22 @@ class ScenarioManager:
     @staticmethod
     def should_return_404_for_profile_get(scenario: Scenario) -> bool:
         """Check if profile GET should return 404 for given scenario"""
-        return scenario in [Scenario.NEW_USER, Scenario.EXISTING_USER]
+        return scenario in [Scenario.NEW_USER, Scenario.NEEDS_ONBOARDING]
     
     @staticmethod
     def should_return_404_for_profile_put(scenario: Scenario) -> bool:
         """Check if profile PUT should return 404 for given scenario"""
-        return scenario in [Scenario.EXISTING_USER]  # new-user CAN save, existing-user cannot
+        return False  # veryone can save
     
     @staticmethod
     def should_return_404_for_workout_plan_get(scenario: Scenario) -> bool:
         """Check if workout plan GET should return 404 for given scenario"""
-        return scenario in [Scenario.NEW_USER, Scenario.EXISTING_USER, Scenario.ONBOARDED_USER]  # Can't fetch if doesn't exist
+        return scenario in [Scenario.NEW_USER, Scenario.NEEDS_ONBOARDING, Scenario.NEEDS_PLAN]  # Can't fetch if doesn't exist
     
     @staticmethod
     def should_return_404_for_workout_plan_post(scenario: Scenario) -> bool:
         """Check if workout plan POST (create) should return 404 for given scenario"""
-        return scenario in [Scenario.EXISTING_USER]  # Only existing-user can't create plans
+        return False  # everyone can create plans
     
     @staticmethod
     def should_return_network_error(scenario: Scenario) -> bool:

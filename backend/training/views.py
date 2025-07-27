@@ -8,10 +8,10 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from datetime import datetime, timedelta
-from .scenario_auth import ScenarioAwareAuthentication, ScenarioAwarePermission
-from .scenario_mixin import ScenarioMixin
-from .scenario_manager import ScenarioManager
-from .scenario_views import MOCK_WORKOUT_PLAN
+from mock.scenario_auth import ScenarioAwareAuthentication, ScenarioAwarePermission
+from mock.scenario_mixin import ScenarioMixin
+from mock.scenario_manager import ScenarioManager, Scenario
+from mock.scenario_views import MOCK_WORKOUT_PLAN
 
 from users.models import UserProfile
 from .models import (
@@ -195,10 +195,9 @@ class WorkoutPlanDetailView(ScenarioMixin, APIView):
             return scenario_response
 
         # If scenario is set and user is not authenticated, return mock plan (for scenario mode)
-        from .scenario_manager import ScenarioManager, Scenario
+        
         scenario = ScenarioManager.get_current_scenario(request)
         if scenario in [Scenario.USER_WITH_PLAN]:
-            from .mock_data import MOCK_WORKOUT_PLAN
             return Response({"workout_plan": MOCK_WORKOUT_PLAN, "progress": None}, status=status.HTTP_200_OK)
 
         try:

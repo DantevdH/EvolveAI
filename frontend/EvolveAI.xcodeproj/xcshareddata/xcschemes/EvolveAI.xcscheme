@@ -76,8 +76,8 @@
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument
-            argument = "--scenario-onboarded-user"
-            isEnabled = "NO">
+            argument = "--scenario-needs-plan"
+            isEnabled = "YES">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "--scenario-new-user"
@@ -85,14 +85,14 @@
          </CommandLineArgument>
          <CommandLineArgument
             argument = "--scenario-user-with-plan"
-            isEnabled = "YES">
+            isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
             argument = "--scenario-network-error"
             isEnabled = "NO">
          </CommandLineArgument>
          <CommandLineArgument
-            argument = "--scenario-existing-user "
+            argument = "--scenario-needs-onboarding"
             isEnabled = "NO">
          </CommandLineArgument>
       </CommandLineArguments>

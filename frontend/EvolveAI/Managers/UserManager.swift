@@ -53,6 +53,7 @@ class UserManager: ObservableObject, UserManagerProtocol {
     
     // Track whether we've attempted to validate the token
     @Published var isNewUser = false
+    @Published var networkErrorMessage: String? = nil
     private let networkService: NetworkServiceProtocol
 
     init(networkService: NetworkServiceProtocol = AppEnvironment.networkService) {
@@ -95,29 +96,30 @@ class UserManager: ObservableObject, UserManagerProtocol {
                     self?.userProfile = profile
                     self?.isOnboardingComplete = true
                     self?.isLoading = false
+                    self?.networkErrorMessage = nil
                     self?.printState("fetchUserData - success")
                 case .failure(let error):
-                    // Check if it's an authentication error (401) or other error
                     if let networkError = error as NSError? {
                         switch networkError.code {
-                        case 401: // Unauthorized - token is invalid
+                        case 401:
                             print("Token is invalid (401), clearing auth token")
                             self?.authToken = nil
                             self?.userProfile = nil
                             self?.isOnboardingComplete = false
-                        case 404: // Not found - user profile doesn't exist
+                        case 404:
                             print("User profile not found (404), moving to onboarding")
-                            // self?.authToken = nil
                             self?.userProfile = nil
                             self?.isOnboardingComplete = false
                             self?.isNewUser = true
-                        default: // Other errors - keep token but clear profile
+                        case 500...599:
+                            print("Network/server error ( \(networkError.code)), surfacing error to UI")
+                            self?.networkErrorMessage = "A network error occurred. Please try again."
+                        default:
                             print("Network error (\(networkError.code)), keeping token but clearing profile")
                             self?.userProfile = nil
                             self?.isOnboardingComplete = false
                         }
                     } else {
-                        // Generic error - clear everything
                         self?.authToken = nil
                         self?.userProfile = nil
                         self?.isOnboardingComplete = false

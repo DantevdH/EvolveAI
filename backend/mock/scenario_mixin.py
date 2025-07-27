@@ -49,7 +49,7 @@ class ScenarioMixin:
                 return ScenarioManager.create_404_response("Cannot create workout plan")
         
         if response_type == 'profile' and request.method == 'GET':
-            if scenario in [Scenario.ONBOARDED_USER, Scenario.USER_WITH_PLAN]:
+            if scenario in [Scenario.NEEDS_PLAN, Scenario.USER_WITH_PLAN]:
                 return Response(MOCK_USER_PROFILE, status=status.HTTP_200_OK)
         
         return None 

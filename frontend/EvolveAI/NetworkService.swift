@@ -253,6 +253,19 @@ class NetworkService: NetworkServiceProtocol {
                     return
                 }
                 
+                // Suppress 404 for workout plan detail endpoint
+                if httpResponse.statusCode == 404 && endpoint.contains("/workoutplan/detail") {
+                    // If T is optional, you could do: completion(.success(nil as! T))
+                    // Otherwise, propagate a custom error or handle in manager
+                    completion(.failure(NSError(domain: "WorkoutPlan", code: 404, userInfo: [NSLocalizedDescriptionKey: "No workout plan found"])))
+                    return
+                }
+                // // Suppress 404 for user profile endpoint
+                // if httpResponse.statusCode == 404 && endpoint.contains("/users/profile") {
+                //     completion(.failure(NSError(domain: "UserProfile", code: 404, userInfo: [NSLocalizedDescriptionKey: "User profile not found"])))
+                //     return
+                // }
+                
                 guard httpResponse.statusCode == expectedStatusCode else {
                     completion(.failure(NetworkError.serverError(statusCode: httpResponse.statusCode)))
                     return

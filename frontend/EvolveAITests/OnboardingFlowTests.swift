@@ -80,6 +80,10 @@ class TestNetworkServiceOnboarding: NetworkServiceProtocol {
             completion(.success(()))
         }
     }
+
+    func setScenarioIfNeeded(completion: @escaping (Bool) -> Void) {
+        completion(true)
+    }
 }
 
 class OnboardingFlowTests: XCTestCase {
