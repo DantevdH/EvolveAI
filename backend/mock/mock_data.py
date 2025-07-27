@@ -1,6 +1,7 @@
 # Centralized mock data for scenario-based development/testing
 
 MOCK_USER_PROFILE = {
+    'username': 'Dante',
     'id': 1,
     'primaryGoal': 'Increase Strength',
     'primaryGoalDescription': 'Focus on increasing raw power and lifting heavier.',

@@ -24,7 +24,7 @@ struct OnboardingFlow: View {
 
     var body: some View {
         ZStack {
-            Color.evolveBackground.ignoresSafeArea()
+            OnboardingBackground()
 
             if viewModel.isGeneratingPlan {
                 // Show plan generation view
@@ -49,9 +49,10 @@ struct OnboardingFlow: View {
 
                     TabView(selection: $viewModel.currentStep) {
                         
-                        WelcomeStep {
+                        WelcomeStep(onStart: { username in
+                            viewModel.userProfile.username = username
                             withAnimation(.easeInOut) { viewModel.nextStep() }
-                        }.tag(0)
+                        }, viewModel: viewModel).tag(0)
 
                         ExperienceStep(viewModel: viewModel).tag(1)
 
@@ -135,7 +136,55 @@ struct ProgressBarView: View {
     }
 }
 
-// #Preview {
-//     OnboardingFlow(userManager: UserManager())
-//         .environmentObject(UserManager())
-// }
+struct OnboardingBackground: View {
+    @State private var gradientRotation: Double = 0
+    @State private var particleOpacity: Double = 0.8
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color.black,
+                    Color.evolvePrimary.opacity(0.3),
+                    Color.black,
+                    Color.evolvePrimary.opacity(0.1),
+                    Color.black
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .rotationEffect(.degrees(gradientRotation))
+            .ignoresSafeArea()
+            .onAppear {
+                withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
+                    gradientRotation = 360
+                }
+            }
+            ForEach(0..<20, id: \.self) { index in
+                Circle()
+                    .fill(Color.evolvePrimary.opacity(0.3))
+                    .frame(width: CGFloat.random(in: 2...6))
+                    .position(
+                        x: CGFloat.random(in: 0...UIScreen.main.bounds.width),
+                        y: CGFloat.random(in: 0...UIScreen.main.bounds.height)
+                    )
+                    .opacity(particleOpacity)
+                    .animation(
+                        .easeInOut(duration: Double.random(in: 2...4))
+                        .repeatForever(autoreverses: true),
+                        value: particleOpacity
+                    )
+            }
+        }
+    }
+}
+
+#if DEBUG
+struct OnboardingFlow_Preview: PreviewProvider {
+    static var previews: some View {
+        OnboardingFlow(userManager: UserManager(), workoutManager: WorkoutManager(), onComplete: {})
+            .environmentObject(UserManager())
+            .environmentObject(WorkoutManager())
+            .preferredColorScheme(.dark)
+    }
+}
+#endif
