@@ -9,6 +9,7 @@ protocol UserManagerProtocol: AnyObject {
     func checkAuthenticationState()
     func login(username: String, password: String)
     func completeOnboarding(with profile: UserProfile, completion: @escaping (Bool) -> Void)
+    func markOnboardingComplete()
     func logout()
 }
 
@@ -50,6 +51,8 @@ class UserManager: ObservableObject, UserManagerProtocol {
         }
     }
     
+    // Track whether we've attempted to validate the token
+    @Published var isNewUser = false
     private let networkService: NetworkServiceProtocol
 
     init(networkService: NetworkServiceProtocol = AppEnvironment.networkService) {
@@ -57,14 +60,46 @@ class UserManager: ObservableObject, UserManagerProtocol {
         loadUserSession()
     }
     
+    private func loadUserSession() {
+        self.authToken = UserDefaults.standard.string(forKey: "authToken")
+        // self.isOnboardingComplete = false
+        // self.isLoading = false
+        printState("loadUserSession")
+        
+        // For debugging: Initialize based on mock scenario
+        #if DEBUG
+            switch AppEnvironment.mockScenario {
+            case .newUser:
+                // New user starts with no token
+                self.authToken = nil
+                print("[DEBUG] New user scenario - no auth token")
+            case .existingUserNotOnboarded, .onboardedUser, .userWithPlan:
+                // Existing users start with a mock token
+                if self.authToken == nil {
+                    self.authToken = "mock-token"
+                    print("[DEBUG] Existing user scenario - created mock token")
+                }
+            case .networkError:
+                // Network error scenario - start with token but will fail
+                if self.authToken == nil {
+                    self.authToken = "mock-token"
+                    print("[DEBUG] Network error scenario - created mock token")
+                }
+            }
+        #endif
+    }
+
     func checkAuthenticationState() {
         printState("checkAuthenticationState - start")
+        
         if authToken == nil {
+            // No token means user needs to log in
             self.isLoading = false
-            printState("checkAuthenticationState - no token")
+            printState("checkAuthenticationState - no token, user needs to login")
         } else {
-            self.isLoading = true  // Set loading to true when we start fetching
-            printState("checkAuthenticationState - fetching user data")
+            // We have a token, but need to validate it
+            self.isLoading = true
+            printState("checkAuthenticationState - validating token")
             fetchUserData()
         }
     }
@@ -83,12 +118,34 @@ class UserManager: ObservableObject, UserManagerProtocol {
                     self?.isOnboardingComplete = true
                     self?.isLoading = false
                     self?.printState("fetchUserData - success")
-                case .failure:
-                    self?.authToken = nil
-                    self?.userProfile = nil
-                    self?.isOnboardingComplete = false
+                case .failure(let error):
+                    // Check if it's an authentication error (401) or other error
+                    if let networkError = error as NSError? {
+                        switch networkError.code {
+                        case 401: // Unauthorized - token is invalid
+                            print("Token is invalid (401), clearing auth token")
+                            self?.authToken = nil
+                            self?.userProfile = nil
+                            self?.isOnboardingComplete = false
+                        case 404: // Not found - user profile doesn't exist
+                            print("User profile not found (404), moving to onboarding")
+                            // self?.authToken = nil
+                            self?.userProfile = nil
+                            self?.isOnboardingComplete = false
+                            self?.isNewUser = true
+                        default: // Other errors - keep token but clear profile
+                            print("Network error (\(networkError.code)), keeping token but clearing profile")
+                            self?.userProfile = nil
+                            self?.isOnboardingComplete = false
+                        }
+                    } else {
+                        // Generic error - clear everything
+                        self?.authToken = nil
+                        self?.userProfile = nil
+                        self?.isOnboardingComplete = false
+                    }
                     self?.isLoading = false
-                    self?.printState("fetchUserData - failure")
+                    self?.printState("fetchUserData - failure: \(error.localizedDescription)")
                 }
             }
         }
@@ -118,18 +175,6 @@ class UserManager: ObservableObject, UserManagerProtocol {
         }
     }
     
-    // private func checkOnboardingStatus() {
-    //     // Fixed: Only update if the value actually needs to change
-    //     let shouldBeComplete = (userProfile != nil)
-        
-    //     if isOnboardingComplete != shouldBeComplete {
-    //         self.isOnboardingComplete = shouldBeComplete
-    //         self.saveOnboardingStatus(isComplete: shouldBeComplete)
-    //     }
-        
-    //     self.isLoading = false
-    // }
-
     func completeOnboarding(with profile: UserProfile, completion: @escaping (Bool) -> Void) {
         guard let token = authToken else {
             print("Error: Auth token missing for profile save.")
@@ -141,9 +186,10 @@ class UserManager: ObservableObject, UserManagerProtocol {
                 switch result {
                 case .success:
                     self?.userProfile = profile
-                    self?.isOnboardingComplete = true
+                    // Don't set isOnboardingComplete yet - wait for plan generation
                     self?.isLoading = false
-                    self?.printState("completeOnboarding - success")
+                    self?.isNewUser = false
+                    self?.printState("completeOnboarding - success (profile saved)")
                     completion(true)
                 case .failure(let error):
                     print("Failed to save profile: \(error.localizedDescription)")
@@ -153,6 +199,12 @@ class UserManager: ObservableObject, UserManagerProtocol {
                 }
             }
         }
+    }
+    
+    /// Marks onboarding as complete after plan generation
+    func markOnboardingComplete() {
+        self.isOnboardingComplete = true
+        self.printState("markOnboardingComplete")
     }
     
     func logout() {
@@ -165,20 +217,7 @@ class UserManager: ObservableObject, UserManagerProtocol {
     }
 
     
-    private func loadUserSession() {
-        self.authToken = UserDefaults.standard.string(forKey: "authToken")
-        // self.isOnboardingComplete = false
-        // self.isLoading = false
-        printState("loadUserSession")
-        
-        // For debugging: If we're in mock mode and have no token, create a mock token
-        #if DEBUG
-        if self.authToken == nil {
-            print("[DEBUG] No auth token found, creating mock token for testing")
-            self.authToken = "mock-token"
-        }
-        #endif
-    }
+    
     
     // Keep this method for any remaining calls, but make it a no-op
     private func saveOnboardingStatus(isComplete: Bool) {

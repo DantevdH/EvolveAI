@@ -32,7 +32,16 @@ class OnboardingViewModelTests: XCTestCase {
         super.setUp()
         // We initialize our mock network service and inject it into the ViewModel.
         mockNetworkService = MockNetworkService()
-        viewModel = OnboardingViewModel(networkService: mockNetworkService)
+        
+        // Create mock managers for testing
+        let mockUserManager = UserManager(networkService: mockNetworkService)
+        let mockWorkoutManager = WorkoutManager(networkService: mockNetworkService)
+        
+        viewModel = OnboardingViewModel(
+            networkService: mockNetworkService,
+            userManager: mockUserManager,
+            workoutManager: mockWorkoutManager
+        )
     }
 
     // This method is called after each test function in this class is called.

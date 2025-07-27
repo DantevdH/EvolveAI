@@ -20,14 +20,22 @@ struct AppView: View {
         case .needsOnboarding:
             OnboardingFlow(
                 userManager: appViewModel.userManager,
+                workoutManager: appViewModel.workoutManager,
                 onComplete: {
-                    appViewModel.userManager.checkAuthenticationState()
                 }
             )
         case .loaded(let plan):
             MainTabView(plan: plan)
         case .needsPlan:
-            Text("No plan found")
+            GeneratePlanView(
+                userProfile: appViewModel.userManager.userProfile ?? UserProfile(),
+                coach: appViewModel.workoutManager.selectedCoach,
+                generatePlan: { completion in
+                    appViewModel.generatePlanForUser(authToken: appViewModel.userManager.authToken ?? "") { success in
+                        completion(success)
+                    }
+                }
+            )
         case .error(let message):
             ErrorView(message: message, retryAction: { appViewModel.fetchCoachesAndPlanIfNeeded() })
         }

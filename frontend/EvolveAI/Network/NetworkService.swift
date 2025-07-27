@@ -41,8 +41,8 @@ protocol NetworkServiceProtocol {
     func getUserProfile(authToken: String, completion: @escaping (Result<UserProfile, Error>) -> Void)
     func saveUserProfile(_ profile: UserProfile, authToken: String, completion: @escaping (Result<Void, Error>) -> Void)
     func getAllCoaches(completion: @escaping (Result<[Coach], Error>) -> Void)
-    func generateWorkoutPlan(for profile: UserProfile, authToken: String, completion: @escaping (Result<Void, Error>) -> Void)
-    func getWorkoutPlan(authToken: String, completion: @escaping (Result<WorkoutPlanResponse, Error>) -> Void)
+    func createAndProvidePlan(for profile: UserProfile, authToken: String, completion: @escaping (Result<WorkoutPlanResponse, Error>) -> Void)
+    func fetchExistingPlan(authToken: String, completion: @escaping (Result<WorkoutPlanResponse, Error>) -> Void)
     func updateProgress(updates: [ExerciseProgressUpdate], authToken: String, completion: @escaping (Result<Void, Error>) -> Void)
 }
 
@@ -104,26 +104,19 @@ class NetworkService: NetworkServiceProtocol {
         performRequest(endpoint: "/coaches/", method: "GET", completion: completion)
     }
 
-    func generateWorkoutPlan(for profile: UserProfile, authToken: String, completion: @escaping (Result<Void, Error>) -> Void) {
+    /// Creates a new workout plan and returns it immediately
+    func createAndProvidePlan(for profile: UserProfile, authToken: String, completion: @escaping (Result<WorkoutPlanResponse, Error>) -> Void) {
         guard let body = try? jsonEncoder.encode(profile) else {
             completion(.failure(NetworkError.decodingError(NSError())))
             return
         }
         
-        // This request expects a 201 status code and no JSON body in the response,
-        // so we use the generic function but ignore the decodable result.
-        performRequest(endpoint: "/workoutplan/", method: "POST", body: body, authToken: authToken, expectedStatusCode: 201) { (result: Result<Data?, Error>) in
-            switch result {
-            case .success:
-                completion(.success(())) // Return a Void success
-            case .failure(let error):
-                completion(.failure(error))
-            }
-        }
+        // This request creates a plan and returns it in the response
+        performRequest(endpoint: "/workoutplan/create/", method: "POST", body: body, authToken: authToken, expectedStatusCode: 201, completion: completion)
     }
-
-    func getWorkoutPlan(authToken: String, completion: @escaping (Result<WorkoutPlanResponse, Error>) -> Void) {
-
+    
+    /// Fetches an existing workout plan
+    func fetchExistingPlan(authToken: String, completion: @escaping (Result<WorkoutPlanResponse, Error>) -> Void) {
         performRequest(endpoint: "/workoutplan/detail/", method: "GET", authToken: authToken, completion: completion)
     }
     

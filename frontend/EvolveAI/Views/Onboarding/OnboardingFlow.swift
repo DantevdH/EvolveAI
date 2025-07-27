@@ -8,8 +8,8 @@ struct OnboardingFlow: View {
     // The total number of steps in the onboarding flow (0-7)
     private let totalSteps = 8
 
-    init(userManager: UserManagerProtocol, onComplete: @escaping () -> Void) {
-        _viewModel = StateObject(wrappedValue: OnboardingViewModel(userManager: userManager))
+    init(userManager: UserManagerProtocol, workoutManager: WorkoutManagerProtocol, onComplete: @escaping () -> Void) {
+        _viewModel = StateObject(wrappedValue: OnboardingViewModel(userManager: userManager, workoutManager: workoutManager))
         self.onComplete = onComplete // Store the action
     }
 
@@ -23,9 +23,21 @@ struct OnboardingFlow: View {
     
 
     var body: some View {
-            ZStack {
-                Color.evolveBackground.ignoresSafeArea()
+        ZStack {
+            Color.evolveBackground.ignoresSafeArea()
 
+            if viewModel.isGeneratingPlan {
+                // Show plan generation view
+                GeneratePlanView(
+                    userProfile: viewModel.userProfile,
+                    coach: viewModel.workoutManager.selectedCoach,
+                    generatePlan: { completion in
+                        viewModel.generateWorkoutPlan {
+                            completion(true)
+                        }
+                    }
+                )
+            } else {
                 VStack(spacing: 0) {
                     if viewModel.currentStep > 0 {
                         ProgressBarView(currentStep: viewModel.currentStep, totalSteps: totalSteps)
@@ -36,6 +48,7 @@ struct OnboardingFlow: View {
                     }
 
                     TabView(selection: $viewModel.currentStep) {
+                        
                         WelcomeStep {
                             withAnimation(.easeInOut) { viewModel.nextStep() }
                         }.tag(0)
@@ -56,7 +69,7 @@ struct OnboardingFlow: View {
 
                         FinalChatStep(
                             viewModel: viewModel,
-                            coach: viewModel.selectedCoach,
+                            coach: viewModel.workoutManager.selectedCoach,
                             onReadyToGenerate: {
                                 viewModel.completeOnboarding(onSuccess: self.onComplete)
                             }
@@ -96,6 +109,7 @@ struct OnboardingFlow: View {
                 }
             }
         }
+    }
 }
 
 struct ProgressBarView: View {

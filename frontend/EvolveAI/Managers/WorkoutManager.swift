@@ -8,7 +8,24 @@
 import Foundation
 import Combine
 
-class WorkoutManager: ObservableObject {
+// MARK: - WorkoutManager Protocol
+protocol WorkoutManagerProtocol: AnyObject {
+    var workoutPlanResponse: WorkoutPlanResponse? { get }
+    var isLoading: Bool { get }
+    var errorMessage: String? { get }
+    var coaches: [Coach] { get }
+    var selectedCoach: Coach? { get }
+    var isCoachesLoading: Bool { get }
+    var coachesErrorMessage: String? { get }
+    var workoutPlan: WorkoutPlan? { get }
+    
+    func fetchExistingPlan(authToken: String, showLoading: Bool, completion: @escaping (Bool) -> Void)
+    func createAndProvidePlan(for profile: UserProfile, authToken: String, completion: @escaping (Bool) -> Void)
+    func updateExerciseCompletion(exerciseId: Int, isCompleted: Bool, weekNumber: Int, authToken: String)
+    func fetchCoaches(userGoal: String, completion: @escaping (Bool) -> Void)
+}
+
+class WorkoutManager: ObservableObject, WorkoutManagerProtocol {
     
     @Published var workoutPlanResponse: WorkoutPlanResponse?
     @Published var isLoading = false
@@ -40,6 +57,14 @@ class WorkoutManager: ObservableObject {
 
     init(networkService: NetworkServiceProtocol = AppEnvironment.networkService) {
         self.networkService = networkService
+        
+        #if DEBUG
+        // Initialize with workout plan based on scenario
+        if AppEnvironment.mockScenario == .userWithPlan {
+            self.workoutPlanResponse = WorkoutPlanResponse(workoutPlan: mockWorkoutPlan)
+            print("[DEBUG] Scenario \(AppEnvironment.mockScenario) - setting mock workout plan")
+        }
+        #endif
     }
     
     deinit {
@@ -47,41 +72,49 @@ class WorkoutManager: ObservableObject {
     }
     
     /// Fetches the existing workout plan for the authenticated user from the server.
-    /// This method corresponds to the fetchPlan() in the flow diagram.
-    func fetchPlan(authToken: String) {
-        DispatchQueue.main.async { [weak self] in
-            self?.isLoading = true
-            self?.errorMessage = nil
+    func fetchExistingPlan(authToken: String, showLoading: Bool = true, completion: @escaping (Bool) -> Void) {
+        if showLoading {
+            DispatchQueue.main.async { [weak self] in
+                self?.isLoading = true
+                self?.errorMessage = nil
+            }
         }
         
-        networkService.getWorkoutPlan(authToken: authToken) { [weak self] result in
+        networkService.fetchExistingPlan(authToken: authToken) { [weak self] result in
             DispatchQueue.main.async {
-                self?.isLoading = false
+                if showLoading {
+                    self?.isLoading = false
+                }
                 switch result {
                 case .success(let response):
                     self?.workoutPlanResponse = response
+                    completion(true)
                 case .failure(let error):
-                    self?.errorMessage = error.localizedDescription
+                    // Don't set error message for 404 - it's expected when no plan exists
+                    if let networkError = error as NSError?, networkError.code == 404 {
+                        // 404 is expected when no plan exists, not an error
+                        completion(false)
+                    } else {
+                        // Only set error message for actual errors
+                        self?.errorMessage = error.localizedDescription
+                        completion(false)
+                    }
                 }
             }
         }
     }
     
     /// Creates a new workout plan for the user.
-    /// This method corresponds to the createPlan() in the flow diagram.
-    func createPlan(for profile: UserProfile, authToken: String, completion: @escaping (Bool) -> Void) {
-        DispatchQueue.main.async { [weak self] in
-            self?.isLoading = true
-            self?.errorMessage = nil
-        }
+    func createAndProvidePlan(for profile: UserProfile, authToken: String, completion: @escaping (Bool) -> Void) {
+        // Don't set global loading state - this should happen in background
+        // while user sees the GeneratePlanView
+        self.errorMessage = nil
         
-        networkService.generateWorkoutPlan(for: profile, authToken: authToken) { [weak self] result in
+        networkService.createAndProvidePlan(for: profile, authToken: authToken) { [weak self] result in
             DispatchQueue.main.async {
-                self?.isLoading = false
                 switch result {
-                case .success:
-                    // After successful creation, fetch the plan
-                    self?.fetchPlan(authToken: authToken)
+                case .success(let response):
+                    self?.workoutPlanResponse = response
                     completion(true)
                 case .failure(let error):
                     self?.errorMessage = error.localizedDescription
@@ -93,11 +126,6 @@ class WorkoutManager: ObservableObject {
     
     /// Updates exercise completion status with batch processing
     func updateExerciseCompletion(exerciseId: Int, isCompleted: Bool, weekNumber: Int, authToken: String) {
-        // Only allow updates for current week or future weeks
-        // guard weekNumber >= currentWeek else {
-        //     print("Cannot modify past weeks")
-        //     return
-        // }
         
         let update = ExerciseProgressUpdate(
             exerciseId: exerciseId,
@@ -119,25 +147,19 @@ class WorkoutManager: ObservableObject {
         }
     }
 
-    /// Legacy method name for backward compatibility
-    func fetchWorkoutPlan(authToken: String) {
-        fetchPlan(authToken: authToken)
-    }
     
     /// Fetches the list of coaches and selects the one matching the user's goal.
     func fetchCoaches(userGoal: String, completion: @escaping (Bool) -> Void) {
+
         print("[WorkoutManager] fetchCoaches called with userGoal: \(userGoal)")
-        print("[WorkoutManager] Using networkService: \(type(of: networkService))")
 
         DispatchQueue.main.async { [weak self] in
             self?.isCoachesLoading = true
             self?.coachesErrorMessage = nil
         }
         
-        print("[WorkoutManager] About to call networkService.getAllCoaches")
         networkService.getAllCoaches { [weak self] result in
             print("[WorkoutManager] getAllCoaches completion called")
-            print("[WorkoutManager] Self is nil: \(self == nil)")
             
             DispatchQueue.main.async {
                 print("[WorkoutManager] getAllCoaches completion - on main queue")
@@ -149,13 +171,8 @@ class WorkoutManager: ObservableObject {
                 self.isCoachesLoading = false
                 switch result {
                 case .success(let coaches):
-                    print("[WorkoutManager] Fetched coaches: \(coaches.count)")
-                    print("[WorkoutManager] First coach (if any): \(coaches.first)")
-
-                    print("[WorkoutManager] getAllCoaches success with \(coaches.count) coaches")
                     self.coaches = coaches
-                    self.selectedCoach = mockCoaches[0]  // This line might be problematic
-                    print("[WorkoutManager] selectedCoach set, calling completion(true)")
+                    self.selectedCoach = coaches.first(where: { $0.goal == userGoal })
                     completion(self.selectedCoach != nil)
                 case .failure(let error):
                     print("[WorkoutManager] getAllCoaches failure: \(error)")
@@ -182,7 +199,7 @@ class WorkoutManager: ObservableObject {
                 case .success:
                     print("Successfully updated \(updates.count) exercise progress items")
                     // Optionally refresh data
-                    self?.fetchPlan(authToken: authToken)
+                    self?.fetchExistingPlan(authToken: authToken) { _ in }
                 case .failure(let error):
                     print("Failed to update progress: \(error.localizedDescription)")
                     // Add failed updates back to pending

@@ -15,6 +15,7 @@ class AppViewModel: ObservableObject {
     @Published private(set) var selectedCoach: Coach?
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var errorMessage: String?
+    @Published private(set) var showRedirectDelay: Bool = false
 
     let userManager: UserManager
     let workoutManager: WorkoutManager
@@ -24,6 +25,8 @@ class AppViewModel: ObservableObject {
         self.userManager = userManager
         self.workoutManager = workoutManager
         setupSubscriptions()
+        
+        // Always check authentication state - the UserManager will handle the logic
         DispatchQueue.main.async {
             self.userManager.checkAuthenticationState()
         }
@@ -39,16 +42,44 @@ class AppViewModel: ObservableObject {
         .receive(on: DispatchQueue.main)
         .sink { [weak self] isLoading, authToken, userProfile, isOnboardingComplete in
             guard let self = self else { return }
+            
             if isLoading {
                 self.state = .loading
-            } else if authToken == nil {
-                self.state = .loggedOut
-            } else if userProfile == nil || !isOnboardingComplete {
-                self.state = .needsOnboarding
+                // Only show loading if we're actually validating a token
+                // if authToken != nil {
+                //     self.state = .loading
+                // } else {
+                //     // No token but loading - this shouldn't happen, but handle gracefully
+                //     self.state = .loggedOut
+                // }
             } else {
-                // User is authenticated and onboarded, start loading plan
-                self.state = .loading
-                self.fetchCoachesAndPlanIfNeeded()
+                // Not loading - determine the appropriate state
+                if authToken == nil {
+                    self.state = .loggedOut
+                } else if userManager.isNewUser {
+                    // New user - show redirect delay
+                    self.showRedirectDelay = true
+                    self.state = .loading
+                    
+                    // After 2 seconds, redirect to onboarding
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        self.showRedirectDelay = false
+                        self.state = .needsOnboarding
+                    }
+                } else if userProfile == nil || !isOnboardingComplete {
+                    self.state = .needsOnboarding
+                } else {
+                    // User is authenticated and onboarded
+                    // Check if we already have a plan (from onboarding)
+                    if self.workoutManager.workoutPlan != nil {
+                        // Plan already exists, go to loaded state
+                        self.state = .loaded(plan: self.workoutManager.workoutPlan!)
+                    } else {
+                        // No plan yet, start loading plan
+                        self.state = .loading
+                        self.fetchCoachesAndPlanIfNeeded()
+                    }
+                }
             }
         }
         .store(in: &cancellables)
@@ -84,6 +115,12 @@ class AppViewModel: ObservableObject {
     func fetchCoachesAndPlanIfNeeded() {
         guard let userProfile = userManager.userProfile else { return }
         isLoading = true
+
+        if workoutManager.selectedCoach != nil {
+            fetchWorkoutPlan()
+            return
+        }
+
         workoutManager.fetchCoaches(userGoal: userProfile.primaryGoal) { [weak self] success in
             guard let self = self else { return }
             if success {
@@ -96,16 +133,47 @@ class AppViewModel: ObservableObject {
     }
 
     func fetchWorkoutPlan() {
-        #if DEBUG
-        workoutManager.fetchPlan(authToken: "DEBUG_MOCK_TOKEN")
-        #else
         guard let authToken = userManager.authToken else {
             self.state = .error(message: "Authentication token not found.")
             return
         }
-        workoutManager.fetchPlan(authToken: authToken)
-        #endif
-        isLoading = false
+        
+        // Try to fetch existing plan first
+        workoutManager.fetchExistingPlan(authToken: authToken, showLoading: false) { [weak self] success in
+            guard let self = self else { return }
+            
+            if success {
+                // Plan exists, we're done
+                self.isLoading = false
+            } else {
+                // No plan exists, show GeneratePlanView
+                self.showPlanGeneration()
+            }
+        }
+    }
+    
+    private func showPlanGeneration() {
+        // Set state to show GeneratePlanView
+        self.state = .needsPlan
+    }
+    
+    func generatePlanForUser(authToken: String, completion: @escaping (Bool) -> Void) {
+        guard let userProfile = userManager.userProfile else {
+            self.state = .error(message: "User profile not found.")
+            return
+        }
+        
+        workoutManager.createAndProvidePlan(for: userProfile, authToken: authToken) { [weak self] success in
+            guard let self = self else { return }
+            
+            if success {
+                // Plan generated successfully, state will be updated by subscription
+                completion(true)
+            } else {
+                self.state = .error(message: "Failed to generate workout plan.")
+                completion(false)
+            }
+        }
     }
 
     func logout() {

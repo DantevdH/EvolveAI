@@ -11,6 +11,10 @@ struct EvolveAIApp: App {
     @StateObject private var appViewModel: AppViewModel
     
     init() {
+        #if DEBUG
+        AppEnvironment.printConfiguration()
+        #endif
+        
         let userManager = UserManager()
         let workoutManager = WorkoutManager()
         _userManager = StateObject(wrappedValue: userManager)

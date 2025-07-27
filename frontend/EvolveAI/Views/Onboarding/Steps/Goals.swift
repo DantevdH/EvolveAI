@@ -39,11 +39,7 @@ struct GoalsStep: View {
                                 viewModel.userProfile.primaryGoalDescription = ""
                             }
                             viewModel.userProfile.primaryGoal = goal.0
-                            // if let coach = availableCoaches.first(where: { $0.goal == goal.0 }) {
-                            //         onCoachSelected(coach)
-                            //     }
-                            
- 
+                            viewModel.fetchCoaches(userGoal: goal.0)
                         }
                     }
                 }

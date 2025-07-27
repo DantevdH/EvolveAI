@@ -11,19 +11,21 @@ class OnboardingViewModel: ObservableObject {
     @Published var currentStep = 0
     @Published var userProfile = UserProfile()
     @Published var isGenerating = false
-    @Published var selectedCoach: Coach?
+    @Published var isGeneratingPlan = false
     @Published var availableCoaches: [Coach] = []
     @Published var showErrorAlert = false
     @Published var errorMessage = ""
 
     private let networkService: NetworkServiceProtocol
     let userManager: UserManagerProtocol
+    let workoutManager: WorkoutManagerProtocol
     
     let levels = ExperienceLevel.allCases
     
-    init(networkService: NetworkServiceProtocol = NetworkService(), userManager: UserManagerProtocol) {
+    init(networkService: NetworkServiceProtocol = NetworkService(), userManager: UserManagerProtocol, workoutManager: WorkoutManagerProtocol) {
         self.networkService = networkService
         self.userManager = userManager
+        self.workoutManager = workoutManager
     }
 
     func nextStep() {
@@ -55,41 +57,69 @@ class OnboardingViewModel: ObservableObject {
         }
     }
     
-    /// Completes onboarding following the new flow diagram
+    /// Completes onboarding and shows plan generation view
     func completeOnboarding(onSuccess: @escaping () -> Void) {
         withAnimation {
             self.isGenerating = true
         }
         
-        // Step 1: Complete onboarding (save user profile)
-        userManager.completeOnboarding(with: userProfile) { [weak self] success in
-            guard let self = self, success else {
+        // Step 1: Show plan generation view (don't save profile yet)
+        DispatchQueue.main.async {
+            self.isGenerating = false
+            self.isGeneratingPlan = true
+        }
+    }
+    
+    /// Generates the workout plan and saves user profile (called by GeneratePlanView)
+    func generateWorkoutPlan(onSuccess: @escaping () -> Void) {
+        guard let authToken = userManager.authToken else {
+            errorMessage = "Authentication token not found"
+            showErrorAlert = true
+            return
+        }
+        
+        // Step 1: Save user profile first
+        userManager.completeOnboarding(with: userProfile) { [weak self] profileSuccess in
+            guard let self = self, profileSuccess else {
                 DispatchQueue.main.async {
-                    self?.isGenerating = false
-                    self?.errorMessage = "Failed to complete onboarding"
+                    self?.isGeneratingPlan = false
+                    self?.errorMessage = "Failed to save user profile"
                     self?.showErrorAlert = true
                 }
                 return
             }
             
-            DispatchQueue.main.async {
-                self.isGenerating = false
-                onSuccess()
+            // Step 2: Generate workout plan
+            self.workoutManager.createAndProvidePlan(for: self.userProfile, authToken: authToken) { [weak self] planSuccess in
+                DispatchQueue.main.async {
+                    self?.isGeneratingPlan = false
+                    if planSuccess {
+                        // Mark onboarding as complete after plan is generated
+                        self?.userManager.markOnboardingComplete()
+                        onSuccess()
+                    } else {
+                        self?.errorMessage = "Failed to generate workout plan"
+                        self?.showErrorAlert = true
+                    }
+                }
             }
         }
     }
     
-    func fetchCoaches() {
+    func fetchCoaches(userGoal: String) {
         if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" {
             self.availableCoaches = mockCoaches
             return
         }
 
-        self.networkService.getAllCoaches { result in
-            if case .success(let coaches) = result {
-                self.availableCoaches = coaches
-            } else {
-                print("Failed to fetch coaches.")
+        // Use the workoutManager to fetch coaches
+        workoutManager.fetchCoaches(userGoal: userGoal) { [weak self] success in
+            DispatchQueue.main.async {
+                if success {
+                    self?.availableCoaches = self?.workoutManager.coaches ?? []
+                } else {
+                    print("Failed to fetch coaches.")
+                }
             }
         }
     }
