@@ -12,6 +12,7 @@ class Coach(models.Model):
 
 class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
+    username = models.CharField(max_length=50, blank=True, null=True)
     # We will link this to a real User model later for authentication
     primaryGoal = models.CharField(max_length=200)
     primaryGoalDescription = models.TextField()

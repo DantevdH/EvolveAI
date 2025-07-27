@@ -42,6 +42,8 @@ class OnboardingViewModel: ObservableObject {
     
     var isNextButtonDisabled: Bool {
         switch self.currentStep {
+        case 0:
+            return self.userProfile.username.count < 5
         case 1:
             return self.userProfile.experienceLevel.isEmpty
         case 2:
