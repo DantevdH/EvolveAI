@@ -8,13 +8,11 @@
 import SwiftUI
 
 /// A view that displays an animated loading indicator while the AI generates the user's workout plan.
-/// This view is presented at the end of the onboarding flow.
-struct AIGeneratingView: View {
-
-    @EnvironmentObject var userManager: UserManager
+struct GeneratePlanView: View {
     let userProfile: UserProfile
     let coach: Coach?
-    
+    let generatePlan: (@escaping (Bool) -> Void) -> Void // Pass a closure
+
     @State private var isAnimating = false
     @State private var hasError = false
 
@@ -75,7 +73,7 @@ struct AIGeneratingView: View {
                         isAnimating = true
                     }
                     // Trigger the plan generation process.
-                    generatePlan()
+                    triggerGeneration()
                 }
             } else {
                 // Fallback view if the coach object is unexpectedly nil.
@@ -86,18 +84,18 @@ struct AIGeneratingView: View {
         // --- Error Handling ---
         // An alert that is shown when the `hasError` state variable is true.
         .alert("Generation Failed", isPresented: $hasError) {
-            Button("Retry", role: .cancel) { generatePlan() }
+            Button("Retry", role: .cancel) { triggerGeneration() }
         } message: {
             Text("We couldn't create your plan. Please check your connection and try again.")
         }
     }
 
-    private func generatePlan() {
+    private func triggerGeneration() {
         // Reset error state before a new attempt.
         hasError = false
         
-        // Call the function on the shared userManager instance.
-        userManager.completeOnboardingAndGeneratePlan(for: userProfile) { success in
+        // Call the passed closure to generate the plan.
+        generatePlan { success in
             // If the generation fails, set the state to show the error alert.
             // The success case is handled automatically by the @Published properties
             // in UserManager, which will cause the InitialiseView to switch to the MainTabView.
@@ -140,7 +138,11 @@ struct AIGeneratingView: View {
 //    // 2. Instantiate your view with the mock data.
 //    return AIGeneratingView(
 //        userProfile: mockProfile,
-//        coach: mockCoach
+//        coach: mockCoach,
+//        generatePlan: { completion in
+//            // Mock implementation for preview purposes
+//            completion(true)
+//        }
 //    )
 //    // 3. Provide a dummy UserManager for the preview to function.
 //    .environmentObject(UserManager())

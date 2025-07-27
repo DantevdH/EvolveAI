@@ -1,13 +1,16 @@
 import SwiftUI
 
 struct OnboardingFlow: View {
+
+    let onComplete: () -> Void
     @StateObject var viewModel: OnboardingViewModel
 
     // The total number of steps in the onboarding flow (0-7)
     private let totalSteps = 8
 
-    init(networkService: NetworkServiceProtocol = NetworkService()) {
-        _viewModel = StateObject(wrappedValue: OnboardingViewModel(networkService: networkService))
+    init(userManager: UserManagerProtocol, workoutManager: WorkoutManagerProtocol, onComplete: @escaping () -> Void) {
+        _viewModel = StateObject(wrappedValue: OnboardingViewModel(userManager: userManager, workoutManager: workoutManager))
+        self.onComplete = onComplete // Store the action
     }
 
     private var userProfileBinding: Binding<UserProfile> {
@@ -20,79 +23,90 @@ struct OnboardingFlow: View {
     
 
     var body: some View {
-        if viewModel.isGenerating {
-            AIGeneratingView(
-                userProfile: viewModel.userProfile,
-                coach: viewModel.selectedCoach
-            )
-        } else {
-            NavigationView {
-                ZStack {
-                    Color.evolveBackground.ignoresSafeArea()
+        ZStack {
+            Color.evolveBackground.ignoresSafeArea()
 
-                    VStack(spacing: 0) {
-                        if viewModel.currentStep > 0 {
-                            ProgressBarView(currentStep: viewModel.currentStep, totalSteps: totalSteps)
-                                .padding(.horizontal)
-                                .padding(.top)
-                        } else {
-                            Spacer()
-                        }
-
-                        TabView(selection: $viewModel.currentStep) {
-                            WelcomeStep {
-                                withAnimation(.easeInOut) { viewModel.nextStep() }
-                            }.tag(0)
-
-                            ExperienceStep(viewModel: viewModel).tag(1)
-
-                            PersonalInfoStep(viewModel: viewModel).tag(2)
-
-                            GoalsStep(
-                                viewModel: viewModel,
-                                availableCoaches: viewModel.availableCoaches,
-                                onCoachSelected: { coach in
-                                    viewModel.selectedCoach = coach
-                                }
-                            ).tag(3)
-
-                            ScheduleStep(viewModel: viewModel).tag(4)
-
-                            EquipmentStep(viewModel: viewModel).tag(5)
-
-                            LimitationsStep(viewModel: viewModel).tag(6)
-
-                            FinalChatStep(
-                                viewModel: viewModel,
-                                coach: viewModel.selectedCoach,
-                                onReadyToGenerate: viewModel.completeOnboarding
-                            ).tag(7)
-                        }
-                        .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
-
-                        if viewModel.currentStep > 0 && viewModel.currentStep < totalSteps - 1 {
-                            HStack {
-                                if viewModel.currentStep > 1 {
-                                    Button("Back") {
-                                        withAnimation { viewModel.previousStep() }
-                                    }
-                                    .buttonStyle(SecondaryButtonStyle())
-                                }
-
-                                Spacer()
-
-                                Button("Next") {
-                                    withAnimation { viewModel.nextStep() }
-                                }
-                                .buttonStyle(NextButtonStyle())
-                                .disabled(viewModel.isNextButtonDisabled)
-                            }
-                            .padding()
+            if viewModel.isGeneratingPlan {
+                // Show plan generation view
+                GeneratePlanView(
+                    userProfile: viewModel.userProfile,
+                    coach: viewModel.workoutManager.selectedCoach,
+                    generatePlan: { completion in
+                        viewModel.generateWorkoutPlan {
+                            completion(true)
                         }
                     }
+                )
+            } else {
+                VStack(spacing: 0) {
+                    if viewModel.currentStep > 0 {
+                        ProgressBarView(currentStep: viewModel.currentStep, totalSteps: totalSteps)
+                            .padding(.horizontal)
+                            .padding(.top)
+                    } else {
+                        Spacer()
+                    }
+
+                    TabView(selection: $viewModel.currentStep) {
+                        
+                        WelcomeStep {
+                            withAnimation(.easeInOut) { viewModel.nextStep() }
+                        }.tag(0)
+
+                        ExperienceStep(viewModel: viewModel).tag(1)
+
+                        PersonalInfoStep(viewModel: viewModel).tag(2)
+
+                        GoalsStep(
+                            viewModel: viewModel,
+                        ).tag(3)
+
+                        ScheduleStep(viewModel: viewModel).tag(4)
+
+                        EquipmentStep(viewModel: viewModel).tag(5)
+
+                        LimitationsStep(viewModel: viewModel).tag(6)
+
+                        FinalChatStep(
+                            viewModel: viewModel,
+                            coach: viewModel.workoutManager.selectedCoach,
+                            onReadyToGenerate: {
+                                viewModel.completeOnboarding(onSuccess: self.onComplete)
+                            }
+                        ).tag(7)
+                    }
+                    .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+
+                    if viewModel.currentStep > 0 && viewModel.currentStep < totalSteps - 1 {
+                        HStack {
+                            if viewModel.currentStep > 1 {
+                                Button("Back") {
+                                    withAnimation { viewModel.previousStep() }
+                                }
+                                .buttonStyle(SecondaryButtonStyle())
+                            }
+
+                            Spacer()
+
+                            Button("Next") {
+                                withAnimation { viewModel.nextStep() }
+                            }
+                            .buttonStyle(NextButtonStyle())
+                            .disabled(viewModel.isNextButtonDisabled)
+                        }
+                        .padding()
+                    }
                 }
-                .navigationBarHidden(true)
-                .onAppear(perform: viewModel.fetchCoaches)
+
+                if viewModel.showErrorAlert {
+                    ErrorView(
+                        message: viewModel.errorMessage,
+                        retryAction: {
+                            viewModel.showErrorAlert = false
+                        }
+                    )
+                    .background(Color.black.opacity(0.7).ignoresSafeArea())
+                }
             }
         }
     }
@@ -121,7 +135,7 @@ struct ProgressBarView: View {
     }
 }
 
-#Preview {
-    OnboardingFlow()
-        .environmentObject(UserManager())
-}
+// #Preview {
+//     OnboardingFlow(userManager: UserManager())
+//         .environmentObject(UserManager())
+// }

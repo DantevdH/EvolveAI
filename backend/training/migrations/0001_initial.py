@@ -9,60 +9,123 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('users', '0001_initial'),
+        ("users", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='DailyWorkout',
+            name="DailyWorkout",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('day_of_week', models.CharField(max_length=10)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("day_of_week", models.CharField(max_length=10)),
             ],
         ),
         migrations.CreateModel(
-            name='Exercise',
+            name="Exercise",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100)),
-                ('description', models.TextField(blank=True, null=True)),
-                ('video_url', models.URLField(blank=True, null=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=100)),
+                ("description", models.TextField(blank=True, null=True)),
+                ("video_url", models.URLField(blank=True, null=True)),
             ],
         ),
         migrations.CreateModel(
-            name='WeeklySchedule',
+            name="WeeklySchedule",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('week_number', models.IntegerField()),
-                ('daily_workouts', models.ManyToManyField(to='training.dailyworkout')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("week_number", models.IntegerField()),
+                ("daily_workouts", models.ManyToManyField(to="training.dailyworkout")),
             ],
         ),
         migrations.CreateModel(
-            name='WorkoutExercise',
+            name="WorkoutExercise",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('sets', models.IntegerField()),
-                ('reps', models.CharField(max_length=50)),
-                ('daily_workout', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='training.dailyworkout')),
-                ('exercise', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='training.exercise')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("sets", models.IntegerField()),
+                ("reps", models.CharField(max_length=50)),
+                (
+                    "daily_workout",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="training.dailyworkout",
+                    ),
+                ),
+                (
+                    "exercise",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="training.exercise",
+                    ),
+                ),
             ],
             options={
-                'unique_together': {('daily_workout', 'exercise')},
+                "unique_together": {("daily_workout", "exercise")},
             },
         ),
         migrations.AddField(
-            model_name='dailyworkout',
-            name='exercises',
-            field=models.ManyToManyField(through='training.WorkoutExercise', to='training.exercise'),
+            model_name="dailyworkout",
+            name="exercises",
+            field=models.ManyToManyField(
+                through="training.WorkoutExercise", to="training.exercise"
+            ),
         ),
         migrations.CreateModel(
-            name='training',
+            name="training",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('title', models.CharField(max_length=200)),
-                ('summary', models.TextField()),
-                ('user_profile', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='users.userprofile')),
-                ('weekly_schedules', models.ManyToManyField(to='training.weeklyschedule')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("title", models.CharField(max_length=200)),
+                ("summary", models.TextField()),
+                (
+                    "user_profile",
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="users.userprofile",
+                    ),
+                ),
+                (
+                    "weekly_schedules",
+                    models.ManyToManyField(to="training.weeklyschedule"),
+                ),
             ],
         ),
     ]

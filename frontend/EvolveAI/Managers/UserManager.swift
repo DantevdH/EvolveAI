@@ -1,15 +1,48 @@
 import Foundation
 
+protocol UserManagerProtocol: AnyObject {
+    var isLoading: Bool { get set }
+    var isOnboardingComplete: Bool { get set }
+    var userProfile: UserProfile? { get set }
+    var authToken: String? { get set }
+    
+    func checkAuthenticationState()
+    func login(username: String, password: String)
+    func completeOnboarding(with profile: UserProfile, completion: @escaping (Bool) -> Void)
+    func markOnboardingComplete()
+    func logout()
+}
 
-import Foundation
-
-class UserManager: ObservableObject {
-    @Published var isLoading = true
-    @Published var isOnboardingComplete = false
+class UserManager: ObservableObject, UserManagerProtocol {
+    @Published var isLoading: Bool = false {
+        didSet {
+            print("UserManager.isLoading changed to \(isLoading) in \(#function), line \(#line)")
+        }
+    }
+    
+    @Published var isOnboardingComplete = true {
+        didSet {
+            print("UserManager.isOnboardingComplete changed to \(isOnboardingComplete)")
+            print("Stack trace: \(Thread.callStackSymbols.prefix(5).joined(separator: "\n"))")
+        }
+    }
+    
+    // Computed property that derives onboarding status from actual user profile
+    var isOnboardingCompleteComputed: Bool {
+        return userProfile != nil
+    }
+    
+    @Published var userProfile: UserProfile? = nil {
+        didSet {
+            print("UserManager.userProfile changed to \(userProfile != nil ? "present" : "nil")")
+            if userProfile == nil {
+                print("UserProfile set to nil - this will affect onboarding status")
+            }
+        }
+    }
+    
     @Published var authToken: String? {
         didSet {
-            // In a real app, you would save `authToken` to the Keychain here.
-            // For simplicity, we use UserDefaults.
             if let token = authToken {
                 UserDefaults.standard.set(token, forKey: "authToken")
             } else {
@@ -18,125 +51,165 @@ class UserManager: ObservableObject {
         }
     }
     
-    // The UserManager now uses the network service directly.
+    // Track whether we've attempted to validate the token
+    @Published var isNewUser = false
+    @Published var networkErrorMessage: String? = nil
     private let networkService: NetworkServiceProtocol
 
-    // We can inject a mock service for testing, but default to the real one.
-    init(networkService: NetworkServiceProtocol = NetworkService()) {
+    init(networkService: NetworkServiceProtocol = AppEnvironment.networkService) {
         self.networkService = networkService
-        // Load any saved session data when the app starts.
         loadUserSession()
     }
     
-    /// Checks for a saved token and onboarding status to determine the app's initial state.
+    private func loadUserSession() {
+        // For scenarios, we need to check the backend for the current user state
+        // For now, just use the network service to get the auth token
+        self.authToken = networkService.getAuthToken()
+        printState("loadUserSession")
+    }
+
     func checkAuthenticationState() {
-        // This check is now synchronous based on what was loaded in init().
-        // If there's no token, we're done loading and the user is logged out.
+        printState("checkAuthenticationState - start")
+        
         if authToken == nil {
+            // No token means user needs to log in
             self.isLoading = false
+            printState("checkAuthenticationState - no token, user needs to login")
         } else {
-            // If there is a token, we need to verify if onboarding is complete.
-            checkOnboardingStatus()
+            // We have a token, but need to validate it
+            self.isLoading = true
+            printState("checkAuthenticationState - validating token")
+            fetchUserData()
+        }
+    }
+    
+    private func fetchUserData() {
+        guard let token = authToken else {
+            self.isLoading = false
+            printState("fetchUserData - no token")
+            return
+        }
+        networkService.getUserProfile(authToken: token) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let profile):
+                    self?.userProfile = profile
+                    self?.isOnboardingComplete = true
+                    self?.isLoading = false
+                    self?.networkErrorMessage = nil
+                    self?.printState("fetchUserData - success")
+                case .failure(let error):
+                    if let networkError = error as NSError? {
+                        switch networkError.code {
+                        case 401:
+                            print("Token is invalid (401), clearing auth token")
+                            self?.authToken = nil
+                            self?.userProfile = nil
+                            self?.isOnboardingComplete = false
+                        case 404:
+                            print("User profile not found (404), moving to onboarding")
+                            self?.userProfile = nil
+                            self?.isOnboardingComplete = false
+                            self?.isNewUser = true
+                        case 500...599:
+                            print("Network/server error ( \(networkError.code)), surfacing error to UI")
+                            self?.networkErrorMessage = "A network error occurred. Please try again."
+                        default:
+                            print("Network error (\(networkError.code)), keeping token but clearing profile")
+                            self?.userProfile = nil
+                            self?.isOnboardingComplete = false
+                        }
+                    } else {
+                        self?.authToken = nil
+                        self?.userProfile = nil
+                        self?.isOnboardingComplete = false
+                    }
+                    self?.isLoading = false
+                    self?.printState("fetchUserData - failure: \(error.localizedDescription)")
+                }
+            }
         }
     }
     
     func signInWithApple() {}
     func signInWithGoogle() {}
     func signInWithFacebook() {}
-    /// Handles user login by calling the network service.
+    
     func login(username: String, password: String) {
         isLoading = true
+        printState("login - start")
         let credentials = ["username": username, "password": password]
-        
         networkService.login(credentials: credentials) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {
                 case .success(let token):
-                    // On successful login, save the token...
                     self?.authToken = token
-                    // ...and then check if onboarding is complete.
-                    self?.checkOnboardingStatus()
+                    self?.fetchUserData()
+                    self?.printState("login - success, token set")
                 case .failure(let error):
-                    // Handle login failure
                     print("Login failed: \(error.localizedDescription)")
                     self?.isLoading = false
+                    self?.printState("login - failure")
                 }
             }
         }
     }
     
-    /// Checks if a workout plan exists on the server to determine onboarding status.
-    func checkOnboardingStatus() {
+    func completeOnboarding(with profile: UserProfile, completion: @escaping (Bool) -> Void) {
         guard let token = authToken else {
-            isLoading = false
-            return
-        }
-        
-        isLoading = true
-        networkService.getWorkoutPlan(authToken: token) { [weak self] result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success:
-                    // If we successfully get a plan, onboarding is complete.
-                    self?.isOnboardingComplete = true
-                    self?.saveOnboardingStatus(isComplete: true)
-                case .failure:
-                    // If it fails (e.g., 404 Not Found), onboarding is not complete.
-                    self?.isOnboardingComplete = false
-                    self?.saveOnboardingStatus(isComplete: false)
-                }
-                self?.isLoading = false
-            }
-        }
-    }
-
-    /// Generates the initial workout plan and marks onboarding as complete.
-    /// This is the sole responsibility of the UserManager.
-    func completeOnboardingAndGeneratePlan(for profile: UserProfile, completion: @escaping (Bool) -> Void) {
-
-         #if DEBUG
-              print("--- App is running in DEBUG mode. Not calling OpenAI model ---")
-             self.isOnboardingComplete = true
-             self.saveOnboardingStatus(isComplete: true)
-             completion(true)
-         #endif
-
-        guard let token = authToken else {
-            print("Error: Auth token missing for plan generation.")
+            print("Error: Auth token missing for profile save.")
             completion(false)
             return
         }
-        
-        print("--- Performing REAL network call to generate workout plan... ---")
-        networkService.generateWorkoutPlan(for: profile, authToken: token) { [weak self] result in
+        networkService.saveUserProfile(profile, authToken: token) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {
                 case .success:
-                    // On success, update and save the onboarding state.
-                    self?.isOnboardingComplete = true
-                    self?.saveOnboardingStatus(isComplete: true)
+                    self?.userProfile = profile
+                    // Don't set isOnboardingComplete yet - wait for plan generation
+                    self?.isLoading = false
+                    self?.isNewUser = false
+                    self?.printState("completeOnboarding - success (profile saved)")
                     completion(true)
-                    
                 case .failure(let error):
-                    print("Failed to generate plan: \(error.localizedDescription)")
+                    print("Failed to save profile: \(error.localizedDescription)")
+                    self?.isLoading = false
+                    self?.printState("completeOnboarding - failure")
                     completion(false)
                 }
             }
         }
     }
     
-    // MARK: - Private Helper Methods
+    /// Marks onboarding as complete after plan generation
+    func markOnboardingComplete() {
+        self.isOnboardingComplete = true
+        self.printState("markOnboardingComplete")
+    }
     
-    /// Saves the user's onboarding completion status to UserDefaults.
+    func logout() {
+        print("UserManager.logout() called")
+        authToken = nil
+        userProfile = nil
+        isOnboardingComplete = false
+        isLoading = false
+        printState("logout")
+    }
+
+    
+    
+    
+    // Keep this method for any remaining calls, but make it a no-op
     private func saveOnboardingStatus(isComplete: Bool) {
-        UserDefaults.standard.set(isComplete, forKey: "onboardingComplete")
+        // No longer saving to UserDefaults - onboarding status is derived from user profile
     }
     
-    /// Loads the session token and onboarding status from UserDefaults at app launch.
-    private func loadUserSession() {
-        self.authToken = UserDefaults.standard.string(forKey: "authToken")
-        self.isOnboardingComplete = UserDefaults.standard.bool(forKey: "onboardingComplete")
+    // Helper to print current state
+    private func printState(_ context: String) {
+        let address = Unmanaged.passUnretained(self).toOpaque()
+        print("[UserManager \(address)] [\(context)] isLoading: \(isLoading), hasToken: \(authToken != nil), hasProfile: \(userProfile != nil), onboardingComplete: \(isOnboardingComplete)")
+        if isLoading && userProfile != nil && isOnboardingComplete {
+            print("[UserManager][WARNING] isLoading is TRUE even though userProfile and isOnboardingComplete are set!")
+        }
     }
-
 }
-

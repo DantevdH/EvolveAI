@@ -2,14 +2,44 @@
 from rest_framework import serializers
 from .models import UserProfile, Coach
 
+
 class CoachSerializer(serializers.ModelSerializer):
     class Meta:
         model = Coach
-        fields = ['name']
+        fields = ["id", "name"]
+
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    coach = CoachSerializer() # Nest the coach serializer
+    # Make coach optional and allow it to be null
+    coach = CoachSerializer(read_only=True)
 
     class Meta:
         model = UserProfile
-        fields = '__all__' # Include all fields from the model
+        fields = [
+            "id",
+            "primaryGoal",
+            "primaryGoalDescription",
+            "coach",
+            "experienceLevel",
+            "daysPerWeek",
+            "minutesPerSession",
+            "equipment",
+            "age",
+            "weight",
+            "weightUnit",
+            "height",
+            "heightUnit",
+            "gender",
+            "hasLimitations",
+            "limitationsDescription",
+            "trainingSchedule",
+            "finalChatNotes",
+        ]
+        # Make coach field not required for input
+        extra_kwargs = {
+            "coach": {"required": False},
+            "primaryGoalDescription": {"required": False},
+            "limitationsDescription": {"required": False},
+            "trainingSchedule": {"required": False},
+            "finalChatNotes": {"required": False},
+        }

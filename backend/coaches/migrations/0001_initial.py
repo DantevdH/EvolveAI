@@ -7,19 +7,26 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
-            name='Coach',
+            name="Coach",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100)),
-                ('goal', models.CharField(max_length=100)),
-                ('iconName', models.CharField(max_length=100)),
-                ('tagline', models.CharField(max_length=255)),
-                ('primaryColorHex', models.CharField(max_length=7)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=100)),
+                ("goal", models.CharField(max_length=100)),
+                ("iconName", models.CharField(max_length=100)),
+                ("tagline", models.CharField(max_length=255)),
+                ("primaryColorHex", models.CharField(max_length=7)),
             ],
         ),
     ]

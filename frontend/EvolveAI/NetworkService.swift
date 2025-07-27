@@ -37,25 +37,61 @@ enum NetworkError: LocalizedError {
 /// A protocol for the network service to allow for mocking in tests.
 /// The public-facing API remains unchanged.
 protocol NetworkServiceProtocol {
+    func getAuthToken() -> String?
+    func getCurrentScenario() -> String
     func login(credentials: [String: String], completion: @escaping (Result<String, Error>) -> Void)
+    func getUserProfile(authToken: String, completion: @escaping (Result<UserProfile, Error>) -> Void)
+    func saveUserProfile(_ profile: UserProfile, authToken: String, completion: @escaping (Result<Void, Error>) -> Void)
     func getAllCoaches(completion: @escaping (Result<[Coach], Error>) -> Void)
-    func generateWorkoutPlan(for profile: UserProfile, authToken: String, completion: @escaping (Result<Void, Error>) -> Void)
-    func getWorkoutPlan(authToken: String, completion: @escaping (Result<WorkoutPlan, Error>) -> Void)
+    func createAndProvidePlan(for profile: UserProfile, authToken: String, completion: @escaping (Result<WorkoutPlanResponse, Error>) -> Void)
+    func fetchExistingPlan(authToken: String, completion: @escaping (Result<WorkoutPlanResponse, Error>) -> Void)
+    func updateProgress(updates: [ExerciseProgressUpdate], authToken: String, completion: @escaping (Result<Void, Error>) -> Void)
+    /// Set the scenario on the backend before any other API calls (no-op in production)
+    func setScenarioIfNeeded(completion: @escaping (Bool) -> Void)
 }
 
 
 // MARK: - Simplified Network Service
 class NetworkService: NetworkServiceProtocol {
     
-    private let baseURL = "http://127.0.0.1:8000/api"
+    private let baseURL: String
     private let jsonDecoder = JSONDecoder()
     private let jsonEncoder = JSONEncoder()
+    
+    init(baseURL: String = "http://127.0.0.1:8000/api") {
+        self.baseURL = baseURL
+    }
     
     // MARK: - Public API Methods
     
     /// A response structure specific to the login endpoint.
     private struct AuthResponse: Codable {
         let token: String
+    }
+    
+    func getAuthToken() -> String? {
+        // Get scenario from launch arguments
+        let arguments = ProcessInfo.processInfo.arguments
+        let scenario = arguments.first { arg in
+            arg.hasPrefix("--scenario-")
+        }?.replacingOccurrences(of: "--scenario-", with: "") ?? "new-user"
+        
+        switch scenario {
+        case "new-user":
+            return nil
+        case "existing-user", "onboarded-user", "user-with-plan":
+            return "mock-token" // Return mock token for these scenarios
+        default:
+            return UserDefaults.standard.string(forKey: "authToken")
+        }
+    }
+    
+    /// Get the current scenario for debugging/testing purposes
+    func getCurrentScenario() -> String {
+        let arguments = ProcessInfo.processInfo.arguments
+        return arguments.first { arg in
+            arg.hasPrefix("--scenario-")
+        }?.replacingOccurrences(of: "--scenario-", with: "") ?? "new-user"
     }
     
     func login(credentials: [String: String], completion: @escaping (Result<String, Error>) -> Void) {
@@ -77,19 +113,17 @@ class NetworkService: NetworkServiceProtocol {
         }
     }
     
-    func getAllCoaches(completion: @escaping (Result<[Coach], Error>) -> Void) {
-        performRequest(endpoint: "/coaches/", method: "GET", completion: completion)
+    func getUserProfile(authToken: String, completion: @escaping (Result<UserProfile, Error>) -> Void) {
+        performRequest(endpoint: "/users/profile/", method: "GET", authToken: authToken, completion: completion)
     }
-
-    func generateWorkoutPlan(for profile: UserProfile, authToken: String, completion: @escaping (Result<Void, Error>) -> Void) {
+    
+    func saveUserProfile(_ profile: UserProfile, authToken: String, completion: @escaping (Result<Void, Error>) -> Void) {
         guard let body = try? jsonEncoder.encode(profile) else {
             completion(.failure(NetworkError.decodingError(NSError())))
             return
         }
         
-        // This request expects a 201 status code and no JSON body in the response,
-        // so we use the generic function but ignore the decodable result.
-        performRequest(endpoint: "/workoutplan/", method: "POST", body: body, authToken: authToken, expectedStatusCode: 201) { (result: Result<Data?, Error>) in
+        performRequest(endpoint: "/users/profile/", method: "PUT", body: body, authToken: authToken) { (result: Result<Data?, Error>) in
             switch result {
             case .success:
                 completion(.success(())) // Return a Void success
@@ -98,9 +132,72 @@ class NetworkService: NetworkServiceProtocol {
             }
         }
     }
+    
+    func getAllCoaches(completion: @escaping (Result<[Coach], Error>) -> Void) {
+        performRequest(endpoint: "/coaches/", method: "GET", completion: completion)
+    }
 
-    func getWorkoutPlan(authToken: String, completion: @escaping (Result<WorkoutPlan, Error>) -> Void) {
+    /// Creates a new workout plan and returns it immediately
+    func createAndProvidePlan(for profile: UserProfile, authToken: String, completion: @escaping (Result<WorkoutPlanResponse, Error>) -> Void) {
+        guard let body = try? jsonEncoder.encode(profile) else {
+            completion(.failure(NetworkError.decodingError(NSError())))
+            return
+        }
+        
+        // This request creates a plan and returns it in the response
+        performRequest(endpoint: "/workoutplan/create/", method: "POST", body: body, authToken: authToken, expectedStatusCode: 201, completion: completion)
+    }
+    
+    /// Fetches an existing workout plan
+    func fetchExistingPlan(authToken: String, completion: @escaping (Result<WorkoutPlanResponse, Error>) -> Void) {
         performRequest(endpoint: "/workoutplan/detail/", method: "GET", authToken: authToken, completion: completion)
+    }
+    
+    func updateProgress(updates: [ExerciseProgressUpdate], authToken: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        let requestBody = ProgressUpdateRequest(updates: updates)
+        
+        guard let body = try? jsonEncoder.encode(requestBody) else {
+            completion(.failure(NetworkError.decodingError(NSError())))
+            return
+        }
+        
+        performRequest(endpoint: "/workoutplan/progress/", method: "POST", body: body, authToken: authToken) { (result: Result<Data?, Error>) in
+            switch result {
+            case .success:
+                completion(.success(()))
+            case .failure(let error):
+                completion(.failure(error))
+            }
+        }
+    }
+    
+    // MARK: - Scenario Setup for Backend
+    /// Call this before any other API calls to ensure the backend uses the correct scenario.
+    func setScenarioIfNeeded(completion: @escaping (Bool) -> Void) {
+        let scenario = getCurrentScenario()
+        guard !scenario.isEmpty else {
+            completion(true) // No scenario to set, continue
+            return
+        }
+        guard let url = URL(string: "http://localhost:8000/api/scenarios/set/") else {
+            completion(false)
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let body = ["scenario": scenario]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            if let error = error {
+                print("Failed to set scenario: \(error)")
+                completion(false)
+                return
+            }
+            completion(true)
+        }
+        task.resume()
     }
     
     
@@ -156,6 +253,19 @@ class NetworkService: NetworkServiceProtocol {
                     return
                 }
                 
+                // Suppress 404 for workout plan detail endpoint
+                if httpResponse.statusCode == 404 && endpoint.contains("/workoutplan/detail") {
+                    // If T is optional, you could do: completion(.success(nil as! T))
+                    // Otherwise, propagate a custom error or handle in manager
+                    completion(.failure(NSError(domain: "WorkoutPlan", code: 404, userInfo: [NSLocalizedDescriptionKey: "No workout plan found"])))
+                    return
+                }
+                // // Suppress 404 for user profile endpoint
+                // if httpResponse.statusCode == 404 && endpoint.contains("/users/profile") {
+                //     completion(.failure(NSError(domain: "UserProfile", code: 404, userInfo: [NSLocalizedDescriptionKey: "User profile not found"])))
+                //     return
+                // }
+                
                 guard httpResponse.statusCode == expectedStatusCode else {
                     completion(.failure(NetworkError.serverError(statusCode: httpResponse.statusCode)))
                     return
@@ -184,3 +294,4 @@ class NetworkService: NetworkServiceProtocol {
         task.resume()
     }
 }
+

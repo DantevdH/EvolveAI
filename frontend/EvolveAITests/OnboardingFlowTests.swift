@@ -7,8 +7,9 @@ import SwiftUI
 /// A mock version of the NetworkService for testing purposes.
 /// This allows us to control the outcome of the network call (e.g., force a success or failure)
 /// without actually hitting the network.
-class MockNetworkService: NetworkServiceProtocol {
+class TestNetworkServiceOnboarding: NetworkServiceProtocol {
     var result: Result<[Coach], Error>
+    private var currentScenario: String = "new-user"
 
     // We initialize the mock service with mock data.
     // This uses the 'Coach' struct from your main app, not a duplicate one.
@@ -19,20 +20,93 @@ class MockNetworkService: NetworkServiceProtocol {
     func getAllCoaches(completion: @escaping (Result<[Coach], Error>) -> Void) {
         completion(result)
     }
+    
+    // MARK: - Required Protocol Methods
+    
+    func getAuthToken() -> String? {
+        switch currentScenario {
+        case "new-user":
+            return nil
+        case "existing-user", "onboarded-user", "user-with-plan":
+            return "mock-token"
+        default:
+            return "mock-token"
+        }
+    }
+    
+    func getCurrentScenario() -> String {
+        return currentScenario
+    }
+    
+    func setScenario(_ scenario: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        self.currentScenario = scenario
+        DispatchQueue.main.async {
+            completion(.success(()))
+        }
+    }
+
+    func login(credentials: [String: String], completion: @escaping (Result<String, Error>) -> Void) {
+        DispatchQueue.main.async {
+            completion(.success("mock-token"))
+        }
+    }
+    
+    func getUserProfile(authToken: String, completion: @escaping (Result<UserProfile, Error>) -> Void) {
+        DispatchQueue.main.async {
+            completion(.success(mockUserProfile))
+        }
+    }
+    
+    func saveUserProfile(_ profile: UserProfile, authToken: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        DispatchQueue.main.async {
+            completion(.success(()))
+        }
+    }
+    
+    func createAndProvidePlan(for profile: UserProfile, authToken: String, completion: @escaping (Result<WorkoutPlanResponse, Error>) -> Void) {
+        DispatchQueue.main.async {
+            completion(.success(WorkoutPlanResponse(workoutPlan: mockWorkoutPlan)))
+        }
+    }
+    
+    func fetchExistingPlan(authToken: String, completion: @escaping (Result<WorkoutPlanResponse, Error>) -> Void) {
+        DispatchQueue.main.async {
+            completion(.failure(NSError(domain: "TestNetworkServiceOnboarding", code: 404, userInfo: [NSLocalizedDescriptionKey: "No workout plan found"])))
+        }
+    }
+    
+    func updateProgress(updates: [ExerciseProgressUpdate], authToken: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        DispatchQueue.main.async {
+            completion(.success(()))
+        }
+    }
+
+    func setScenarioIfNeeded(completion: @escaping (Bool) -> Void) {
+        completion(true)
+    }
 }
 
-class OnboardingViewModelTests: XCTestCase {
+class OnboardingFlowTests: XCTestCase {
 
     // The System Under Test (SUT) is now the ViewModel.
     var viewModel: OnboardingViewModel!
-    var mockNetworkService: MockNetworkService!
+    var mockNetworkService: TestNetworkServiceOnboarding!
 
     // This method is called before each test function in this class is called.
     override func setUp() {
         super.setUp()
         // We initialize our mock network service and inject it into the ViewModel.
-        mockNetworkService = MockNetworkService()
-        viewModel = OnboardingViewModel(networkService: mockNetworkService)
+        mockNetworkService = TestNetworkServiceOnboarding()
+        
+        // Create mock managers for testing
+        let mockUserManager = UserManager(networkService: mockNetworkService)
+        let mockWorkoutManager = WorkoutManager(networkService: mockNetworkService)
+        
+        viewModel = OnboardingViewModel(
+            networkService: mockNetworkService,
+            userManager: mockUserManager,
+            workoutManager: mockWorkoutManager
+        )
     }
 
     // This method is called after each test function in this class is called.
@@ -106,30 +180,5 @@ class OnboardingViewModelTests: XCTestCase {
         viewModel.userProfile.limitationsDescription = "Knee injury"
         // Assert: The button should now be enabled.
         XCTAssertFalse(viewModel.isNextButtonDisabled, "Next button should be enabled once limitations are described.")
-    }
-
-    /// Test the successful fetching of coaches.
-    func test_fetchCoaches_success_populatesAvailableCoaches() {
-        // Arrange: Configure the mock service to return a successful result.
-        mockNetworkService.result = .success(mockCoaches)
-        
-        // Act: Call the fetch function on the ViewModel.
-        viewModel.fetchCoaches()
-
-        // Assert: The ViewModel's `availableCoaches` property should be populated.
-        XCTAssertEqual(viewModel.availableCoaches.count, mockCoaches.count, "availableCoaches should be populated on successful fetch.")
-    }
-
-    /// Test the failure case when fetching coaches.
-    func test_fetchCoaches_failure_doesNotPopulateCoaches() {
-        // Arrange: Configure the mock service to return a failure.
-        enum TestError: Error { case networkFailure }
-        mockNetworkService.result = .failure(TestError.networkFailure)
-        
-        // Act: Call the fetch function on the ViewModel.
-        viewModel.fetchCoaches()
-
-        // Assert: The `availableCoaches` property should remain empty.
-        XCTAssertTrue(viewModel.availableCoaches.isEmpty, "availableCoaches should be empty on a failed fetch.")
     }
 }

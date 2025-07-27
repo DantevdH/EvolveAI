@@ -9,8 +9,8 @@ import SwiftUI
 
 struct GoalsStep: View {
     @ObservedObject var viewModel: OnboardingViewModel
-    let availableCoaches: [Coach]
-    var onCoachSelected: (Coach) -> Void
+    // let availableCoaches: [Coach]
+    // var onCoachSelected: (Coach) -> Void
     private let characterLimit = 300
     
     var body: some View {
@@ -39,11 +39,7 @@ struct GoalsStep: View {
                                 viewModel.userProfile.primaryGoalDescription = ""
                             }
                             viewModel.userProfile.primaryGoal = goal.0
-                            if let coach = availableCoaches.first(where: { $0.goal == goal.0 }) {
-                                    onCoachSelected(coach)
-                                }
-                            
- 
+                            viewModel.fetchCoaches(userGoal: goal.0)
                         }
                     }
                 }
