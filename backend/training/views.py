@@ -8,6 +8,10 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from datetime import datetime, timedelta
+from .scenario_auth import ScenarioAwareAuthentication, ScenarioAwarePermission
+from .scenario_mixin import ScenarioMixin
+from .scenario_manager import ScenarioManager
+from .scenario_views import MOCK_WORKOUT_PLAN
 
 from users.models import UserProfile
 from .models import (
@@ -29,15 +33,33 @@ from .services.prompt_generator import WorkoutPromptGenerator
 from .services.database_service import WorkoutPlanDatabaseService
 
 
-class GenerateWorkoutView(APIView):
+class GenerateWorkoutView(ScenarioMixin, APIView):
     """Generate a new workout plan using OpenAI and save to database."""
 
-    authentication_classes = [TokenAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = [ScenarioAwareAuthentication]
+    permission_classes = [ScenarioAwarePermission]
 
     def post(self, request, *args, **kwargs):
         """Generate and save a new workout plan."""
+        
+        # Check for scenario response first
+        scenario_response = self.handle_scenario_response(request, 'workout_plan')
+        if scenario_response:
+            return scenario_response
+        
+        # If we reach here, it means we're in a scenario that should succeed
+        # or we have a real authenticated user
+        scenario = ScenarioManager.get_current_scenario(request)
+        if scenario:
+            # For scenarios, return mock workout plan response
+            return Response(
+                {
+                    "workout_plan": MOCK_WORKOUT_PLAN
+                },
+                status=status.HTTP_201_CREATED,
+            )
 
+        # For real users, actually generate and save
         # Step 1: Create/update user profile
         user_profile = self._create_or_update_user_profile(request)
 
@@ -159,14 +181,26 @@ class GenerateWorkoutView(APIView):
                 )
 
 
-class WorkoutPlanDetailView(APIView):
+class WorkoutPlanDetailView(ScenarioMixin, APIView):
     """Retrieve the user's current workout plan with progress."""
 
-    authentication_classes = [TokenAuthentication]
-    permission_classes = [IsAuthenticated]
+    authentication_classes = [ScenarioAwareAuthentication]
+    permission_classes = [ScenarioAwarePermission]
 
     def get(self, request, *args, **kwargs):
         """Get the user's current workout plan with progress data."""
+        # Check for scenario response first
+        scenario_response = self.handle_scenario_response(request, 'workout_plan')
+        if scenario_response:
+            return scenario_response
+
+        # If scenario is set and user is not authenticated, return mock plan (for scenario mode)
+        from .scenario_manager import ScenarioManager, Scenario
+        scenario = ScenarioManager.get_current_scenario(request)
+        if scenario in [Scenario.USER_WITH_PLAN]:
+            from .mock_data import MOCK_WORKOUT_PLAN
+            return Response({"workout_plan": MOCK_WORKOUT_PLAN, "progress": None}, status=status.HTTP_200_OK)
+
         try:
             user_profile = UserProfile.objects.get(user=request.user)
             workout_plan = WorkoutPlan.objects.get(user_profile=user_profile)

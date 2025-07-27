@@ -11,8 +11,12 @@ struct EvolveAIApp: App {
     @StateObject private var appViewModel: AppViewModel
     
     init() {
+        // Only run app initialization if not in test environment
         #if DEBUG
-        AppEnvironment.printConfiguration()
+        if !ProcessInfo.processInfo.environment.keys.contains("XCTestConfigurationFilePath") {
+            AppEnvironment.printConfiguration()
+            AppEnvironment.initializeDevelopmentScenario()
+        }
         #endif
         
         let userManager = UserManager()

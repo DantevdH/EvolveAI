@@ -61,32 +61,10 @@ class UserManager: ObservableObject, UserManagerProtocol {
     }
     
     private func loadUserSession() {
-        self.authToken = UserDefaults.standard.string(forKey: "authToken")
-        // self.isOnboardingComplete = false
-        // self.isLoading = false
+        // For scenarios, we need to check the backend for the current user state
+        // For now, just use the network service to get the auth token
+        self.authToken = networkService.getAuthToken()
         printState("loadUserSession")
-        
-        // For debugging: Initialize based on mock scenario
-        #if DEBUG
-            switch AppEnvironment.mockScenario {
-            case .newUser:
-                // New user starts with no token
-                self.authToken = nil
-                print("[DEBUG] New user scenario - no auth token")
-            case .existingUserNotOnboarded, .onboardedUser, .userWithPlan:
-                // Existing users start with a mock token
-                if self.authToken == nil {
-                    self.authToken = "mock-token"
-                    print("[DEBUG] Existing user scenario - created mock token")
-                }
-            case .networkError:
-                // Network error scenario - start with token but will fail
-                if self.authToken == nil {
-                    self.authToken = "mock-token"
-                    print("[DEBUG] Network error scenario - created mock token")
-                }
-            }
-        #endif
     }
 
     func checkAuthenticationState() {
