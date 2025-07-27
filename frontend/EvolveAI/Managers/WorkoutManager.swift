@@ -57,14 +57,6 @@ class WorkoutManager: ObservableObject, WorkoutManagerProtocol {
 
     init(networkService: NetworkServiceProtocol = AppEnvironment.networkService) {
         self.networkService = networkService
-        
-        #if DEBUG
-        // Initialize with workout plan based on scenario
-        if AppEnvironment.mockScenario == .userWithPlan {
-            self.workoutPlanResponse = WorkoutPlanResponse(workoutPlan: mockWorkoutPlan)
-            print("[DEBUG] Scenario \(AppEnvironment.mockScenario) - setting mock workout plan")
-        }
-        #endif
     }
     
     deinit {

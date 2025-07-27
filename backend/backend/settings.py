@@ -145,3 +145,6 @@ CACHES = {
         },
     }
 }
+
+# Scenario/Mock API response delay toggle
+SCENARIO_RESPONSE_DELAY = os.getenv("SCENARIO_RESPONSE_DELAY", "true").lower() == "true"
