@@ -49,6 +49,11 @@ extension Color {
     /// A clean white color for primary text.
     static let evolveText = Color.white
     
+    // A vibrant, modern blue for secondary actions (e.g., Ask AI)
+    static let evolveSecondary = Color(hex: "#236193")
+
+    // A less shiny, muted teal for tertiary actions (e.g., Log Food)
+    static let evolveTertiary = Color(hex: "#16B89F")
 }
 
 

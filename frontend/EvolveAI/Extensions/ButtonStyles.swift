@@ -36,28 +36,24 @@ struct StartButtonStyle: ButtonStyle {
 }
 
 struct PrimaryButtonStyle: ButtonStyle {
-    // A futuristic gradient from your brand red to a slightly darker, richer red.
-    let futuristicGradient = LinearGradient(
-        gradient: Gradient(colors: [Color(hex: "#b74248"), Color(hex: "#4a1117")]),
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-    
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline.weight(.bold))
-            .padding()
-            .frame(maxWidth: .infinity) // Make the button stretch to the edges
+            .padding(.vertical, 18)
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity)
             .foregroundColor(.white)
             .background(
-                // Use the gradient for the background
-                futuristicGradient
+                Color.evolvePrimary
             )
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous)) // Modern rounded corners
-            // Add a "glow" effect using a shadow with the button's own color
-            .shadow(color: .evolvePrimary.opacity(0.6), radius: configuration.isPressed ? 8 : 12, y: 8)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
-            // Use a spring animation for a more dynamic press effect
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.white.opacity(configuration.isPressed ? 0.22 : 0.14), lineWidth: 2)
+            )
+            .shadow(color: Color.evolvePrimary.opacity(0.7), radius: configuration.isPressed ? 4 : 14, y: 8)
+            .shadow(color: Color.evolvePrimary.opacity(0.3), radius: 24, y: 0)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
             .animation(.spring(response: 0.4, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }

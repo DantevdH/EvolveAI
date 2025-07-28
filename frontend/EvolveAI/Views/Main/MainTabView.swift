@@ -12,7 +12,7 @@ struct MainTabView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             TabView(selection: $selectedTab) {
-                DashboardView().tag(0)
+                HomeView().tag(0)
                 WorkoutView(workoutPlan: plan).tag(1)
                 NutritionView().tag(2)
             }

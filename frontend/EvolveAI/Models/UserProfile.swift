@@ -41,6 +41,8 @@ enum ExperienceLevel: String, CaseIterable, Identifiable {
 // This struct will temporarily hold all the user's answers
 // during the onboarding process.
 struct UserProfile: Codable {
+
+    var username: String = ""
     // Properties for GoalsStep
     var primaryGoal: String = ""
 

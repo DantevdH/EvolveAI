@@ -17,6 +17,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = UserProfile
         fields = [
             "id",
+            "username",
             "primaryGoal",
             "primaryGoalDescription",
             "coach",

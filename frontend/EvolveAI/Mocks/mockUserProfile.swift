@@ -1,4 +1,5 @@
 let mockUserProfile = UserProfile(
+    username: "Dante",
     primaryGoal: "Increase Strength",
     primaryGoalDescription: "Focus on increasing raw power and lifting heavier.",
     experienceLevel: "Intermediate",
