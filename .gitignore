@@ -182,3 +182,8 @@ env.bak/
 venv.bak/
 
 # End of https://www.toptal.com/developers/gitignore/api/swift,xcode,python,django
+
+# Supabase Configuration
+frontend/EvolveAI/Resources/Config.plist
+frontend/Pods/
+

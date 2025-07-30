@@ -16,7 +16,7 @@ let mockCoaches: [Coach] = [
     Coach(
         name: "Coach Forge",
         goal: "Bodybuilding",
-        iconName: "dumbbell.fill",
+        iconName: "Coachforge",
         tagline: "Sculpting strength, building legends.",
         primaryColorHex: "#FF9500"
     ),

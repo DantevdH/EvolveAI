@@ -1,4 +1,4 @@
-# EvolveAI Backend Scenario System
+# EvolveAI Backend Scenario System 
 
 ## Overview
 This backend supports scenario-based development and testing for the EvolveAI app. Scenarios allow the frontend to simulate different user states (new user, onboarding, etc.) without real authentication or database data.

@@ -8,7 +8,8 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from datetime import datetime, timedelta
-from mock.scenario_auth import ScenarioAwareAuthentication, ScenarioAwarePermission
+from mock.scenario_auth import ScenarioAwarePermission
+from users.authentication import SupabaseOrTokenAuthentication
 from mock.scenario_mixin import ScenarioMixin
 from mock.scenario_manager import ScenarioManager, Scenario
 from mock.scenario_views import MOCK_WORKOUT_PLAN
@@ -36,7 +37,7 @@ from .services.database_service import WorkoutPlanDatabaseService
 class GenerateWorkoutView(ScenarioMixin, APIView):
     """Generate a new workout plan using OpenAI and save to database."""
 
-    authentication_classes = [ScenarioAwareAuthentication]
+    authentication_classes = [SupabaseOrTokenAuthentication]
     permission_classes = [ScenarioAwarePermission]
 
     def post(self, request, *args, **kwargs):
@@ -184,7 +185,7 @@ class GenerateWorkoutView(ScenarioMixin, APIView):
 class WorkoutPlanDetailView(ScenarioMixin, APIView):
     """Retrieve the user's current workout plan with progress."""
 
-    authentication_classes = [ScenarioAwareAuthentication]
+    authentication_classes = [SupabaseOrTokenAuthentication]
     permission_classes = [ScenarioAwarePermission]
 
     def get(self, request, *args, **kwargs):

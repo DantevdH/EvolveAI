@@ -25,10 +25,12 @@ struct LoginView: View {
                 VStack(spacing: 15) {
                     SocialLoginButton(
                         imageName: "apple.logo",
-                        text: "Sign In with Apple",
+                        text: "Sign In with Apple (Coming Soon)",
                         isSystemImage: true,
                         action: userManager.signInWithApple
                     )
+                    .disabled(true)
+                    .opacity(0.5)
                     
                     SocialLoginButton(
                         imageName: "google.logo", // Custom asset
@@ -81,7 +83,7 @@ struct LoginView: View {
                             .scaleEffect(1.5)
                     } else {
                         Button("Sign In") {
-                            userManager.login(username: email, password: password)
+                            userManager.signInWithEmail(email: email, password: password)
                         }
                         .buttonStyle(PrimaryButtonStyle())
                     }

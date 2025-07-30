@@ -8,6 +8,11 @@ protocol UserManagerProtocol: AnyObject {
     
     func checkAuthenticationState()
     func login(username: String, password: String)
+    func signInWithEmail(email: String, password: String)
+    func signUpWithEmail(email: String, password: String)
+    func signInWithGoogle()
+    func signInWithFacebook()
+    func signInWithApple()
     func completeOnboarding(with profile: UserProfile, completion: @escaping (Bool) -> Void)
     func markOnboardingComplete()
     func logout()
@@ -55,9 +60,12 @@ class UserManager: ObservableObject, UserManagerProtocol {
     @Published var isNewUser = false
     @Published var networkErrorMessage: String? = nil
     private let networkService: NetworkServiceProtocol
+    private let supabaseManager: SupabaseManagerProtocol
 
-    init(networkService: NetworkServiceProtocol = AppEnvironment.networkService) {
+    init(networkService: NetworkServiceProtocol = AppEnvironment.networkService, 
+         supabaseManager: SupabaseManagerProtocol = SupabaseManager.shared) {
         self.networkService = networkService
+        self.supabaseManager = supabaseManager
         loadUserSession()
     }
     
@@ -131,9 +139,131 @@ class UserManager: ObservableObject, UserManagerProtocol {
         }
     }
     
-    func signInWithApple() {}
-    func signInWithGoogle() {}
-    func signInWithFacebook() {}
+    func signInWithEmail(email: String, password: String) {
+        isLoading = true
+        printState("signInWithEmail - start")
+        
+        supabaseManager.signInWithEmail(email: email, password: password) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let authResult):
+                    // Exchange Supabase token for Django token
+                    self?.exchangeSupabaseTokenForDjangoToken(authResult.accessToken)
+                case .failure(let error):
+                    print("Email sign-in failed: \(error.localizedDescription)")
+                    self?.isLoading = false
+                    self?.networkErrorMessage = error.localizedDescription
+                    self?.printState("signInWithEmail - failure")
+                }
+            }
+        }
+    }
+    
+    func signUpWithEmail(email: String, password: String) {
+        isLoading = true
+        printState("signUpWithEmail - start")
+        
+        supabaseManager.signUpWithEmail(email: email, password: password) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let authResult):
+                    // Exchange Supabase token for Django token
+                    self?.exchangeSupabaseTokenForDjangoToken(authResult.accessToken)
+                case .failure(let error):
+                    print("Email sign-up failed: \(error.localizedDescription)")
+                    self?.isLoading = false
+                    self?.networkErrorMessage = error.localizedDescription
+                    self?.printState("signUpWithEmail - failure")
+                }
+            }
+        }
+    }
+    
+    func signInWithGoogle() {
+        isLoading = true
+        printState("signInWithGoogle - start")
+        
+        supabaseManager.signInWithGoogle { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let authResult):
+                    // Exchange Supabase token for Django token
+                    self?.exchangeSupabaseTokenForDjangoToken(authResult.accessToken)
+                case .failure(let error):
+                    print("Google sign-in failed: \(error.localizedDescription)")
+                    self?.isLoading = false
+                    self?.networkErrorMessage = error.localizedDescription
+                    self?.printState("signInWithGoogle - failure")
+                }
+            }
+        }
+    }
+    
+    func signInWithFacebook() {
+        isLoading = true
+        printState("signInWithFacebook - start")
+        
+        supabaseManager.signInWithFacebook { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let authResult):
+                    // Exchange Supabase token for Django token
+                    self?.exchangeSupabaseTokenForDjangoToken(authResult.accessToken)
+                case .failure(let error):
+                    print("Facebook sign-in failed: \(error.localizedDescription)")
+                    self?.isLoading = false
+                    self?.networkErrorMessage = error.localizedDescription
+                    self?.printState("signInWithFacebook - failure")
+                }
+            }
+        }
+    }
+    
+    // Apple Sign-In disabled as requested
+    func signInWithApple() {
+        print("Apple Sign-In is disabled")
+        self.isLoading = false
+        self.networkErrorMessage = "Apple Sign-In is not available"
+    }
+    
+    private func exchangeSupabaseTokenForDjangoToken(_ supabaseToken: String) {
+        // Call Django backend to exchange Supabase token for Django token
+        let body = ["access_token": supabaseToken]
+        
+        guard let url = URL(string: "http://127.0.0.1:8000/api/users/auth/supabase/") else {
+            self.isLoading = false
+            self.networkErrorMessage = "Invalid URL"
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+        
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    self?.isLoading = false
+                    self?.networkErrorMessage = error.localizedDescription
+                    return
+                }
+                
+                guard let data = data,
+                      let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                      let djangoToken = json["token"] as? String else {
+                    self?.isLoading = false
+                    self?.networkErrorMessage = "Failed to get Django token"
+                    return
+                }
+                
+                // Set Django token and fetch user data
+                self?.authToken = djangoToken
+                self?.fetchUserData()
+                self?.printState("exchangeSupabaseTokenForDjangoToken - success")
+            }
+        }.resume()
+    }
     
     func login(username: String, password: String) {
         isLoading = true
