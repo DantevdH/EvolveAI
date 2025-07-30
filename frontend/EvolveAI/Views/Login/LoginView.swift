@@ -88,6 +88,14 @@ struct LoginView: View {
                         .buttonStyle(PrimaryButtonStyle())
                     }
                     
+                    // Show error message if any
+                    if let errorMessage = userManager.errorMessage {
+                        Text(errorMessage)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                            .multilineTextAlignment(.center)
+                    }
+                    
                     // --- Sign Up Link ---
                     HStack {
                         Text("Don't have an account?")

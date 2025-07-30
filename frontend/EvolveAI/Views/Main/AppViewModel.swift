@@ -130,13 +130,13 @@ class AppViewModel: ObservableObject {
             }
             .store(in: &cancellables)
         
-        // Subscribe to userManager network errors
-        userManager.$networkErrorMessage
+        // Subscribe to userManager errors
+        userManager.$errorMessage
             .receive(on: DispatchQueue.main)
             .sink { [weak self] error in
                 if let error = error {
                     self?.state = .error(message: error)
-                    print("[DEBUG] AppViewModel.state set to .error in userManager.networkErrorMessage subscription")
+                    print("[DEBUG] AppViewModel.state set to .error in userManager.errorMessage subscription")
                 }
             }
             .store(in: &cancellables)

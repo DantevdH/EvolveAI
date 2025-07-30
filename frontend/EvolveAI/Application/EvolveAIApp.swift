@@ -46,8 +46,15 @@ struct EvolveAIApp: App {
         let config = GIDConfiguration(clientID: clientID)
         GIDSignIn.sharedInstance.configuration = config
         
+        // Restore previous sign-in state
+        GIDSignIn.sharedInstance.restorePreviousSignIn { user, error in
+            if let error = error {
+                print("Google Sign-In restore error: \(error)")
+            }
+        }
+        
         let service = factory.makeNetworkService()
-        let userManager = UserManager(networkService: service)
+        let userManager = UserManager()
         let workoutManager = WorkoutManager(networkService: service)
         _userManager = StateObject(wrappedValue: userManager)
         _workoutManager = StateObject(wrappedValue: workoutManager)

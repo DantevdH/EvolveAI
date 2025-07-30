@@ -99,6 +99,10 @@ def supabase_auth_callback(request):
     Handle Supabase authentication callback.
     This endpoint receives the Supabase JWT token and returns a Django token.
     """
+    print(f"=== SUPABASE AUTH CALLBACK CALLED ===")
+    print(f"Request path: {request.path}")
+    print(f"Request data: {request.data}")
+    
     scenario = ScenarioManager.get_current_scenario(request)
     if scenario:
         if ScenarioManager.should_return_network_error(scenario):
@@ -134,6 +138,10 @@ def social_auth_signin(request):
     """
     Handle social authentication sign-in (Google, Facebook, Apple).
     """
+    print(f"=== SOCIAL AUTH SIGNIN CALLED ===")
+    print(f"Request path: {request.path}")
+    print(f"Request data: {request.data}")
+    
     scenario = ScenarioManager.get_current_scenario(request)
     if scenario:
         if ScenarioManager.should_return_network_error(scenario):

@@ -36,17 +36,28 @@
     <key>MinimumOSVersion</key>
     <string>15.0</string>
     
+    <!-- URL Schemes Configuration -->
     <key>CFBundleURLTypes</key>
     <array>
+        <!-- Supabase OAuth URL Scheme -->
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>SupabaseOAuth</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>com.evolveai.app</string>
+            </array>
+        </dict>
+        <!-- Google Sign-In URL Scheme -->
         <dict>
             <key>CFBundleURLName</key>
             <string>GoogleSignIn</string>
             <key>CFBundleURLSchemes</key>
             <array>
-                <string>com.googleusercontent.apps.41234641985-0f67mmmc4nph7eivf3t8ebgmtsmvp4t2</string>
-                <string>41234641985-0f67mmmc4nph7eivf3t8ebgmtsmvp4t2</string>
+                <string>com.googleusercontent.apps.41234641985-kqo0eqpfuk0ms204roomrbem4cckihj3</string>
             </array>
         </dict>
+        <!-- Facebook Login URL Scheme -->
         <dict>
             <key>CFBundleURLName</key>
             <string>FacebookLogin</string>
@@ -56,30 +67,10 @@
             </array>
         </dict>
     </array>
-    <!-- Google Sign-In URL Scheme
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLName</key>
-            <string>GoogleSignIn</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>com.googleusercontent.apps.41234641985-0f67mmmc4nph7eivf3t8ebgmtsmvp4t2</string>
-            </array>
-        </dict>
-        <dict>
-            <key>CFBundleURLName</key>
-            <string>FacebookLogin</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>fb628474536474668</string>
-            </array>
-        </dict>
-    </array> -->
     
     <!-- Google Sign-In Configuration -->
     <key>GIDClientID</key>
-    <string>41234641985-0f67mmmc4nph7eivf3t8ebgmtsmvp4t2</string>
+    <string>41234641985-kqo0eqpfuk0ms204roomrbem4cckihj3.apps.googleusercontent.com</string>
     
     <!-- Facebook Login Configuration -->
     <key>FacebookAppID</key>
@@ -88,5 +79,14 @@
     <string>9fd91090ef345afe91910a7a44589bd6</string>
     <key>FacebookDisplayName</key>
     <string>EvolveAI</string>
+    
+    <!-- LSApplicationQueriesSchemes for Facebook -->
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>fbapi</string>
+        <string>fb-messenger-share-api</string>
+        <string>fbauth2</string>
+        <string>fbshareextension</string>
+    </array>
 </dict>
-</plist> 
+</plist>
