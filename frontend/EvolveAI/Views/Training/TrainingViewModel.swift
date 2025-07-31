@@ -11,6 +11,7 @@ class TrainingViewModel: ObservableObject {
     @Published var selectedExercise: Exercise?
     
     private var workoutPlan: WorkoutPlan?
+    private var completeWorkoutPlan: CompleteWorkoutPlan?
     
     init(workoutPlan: WorkoutPlan?) {
         self.workoutPlan = workoutPlan
@@ -31,37 +32,48 @@ class TrainingViewModel: ObservableObject {
     }
     
     func updateWorkoutPlan(_ plan: WorkoutPlan) {
-        print("[DEBUG] updateWorkoutPlan called with plan containing weeks: \(plan.weekly_schedules.map { $0.week_number })")
+        print("[DEBUG] updateWorkoutPlan called with plan ID: \(plan.id)")
         workoutPlan = plan
+        setupTodayAsDefault()
+    }
+    
+    func updateCompleteWorkoutPlan(_ completePlan: CompleteWorkoutPlan) {
+        print("[DEBUG] updateCompleteWorkoutPlan called")
+        completeWorkoutPlan = completePlan
+        workoutPlan = completePlan.workoutPlan
         setupTodayAsDefault()
     }
     
     func setCurrentWeek(_ week: Int) {
         print("[DEBUG] setCurrentWeek called with week: \(week)")
-        if let plan = workoutPlan,
-           week > 0 && week <= plan.weekly_schedules.count {
-            print("[DEBUG] Setting currentWeekIndex to \(week - 1)")
-            // currentWeekIndex = week - 1 // This line is removed
+        if let completePlan = completeWorkoutPlan,
+           week > 0 && week <= completePlan.weeklySchedules.count {
+            print("[DEBUG] Setting currentWeekSelected to \(week)")
+            currentWeekSelected = week
         } else {
-            print("[DEBUG] setCurrentWeek: invalid week \(week) for plan with weeks: \(workoutPlan?.weekly_schedules.count ?? 0)")
+            print("[DEBUG] setCurrentWeek: invalid week \(week) for plan with weeks: \(completeWorkoutPlan?.weeklySchedules.count ?? 0)")
         }
     }
     
     var currentWeek: WeeklySchedule? {
-        guard let plan = workoutPlan, plan.weekly_schedules.count > 0 else { return nil }
-        let safeIndex = min(currentWeekSelected, plan.weekly_schedules.count) - 1
-        guard safeIndex >= 0, safeIndex < plan.weekly_schedules.count else { return nil }
-        return plan.weekly_schedules[safeIndex]
+        guard let completePlan = completeWorkoutPlan, completePlan.weeklySchedules.count > 0 else { return nil }
+        let safeIndex = min(currentWeekSelected, completePlan.weeklySchedules.count) - 1
+        guard safeIndex >= 0, safeIndex < completePlan.weeklySchedules.count else { return nil }
+        return completePlan.weeklySchedules[safeIndex]
     }
     
     var selectedDayWorkout: DailyWorkout? {
-        guard let week = currentWeek,
-              selectedDayIndex < week.daily_workouts.count else { return nil }
-        return week.daily_workouts[selectedDayIndex]
+        guard let week = currentWeek else { return nil }
+        
+        // Get daily workouts for this week
+        let weekDailyWorkouts = completeWorkoutPlan?.dailyWorkouts.filter { $0.weeklyScheduleId == week.id } ?? []
+        
+        guard selectedDayIndex < weekDailyWorkouts.count else { return nil }
+        return weekDailyWorkouts[selectedDayIndex]
     }
     
     var totalWeeks: Int {
-        workoutPlan?.weekly_schedules.count ?? 0
+        completeWorkoutPlan?.weeklySchedules.count ?? 0
     }
     
     var currentWeekNumber: Int {
@@ -69,22 +81,22 @@ class TrainingViewModel: ObservableObject {
     }
     
     func previousWeek() {
-        print("[DEBUG] previousWeek called. currentWeekIndex before: \(currentWeekSelected)")
+        print("[DEBUG] previousWeek called. currentWeekSelected before: \(currentWeekSelected)")
         if currentWeekSelected > 1 {
             currentWeekSelected -= 1
             selectedDayIndex = 0
-            print("[DEBUG] previousWeek: currentWeekIndex after: \(currentWeekSelected), selectedDayIndex reset to 0")
+            print("[DEBUG] previousWeek: currentWeekSelected after: \(currentWeekSelected), selectedDayIndex reset to 0")
         } else {
             print("[DEBUG] previousWeek: already at first week")
         }
     }
     
     func nextWeek() {
-        print("[DEBUG] nextWeek called. currentWeekIndex before: \(currentWeekSelected), totalWeeks: \(totalWeeks)")
+        print("[DEBUG] nextWeek called. currentWeekSelected before: \(currentWeekSelected), totalWeeks: \(totalWeeks)")
         if currentWeekSelected < totalWeeks {
             currentWeekSelected += 1
             selectedDayIndex = 0
-            print("[DEBUG] nextWeek: currentWeekIndex after: \(currentWeekSelected), selectedDayIndex reset to 0")
+            print("[DEBUG] nextWeek: currentWeekSelected after: \(currentWeekSelected), selectedDayIndex reset to 0")
         } else {
             print("[DEBUG] nextWeek: already at last week")
         }
@@ -108,22 +120,12 @@ class TrainingViewModel: ObservableObject {
         
         let isCompleted = completedExercises.contains(exerciseId)
         
-        // Send to WorkoutManager for batch processing (only if we have auth token)
-        #if DEBUG
-        print("DEBUG: Toggle exercise \(exerciseId) to \(isCompleted)")
-        // In debug mode, just update local state
-        #else
-        guard let authToken = userManager.authToken else { 
-            print("No auth token available")
-            return 
-        }
+        // Send to WorkoutManager for batch processing
         workoutManager.updateExerciseCompletion(
             exerciseId: exerciseId,
             isCompleted: isCompleted,
-            weekNumber: currentWeekNumber,
-            authToken: authToken
+            weekNumber: currentWeekNumber
         )
-        #endif
         
         // Update workout completion status
         updateWorkoutCompletionStatus()
@@ -143,41 +145,33 @@ class TrainingViewModel: ObservableObject {
         
         if isCurrentlyCompleted {
             // Mark all exercises as incomplete
-            for exercise in workout.exercises {
-                completedExercises.remove(exercise.id)
-                #if !DEBUG
-                guard let authToken = userManager.authToken else { continue }
+            let workoutExercises = getWorkoutExercises(for: workout.id)
+            for workoutExercise in workoutExercises {
+                completedExercises.remove(workoutExercise.exerciseId)
                 workoutManager.updateExerciseCompletion(
-                    exerciseId: exercise.id,
+                    exerciseId: workoutExercise.exerciseId,
                     isCompleted: false,
-                    weekNumber: currentWeekNumber,
-                    authToken: authToken
+                    weekNumber: currentWeekNumber
                 )
-                #endif
             }
             completedWorkouts.remove(workout.id)
         } else {
             // Mark all exercises as complete
-            for exercise in workout.exercises {
-                completedExercises.insert(exercise.id)
-                #if !DEBUG
-                guard let authToken = userManager.authToken else { continue }
+            let workoutExercises = getWorkoutExercises(for: workout.id)
+            for workoutExercise in workoutExercises {
+                completedExercises.insert(workoutExercise.exerciseId)
                 workoutManager.updateExerciseCompletion(
-                    exerciseId: exercise.id,
+                    exerciseId: workoutExercise.exerciseId,
                     isCompleted: true,
-                    weekNumber: currentWeekNumber,
-                    authToken: authToken
+                    weekNumber: currentWeekNumber
                 )
-                #endif
             }
             completedWorkouts.insert(workout.id)
         }
         
         updateWorkoutCompletionStatus()
         
-        #if DEBUG
         print("DEBUG: Workout \(workout.id) completion toggled. Now completed: \(!isCurrentlyCompleted)")
-        #endif
     }
     
     func isExerciseCompleted(_ exerciseId: Int) -> Bool {
@@ -187,42 +181,64 @@ class TrainingViewModel: ObservableObject {
     func isWorkoutCompleted(_ workoutId: Int) -> Bool {
         guard let workout = findWorkoutById(workoutId) else { return false }
         
-        // Rest days are automatically "completed"
-        if workout.isRestDay {
-            return true
+        // Check if this is a rest day (no exercises)
+        let workoutExercises = getWorkoutExercises(for: workout.id)
+        if workoutExercises.isEmpty {
+            return true // Rest days are automatically "completed"
         }
         
         // Check if all exercises in this workout are completed
-        let allExerciseIds = Set(workout.exercises.map { $0.id })
+        let allExerciseIds = Set(workoutExercises.map { $0.exerciseId })
         return allExerciseIds.isSubset(of: completedExercises)
     }
     
     private func updateWorkoutCompletionStatus() {
-        guard let plan = workoutPlan else { return }
+        guard let completePlan = completeWorkoutPlan else { return }
         
         // Update completed workouts based on exercise completion
-        for weeklySchedule in plan.weekly_schedules {
-            for dailyWorkout in weeklySchedule.daily_workouts {
-                if isWorkoutCompleted(dailyWorkout.id) {
-                    completedWorkouts.insert(dailyWorkout.id)
-                } else {
-                    completedWorkouts.remove(dailyWorkout.id)
-                }
+        for dailyWorkout in completePlan.dailyWorkouts {
+            if isWorkoutCompleted(dailyWorkout.id) {
+                completedWorkouts.insert(dailyWorkout.id)
+            } else {
+                completedWorkouts.remove(dailyWorkout.id)
             }
         }
     }
     
     private func findWorkoutById(_ workoutId: Int) -> DailyWorkout? {
-        guard let plan = workoutPlan else { return nil }
-        
-        for weeklySchedule in plan.weekly_schedules {
-            for dailyWorkout in weeklySchedule.daily_workouts {
-                if dailyWorkout.id == workoutId {
-                    return dailyWorkout
-                }
-            }
+        return completeWorkoutPlan?.dailyWorkouts.first { $0.id == workoutId }
+    }
+    
+    private func getWorkoutExercises(for dailyWorkoutId: Int) -> [WorkoutExercise] {
+        return completeWorkoutPlan?.workoutExercises.filter { $0.dailyWorkoutId == dailyWorkoutId } ?? []
+    }
+    
+    private func getExercise(for exerciseId: Int) -> Exercise? {
+        return completeWorkoutPlan?.exercises.first { $0.id == exerciseId }
+    }
+    
+    // Helper method to get exercises for a specific daily workout
+    func getExercisesForWorkout(_ workout: DailyWorkout) -> [Exercise] {
+        let workoutExercises = getWorkoutExercises(for: workout.id)
+        return workoutExercises.compactMap { workoutExercise in
+            getExercise(for: workoutExercise.exerciseId)
         }
-        return nil
+    }
+    
+    // Helper method to get workout exercise details for a specific exercise
+    func getWorkoutExerciseDetails(for exerciseId: Int, in workout: DailyWorkout) -> WorkoutExercise? {
+        return getWorkoutExercises(for: workout.id).first { $0.exerciseId == exerciseId }
+    }
+    
+    // Helper method to get daily workouts for a specific week
+    func getDailyWorkoutsForWeek(_ week: WeeklySchedule) -> [DailyWorkout] {
+        return completeWorkoutPlan?.dailyWorkouts.filter { $0.weeklyScheduleId == week.id } ?? []
+    }
+    
+    // Helper method to check if a daily workout is a rest day
+    func isRestDay(_ workout: DailyWorkout) -> Bool {
+        let workoutExercises = getWorkoutExercises(for: workout.id)
+        return workoutExercises.isEmpty
     }
     
     private func setupTodayAsDefault() {
@@ -242,29 +258,9 @@ class TrainingViewModel: ObservableObject {
     
     // Initialize from server data
     func loadFromServerData() {
-        guard let plan = workoutPlan else { return }
-        
-        // Extract completion status from server data
-        var exerciseCompletions: Set<Int> = []
-        var workoutCompletions: Set<Int> = []
-        
-        for weeklySchedule in plan.weekly_schedules {
-            for dailyWorkout in weeklySchedule.daily_workouts {
-                // Check if workout is completed (from server)
-                if dailyWorkout.isCompleted {
-                    workoutCompletions.insert(dailyWorkout.id)
-                }
-                
-                // Check individual exercises
-                for exercise in dailyWorkout.exercises {
-                    if exercise.isCompleted {
-                        exerciseCompletions.insert(exercise.id)
-                    }
-                }
-            }
-        }
-        
-        completedExercises = exerciseCompletions
-        completedWorkouts = workoutCompletions
+        // For now, we'll start with empty completion status
+        // TODO: Implement loading completion status from Supabase when you add progress tracking
+        completedExercises = []
+        completedWorkouts = []
     }
 }

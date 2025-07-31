@@ -95,8 +95,7 @@ class AppViewModel: ObservableObject {
         }
         .store(in: &cancellables)
 
-        workoutManager.$workoutPlanResponse
-            .map { $0?.workoutPlan }
+        workoutManager.$workoutPlan
             .receive(on: DispatchQueue.main)
             .sink { [weak self] plan in
                 guard let self = self else { return }
@@ -107,10 +106,10 @@ class AppViewModel: ObservableObject {
                 }
                 if let plan = plan {
                     self.state = .loaded(plan: plan)
-                    print("[DEBUG] AppViewModel.state set to .loaded(plan) in workoutPlanResponse subscription")
+                    print("[DEBUG] AppViewModel.state set to .loaded(plan) in workoutPlan subscription")
                 } else if !self.workoutManager.isLoading && !self.workoutManager.isCoachesLoading {
                     self.state = .needsPlan
-                    print("[DEBUG] AppViewModel.state set to .needsPlan in workoutPlanResponse subscription")
+                    print("[DEBUG] AppViewModel.state set to .needsPlan in workoutPlan subscription")
                 }
             }
             .store(in: &cancellables)
@@ -164,14 +163,8 @@ class AppViewModel: ObservableObject {
     }
 
     func fetchWorkoutPlan() {
-        guard let authToken = userManager.authToken else {
-            self.state = .error(message: "Authentication token not found.")
-            print("[DEBUG] AppViewModel.state set to .error (Authentication token not found) in fetchWorkoutPlan")
-            return
-        }
-        
         // Try to fetch existing plan first
-        workoutManager.fetchExistingPlan(authToken: authToken, showLoading: false) { [weak self] success in
+        workoutManager.fetchExistingPlan { [weak self] success in
             guard let self = self else { return }
             
             if success {
@@ -197,7 +190,7 @@ class AppViewModel: ObservableObject {
             return
         }
         
-        workoutManager.createAndProvidePlan(for: userProfile, authToken: authToken) { [weak self] success in
+        workoutManager.createAndProvidePlan(for: userProfile) { [weak self] success in
             guard let self = self else { return }
             
             if success {

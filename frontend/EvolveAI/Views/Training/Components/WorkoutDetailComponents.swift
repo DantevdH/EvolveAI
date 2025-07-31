@@ -2,7 +2,8 @@ import SwiftUI
 
 // MARK: - Exercise Row
 struct ExerciseRowView: View {
-    let exercise: WorkoutExercise
+    let exercise: Exercise
+    let workoutExercise: WorkoutExercise?
     let isCompleted: Bool
     let canModify: Bool
     let onToggleCompletion: () -> Void
@@ -17,13 +18,15 @@ struct ExerciseRowView: View {
             }
             .disabled(!canModify)
             VStack(alignment: .leading, spacing: 4) {
-                Text(exercise.exercise.name)
+                Text(exercise.name)
                     .font(.subheadline)
                     .fontWeight(.medium)
                     .foregroundColor(.evolveText)
-                Text("\(exercise.sets) sets × \(exercise.reps) reps")
-                    .font(.caption)
-                    .foregroundColor(.evolveMuted)
+                if let workoutExercise = workoutExercise {
+                    Text("\(workoutExercise.sets) sets × \(workoutExercise.reps) reps")
+                        .font(.caption)
+                        .foregroundColor(.evolveMuted)
+                }
             }
             Spacer()
             Button(action: onShowDetail) {

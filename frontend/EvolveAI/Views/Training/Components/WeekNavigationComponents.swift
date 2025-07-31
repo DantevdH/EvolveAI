@@ -74,17 +74,20 @@ struct WeeklyOverviewView: View {
             }
             HStack(spacing: 8) {
                 ForEach(0..<7, id: \.self) { dayIndex in
-                    if let week = viewModel.currentWeek,
-                       dayIndex < week.daily_workouts.count {
-                        DayIndicatorView(
-                            dayAbbreviation: dayAbbreviations[dayIndex],
-                            workout: week.daily_workouts[dayIndex],
-                            isSelected: dayIndex == viewModel.selectedDayIndex,
-                            isCompleted: viewModel.isWorkoutCompleted(week.daily_workouts[dayIndex].id),
-                            isCurrentWeek: isCurrentWeek,
-                            canModify: canModifyWeek
-                        ) {
-                            viewModel.selectDay(dayIndex)
+                    if let week = viewModel.currentWeek {
+                        let weekDailyWorkouts = viewModel.getDailyWorkoutsForWeek(week)
+                        if dayIndex < weekDailyWorkouts.count {
+                            DayIndicatorView(
+                                dayAbbreviation: dayAbbreviations[dayIndex],
+                                workout: weekDailyWorkouts[dayIndex],
+                                isSelected: dayIndex == viewModel.selectedDayIndex,
+                                isCompleted: viewModel.isWorkoutCompleted(weekDailyWorkouts[dayIndex].id),
+                                isCurrentWeek: isCurrentWeek,
+                                canModify: canModifyWeek,
+                                viewModel: viewModel
+                            ) {
+                                viewModel.selectDay(dayIndex)
+                            }
                         }
                     }
                 }
@@ -107,6 +110,7 @@ struct DayIndicatorView: View {
     let isCompleted: Bool
     let isCurrentWeek: Bool
     let canModify: Bool
+    let viewModel: TrainingViewModel
     let onTap: () -> Void
     var body: some View {
         Button(action: onTap) {
@@ -120,7 +124,7 @@ struct DayIndicatorView: View {
                     .foregroundColor(backgroundColor)
                     .overlay(
                         Group {
-                            if workout.isRestDay {
+                            if viewModel.isRestDay(workout) {
                                 Image(systemName: "moon.fill")
                                     .font(.system(size: 12))
                                     .foregroundColor(.white)
@@ -142,7 +146,7 @@ struct DayIndicatorView: View {
     private var backgroundColor: Color {
         if isSelected {
             return .evolvePrimary
-        } else if workout.isRestDay {
+        } else if viewModel.isRestDay(workout) {
             return .purple.opacity(0.6)
         } else if isCompleted {
             return .green

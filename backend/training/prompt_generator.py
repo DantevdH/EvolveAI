@@ -1,10 +1,7 @@
-from users.models import UserProfile
-
-
 class WorkoutPromptGenerator:
     """Service for generating structured prompts for the LLM."""
 
-    def create_initial_plan_prompt(self, user_profile: UserProfile) -> str:
+    def create_initial_plan_prompt(self, user_profile) -> str:
         """Create a detailed prompt based on user profile."""
 
         limitations_text = (

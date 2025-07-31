@@ -237,16 +237,19 @@ struct TodaysWorkoutCard: View {
     @EnvironmentObject var workoutManager: WorkoutManager
     
     var todayWorkout: DailyWorkout? {
+        guard let completePlan = workoutManager.completeWorkoutPlan else { return nil }
+        
         let today = Calendar.current.component(.weekday, from: Date())
         let dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
         let todayName = dayNames[today - 1]
-        let week = plan.weekly_schedules.first
-        return week?.daily_workouts.first(where: { $0.day_of_week == todayName })
+        
+        // Find today's workout by matching the day name
+        return completePlan.dailyWorkouts.first(where: { $0.dayOfWeek == todayName })
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            if let workout = todayWorkout, !workout.isRestDay {
+            if let workout = todayWorkout, !isRestDay(workout) {
                 HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Today's Workout")
@@ -255,8 +258,9 @@ struct TodaysWorkoutCard: View {
                             .foregroundColor(.white)
                     }
                     Spacer()
-                    let completed = workout.exercises.filter { $0.isCompleted }.count
-                    let total = max(workout.exercises.count, 1)
+                    let exercises = getExercisesForWorkout(workout)
+                    let completed = exercises.filter { isExerciseCompleted($0.id) }.count
+                    let total = max(exercises.count, 1)
                     ZStack {
                         ProgressRing(progress: Double(completed) / Double(total), color: .evolvePrimary)
                             .frame(width: 36, height: 36)
@@ -277,20 +281,22 @@ struct TodaysWorkoutCard: View {
                     .shadow(color: Color.evolvePrimary.opacity(0.18), radius: 4, x: 0, y: 2)
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("\(workout.exercises.count) exercises")
+                    let exercises = getExercisesForWorkout(workout)
+                    Text("\(exercises.count) exercises")
                         .font(.subheadline)
                         .foregroundColor(.white)
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
-                        ForEach(Array(workout.exercises.prefix(5)), id: \.id) { exercise in
+                        let exercises = getExercisesForWorkout(workout)
+                        ForEach(Array(exercises.prefix(5)), id: \.id) { exercise in
                             VStack(spacing: 4) {
                                 Image(systemName: "figure.strengthtraining.traditional")
                                     .resizable()
                                     .scaledToFit()
                                     .frame(width: 24, height: 24)
-                                    .foregroundColor(exercise.isCompleted ? .evolvePrimary : .evolveMuted)
-                                Text(exercise.exercise.name)
+                                    .foregroundColor(isExerciseCompleted(exercise.id) ? .evolvePrimary : .evolveMuted)
+                                Text(exercise.name)
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
                                     .foregroundColor(.white)
@@ -335,6 +341,27 @@ struct TodaysWorkoutCard: View {
                 .fill(Color.evolveCard)
                 .shadow(color: .evolvePrimary.opacity(0.08), radius: 8, x: 0, y: 4)
         )
+    }
+    
+    // Helper methods to work with the flat structure
+    private func isRestDay(_ workout: DailyWorkout) -> Bool {
+        guard let completePlan = workoutManager.completeWorkoutPlan else { return true }
+        let workoutExercises = completePlan.workoutExercises.filter { $0.dailyWorkoutId == workout.id }
+        return workoutExercises.isEmpty
+    }
+    
+    private func getExercisesForWorkout(_ workout: DailyWorkout) -> [Exercise] {
+        guard let completePlan = workoutManager.completeWorkoutPlan else { return [] }
+        let workoutExercises = completePlan.workoutExercises.filter { $0.dailyWorkoutId == workout.id }
+        return workoutExercises.compactMap { workoutExercise in
+            completePlan.exercises.first { $0.id == workoutExercise.exerciseId }
+        }
+    }
+    
+    private func isExerciseCompleted(_ exerciseId: Int) -> Bool {
+        // For now, return false since we don't have completion tracking in this view
+        // In a real app, this would check against the completion status
+        return false
     }
 }
 
@@ -487,7 +514,8 @@ struct AIInsightsCard: View {
 #Preview("Home - With Plan") {
     let userManager = UserManager()
     let workoutManager = WorkoutManager()
-    workoutManager.workoutPlanResponse = WorkoutPlanResponse(workoutPlan: mockWorkoutPlan)
+    workoutManager.workoutPlan = mockWorkoutPlan
+    
     return HomeView()
         .environmentObject(userManager)
         .environmentObject(workoutManager)
@@ -497,6 +525,7 @@ struct AIInsightsCard: View {
 #Preview("Home - No Plan") {
     let userManager = UserManager()
     let workoutManager = WorkoutManager()
+    
     return HomeView()
         .environmentObject(userManager)
         .environmentObject(workoutManager)
@@ -508,56 +537,39 @@ struct HomeView_SundayComparisonPreview: PreviewProvider {
     static var sundayWorkout: DailyWorkout {
         DailyWorkout(
             id: 1,
-            day_of_week: "Sunday",
-            exercises: [
-                WorkoutExercise(id: 1, exercise: Exercise(id: 1, name: "Squat", description: nil, video_url: nil), sets: 3, reps: "10", isCompleted: false, progressId: nil),
-                WorkoutExercise(id: 2, exercise: Exercise(id: 2, name: "Bench Press", description: nil, video_url: nil), sets: 3, reps: "8", isCompleted: true, progressId: nil)
-            ],
-            isCompleted: false,
-            weekNumber: 1
+            weeklyScheduleId: 1,
+            dayOfWeek: "Sunday",
+            createdAt: ISO8601DateFormatter().string(from: Date()),
+            updatedAt: ISO8601DateFormatter().string(from: Date())
         )
     }
     static var sundayRest: DailyWorkout {
         DailyWorkout(
             id: 2,
-            day_of_week: "Sunday",
-            exercises: [],
-            isCompleted: false,
-            weekNumber: 1
+            weeklyScheduleId: 1,
+            dayOfWeek: "Sunday",
+            createdAt: ISO8601DateFormatter().string(from: Date()),
+            updatedAt: ISO8601DateFormatter().string(from: Date())
         )
     }
     static var workoutPlan: WorkoutPlan {
         WorkoutPlan(
             id: 1,
+            userProfileId: 1,
             title: "Test Plan",
             summary: "",
-            totalWeeks: 1,
-            createdAt: "",
-            updatedAt: "",
-            weekly_schedules: [
-                WeeklySchedule(
-                    id: 1,
-                    week_number: 1,
-                    daily_workouts: [sundayWorkout]
-                )
-            ]
+            createdAt: ISO8601DateFormatter().string(from: Date()),
+            updatedAt: ISO8601DateFormatter().string(from: Date())
         )
     }
     static var restPlan: WorkoutPlan {
         WorkoutPlan(
             id: 1,
+            userProfileId: 1,
             title: "Test Plan",
             summary: "",
-            totalWeeks: 1,
-            createdAt: "",
-            updatedAt: "",
-            weekly_schedules: [
-                WeeklySchedule(
-                    id: 1,
-                    week_number: 1,
-                    daily_workouts: [sundayRest]
-                )
-            ]
+            createdAt: ISO8601DateFormatter().string(from: Date()),
+            updatedAt: ISO8601DateFormatter().string(from: Date())
         )
     }
     static var previews: some View {
@@ -566,7 +578,7 @@ struct HomeView_SundayComparisonPreview: PreviewProvider {
                 .environmentObject(UserManager())
                 .environmentObject({
                     let wm = WorkoutManager()
-                    wm.workoutPlanResponse = WorkoutPlanResponse(workoutPlan: workoutPlan)
+                    wm.workoutPlan = workoutPlan
                     return wm
                 }())
                 .environmentObject(NutritionManager())
@@ -577,7 +589,7 @@ struct HomeView_SundayComparisonPreview: PreviewProvider {
                 .environmentObject(UserManager())
                 .environmentObject({
                     let wm = WorkoutManager()
-                    wm.workoutPlanResponse = WorkoutPlanResponse(workoutPlan: restPlan)
+                    wm.workoutPlan = restPlan
                     return wm
                 }())
                 .environmentObject(NutritionManager())

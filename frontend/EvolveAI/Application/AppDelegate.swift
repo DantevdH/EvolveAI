@@ -14,6 +14,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                      options: [UIApplication.OpenURLOptionsKey : Any] = [:]) -> Bool {
         
         print("AppDelegate received URL: \(url.absoluteString)")
+        print("URL scheme: \(url.scheme ?? "nil")")
+        print("URL host: \(url.host ?? "nil")")
         
         // Handle Supabase OAuth callbacks (using your app scheme)
         if url.scheme == "com.evolveai.app" && url.host == "oauth" {
@@ -25,6 +27,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                     
                     // Post notification for UserManager to handle
                     await MainActor.run {
+                        print("Posting supabaseOAuthSuccess notification")
                         NotificationCenter.default.post(
                             name: .supabaseOAuthSuccess,
                             object: session
@@ -33,6 +36,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 } catch {
                     print("Supabase OAuth error: \(error)")
                     await MainActor.run {
+                        print("Posting supabaseOAuthError notification")
                         NotificationCenter.default.post(
                             name: .supabaseOAuthError,
                             object: error

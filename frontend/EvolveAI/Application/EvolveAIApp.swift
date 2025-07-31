@@ -11,7 +11,7 @@ protocol NetworkServiceFactory {
 
 struct ProductionNetworkServiceFactory: NetworkServiceFactory {
     func makeNetworkService() -> NetworkServiceProtocol {
-        NetworkService(baseURL: AppEnvironment.apiBaseURL)
+        NetworkService()
     }
 }
 
@@ -55,7 +55,7 @@ struct EvolveAIApp: App {
         
         let service = factory.makeNetworkService()
         let userManager = UserManager()
-        let workoutManager = WorkoutManager(networkService: service)
+        let workoutManager = WorkoutManager()
         _userManager = StateObject(wrappedValue: userManager)
         _workoutManager = StateObject(wrappedValue: workoutManager)
         _nutritionManager = StateObject(wrappedValue: NutritionManager())

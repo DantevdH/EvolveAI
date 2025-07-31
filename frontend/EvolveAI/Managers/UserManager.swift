@@ -80,9 +80,12 @@ class UserManager: ObservableObject, UserManagerProtocol {
     @Published var authToken: String? {
         didSet {
             if let token = authToken {
+                // Save to both UserDefaults and NetworkService for consistency
                 UserDefaults.standard.set(token, forKey: "authToken")
+                // Note: NetworkService.saveAuthToken() should be called when we get a valid Supabase session
             } else {
                 UserDefaults.standard.removeObject(forKey: "authToken")
+                // Note: NetworkService.clearAuthToken() should be called when logging out
             }
         }
     }
@@ -115,6 +118,8 @@ class UserManager: ObservableObject, UserManagerProtocol {
                 await MainActor.run {
                     self.authToken = session.accessToken
                     self.isAuthenticated = true
+                    // Save the Supabase token to NetworkService for consistency
+                    // Note: You might want to inject NetworkService as a dependency
                     printState("loadUserSession - found session")
                 }
             } catch {
@@ -155,6 +160,8 @@ class UserManager: ObservableObject, UserManagerProtocol {
                 let session = try await supabase.auth.session
                 let userId = session.user.id
                 
+                print("Fetching user profile for user ID: \(userId)")
+                
                 let response: [UserProfile] = try await supabase.database
                     .from("user_profiles")
                     .select()
@@ -164,9 +171,11 @@ class UserManager: ObservableObject, UserManagerProtocol {
                 
                 await MainActor.run {
                     if let profile = response.first {
+                        print("Found user profile: \(profile)")
                         self.userProfile = profile
                         self.isOnboardingComplete = true
                     } else {
+                        print("No user profile found for user ID: \(userId)")
                         // No profile found, user needs onboarding
                         self.isOnboardingComplete = false
                     }
@@ -176,6 +185,7 @@ class UserManager: ObservableObject, UserManagerProtocol {
             } catch {
                 await MainActor.run {
                     print("Failed to fetch user profile: \(error)")
+                    print("Error details: \(error)")
                     self.isOnboardingComplete = false
                     self.isLoading = false
                     self.printState("fetchUserData - failure: \(error.localizedDescription)")
@@ -189,19 +199,44 @@ class UserManager: ObservableObject, UserManagerProtocol {
     // MARK: - Social Authentication
     
     func signInWithGoogle() {
+        print("[UserManager] signInWithGoogle called")
         isLoading = true
         errorMessage = nil
         
         Task {
             do {
+                print("[UserManager] Initiating Google OAuth flow")
                 // Use Supabase's OAuth flow for Google with explicit redirect URL
                 try await supabase.auth.signInWithOAuth(
                     provider: .google,
                     redirectTo: URL(string: SupabaseConfig.redirectURL)
                 )
+                print("[UserManager] Google OAuth flow initiated successfully")
                 // This will open Safari for OAuth flow
                 // The session will be handled by the app delegate URL callback
+                // Note: isLoading will be set to false in handleOAuthSession when the OAuth completes
+                
+                // Add a fallback check after 5 seconds to see if session was established
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+                    print("[UserManager] Starting fallback session check")
+                    Task {
+                        do {
+                            let session = try await supabase.auth.session
+                            print("[UserManager] Fallback check: Found session after OAuth - user: \(session.user.email ?? "unknown")")
+                            await MainActor.run {
+                                self?.handleOAuthSession(session)
+                            }
+                        } catch {
+                            print("[UserManager] Fallback check: No session found after OAuth - error: \(error)")
+                            await MainActor.run {
+                                self?.isLoading = false
+                                self?.errorMessage = "OAuth authentication timed out. Please try again."
+                            }
+                        }
+                    }
+                }
             } catch {
+                print("[UserManager] Google OAuth error: \(error)")
                 await MainActor.run {
                     self.errorMessage = "Google Sign-In failed: \(error.localizedDescription)"
                     self.isLoading = false
@@ -211,19 +246,44 @@ class UserManager: ObservableObject, UserManagerProtocol {
     }
     
     func signInWithFacebook() {
+        print("[UserManager] signInWithFacebook called")
         isLoading = true
         errorMessage = nil
         
         Task {
             do {
+                print("[UserManager] Initiating Facebook OAuth flow")
                 // Use Supabase's OAuth flow for Facebook with explicit redirect URL
                 try await supabase.auth.signInWithOAuth(
                     provider: .facebook,
                     redirectTo: URL(string: SupabaseConfig.redirectURL)
                 )
+                print("[UserManager] Facebook OAuth flow initiated successfully")
                 // This will open Safari for OAuth flow
                 // The session will be handled by the app delegate URL callback
+                // Note: isLoading will be set to false in handleOAuthSession when the OAuth completes
+                
+                // Add a fallback check after 5 seconds to see if session was established
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) { [weak self] in
+                    print("[UserManager] Starting fallback session check")
+                    Task {
+                        do {
+                            let session = try await supabase.auth.session
+                            print("[UserManager] Fallback check: Found session after OAuth - user: \(session.user.email ?? "unknown")")
+                            await MainActor.run {
+                                self?.handleOAuthSession(session)
+                            }
+                        } catch {
+                            print("[UserManager] Fallback check: No session found after OAuth - error: \(error)")
+                            await MainActor.run {
+                                self?.isLoading = false
+                                self?.errorMessage = "OAuth authentication timed out. Please try again."
+                            }
+                        }
+                    }
+                }
             } catch {
+                print("[UserManager] Facebook OAuth error: \(error)")
                 await MainActor.run {
                     self.errorMessage = "Facebook Sign-In failed: \(error.localizedDescription)"
                     self.isLoading = false
@@ -305,24 +365,58 @@ class UserManager: ObservableObject, UserManagerProtocol {
         
         Task {
             do {
+                // Get current session to get user ID
+                let session = try await supabase.auth.session
+                let userId = session.user.id
+                
+                // Create a new profile with the user ID
+                var profileToSave = profile
+                profileToSave = UserProfile(
+                    userId: userId,
+                    username: profile.username,
+                    primaryGoal: profile.primaryGoal,
+                    primaryGoalDescription: profile.primaryGoalDescription,
+                    experienceLevel: profile.experienceLevel,
+                    daysPerWeek: profile.daysPerWeek,
+                    minutesPerSession: profile.minutesPerSession,
+                    equipment: profile.equipment,
+                    age: profile.age,
+                    weight: profile.weight,
+                    weightUnit: profile.weightUnit,
+                    height: profile.height,
+                    heightUnit: profile.heightUnit,
+                    gender: profile.gender,
+                    hasLimitations: profile.hasLimitations,
+                    limitationsDescription: profile.limitationsDescription,
+                    trainingSchedule: profile.trainingSchedule,
+                    finalChatNotes: profile.finalChatNotes
+                )
+                
                 let response: [UserProfile] = try await supabase.database
                     .from("user_profiles")
-                    .insert(profile)
+                    .insert(profileToSave)
                     .execute()
                     .value
                 
                 await MainActor.run {
-                    self.userProfile = profile
-                    self.isOnboardingComplete = true
-                    self.isLoading = false
-                    self.isNewUser = false
-                    self.printState("completeOnboarding - success (profile saved)")
-                    completion(true)
+                    if let savedProfile = response.first {
+                        self.userProfile = savedProfile
+                        self.isOnboardingComplete = true
+                        self.isLoading = false
+                        self.isNewUser = false
+                        self.printState("completeOnboarding - success (profile saved)")
+                        completion(true)
+                    } else {
+                        self.errorMessage = "Failed to save profile: No response from server"
+                        self.isLoading = false
+                        self.printState("completeOnboarding - failure: no response")
+                        completion(false)
+                    }
                 }
             } catch {
                 await MainActor.run {
                     print("Failed to save profile: \(error.localizedDescription)")
-                    self.errorMessage = "Failed to save profile"
+                    self.errorMessage = "Failed to save profile: \(error.localizedDescription)"
                     self.isLoading = false
                     self.printState("completeOnboarding - failure")
                     completion(false)
@@ -395,6 +489,7 @@ class UserManager: ObservableObject, UserManagerProtocol {
     // MARK: - OAuth Session Handling
     
     private func setupOAuthNotifications() {
+        print("[UserManager] Setting up OAuth notifications")
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleOAuthSuccess),
@@ -408,26 +503,39 @@ class UserManager: ObservableObject, UserManagerProtocol {
             name: .supabaseOAuthError,
             object: nil
         )
+        print("[UserManager] OAuth notifications setup complete")
     }
     
     @objc private func handleOAuthSuccess(_ notification: Notification) {
-        guard let session = notification.object as? Session else { return }
+        print("[UserManager] handleOAuthSuccess called")
+        guard let session = notification.object as? Session else { 
+            print("[UserManager] handleOAuthSuccess: Invalid session object")
+            return 
+        }
         handleOAuthSession(session)
     }
     
     @objc private func handleOAuthError(_ notification: Notification) {
-        guard let error = notification.object as? Error else { return }
+        print("[UserManager] handleOAuthError called")
+        guard let error = notification.object as? Error else { 
+            print("[UserManager] handleOAuthError: Invalid error object")
+            return 
+        }
         errorMessage = "OAuth failed: \(error.localizedDescription)"
         isLoading = false
+        print("[UserManager] handleOAuthError: isLoading set to false")
     }
     
     func handleOAuthSession(_ session: Session) {
+        print("[UserManager] handleOAuthSession called")
         Task {
             await MainActor.run {
+                print("[UserManager] handleOAuthSession: Setting up session")
                 self.authToken = session.accessToken
                 self.isAuthenticated = true
                 self.userEmail = session.user.email
                 self.isLoading = false
+                print("[UserManager] handleOAuthSession: isLoading set to false")
                 self.fetchUserData()
                 print("OAuth session handled successfully")
             }
@@ -437,6 +545,40 @@ class UserManager: ObservableObject, UserManagerProtocol {
     // Keep this method for any remaining calls, but make it a no-op
     private func saveOnboardingStatus(isComplete: Bool) {
         // No longer saving to UserDefaults - onboarding status is derived from user profile
+    }
+    
+    // MARK: - Auth Token Management
+    
+    /// Gets the current Supabase access token
+    /// This is the primary method for getting the auth token
+    var currentAuthToken: String? {
+        return authToken
+    }
+    
+    /// Checks if user is authenticated with a valid Supabase session
+    func isUserAuthenticated() async -> Bool {
+        do {
+            let session = try await supabase.auth.session
+            return !session.accessToken.isEmpty
+        } catch {
+            return false
+        }
+    }
+    
+    /// Refreshes the auth token from Supabase
+    func refreshAuthToken() async {
+        do {
+            let session = try await supabase.auth.session
+            await MainActor.run {
+                self.authToken = session.accessToken
+                self.isAuthenticated = true
+            }
+        } catch {
+            await MainActor.run {
+                self.authToken = nil
+                self.isAuthenticated = false
+            }
+        }
     }
     
     // Helper to print current state

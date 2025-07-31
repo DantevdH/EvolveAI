@@ -12,7 +12,7 @@ struct DailyWorkoutDetailView: View {
                 VStack(spacing: 16) {
                     // Day header
                     HStack {
-                        Text(workout.day_of_week)
+                        Text(workout.dayOfWeek)
                             .font(.title2)
                             .fontWeight(.bold)
                             .foregroundColor(.evolveText)
@@ -20,7 +20,7 @@ struct DailyWorkoutDetailView: View {
                         Spacer()
                         
                         // Show past week indicator
-                        if !canModifyWorkout && !workout.isRestDay {
+                        if !canModifyWorkout && !viewModel.isRestDay(workout) {
                             HStack(spacing: 4) {
                                 Image(systemName: "lock.fill")
                                     .font(.caption)
@@ -39,13 +39,16 @@ struct DailyWorkoutDetailView: View {
                     }
                     
                     // Content
-                    if workout.isRestDay {
+                    if viewModel.isRestDay(workout) {
                         RestDayView()
                     } else {
                         VStack(spacing: 12) {
-                            ForEach(workout.exercises, id: \.id) { exercise in
+                            let exercises = viewModel.getExercisesForWorkout(workout)
+                            ForEach(exercises, id: \.id) { exercise in
+                                let workoutExercise = viewModel.getWorkoutExerciseDetails(for: exercise.id, in: workout)
                                 ExerciseRowView(
                                     exercise: exercise,
+                                    workoutExercise: workoutExercise,
                                     isCompleted: viewModel.isExerciseCompleted(exercise.id),
                                     canModify: canModifyWorkout,
                                     onToggleCompletion: {
@@ -56,7 +59,7 @@ struct DailyWorkoutDetailView: View {
                                         )
                                     },
                                     onShowDetail: {
-                                        viewModel.showExerciseDetail(exercise.exercise)
+                                        viewModel.showExerciseDetail(exercise)
                                     }
                                 )
                             }

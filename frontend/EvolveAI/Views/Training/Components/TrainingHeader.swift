@@ -58,13 +58,21 @@ struct TrainingHeaderView: View {
     
     private var completedWorkoutsThisWeek: Int {
         guard let week = viewModel.currentWeek else { return 0 }
-        return week.daily_workouts.filter { workout in
-            !workout.isRestDay && viewModel.isWorkoutCompleted(workout.id)
+        
+        // Get daily workouts for this week
+        let weekDailyWorkouts = viewModel.getDailyWorkoutsForWeek(week)
+        
+        return weekDailyWorkouts.filter { workout in
+            !viewModel.isRestDay(workout) && viewModel.isWorkoutCompleted(workout.id)
         }.count
     }
     
     private var totalWorkoutsThisWeek: Int {
         guard let week = viewModel.currentWeek else { return 0 }
-        return week.daily_workouts.filter { !$0.isRestDay }.count
+        
+        // Get daily workouts for this week
+        let weekDailyWorkouts = viewModel.getDailyWorkoutsForWeek(week)
+        
+        return weekDailyWorkouts.filter { !viewModel.isRestDay($0) }.count
     }
 }

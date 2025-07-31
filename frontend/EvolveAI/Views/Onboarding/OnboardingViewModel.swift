@@ -9,7 +9,7 @@ import SwiftUI
 
 class OnboardingViewModel: ObservableObject {
     @Published var currentStep = 0
-    @Published var userProfile = UserProfile()
+    @Published var userProfile = UserProfile(userId: UUID()) // Will be updated with real userId
     @Published var isGenerating = false
     @Published var isGeneratingPlan = false
     @Published var availableCoaches: [Coach] = []
@@ -26,6 +26,20 @@ class OnboardingViewModel: ObservableObject {
         self.networkService = networkService
         self.userManager = userManager
         self.workoutManager = workoutManager
+        
+        // Initialize userProfile with the current user's ID if available
+        if let authToken = userManager.authToken {
+            Task {
+                do {
+                    let session = try await supabase.auth.session
+                    await MainActor.run {
+                        self.userProfile = UserProfile(userId: session.user.id)
+                    }
+                } catch {
+                    print("Failed to get user ID for onboarding: \(error)")
+                }
+            }
+        }
     }
 
     func nextStep() {
@@ -92,7 +106,7 @@ class OnboardingViewModel: ObservableObject {
             }
             
             // Step 2: Generate workout plan
-            self.workoutManager.createAndProvidePlan(for: self.userProfile, authToken: authToken) { [weak self] planSuccess in
+            self.workoutManager.createAndProvidePlan(for: self.userProfile) { [weak self] planSuccess in
                 DispatchQueue.main.async {
                     self?.isGeneratingPlan = false
                     if planSuccess {
