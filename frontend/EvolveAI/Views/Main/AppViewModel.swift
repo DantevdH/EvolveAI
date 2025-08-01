@@ -26,116 +26,114 @@ class AppViewModel: ObservableObject {
         self.workoutManager = workoutManager
         setupSubscriptions()
         
-        // Always check authentication state - the UserManager will handle the logic
+        // Start the flow by checking authentication
         DispatchQueue.main.async {
             self.userManager.checkAuthenticationState()
         }
     }
 
     private func setupSubscriptions() {
-        Publishers.CombineLatest4(
-            userManager.$isLoading,
+        // Simple flow: Check auth → Check profile → Check plan
+        Publishers.CombineLatest3(
             userManager.$authToken,
             userManager.$userProfile,
-            userManager.$isOnboardingComplete
+            workoutManager.$workoutPlan
         )
         .receive(on: DispatchQueue.main)
-        .sink { [weak self] isLoading, authToken, userProfile, isOnboardingComplete in
+        .sink { [weak self] authToken, userProfile, workoutPlan in
             guard let self = self else { return }
+            
+            // Don't update state if we're already in an error state
             if case .error = self.state {
-                // Already in error state, do not update further
                 return
             }
             
-            if isLoading {
+            // Step 1: Check if user is authenticated
+            if authToken == nil {
+                self.state = .loggedOut
+                print("[DEBUG] AppViewModel: No auth token → .loggedOut")
+                return
+            }
+            
+            // Step 2: Check if user profile exists
+            if userProfile == nil {
+                // User is authenticated but no profile → needs onboarding
+                self.state = .needsOnboarding
+                print("[DEBUG] AppViewModel: Has token, no profile → .needsOnboarding")
+                return
+            }
+            
+            // Step 3: Check if workout plan exists
+            if workoutPlan == nil {
+                // User has profile but no plan → needs plan generation
+                self.state = .needsPlan
+                print("[DEBUG] AppViewModel: Has profile, no plan → .needsPlan")
+                return
+            }
+            
+            // Step 4: Everything exists → show main app
+            self.state = .loaded(plan: workoutPlan!)
+            print("[DEBUG] AppViewModel: Has everything → .loaded")
+        }
+        .store(in: &cancellables)
+        
+        // Handle loading states
+        Publishers.CombineLatest(
+            userManager.$isLoading,
+            workoutManager.$isLoading
+        )
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] userLoading, workoutLoading in
+            guard let self = self else { return }
+            
+            // Only show loading if we're not in an error state and something is actually loading
+            if case .error = self.state {
+                return
+            }
+            
+            if userLoading || workoutLoading {
                 self.state = .loading
-                print("[DEBUG] AppViewModel.state set to .loading in CombineLatest4 subscription")
-                // Only show loading if we're actually validating a token
-                // if authToken != nil {
-                //     self.state = .loading
-                // } else {
-                //     // No token but loading - this shouldn't happen, but handle gracefully
-                //     self.state = .loggedOut
-                // }
-            } else {
-                // Not loading - determine the appropriate state
-                if authToken == nil {
-                    self.state = .loggedOut
-                    print("[DEBUG] AppViewModel.state set to .loggedOut in CombineLatest4 subscription")
-                } else if userManager.isNewUser {
-                    // New user - show redirect delay
-                    self.showRedirectDelay = true
-                    self.state = .loading
-                    print("[DEBUG] AppViewModel.state set to .loading (redirect delay) in CombineLatest4 subscription")
-                    
-                    // After 2 seconds, redirect to onboarding
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                        self.showRedirectDelay = false
-                        self.state = .needsOnboarding
-                        print("[DEBUG] AppViewModel.state set to .needsOnboarding after redirect delay")
-                    }
-                } else if userProfile == nil || !isOnboardingComplete {
-                    self.state = .needsOnboarding
-                    print("[DEBUG] AppViewModel.state set to .needsOnboarding in CombineLatest4 subscription")
-                } else {
-                    // User is authenticated and onboarded
-                    // Check if we already have a plan (from onboarding)
-                    if self.workoutManager.workoutPlan != nil {
-                        // Plan already exists, go to loaded state
-                        self.state = .loaded(plan: self.workoutManager.workoutPlan!)
-                        print("[DEBUG] AppViewModel.state set to .loaded(plan) in CombineLatest4 subscription")
-                    } else {
-                        // No plan yet, start loading plan
-                        self.state = .loading
-                        print("[DEBUG] AppViewModel.state set to .loading (fetching plan) in CombineLatest4 subscription")
-                        self.fetchCoachesAndPlanIfNeeded()
-                    }
-                }
+                print("[DEBUG] AppViewModel: Loading state → .loading")
             }
         }
         .store(in: &cancellables)
-
-        workoutManager.$workoutPlan
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] plan in
-                guard let self = self else { return }
-                // Only update state if user is authenticated and onboarded
-                if self.userManager.authToken == nil || self.userManager.userProfile == nil || !self.userManager.isOnboardingComplete {
-                    // Don't update state, user is not ready for a plan
-                    return
-                }
-                if let plan = plan {
-                    self.state = .loaded(plan: plan)
-                    print("[DEBUG] AppViewModel.state set to .loaded(plan) in workoutPlan subscription")
-                } else if !self.workoutManager.isLoading && !self.workoutManager.isCoachesLoading {
-                    self.state = .needsPlan
-                    print("[DEBUG] AppViewModel.state set to .needsPlan in workoutPlan subscription")
-                }
-            }
-            .store(in: &cancellables)
+        
+        // Handle errors
+        Publishers.Merge(
+            userManager.$errorMessage,
+            workoutManager.$errorMessage
+        )
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] error in
+            guard let self = self, let error = error else { return }
+            self.state = .error(message: error)
+            print("[DEBUG] AppViewModel: Error → .error(\(error))")
+        }
+        .store(in: &cancellables)
+        
+        // Track selected coach
         workoutManager.$selectedCoach
             .receive(on: DispatchQueue.main)
             .sink { [weak self] coach in
                 self?.selectedCoach = coach
             }
             .store(in: &cancellables)
-        workoutManager.$errorMessage
+
+        // Trigger coach fetching when entering needsPlan state
+        $state
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] error in
-                if let error = error {
-                    self?.state = .error(message: error)
-                    print("[DEBUG] AppViewModel.state set to .error in errorMessage subscription")
-                }
-            }
-            .store(in: &cancellables)
-        
-        // Subscribe to userManager errors
-        userManager.$errorMessage
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] error in
-                if let error = error {
-                    self?.state = .error(message: error)
-                    print("[DEBUG] AppViewModel.state set to .error in userManager.errorMessage subscription")
+            .sink { [weak self] state in
+                guard let self = self else { return }
+                if case .needsPlan = state {
+                    if let userProfile = self.userManager.userProfile,
+                       self.workoutManager.selectedCoach == nil {
+                        print("[DEBUG] AppViewModel: Entering .needsPlan, fetching coaches")
+                        self.workoutManager.fetchCoaches(userGoal: userProfile.primaryGoal) { success in
+                            if !success {
+                                print("[DEBUG] AppViewModel: Failed to fetch coaches for .needsPlan")
+                            }
+                        }
+                    }
                 }
             }
             .store(in: &cancellables)
@@ -143,50 +141,25 @@ class AppViewModel: ObservableObject {
 
     func fetchCoachesAndPlanIfNeeded() {
         guard let userProfile = userManager.userProfile else { return }
-        isLoading = true
-
-        if workoutManager.selectedCoach != nil {
-            fetchWorkoutPlan()
-            return
-        }
-
+        
+        // Fetch coaches first, then check for existing plan
         workoutManager.fetchCoaches(userGoal: userProfile.primaryGoal) { [weak self] success in
             guard let self = self else { return }
             if success {
-                self.fetchWorkoutPlan()
+                // Coaches fetched successfully, now check for existing plan
+                self.workoutManager.fetchExistingPlan { success in
+                    // The subscription will handle state updates based on workoutPlan
+                }
             } else {
-                self.isLoading = false
                 self.state = .error(message: "Failed to fetch coaches.")
-                print("[DEBUG] AppViewModel.state set to .error (Failed to fetch coaches) in fetchCoachesAndPlanIfNeeded")
             }
         }
-    }
-
-    func fetchWorkoutPlan() {
-        // Try to fetch existing plan first
-        workoutManager.fetchExistingPlan { [weak self] success in
-            guard let self = self else { return }
-            
-            if success {
-                // Plan exists, we're done
-                self.isLoading = false
-            } else {
-                // No plan exists, show GeneratePlanView
-                self.showPlanGeneration()
-            }
-        }
-    }
-    
-    private func showPlanGeneration() {
-        // Set state to show GeneratePlanView
-        self.state = .needsPlan
-        print("[DEBUG] AppViewModel.state set to .needsPlan in showPlanGeneration")
     }
     
     func generatePlanForUser(authToken: String, completion: @escaping (Bool) -> Void) {
         guard let userProfile = userManager.userProfile else {
             self.state = .error(message: "User profile not found.")
-            print("[DEBUG] AppViewModel.state set to .error (User profile not found) in generatePlanForUser")
+            completion(false)
             return
         }
         
@@ -194,11 +167,10 @@ class AppViewModel: ObservableObject {
             guard let self = self else { return }
             
             if success {
-                // Plan generated successfully, state will be updated by subscription
+                // Plan generated successfully, subscription will handle state update
                 completion(true)
             } else {
                 self.state = .error(message: "Failed to generate workout plan.")
-                print("[DEBUG] AppViewModel.state set to .error (Failed to generate workout plan) in generatePlanForUser")
                 completion(false)
             }
         }

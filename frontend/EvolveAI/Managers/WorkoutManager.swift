@@ -195,7 +195,7 @@ class WorkoutManager: ObservableObject, WorkoutManagerProtocol {
             do {
                 // Use the dedicated service to generate and save the workout plan
                 let savedWorkoutPlan = try await workoutPlanService.generateAndSaveWorkoutPlan(for: profile)
-                
+                print("--- [DEBUG] Saved workout plan: \(savedWorkoutPlan) ---")
                 await MainActor.run {
                     self.workoutPlan = savedWorkoutPlan
                     completion(true)

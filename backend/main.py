@@ -4,10 +4,12 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 from dotenv import load_dotenv
+import json
 
 # Import your existing training schemas and services
 from training.schemas import WorkoutPlanSchema, UserProfileSchema
 from training.prompt_generator import WorkoutPromptGenerator
+from training.helpers import create_mock_workout_plan, GenerateWorkoutRequest, GenerateWorkoutResponse
 import openai
 
 # Load environment variables
@@ -28,31 +30,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pydantic models for API requests
-class GenerateWorkoutRequest(BaseModel):
-    """Request model for generating a workout plan."""
-    primaryGoal: str
-    primaryGoalDescription: str
-    experienceLevel: str
-    daysPerWeek: int
-    minutesPerSession: int
-    equipment: str
-    age: int
-    weight: float
-    weightUnit: str
-    height: float
-    heightUnit: str
-    gender: str
-    hasLimitations: bool
-    limitationsDescription: Optional[str] = None
-    trainingSchedule: str
-    finalChatNotes: Optional[str] = None
-
-class GenerateWorkoutResponse(BaseModel):
-    """Response model for workout plan generation."""
-    status: str
-    message: str
-    workout_plan: WorkoutPlanSchema
 
 # Dependency to get OpenAI client
 def get_openai_client():
@@ -78,6 +55,25 @@ async def generate_workout_plan(
     using the existing training prompt generator and schemas.
     """
     try:
+        print(f"--- [DEBUG] Request received: {request}---")
+        
+        # DEVELOPMENT MODE: Return mock data instead of calling OpenAI
+        # Set USE_MOCK_DATA=true in .env to use mock data, false to use real OpenAI API
+        USE_MOCK_DATA = os.getenv("DEVELOPMENT_MODE", "false").lower() == "true"
+        
+        if USE_MOCK_DATA:
+            print("--- [DEBUG] Using mock workout plan data ---")
+            
+            # Create mock workout plan based on user profile
+            mock_workout_plan = create_mock_workout_plan(request)
+            
+            return GenerateWorkoutResponse(
+                status="success",
+                message="Mock workout plan generated successfully",
+                workout_plan=mock_workout_plan
+            )
+        
+        # PRODUCTION MODE: Use OpenAI API
         # Convert request to UserProfileSchema format
         user_profile_data = {
             "primary_goal": request.primaryGoal,
@@ -105,6 +101,7 @@ async def generate_workout_plan(
         prompt_generator = WorkoutPromptGenerator()
         prompt = prompt_generator.create_initial_plan_prompt(user_profile)
         
+        print("--- [DEBUG] Workout plan generating started ---")
         # Call OpenAI API
         completion = openai_client.chat.completions.parse(
             model=os.getenv("OPENAI_MODEL", "gpt-4"),
@@ -113,9 +110,12 @@ async def generate_workout_plan(
             temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
         )
         
-        # Get the generated workout plan
-        workout_plan = completion.choices[0].message.parsed
-        
+        # Parse the response content
+        response_content = completion.choices[0].message.content
+        workout_plan_data = json.loads(response_content)
+        workout_plan = WorkoutPlanSchema(**workout_plan_data)
+        print("--- [DEBUG] Workout plan generated successfully ---")
+
         return GenerateWorkoutResponse(
             status="success",
             message="Workout plan generated successfully",

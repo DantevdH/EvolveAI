@@ -33,7 +33,7 @@ let supabase = SupabaseClient(
 
 protocol UserManagerProtocol: AnyObject {
     var isLoading: Bool { get set }
-    var isOnboardingComplete: Bool { get set }
+    var isOnboardingComplete: Bool { get }
     var userProfile: UserProfile? { get set }
     var authToken: String? { get set }
     var isAuthenticated: Bool { get set }
@@ -45,7 +45,6 @@ protocol UserManagerProtocol: AnyObject {
     func signInWithFacebook()
     func signInWithApple()
     func completeOnboarding(with profile: UserProfile, completion: @escaping (Bool) -> Void)
-    func markOnboardingComplete()
     func logout()
 }
 
@@ -56,15 +55,8 @@ class UserManager: ObservableObject, UserManagerProtocol {
         }
     }
     
-    @Published var isOnboardingComplete = true {
-        didSet {
-            print("UserManager.isOnboardingComplete changed to \(isOnboardingComplete)")
-            print("Stack trace: \(Thread.callStackSymbols.prefix(5).joined(separator: "\n"))")
-        }
-    }
-    
-    // Computed property that derives onboarding status from actual user profile
-    var isOnboardingCompleteComputed: Bool {
+    // Onboarding is complete if user profile exists
+    var isOnboardingComplete: Bool {
         return userProfile != nil
     }
     
@@ -101,12 +93,12 @@ class UserManager: ObservableObject, UserManagerProtocol {
     @Published var errorMessage: String? = nil
 
     init() {
-        #if DEBUG
-        // Clear auth state in debug mode to ensure clean testing
-        clearAllAuthState()
-        #else
+        // #if DEBUG
+        // // Clear auth state in debug mode to ensure clean testing
+        // clearAllAuthState()
+        // #else
         loadUserSession()
-        #endif
+        // #endif
         setupOAuthNotifications()
     }
     
@@ -173,11 +165,10 @@ class UserManager: ObservableObject, UserManagerProtocol {
                     if let profile = response.first {
                         print("Found user profile: \(profile)")
                         self.userProfile = profile
-                        self.isOnboardingComplete = true
                     } else {
                         print("No user profile found for user ID: \(userId)")
-                        // No profile found, user needs onboarding
-                        self.isOnboardingComplete = false
+                        // No profile found, userProfile will be nil
+                        self.userProfile = nil
                     }
                     self.isLoading = false
                     self.printState("fetchUserData - success")
@@ -186,7 +177,7 @@ class UserManager: ObservableObject, UserManagerProtocol {
                 await MainActor.run {
                     print("Failed to fetch user profile: \(error)")
                     print("Error details: \(error)")
-                    self.isOnboardingComplete = false
+                    self.userProfile = nil
                     self.isLoading = false
                     self.printState("fetchUserData - failure: \(error.localizedDescription)")
                 }
@@ -338,7 +329,6 @@ class UserManager: ObservableObject, UserManagerProtocol {
                         self.isAuthenticated = true
                         self.userEmail = authResponse.user.email
                         self.isLoading = false
-                        self.isOnboardingComplete = false
                     } else {
                         self.errorMessage = "Sign up failed: No session returned"
                         self.isLoading = false
@@ -401,7 +391,6 @@ class UserManager: ObservableObject, UserManagerProtocol {
                 await MainActor.run {
                     if let savedProfile = response.first {
                         self.userProfile = savedProfile
-                        self.isOnboardingComplete = true
                         self.isLoading = false
                         self.isNewUser = false
                         self.printState("completeOnboarding - success (profile saved)")
@@ -425,12 +414,6 @@ class UserManager: ObservableObject, UserManagerProtocol {
         }
     }
     
-    /// Marks onboarding as complete after plan generation
-    func markOnboardingComplete() {
-        self.isOnboardingComplete = true
-        self.printState("markOnboardingComplete")
-    }
-    
     func logout() {
         print("UserManager.logout() called")
         
@@ -440,7 +423,6 @@ class UserManager: ObservableObject, UserManagerProtocol {
                 await MainActor.run {
                     self.authToken = nil
                     self.userProfile = nil
-                    self.isOnboardingComplete = false
                     self.isAuthenticated = false
                     self.userEmail = nil
                     self.isLoading = false
@@ -452,7 +434,6 @@ class UserManager: ObservableObject, UserManagerProtocol {
                     // Still clear local state even if server logout fails
                     self.authToken = nil
                     self.userProfile = nil
-                    self.isOnboardingComplete = false
                     self.isAuthenticated = false
                     self.userEmail = nil
                     self.isLoading = false
@@ -469,7 +450,6 @@ class UserManager: ObservableObject, UserManagerProtocol {
         // Clear local state immediately
         self.authToken = nil
         self.userProfile = nil
-        self.isOnboardingComplete = false
         self.isAuthenticated = false
         self.userEmail = nil
         self.isLoading = false

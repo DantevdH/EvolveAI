@@ -110,8 +110,7 @@ class OnboardingViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     self?.isGeneratingPlan = false
                     if planSuccess {
-                        // Mark onboarding as complete after plan is generated
-                        self?.userManager.markOnboardingComplete()
+                        // Onboarding is already complete when userProfile is saved
                         onSuccess()
                     } else {
                         self?.errorMessage = "Failed to generate workout plan"

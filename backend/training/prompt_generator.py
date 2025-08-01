@@ -1,3 +1,5 @@
+
+
 class WorkoutPromptGenerator:
     """Service for generating structured prompts for the LLM."""
 
@@ -5,8 +7,8 @@ class WorkoutPromptGenerator:
         """Create a detailed prompt based on user profile."""
 
         limitations_text = (
-            f"Yes: {user_profile.limitationsDescription}"
-            if user_profile.hasLimitations
+            f"Yes: {user_profile.limitations_description}"
+            if user_profile.has_limitations
             else "No limitations reported."
         )
 
@@ -20,25 +22,25 @@ class WorkoutPromptGenerator:
                 4. **Progressive Structure**: Plan should be challenging but achievable for the user's level.
 
                 **USER PROFILE:**
-                - Primary Goal: {user_profile.primaryGoal} ({user_profile.primaryGoalDescription})
-                - Experience Level: {user_profile.experienceLevel}
-                - Workout Frequency: {user_profile.daysPerWeek} days per week
-                - Session Duration: {user_profile.minutesPerSession} minutes per session
+                - Primary Goal: {user_profile.primary_goal} ({user_profile.primary_goal_description})
+                - Experience Level: {user_profile.experience_level}
+                - Workout Frequency: {user_profile.days_per_week} days per week
+                - Session Duration: {user_profile.minutes_per_session} minutes per session
                 - Available Equipment: {user_profile.equipment}
                 - Age: {user_profile.age} years old
                 - Gender: {user_profile.gender}
-                - Weight: {user_profile.weight} {user_profile.weightUnit}
-                - Height: {user_profile.height} {user_profile.heightUnit}
+                - Weight: {user_profile.weight} {user_profile.weight_unit}
+                - Height: {user_profile.height} {user_profile.height_unit}
                 - Physical Limitations: {limitations_text}
-                - Additional Notes: {user_profile.finalChatNotes or 'None provided'}
+                - Additional Notes: {user_profile.final_chat_notes or 'None provided'}
 
                 **SPECIFIC REQUIREMENTS:**
                 1. Generate exactly 4 weeks of workout plans
                 2. Each week must have exactly 7 days (Monday through Sunday)
-                3. Training days should match the user's requested frequency ({user_profile.daysPerWeek} days/week)
+                3. Training days should match the user's requested frequency ({user_profile.days_per_week} days/week)
                 4. Remaining days should be rest days (is_rest_day=True, empty exercises array)
                 5. For training days: is_rest_day=False with appropriate exercises
-                6. Keep sessions within the {user_profile.minutesPerSession}-minute timeframe
+                6. Keep sessions within the {user_profile.minutes_per_session}-minute timeframe
                 7. Exercise names should be clear and specific (e.g., "Barbell Back Squat" not just "Squat")
                 8. Reps can be ranges (e.g., "8-12") or time-based (e.g., "30 seconds", "1 minute")
 

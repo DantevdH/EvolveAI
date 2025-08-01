@@ -511,92 +511,92 @@ struct AIInsightsCard: View {
     }
 }
 
-#Preview("Home - With Plan") {
-    let userManager = UserManager()
-    let workoutManager = WorkoutManager()
-    workoutManager.workoutPlan = mockWorkoutPlan
+// #Preview("Home - With Plan") {
+//     let userManager = UserManager()
+//     let workoutManager = WorkoutManager()
+//     workoutManager.workoutPlan = mockWorkoutPlan
     
-    return HomeView()
-        .environmentObject(userManager)
-        .environmentObject(workoutManager)
-        .environmentObject(NutritionManager())
-}
+//     return HomeView()
+//         .environmentObject(userManager)
+//         .environmentObject(workoutManager)
+//         .environmentObject(NutritionManager())
+// }
 
-#Preview("Home - No Plan") {
-    let userManager = UserManager()
-    let workoutManager = WorkoutManager()
+// #Preview("Home - No Plan") {
+//     let userManager = UserManager()
+//     let workoutManager = WorkoutManager()
     
-    return HomeView()
-        .environmentObject(userManager)
-        .environmentObject(workoutManager)
-        .environmentObject(NutritionManager())
-}
+//     return HomeView()
+//         .environmentObject(userManager)
+//         .environmentObject(workoutManager)
+//         .environmentObject(NutritionManager())
+// }
 
-#if DEBUG
-struct HomeView_SundayComparisonPreview: PreviewProvider {
-    static var sundayWorkout: DailyWorkout {
-        DailyWorkout(
-            id: 1,
-            weeklyScheduleId: 1,
-            dayOfWeek: "Sunday",
-            createdAt: ISO8601DateFormatter().string(from: Date()),
-            updatedAt: ISO8601DateFormatter().string(from: Date())
-        )
-    }
-    static var sundayRest: DailyWorkout {
-        DailyWorkout(
-            id: 2,
-            weeklyScheduleId: 1,
-            dayOfWeek: "Sunday",
-            createdAt: ISO8601DateFormatter().string(from: Date()),
-            updatedAt: ISO8601DateFormatter().string(from: Date())
-        )
-    }
-    static var workoutPlan: WorkoutPlan {
-        WorkoutPlan(
-            id: 1,
-            userProfileId: 1,
-            title: "Test Plan",
-            summary: "",
-            createdAt: ISO8601DateFormatter().string(from: Date()),
-            updatedAt: ISO8601DateFormatter().string(from: Date())
-        )
-    }
-    static var restPlan: WorkoutPlan {
-        WorkoutPlan(
-            id: 1,
-            userProfileId: 1,
-            title: "Test Plan",
-            summary: "",
-            createdAt: ISO8601DateFormatter().string(from: Date()),
-            updatedAt: ISO8601DateFormatter().string(from: Date())
-        )
-    }
-    static var previews: some View {
-        Group {
-            HomeView()
-                .environmentObject(UserManager())
-                .environmentObject({
-                    let wm = WorkoutManager()
-                    wm.workoutPlan = workoutPlan
-                    return wm
-                }())
-                .environmentObject(NutritionManager())
-                .previewDisplayName("Sunday Workout")
-                .background(Color.evolveBackground)
-                .previewLayout(.sizeThatFits)
-            HomeView()
-                .environmentObject(UserManager())
-                .environmentObject({
-                    let wm = WorkoutManager()
-                    wm.workoutPlan = restPlan
-                    return wm
-                }())
-                .environmentObject(NutritionManager())
-                .previewDisplayName("Sunday Rest")
-                .background(Color.evolveBackground)
-                .previewLayout(.sizeThatFits)
-        }
-    }
-}
-#endif
+// #if DEBUG
+// struct HomeView_SundayComparisonPreview: PreviewProvider {
+//     static var sundayWorkout: DailyWorkout {
+//         DailyWorkout(
+//             id: 1,
+//             weeklyScheduleId: 1,
+//             dayOfWeek: "Sunday",
+//             createdAt: ISO8601DateFormatter().string(from: Date()),
+//             updatedAt: ISO8601DateFormatter().string(from: Date())
+//         )
+//     }
+//     static var sundayRest: DailyWorkout {
+//         DailyWorkout(
+//             id: 2,
+//             weeklyScheduleId: 1,
+//             dayOfWeek: "Sunday",
+//             createdAt: ISO8601DateFormatter().string(from: Date()),
+//             updatedAt: ISO8601DateFormatter().string(from: Date())
+//         )
+//     }
+//     static var workoutPlan: WorkoutPlan {
+//         WorkoutPlan(
+//             id: 1,
+//             userProfileId: 1,
+//             title: "Test Plan",
+//             summary: "",
+//             createdAt: ISO8601DateFormatter().string(from: Date()),
+//             updatedAt: ISO8601DateFormatter().string(from: Date())
+//         )
+//     }
+//     static var restPlan: WorkoutPlan {
+//         WorkoutPlan(
+//             id: 1,
+//             userProfileId: 1,
+//             title: "Test Plan",
+//             summary: "",
+//             createdAt: ISO8601DateFormatter().string(from: Date()),
+//             updatedAt: ISO8601DateFormatter().string(from: Date())
+//         )
+//     }
+//     static var previews: some View {
+//         Group {
+//             HomeView()
+//                 .environmentObject(UserManager())
+//                 .environmentObject({
+//                     let wm = WorkoutManager()
+//                     wm.workoutPlan = workoutPlan
+//                     return wm
+//                 }())
+//                 .environmentObject(NutritionManager())
+//                 .previewDisplayName("Sunday Workout")
+//                 .background(Color.evolveBackground)
+//                 .previewLayout(.sizeThatFits)
+//             HomeView()
+//                 .environmentObject(UserManager())
+//                 .environmentObject({
+//                     let wm = WorkoutManager()
+//                     wm.workoutPlan = restPlan
+//                     return wm
+//                 }())
+//                 .environmentObject(NutritionManager())
+//                 .previewDisplayName("Sunday Rest")
+//                 .background(Color.evolveBackground)
+//                 .previewLayout(.sizeThatFits)
+//         }
+//     }
+// }
+// #endif
