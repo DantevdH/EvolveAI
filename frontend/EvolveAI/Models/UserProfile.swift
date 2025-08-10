@@ -60,7 +60,7 @@ struct UserProfile: Codable {
     
     // Database fields (read-only)
     let id: Int?
-    let userId: UUID?
+    var userId: UUID?
     let coachId: Int?
     let createdAt: Date?
     let updatedAt: Date?

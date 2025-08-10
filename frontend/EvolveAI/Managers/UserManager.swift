@@ -345,7 +345,7 @@ class UserManager: ObservableObject, UserManagerProtocol {
 
     
     func completeOnboarding(with profile: UserProfile, completion: @escaping (Bool) -> Void) {
-        guard let token = authToken else {
+        guard authToken != nil else {
             errorMessage = "Not authenticated"
             completion(false)
             return
@@ -359,27 +359,9 @@ class UserManager: ObservableObject, UserManagerProtocol {
                 let session = try await supabase.auth.session
                 let userId = session.user.id
                 
-                // Create a new profile with the user ID
+                // Attach the real userId to the profile provided by onboarding
                 var profileToSave = profile
-                profileToSave = UserProfile(
-                    userId: userId,
-                    username: profile.username,
-                    primaryGoal: profile.primaryGoal,
-                    primaryGoalDescription: profile.primaryGoalDescription,
-                    experienceLevel: profile.experienceLevel,
-                    daysPerWeek: profile.daysPerWeek,
-                    minutesPerSession: profile.minutesPerSession,
-                    equipment: profile.equipment,
-                    age: profile.age,
-                    weight: profile.weight,
-                    weightUnit: profile.weightUnit,
-                    height: profile.height,
-                    heightUnit: profile.heightUnit,
-                    gender: profile.gender,
-                    hasLimitations: profile.hasLimitations,
-                    limitationsDescription: profile.limitationsDescription,
-                    finalChatNotes: profile.finalChatNotes
-                )
+                profileToSave.userId = userId
                 
                 let response: [UserProfile] = try await supabase.database
                     .from("user_profiles")
@@ -439,29 +421,6 @@ class UserManager: ObservableObject, UserManagerProtocol {
                     self.isLoading = false
                     self.printState("logout")
                 }
-            }
-        }
-    }
-    
-    /// Clear all authentication state for testing new user scenarios
-    func clearAllAuthState() {
-        print("UserManager.clearAllAuthState() called")
-        
-        // Clear local state immediately
-        self.authToken = nil
-        self.userProfile = nil
-        self.isAuthenticated = false
-        self.userEmail = nil
-        self.isLoading = false
-        self.printState("clearAllAuthState")
-        
-        // Clear server session in background
-        Task {
-            do {
-                try await supabase.auth.signOut()
-                print("Server session cleared successfully")
-            } catch {
-                print("Clear auth state error: \(error)")
             }
         }
     }

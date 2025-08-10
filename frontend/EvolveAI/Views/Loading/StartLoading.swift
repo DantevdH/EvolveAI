@@ -6,21 +6,15 @@ struct StartLoadingView: View {
     @EnvironmentObject var appViewModel: AppViewModel
     
     @State private var gradientRotation: Double = 0
-    @State private var pulseScale: CGFloat = 1.0
-    @State private var scanLineOffset: CGFloat = -200
-    @State private var particleOpacity: Double = 0.8
     @State private var currentMessage: String = "Stretching muscles..."
     
     var body: some View {
         ZStack {
-            // Animated background gradient
+            // Subtle animated background
             LinearGradient(
                 colors: [
-                    Color.black,
-                    Color.evolvePrimary.opacity(0.3),
-                    Color.black,
-                    Color.evolvePrimary.opacity(0.1),
-                    Color.black
+                    Color.evolveBackground,
+                    Color.evolveBackground.opacity(0.98)
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -28,203 +22,170 @@ struct StartLoadingView: View {
             .rotationEffect(.degrees(gradientRotation))
             .ignoresSafeArea()
             .onAppear {
-                withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
+                withAnimation(.linear(duration: 20).repeatForever(autoreverses: false)) {
                     gradientRotation = 360
                 }
             }
             
-            // Particle effects
-            ForEach(0..<20, id: \.self) { index in
-                Circle()
-                    .fill(Color.evolvePrimary.opacity(0.3))
-                    .frame(width: CGFloat.random(in: 2...6))
-                    .position(
-                        x: CGFloat.random(in: 0...UIScreen.main.bounds.width),
-                        y: CGFloat.random(in: 0...UIScreen.main.bounds.height)
-                    )
-                    .opacity(particleOpacity)
-                    .animation(
-                        .easeInOut(duration: Double.random(in: 2...4))
-                        .repeatForever(autoreverses: true),
-                        value: particleOpacity
-                    )
-            }
-            
             // Main content
-            VStack(spacing: 50) {
-                // AI Logo and Title
-                VStack(spacing: 24) {
-                    // Animated AI brain icon
-                    ZStack {
-                        Circle()
-                            .fill(
-                                RadialGradient(
-                                    colors: [Color.evolvePrimary.opacity(0.8), Color.clear],
-                                    center: .center,
-                                    startRadius: 0,
-                                    endRadius: 80
-                                )
+            VStack(spacing: 28) {
+                VStack(spacing: 6) {
+                    Text("EVOLVE")
+                        .font(.system(size: 32, weight: .black, design: .rounded))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [Color.evolvePrimary, Color.evolvePrimary.opacity(0.8)],
+                                startPoint: .leading,
+                                endPoint: .trailing
                             )
-                            .frame(width: 160, height: 160)
-                            .scaleEffect(pulseScale)
-                            .onAppear {
-                                withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: true)) {
-                                    pulseScale = 1.2
-                                }
-                            }
-                        
-                        Image(systemName: "brain.head.profile")
-                            .font(.system(size: 60, weight: .light))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [Color.evolvePrimary, Color.white],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    }
-                    
-                    VStack(spacing: 8) {
-                        Text("EVOLVE")
-                            .font(.system(size: 36, weight: .black, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [Color.evolvePrimary, Color.white],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                        
-                        Text("AI FITNESS")
-                            .font(.system(size: 18, weight: .medium, design: .rounded))
-                            .foregroundColor(.evolveMuted)
-                            .tracking(4)
-                    }
+                        )
+                    Text("AI FITNESS")
+                        .font(.system(size: 14, weight: .medium, design: .rounded))
+                        .foregroundColor(Color.evolvePrimary.opacity(0.8))
+                        .tracking(3)
                 }
                 
-                // Contextual loading message
-                VStack(spacing: 20) {
+                // Subtle primary glow + Simplified spinner
+                ZStack {
+                    RadialGradient(
+                        colors: [Color.evolvePrimary.opacity(0.25), .clear],
+                        center: .center,
+                        startRadius: 2,
+                        endRadius: 120
+                    )
+                    .frame(width: 180, height: 180)
+                    .blur(radius: 20)
+                    EvolveSpinner(size: 120)
+                }
+                .padding(.top, 2)
+                
+                // Contextual loading message + progress
+                VStack(spacing: 12) {
                     if appViewModel.showRedirectDelay {
-                        // Redirect message for new users
-                        VStack(spacing: 16) {
+                        VStack(spacing: 6) {
                             Image(systemName: "person.badge.plus")
-                                .font(.system(size: 40))
+                                .font(.system(size: 24))
                                 .foregroundColor(.evolvePrimary)
-                            
-                            Text("New User Detected")
-                                .font(.system(size: 20, weight: .bold))
+                            Text("New user detected. Redirecting to onboarding…")
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.evolveText)
-                            
-                            Text("Redirecting to onboarding...")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundColor(.evolveMuted)
                                 .multilineTextAlignment(.center)
                         }
                         .transition(.opacity.combined(with: .scale))
                     } else {
-                        // Regular loading message
-                        VStack(spacing: 16) {
+                        VStack(spacing: 8) {
                             Text(currentMessage)
-                                .font(.system(size: 18, weight: .medium))
+                                .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.evolveText)
                                 .multilineTextAlignment(.center)
-                                .animation(.easeInOut(duration: 0.5), value: currentMessage)
+                                .animation(.easeInOut(duration: 0.2), value: currentMessage)
                             
-                            // Progress indicator
-                            HStack(spacing: 8) {
-                                ForEach(0..<3, id: \.self) { index in
-                                    Circle()
-                                        .fill(Color.evolvePrimary.opacity(0.3))
-                                        .frame(width: 8, height: 8)
-                                        .scaleEffect(getProgressDotScale(for: index))
-                                        .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: getProgressDotScale(for: index))
+                            if let coach = workoutManager.selectedCoach {
+                                HStack(spacing: 6) {
+                                    Image(systemName: coach.iconName)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(coach.primaryColor)
+                                    Text("Coach: \(coach.name)")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(.evolveMuted)
                                 }
+                                .transition(.opacity)
                             }
+                            
+                            LoadingProgressBar(progress: CGFloat(getOverallProgress()))
+                                .frame(height: 6)
+                                .padding(.top, 4)
                         }
                     }
                 }
-                .padding(.horizontal, 30)
-                
-                // Scanning line effect
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.clear, Color.evolvePrimary.opacity(0.8), Color.clear],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(height: 2)
-                    .offset(x: scanLineOffset)
-                    .onAppear {
-                        withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
-                            scanLineOffset = UIScreen.main.bounds.width + 200
-                        }
-                    }
+                .padding(.horizontal, 28)
             }
             .padding()
         }
-        .onAppear {
-            updateLoadingMessage()
-        }
-        .onChange(of: userManager.isLoading) { _ in
-            updateLoadingMessage()
-        }
-        .onChange(of: workoutManager.isCoachesLoading) { _ in
-            updateLoadingMessage()
-        }
-        .onChange(of: workoutManager.isLoading) { _ in
-            updateLoadingMessage()
-        }
+        .onAppear { updateLoadingMessage() }
+        .onChange(of: userManager.isLoading) { _ in updateLoadingMessage() }
+        .onChange(of: userManager.authToken) { _ in updateLoadingMessage() }
+        .onChange(of: userManager.userProfile?.id) { _ in updateLoadingMessage() }
+        .onChange(of: workoutManager.isCoachesLoading) { _ in updateLoadingMessage() }
+        .onChange(of: workoutManager.isLoading) { _ in updateLoadingMessage() }
+        .onChange(of: workoutManager.selectedCoach?.id) { _ in updateLoadingMessage() }
+        .onChange(of: workoutManager.workoutPlan) { _ in updateLoadingMessage() }
+        .onChange(of: workoutManager.errorMessage) { _ in updateLoadingMessage() }
+        .onChange(of: workoutManager.coachesErrorMessage) { _ in updateLoadingMessage() }
+        .onChange(of: appViewModel.state) { _ in updateLoadingMessage() }
     }
     
     private func updateLoadingMessage() {
-        // Determine the appropriate message based on current state
         if appViewModel.showRedirectDelay {
-            currentMessage = "New user detected, redirecting to onboarding..."
-        } else if userManager.isLoading && userManager.userProfile == nil {
-            currentMessage = "Loading your profile..."
-        } else if workoutManager.isCoachesLoading {
-            currentMessage = "Finding your perfect AI coach..."
-        } else if workoutManager.isLoading && workoutManager.selectedCoach != nil {
-            if workoutManager.workoutPlan != nil {
-                currentMessage = "Loading your workout plan..."
-            } else {
-                currentMessage = "Generating your personalized workout plan..."
-            }
-        } else if workoutManager.errorMessage != nil {
-            currentMessage = "Network error, please try again..."
-        } else if userManager.userProfile != nil && workoutManager.selectedCoach != nil && workoutManager.workoutPlan != nil {
-            currentMessage = "Setup complete! Redirecting to your dashboard..."
-        } else {
-            currentMessage = "Preparing your fitness journey..."
+            currentMessage = "New user detected. Redirecting to onboarding…"
+            return
         }
-    }
-    
-    private func getProgressDotScale(for index: Int) -> CGFloat {
-        let progress = getOverallProgress()
-        if Double(index) < progress {
-            return 1.2
+        if let error = userManager.errorMessage ?? workoutManager.coachesErrorMessage ?? workoutManager.errorMessage {
+            currentMessage = "\(error)"
+            return
+        }
+        if userManager.isLoading && userManager.authToken == nil {
+            currentMessage = "Connecting to your account…"
+        } else if userManager.isLoading && userManager.userProfile == nil {
+            currentMessage = "Fetching your profile…"
+        } else if workoutManager.isCoachesLoading {
+            currentMessage = "Matching you with the right AI coach…"
+        } else if workoutManager.isLoading && workoutManager.selectedCoach != nil && workoutManager.workoutPlan == nil {
+            let coachName = workoutManager.selectedCoach?.name ?? "your coach"
+            currentMessage = "Generating your personalized plan with \(coachName)…"
+        } else if workoutManager.isLoading && workoutManager.workoutPlan != nil {
+            currentMessage = "Loading your workout plan…"
+        } else if case .needsPlan = appViewModel.state {
+            currentMessage = "No plan found. Preparing recommendations…"
+        } else if userManager.userProfile != nil && workoutManager.selectedCoach != nil && workoutManager.workoutPlan != nil {
+            currentMessage = "Setup complete! Taking you to your dashboard…"
         } else {
-            return 0.8
+            currentMessage = "Preparing your fitness journey…"
         }
     }
     
     private func getOverallProgress() -> Double {
         var completed = 0
+        if userManager.authToken != nil { completed += 1 }
         if userManager.userProfile != nil { completed += 1 }
         if workoutManager.selectedCoach != nil { completed += 1 }
         if workoutManager.workoutPlan != nil { completed += 1 }
-        return Double(completed) / 3.0
+        return Double(completed) / 4.0
+    }
+}
+
+// MARK: - Progress Bar
+fileprivate struct LoadingProgressBar: View {
+    let progress: CGFloat // 0.0 - 1.0
+    
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let clamped = min(max(progress, 0), 1)
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(Color.evolvePrimary.opacity(0.18))
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.evolvePrimary.opacity(0.95), Color.evolvePrimary.opacity(0.6)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: width * clamped)
+                    .shadow(color: Color.evolvePrimary.opacity(0.35), radius: 5, x: 0, y: 0)
+            }
+        }
     }
 }
 
 // MARK: - Previews
-
 #Preview("StartLoadingView - Initial State") {
     StartLoadingView()
         .environmentObject(UserManager())
         .environmentObject(WorkoutManager())
+        .environmentObject(AppViewModel(userManager: UserManager(), workoutManager: WorkoutManager()))
         .preferredColorScheme(.dark)
 }
 
@@ -235,5 +196,6 @@ struct StartLoadingView: View {
     return StartLoadingView()
         .environmentObject(userManager)
         .environmentObject(WorkoutManager())
+        .environmentObject(AppViewModel(userManager: userManager, workoutManager: WorkoutManager()))
         .preferredColorScheme(.dark)
 }
