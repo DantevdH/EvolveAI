@@ -72,53 +72,35 @@ class WorkoutManager: ObservableObject, WorkoutManagerProtocol {
                 
                 let network = self.networkService
                 
+                // Resolve base plan
+                let basePlan: WorkoutPlan?
                 if let profileId = userProfileId {
                     print("[WorkoutManager] fetchExistingPlan: Using provided userProfileId=\(profileId)")
-                    // Try direct lookup by profile id
-                    let workoutPlans = try await network.fetchWorkoutPlans(userProfileId: profileId)
-                    print("[WorkoutManager] fetchExistingPlan: workout_plans by provided profileId count=\(workoutPlans.count)")
-                    if let directPlan = workoutPlans.first {
-                        await MainActor.run {
-                            self.isLoading = false
-                            self.workoutPlan = directPlan
-                            print("[WorkoutManager] Found plan by user_profile_id: \(directPlan.id)")
-                            completion(true)
-                        }
-                    } else {
-                        // Fallback: lookup by userId join
-                        print("[WorkoutManager] fetchExistingPlan: No plan found by provided profileId. Falling back to join by userId=")
-                        let joinedPlans = try await network.fetchWorkoutPlansByUserIdJoin(userId: userId)
-                        print("[WorkoutManager] fetchExistingPlan: joined workout_plans count=\(joinedPlans.count)")
-                        await MainActor.run {
-                            self.isLoading = false
-                            if let plan = joinedPlans.first {
-                                self.workoutPlan = plan
-                                print("[WorkoutManager] Found plan via join-filter: \(plan.id)")
-                                completion(true)
-                            } else {
-                                self.workoutPlan = nil
-                                print("[WorkoutManager] No existing plan found for user \(userId)")
-                                completion(false)
-                            }
-                        }
-                    }
+                    basePlan = try await network.fetchWorkoutPlans(userProfileId: profileId).first
                 } else {
-                    // No profile id provided: attempt join-filter by user_id directly
                     print("[WorkoutManager] fetchExistingPlan: No userProfileId provided, querying by userId join")
-                    let joinedPlans = try await network.fetchWorkoutPlansByUserIdJoin(userId: userId)
-                    print("[WorkoutManager] fetchExistingPlan: joined workout_plans count=\(joinedPlans.count)")
+                    basePlan = try await network.fetchWorkoutPlansByUserIdJoin(userId: userId).first
+                }
+                
+                guard let plan = basePlan else {
                     await MainActor.run {
                         self.isLoading = false
-                        if let plan = joinedPlans.first {
-                            self.workoutPlan = plan
-                            print("[WorkoutManager] Found plan via join-filter: \(plan.id)")
-                            completion(true)
-                        } else {
-                            self.workoutPlan = nil
-                            print("[WorkoutManager] No existing plan found for user \(userId)")
-                            completion(false)
-                        }
+                        self.workoutPlan = nil
+                        print("[WorkoutManager] No existing plan found for user \(userId)")
+                        completion(false)
                     }
+                    return
+                }
+                
+                // Fetch complete structure
+                let complete = try await network.fetchCompleteWorkoutPlan(for: plan)
+                
+                await MainActor.run {
+                    self.isLoading = false
+                    self.workoutPlan = plan
+                    self.completeWorkoutPlan = complete
+                    print("[WorkoutManager] Fetched complete plan for planId=\(plan.id)")
+                    completion(true)
                 }
             } catch {
                 await MainActor.run {
@@ -223,14 +205,19 @@ class WorkoutManager: ObservableObject, WorkoutManagerProtocol {
                     userProfile: userProfile
                 )
                 
-                print("--- [DEBUG] Saved workout plan: \(savedWorkoutPlan) ---")
+                // Immediately fetch the complete structure so callers can proceed once fully ready
+                let complete = try await networkService.fetchCompleteWorkoutPlan(for: savedWorkoutPlan)
+                
                 await MainActor.run {
                     self.workoutPlan = savedWorkoutPlan
+                    self.completeWorkoutPlan = complete
+                    self.isLoading = false
                     completion(true)
                 }
             } catch {
                 await MainActor.run {
                     self.errorMessage = "Failed to create workout plan: \(error.localizedDescription)"
+                    self.isLoading = false
                     completion(false)
                 }
             }

@@ -77,6 +77,7 @@ protocol NetworkServiceProtocol {
     func saveWorkoutPlanToDatabase(generatedPlan: GeneratedWorkoutPlan, userProfile: UserProfile) async throws -> WorkoutPlan
     func fetchWorkoutPlans(userProfileId: Int) async throws -> [WorkoutPlan]
     func fetchWorkoutPlansByUserIdJoin(userId: UUID) async throws -> [WorkoutPlan]
+    func fetchCompleteWorkoutPlan(for workoutPlan: WorkoutPlan) async throws -> CompleteWorkoutPlan
 }
 
 // MARK: - Unified Network Service
@@ -468,6 +469,144 @@ class NetworkService: NetworkServiceProtocol, ObservableObject {
             return []
         }
         return try jsonArray.map { try parseWorkoutPlanObject($0) }
+    }
+    
+    // MARK: - Complete plan fetching
+    func fetchCompleteWorkoutPlan(for workoutPlan: WorkoutPlan) async throws -> CompleteWorkoutPlan {
+        // Step 1: Fetch weekly schedules (manual parse for dates)
+        let weeklySchedulesResponse = try await supabase.database
+            .from("weekly_schedules")
+            .select()
+            .eq("workout_plan_id", value: workoutPlan.id)
+            .execute()
+        let weeklySchedules: [WeeklySchedule]
+        if let data = weeklySchedulesResponse.data as? Data {
+            weeklySchedules = try parseWeeklySchedulesArray(from: data)
+        } else {
+            weeklySchedules = try await supabase.database
+                .from("weekly_schedules")
+                .select()
+                .eq("workout_plan_id", value: workoutPlan.id)
+                .execute()
+                .value
+        }
+        
+        // Step 2: Fetch daily workouts for all weekly schedules (manual parse for dates)
+        let weeklyScheduleIds = weeklySchedules.map { $0.id }
+        let dailyWorkoutsResponse = try await supabase.database
+            .from("daily_workouts")
+            .select()
+            .`in`("weekly_schedule_id", values: weeklyScheduleIds)
+            .execute()
+        let dailyWorkouts: [DailyWorkout]
+        if let data = dailyWorkoutsResponse.data as? Data {
+            dailyWorkouts = try parseDailyWorkoutsArray(from: data)
+        } else {
+            dailyWorkouts = try await supabase.database
+                .from("daily_workouts")
+                .select()
+                .`in`("weekly_schedule_id", values: weeklyScheduleIds)
+                .execute()
+                .value
+        }
+        
+        // Step 3: Fetch workout exercises for all daily workouts (manual parse for dates)
+        let dailyWorkoutIds = dailyWorkouts.map { $0.id }
+        let workoutExercisesResponse = try await supabase.database
+            .from("workout_exercises")
+            .select()
+            .`in`("daily_workout_id", values: dailyWorkoutIds)
+            .execute()
+        let workoutExercises: [WorkoutExercise]
+        if let data = workoutExercisesResponse.data as? Data {
+            workoutExercises = try parseWorkoutExercisesArray(from: data)
+        } else {
+            workoutExercises = try await supabase.database
+                .from("workout_exercises")
+                .select()
+                .`in`("daily_workout_id", values: dailyWorkoutIds)
+                .execute()
+                .value
+        }
+        
+        // Step 4: Fetch exercises referenced by workout exercises (no dates; typed decoding fine)
+        let exerciseIds = workoutExercises.map { $0.exerciseId }
+        let exercises: [Exercise] = try await supabase.database
+            .from("exercises")
+            .select()
+            .`in`("id", values: exerciseIds)
+            .execute()
+            .value
+        
+        // Step 5: Create complete workout plan structure
+        return CompleteWorkoutPlan(
+            workoutPlan: workoutPlan,
+            weeklySchedules: weeklySchedules,
+            dailyWorkouts: dailyWorkouts,
+            workoutExercises: workoutExercises,
+            exercises: exercises
+        )
+    }
+    
+    // MARK: - Parsers for entities with Date fields
+    private func parseWeeklySchedulesArray(from data: Data) throws -> [WeeklySchedule] {
+        guard let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        return try jsonArray.map { json in
+            guard let id = json["id"] as? Int,
+                  let workoutPlanId = json["workout_plan_id"] as? Int,
+                  let weekNumber = json["week_number"] as? Int,
+                  let createdAt = json["created_at"] as? String,
+                  let updatedAt = json["updated_at"] as? String else {
+                throw NetworkError.decodingError(NSError(domain: "WeeklySchedule", code: 0))
+            }
+            let createdAtDate = try parseDateOrThrow(createdAt)
+            let updatedAtDate = try parseDateOrThrow(updatedAt)
+            return WeeklySchedule(id: id, workoutPlanId: workoutPlanId, weekNumber: weekNumber, createdAt: createdAtDate, updatedAt: updatedAtDate)
+        }
+    }
+    
+    private func parseDailyWorkoutsArray(from data: Data) throws -> [DailyWorkout] {
+        guard let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        return try jsonArray.map { json in
+            guard let id = json["id"] as? Int,
+                  let weeklyScheduleId = json["weekly_schedule_id"] as? Int,
+                  let dayOfWeek = json["day_of_week"] as? String,
+                  let createdAt = json["created_at"] as? String,
+                  let updatedAt = json["updated_at"] as? String else {
+                throw NetworkError.decodingError(NSError(domain: "DailyWorkout", code: 0))
+            }
+            let createdAtDate = try parseDateOrThrow(createdAt)
+            let updatedAtDate = try parseDateOrThrow(updatedAt)
+            return DailyWorkout(id: id, weeklyScheduleId: weeklyScheduleId, dayOfWeek: dayOfWeek, createdAt: createdAtDate, updatedAt: updatedAtDate)
+        }
+    }
+    
+    private func parseWorkoutExercisesArray(from data: Data) throws -> [WorkoutExercise] {
+        guard let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
+        return try jsonArray.map { json in
+            guard let id = json["id"] as? Int,
+                  let dailyWorkoutId = json["daily_workout_id"] as? Int,
+                  let exerciseId = json["exercise_id"] as? Int,
+                  let sets = json["sets"] as? Int,
+                  let reps = json["reps"] as? String,
+                  let createdAt = json["created_at"] as? String,
+                  let updatedAt = json["updated_at"] as? String else {
+                throw NetworkError.decodingError(NSError(domain: "WorkoutExercise", code: 0))
+            }
+            let weight = json["weight"] as? Double
+            let createdAtDate = try parseDateOrThrow(createdAt)
+            let updatedAtDate = try parseDateOrThrow(updatedAt)
+            return WorkoutExercise(
+                id: id,
+                dailyWorkoutId: dailyWorkoutId,
+                exerciseId: exerciseId,
+                sets: sets,
+                reps: reps,
+                weight: weight,
+                createdAt: createdAtDate,
+                updatedAt: updatedAtDate
+            )
+        }
     }
     
     /// Save weekly schedule and its daily workouts
