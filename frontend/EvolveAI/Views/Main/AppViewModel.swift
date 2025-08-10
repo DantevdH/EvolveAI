@@ -16,6 +16,7 @@ class AppViewModel: ObservableObject {
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var errorMessage: String?
     @Published private(set) var showRedirectDelay: Bool = false
+    private var hasAttemptedPlanFetch = false
 
     let userManager: UserManager
     let workoutManager: WorkoutManager
@@ -65,9 +66,31 @@ class AppViewModel: ObservableObject {
             
             // Step 3: Check if workout plan exists
             if workoutPlan == nil {
-                // User has profile but no plan → needs plan generation
-                self.state = .needsPlan
-                print("[DEBUG] AppViewModel: Has profile, no plan → .needsPlan")
+                // Attempt to fetch existing plan once before deciding user needs a new plan
+                if !self.hasAttemptedPlanFetch {
+                    self.hasAttemptedPlanFetch = true
+                    self.state = .loading
+                    print("[DEBUG] AppViewModel: Has profile, no plan → attempting fetchExistingPlan")
+                    self.workoutManager.fetchExistingPlan(userProfileId: self.userManager.userProfile?.id) { found in
+                        DispatchQueue.main.async {
+                            if found {
+                                print("[DEBUG] AppViewModel: Existing plan found after fetch")
+                                // State will switch to .loaded when workoutPlan publishes
+                            } else {
+                                if self.userManager.authToken != nil,
+                                   self.userManager.userProfile != nil,
+                                   self.workoutManager.workoutPlan == nil {
+                                    self.state = .needsPlan
+                                    print("[DEBUG] AppViewModel: No existing plan found → .needsPlan")
+                                   }
+                            }
+                        }
+                    }
+                } else {
+                    // Already attempted to fetch, move to needsPlan
+                    self.state = .needsPlan
+                    print("[DEBUG] AppViewModel: No plan and already attempted fetch → .needsPlan")
+                }
                 return
             }
             
@@ -147,7 +170,7 @@ class AppViewModel: ObservableObject {
             guard let self = self else { return }
             if success {
                 // Coaches fetched successfully, now check for existing plan
-                self.workoutManager.fetchExistingPlan { success in
+                self.workoutManager.fetchExistingPlan(userProfileId: self.userManager.userProfile?.id) { success in
                     // The subscription will handle state updates based on workoutPlan
                 }
             } else {
@@ -178,6 +201,7 @@ class AppViewModel: ObservableObject {
 
     func logout() {
         userManager.logout()
+        hasAttemptedPlanFetch = false
         state = .loggedOut
         print("[DEBUG] AppViewModel.state set to .loggedOut in logout()")
     }

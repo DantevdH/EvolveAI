@@ -378,13 +378,13 @@ class UserManager: ObservableObject, UserManagerProtocol {
                     gender: profile.gender,
                     hasLimitations: profile.hasLimitations,
                     limitationsDescription: profile.limitationsDescription,
-                    trainingSchedule: profile.trainingSchedule,
                     finalChatNotes: profile.finalChatNotes
                 )
                 
                 let response: [UserProfile] = try await supabase.database
                     .from("user_profiles")
                     .insert(profileToSave)
+                    .select()
                     .execute()
                     .value
                 

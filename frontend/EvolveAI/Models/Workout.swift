@@ -6,8 +6,8 @@ struct WorkoutPlan: Codable, Identifiable, Equatable {
     let userProfileId: Int
     let title: String
     let summary: String
-    let createdAt: String
-    let updatedAt: String
+    let createdAt: Date
+    let updatedAt: Date
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -27,8 +27,8 @@ struct WeeklySchedule: Codable, Identifiable, Equatable {
     let id: Int
     let workoutPlanId: Int
     let weekNumber: Int
-    let createdAt: String
-    let updatedAt: String
+    let createdAt: Date
+    let updatedAt: Date
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -44,8 +44,8 @@ struct DailyWorkout: Codable, Identifiable, Equatable {
     let id: Int
     let weeklyScheduleId: Int
     let dayOfWeek: String
-    let createdAt: String
-    let updatedAt: String
+    let createdAt: Date
+    let updatedAt: Date
     
     enum CodingKeys: String, CodingKey {
         case id
@@ -64,8 +64,8 @@ struct WorkoutExercise: Codable, Identifiable, Equatable {
     let sets: Int
     let reps: String
     let weight: Double?
-    let createdAt: String
-    let updatedAt: String
+    let createdAt: Date
+    let updatedAt: Date
     
     enum CodingKeys: String, CodingKey {
         case id

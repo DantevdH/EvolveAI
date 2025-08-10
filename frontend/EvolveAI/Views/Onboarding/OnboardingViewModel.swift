@@ -78,11 +78,19 @@ class OnboardingViewModel: ObservableObject {
         withAnimation {
             self.isGenerating = true
         }
-        
-        // Step 1: Show plan generation view (don't save profile yet)
-        DispatchQueue.main.async {
-            self.isGenerating = false
-            self.isGeneratingPlan = true
+
+        // Save user profile and let AppView handle plan generation
+        userManager.completeOnboarding(with: userProfile) { [weak self] success in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.isGenerating = false
+                if success {
+                    onSuccess()
+                } else {
+                    self.errorMessage = "Failed to save user profile"
+                    self.showErrorAlert = true
+                }
+            }
         }
     }
     

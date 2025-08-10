@@ -90,7 +90,6 @@ async def generate_workout_plan(
             "gender": request.gender,
             "has_limitations": request.hasLimitations,
             "limitations_description": request.limitationsDescription or "",
-            "training_schedule": request.trainingSchedule,
             "final_chat_notes": request.finalChatNotes or ""
         }
         

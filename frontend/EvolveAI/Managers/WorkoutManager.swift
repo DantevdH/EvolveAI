@@ -20,7 +20,7 @@ protocol WorkoutManagerProtocol: AnyObject {
     var isCoachesLoading: Bool { get }
     var coachesErrorMessage: String? { get }
     
-    func fetchExistingPlan(completion: @escaping (Bool) -> Void)
+    func fetchExistingPlan(userProfileId: Int?, completion: @escaping (Bool) -> Void)
     func fetchCompleteWorkoutPlan(completion: @escaping (Bool) -> Void)
     func createAndProvidePlan(for profile: UserProfile, completion: @escaping (Bool) -> Void)
     func updateExerciseCompletion(exerciseId: Int, isCompleted: Bool, weekNumber: Int)
@@ -45,10 +45,10 @@ class WorkoutManager: ObservableObject, WorkoutManagerProtocol {
     @Published var coachesErrorMessage: String? = nil
     
     private var cancellables = Set<AnyCancellable>()
-    private let workoutPlanService = WorkoutPlanService()
+    private let networkService: NetworkServiceProtocol
 
-    init() {
-        // No need for network service dependency
+    init(networkService: NetworkServiceProtocol = NetworkService()) {
+        self.networkService = networkService
     }
     
     deinit {
@@ -56,7 +56,7 @@ class WorkoutManager: ObservableObject, WorkoutManagerProtocol {
     }
     
     /// Fetches the existing workout plan for the authenticated user from Supabase
-    func fetchExistingPlan(completion: @escaping (Bool) -> Void) {
+    func fetchExistingPlan(userProfileId: Int?, completion: @escaping (Bool) -> Void) {
         DispatchQueue.main.async { [weak self] in
             self?.isLoading = true
             self?.errorMessage = nil
@@ -64,50 +64,67 @@ class WorkoutManager: ObservableObject, WorkoutManagerProtocol {
         
         Task {
             do {
+                print("[WorkoutManager] fetchExistingPlan: Start (userProfileId=\(userProfileId?.description ?? "nil"))")
                 // Get current session to get user ID
                 let session = try await supabase.auth.session
                 let userId = session.user.id
+                print("[WorkoutManager] fetchExistingPlan: Have session for userId=\(userId)")
                 
-                // First, get the user's profile to get the profile ID
-                let userProfiles: [UserProfile] = try await supabase.database
-                    .from("user_profiles")
-                    .select()
-                    .eq("user_id", value: userId)
-                    .execute()
-                    .value
+                let network = self.networkService
                 
-                guard let userProfile = userProfiles.first else {
+                if let profileId = userProfileId {
+                    print("[WorkoutManager] fetchExistingPlan: Using provided userProfileId=\(profileId)")
+                    // Try direct lookup by profile id
+                    let workoutPlans = try await network.fetchWorkoutPlans(userProfileId: profileId)
+                    print("[WorkoutManager] fetchExistingPlan: workout_plans by provided profileId count=\(workoutPlans.count)")
+                    if let directPlan = workoutPlans.first {
+                        await MainActor.run {
+                            self.isLoading = false
+                            self.workoutPlan = directPlan
+                            print("[WorkoutManager] Found plan by user_profile_id: \(directPlan.id)")
+                            completion(true)
+                        }
+                    } else {
+                        // Fallback: lookup by userId join
+                        print("[WorkoutManager] fetchExistingPlan: No plan found by provided profileId. Falling back to join by userId=")
+                        let joinedPlans = try await network.fetchWorkoutPlansByUserIdJoin(userId: userId)
+                        print("[WorkoutManager] fetchExistingPlan: joined workout_plans count=\(joinedPlans.count)")
+                        await MainActor.run {
+                            self.isLoading = false
+                            if let plan = joinedPlans.first {
+                                self.workoutPlan = plan
+                                print("[WorkoutManager] Found plan via join-filter: \(plan.id)")
+                                completion(true)
+                            } else {
+                                self.workoutPlan = nil
+                                print("[WorkoutManager] No existing plan found for user \(userId)")
+                                completion(false)
+                            }
+                        }
+                    }
+                } else {
+                    // No profile id provided: attempt join-filter by user_id directly
+                    print("[WorkoutManager] fetchExistingPlan: No userProfileId provided, querying by userId join")
+                    let joinedPlans = try await network.fetchWorkoutPlansByUserIdJoin(userId: userId)
+                    print("[WorkoutManager] fetchExistingPlan: joined workout_plans count=\(joinedPlans.count)")
                     await MainActor.run {
                         self.isLoading = false
-                        self.errorMessage = "User profile not found"
-                        completion(false)
-                    }
-                    return
-                }
-                
-                // Get the workout plan for this user
-                let workoutPlans: [WorkoutPlan] = try await supabase.database
-                    .from("workout_plans")
-                    .select()
-                    .eq("user_profile_id", value: userProfile.id!)
-                    .execute()
-                    .value
-                
-                await MainActor.run {
-                    self.isLoading = false
-                    if let plan = workoutPlans.first {
-                        self.workoutPlan = plan
-                        completion(true)
-                    } else {
-                        // No plan exists yet
-                        self.workoutPlan = nil
-                        completion(false)
+                        if let plan = joinedPlans.first {
+                            self.workoutPlan = plan
+                            print("[WorkoutManager] Found plan via join-filter: \(plan.id)")
+                            completion(true)
+                        } else {
+                            self.workoutPlan = nil
+                            print("[WorkoutManager] No existing plan found for user \(userId)")
+                            completion(false)
+                        }
                     }
                 }
             } catch {
                 await MainActor.run {
                     self.isLoading = false
                     self.errorMessage = "Failed to fetch workout plan: \(error.localizedDescription)"
+                    print("[WorkoutManager] fetchExistingPlan: ERROR: \(error.localizedDescription)")
                     completion(false)
                 }
             }
@@ -187,14 +204,25 @@ class WorkoutManager: ObservableObject, WorkoutManagerProtocol {
         }
     }
     
-    /// Creates a new workout plan for the user using the WorkoutPlanService
+    /// Creates a new workout plan for the user using the NetworkService
     func createAndProvidePlan(for profile: UserProfile, completion: @escaping (Bool) -> Void) {
         self.errorMessage = nil
         
         Task {
             do {
-                // Use the dedicated service to generate and save the workout plan
-                let savedWorkoutPlan = try await workoutPlanService.generateAndSaveWorkoutPlan(for: profile)
+                let session = try await supabase.auth.session
+                let userId = session.user.id
+                let userProfile = try await networkService.fetchUserProfile(for: userId)
+                
+                // Generate via FastAPI
+                let generated = try await networkService.generateWorkoutPlanFromAPI(profile: profile)
+                
+                // Save to Supabase
+                let savedWorkoutPlan = try await networkService.saveWorkoutPlanToDatabase(
+                    generatedPlan: generated,
+                    userProfile: userProfile
+                )
+                
                 print("--- [DEBUG] Saved workout plan: \(savedWorkoutPlan) ---")
                 await MainActor.run {
                     self.workoutPlan = savedWorkoutPlan

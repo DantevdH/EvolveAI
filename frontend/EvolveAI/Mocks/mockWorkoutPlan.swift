@@ -7,7 +7,7 @@
 
 import Foundation
 
-let todayString = ISO8601DateFormatter().string(from: Date())
+let today = Date()
 
 // MARK: - Mock Workout Plan (matches Supabase schema)
 let mockWorkoutPlan = WorkoutPlan(
@@ -15,8 +15,8 @@ let mockWorkoutPlan = WorkoutPlan(
     userProfileId: 1,
     title: "Foundational Strength Program",
     summary: "A 2-week plan to build a solid strength base and improve technique.",
-    createdAt: todayString,
-    updatedAt: todayString
+    createdAt: today,
+    updatedAt: today
 )
 
 // MARK: - Mock Weekly Schedules
@@ -25,15 +25,15 @@ let mockWeeklySchedules = [
         id: 1,
         workoutPlanId: 1,
         weekNumber: 1,
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     WeeklySchedule(
         id: 2,
         workoutPlanId: 1,
         weekNumber: 2,
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     )
 ]
 
@@ -44,100 +44,100 @@ let mockDailyWorkouts = [
         id: 1,
         weeklyScheduleId: 1,
         dayOfWeek: "Monday",
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     DailyWorkout(
         id: 2,
         weeklyScheduleId: 1,
         dayOfWeek: "Tuesday",
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     DailyWorkout(
         id: 3,
         weeklyScheduleId: 1,
         dayOfWeek: "Wednesday",
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     DailyWorkout(
         id: 4,
         weeklyScheduleId: 1,
         dayOfWeek: "Thursday",
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     DailyWorkout(
         id: 5,
         weeklyScheduleId: 1,
         dayOfWeek: "Friday",
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     DailyWorkout(
         id: 6,
         weeklyScheduleId: 1,
         dayOfWeek: "Saturday",
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     DailyWorkout(
         id: 7,
         weeklyScheduleId: 1,
         dayOfWeek: "Sunday",
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     // Week 2
     DailyWorkout(
         id: 8,
         weeklyScheduleId: 2,
         dayOfWeek: "Monday",
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     DailyWorkout(
         id: 9,
         weeklyScheduleId: 2,
         dayOfWeek: "Tuesday",
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     DailyWorkout(
         id: 10,
         weeklyScheduleId: 2,
         dayOfWeek: "Wednesday",
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     DailyWorkout(
         id: 11,
         weeklyScheduleId: 2,
         dayOfWeek: "Thursday",
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     DailyWorkout(
         id: 12,
         weeklyScheduleId: 2,
         dayOfWeek: "Friday",
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     DailyWorkout(
         id: 13,
         weeklyScheduleId: 2,
         dayOfWeek: "Saturday",
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     DailyWorkout(
         id: 14,
         weeklyScheduleId: 2,
         dayOfWeek: "Sunday",
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     )
 ]
 
@@ -151,8 +151,8 @@ let mockWorkoutExercises = [
         sets: 4,
         reps: "8-10",
         weight: nil,
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     WorkoutExercise(
         id: 2,
@@ -161,8 +161,8 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: "10-12",
         weight: nil,
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     WorkoutExercise(
         id: 3,
@@ -171,8 +171,8 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: "10-12",
         weight: nil,
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     // Wednesday Week 1
     WorkoutExercise(
@@ -182,8 +182,8 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: "5-8",
         weight: nil,
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     WorkoutExercise(
         id: 5,
@@ -192,8 +192,8 @@ let mockWorkoutExercises = [
         sets: 4,
         reps: "8-10",
         weight: nil,
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     WorkoutExercise(
         id: 6,
@@ -202,8 +202,8 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: "45 seconds",
         weight: nil,
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     // Friday Week 1
     WorkoutExercise(
@@ -213,8 +213,8 @@ let mockWorkoutExercises = [
         sets: 4,
         reps: "As many as possible",
         weight: nil,
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     WorkoutExercise(
         id: 8,
@@ -223,8 +223,8 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: "12-15",
         weight: nil,
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     WorkoutExercise(
         id: 9,
@@ -233,8 +233,8 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: "12-15",
         weight: nil,
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     // Monday Week 2
     WorkoutExercise(
@@ -244,8 +244,8 @@ let mockWorkoutExercises = [
         sets: 4,
         reps: "10-12",
         weight: nil,
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     WorkoutExercise(
         id: 11,
@@ -254,8 +254,8 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: "10-12",
         weight: nil,
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     ),
     WorkoutExercise(
         id: 12,
@@ -264,8 +264,8 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: "12-15",
         weight: nil,
-        createdAt: todayString,
-        updatedAt: todayString
+        createdAt: today,
+        updatedAt: today
     )
 ]
 

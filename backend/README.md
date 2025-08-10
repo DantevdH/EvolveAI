@@ -73,7 +73,6 @@ Generates a personalized workout plan based on user profile data.
   "gender": "male",
   "hasLimitations": false,
   "limitationsDescription": "",
-  "trainingSchedule": "morning",
   "finalChatNotes": "Prefers compound movements"
 }
 ```

@@ -19,7 +19,6 @@ class GenerateWorkoutRequest(BaseModel):
     gender: str
     hasLimitations: bool
     limitationsDescription: Optional[str] = None
-    trainingSchedule: str
     finalChatNotes: Optional[str] = None
 
 class GenerateWorkoutResponse(BaseModel):

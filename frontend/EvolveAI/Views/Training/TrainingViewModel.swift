@@ -22,7 +22,7 @@ class TrainingViewModel: ObservableObject {
     // Helper to calculate the real current week based on plan start date
     static func calculateCurrentWeek(from plan: WorkoutPlan?) -> Int {
         guard let plan = plan else { return 1 }
-        let startDate = ISO8601DateFormatter().date(from: plan.createdAt) ?? Date()
+        let startDate = plan.createdAt ?? Date()
         let now = Date()
         let calendar = Calendar.current
         let weekDiff = calendar.dateComponents([.weekOfYear], from: startDate, to: now).weekOfYear ?? 0

@@ -18,6 +18,5 @@ let mockUserProfile = UserProfile(
     gender: "Male",
     hasLimitations: false,
     limitationsDescription: "",
-    trainingSchedule: "Monday, Wednesday, Friday",
     finalChatNotes: "User is motivated and ready to start. Wants to focus on compound lifts."
 )

@@ -56,7 +56,6 @@ struct UserProfile: Codable {
     var gender: String = ""
     var hasLimitations: Bool = false
     var limitationsDescription: String = ""
-    var trainingSchedule: String = ""
     var finalChatNotes: String = ""
     
     // Database fields (read-only)
@@ -86,7 +85,6 @@ struct UserProfile: Codable {
         case gender
         case hasLimitations = "has_limitations"
         case limitationsDescription = "limitations_description"
-        case trainingSchedule = "training_schedule"
         case finalChatNotes = "final_chat_notes"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -113,7 +111,7 @@ struct UserProfile: Codable {
     }
     
     // Initializer for creating a profile with all values
-    init(userId: UUID, username: String, primaryGoal: String, primaryGoalDescription: String, coachId: Int? = nil, experienceLevel: String, daysPerWeek: Int, minutesPerSession: Int, equipment: String, age: Int, weight: Double, weightUnit: String, height: Double, heightUnit: String, gender: String, hasLimitations: Bool, limitationsDescription: String, trainingSchedule: String, finalChatNotes: String) {
+    init(userId: UUID, username: String, primaryGoal: String, primaryGoalDescription: String, coachId: Int? = nil, experienceLevel: String, daysPerWeek: Int, minutesPerSession: Int, equipment: String, age: Int, weight: Double, weightUnit: String, height: Double, heightUnit: String, gender: String, hasLimitations: Bool, limitationsDescription: String, finalChatNotes: String) {
         self.userId = userId
         self.username = username
         self.primaryGoal = primaryGoal
@@ -131,7 +129,6 @@ struct UserProfile: Codable {
         self.gender = gender
         self.hasLimitations = hasLimitations
         self.limitationsDescription = limitationsDescription
-        self.trainingSchedule = trainingSchedule
         self.finalChatNotes = finalChatNotes
         self.id = nil
         self.createdAt = nil
