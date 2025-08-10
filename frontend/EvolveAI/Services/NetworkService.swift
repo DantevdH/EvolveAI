@@ -363,105 +363,63 @@ class NetworkService: NetworkServiceProtocol, ObservableObject {
     
     private func upsertCompleteWorkoutPlan(userProfileId: Int, title: String, summary: String) async throws -> WorkoutPlan {
         print("--- [DEBUG] 🔧 Calling upsert_complete_workout_plan function ---")
-        let functionResult = try await supabase.database
+        let rows: [WorkoutPlan] = try await supabase.database
             .rpc("upsert_complete_workout_plan", params: [
                 "p_user_profile_id": String(userProfileId),
                 "p_title": title,
                 "p_summary": summary,
             ])
             .execute()
-        print("--- [DEBUG] 🔍 Function result status: \(functionResult.status) ---")
-        
-        let jsonData = functionResult.data
-        if let jsonString = String(data: jsonData, encoding: .utf8) {
-            print("--- [DEBUG] 📄 Raw JSON response: \(jsonString) ---")
-        } else {
-            print("--- [DEBUG] ❌ Could not convert data to UTF-8 string ---")
+            .value
+        guard let plan = rows.first else {
+            throw NetworkError.workoutPlanGenerationFailed("Empty function response")
         }
-        
-        return try parseWorkoutPlan(from: jsonData)
+        return plan
     }
     
     private func parseWorkoutPlan(from jsonData: Data) throws -> WorkoutPlan {
-        // Accept either an array with one object or a single object
-        if let jsonArray = try? JSONSerialization.jsonObject(with: jsonData) as? [[String: Any]],
-           let jsonObject = jsonArray.first {
-            return try parseWorkoutPlanObject(jsonObject)
-        } else if let jsonObject = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
-            return try parseWorkoutPlanObject(jsonObject)
-        } else {
-            print("--- [DEBUG] ❌ Failed to parse workout plan from function result ---")
-            throw NetworkError.workoutPlanGenerationFailed("Invalid function response")
+        // Prefer typed decode via Supabase SDK structure; support both array and single object
+        if let array = try? JSONSerialization.jsonObject(with: jsonData) as? [[String: Any]], !array.isEmpty {
+            let data = try JSONSerialization.data(withJSONObject: array)
+            let rows = try JSONDecoder().decode([WorkoutPlan].self, from: data)
+            if let first = rows.first { return first }
+        } else if let obj = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
+            let data = try JSONSerialization.data(withJSONObject: obj)
+            return try JSONDecoder().decode(WorkoutPlan.self, from: data)
         }
+        throw NetworkError.workoutPlanGenerationFailed("Invalid function response")
     }
     
     private func parseWorkoutPlanObject(_ jsonObject: [String: Any]) throws -> WorkoutPlan {
-        guard let id = jsonObject["id"] as? Int,
-              let userProfileId = jsonObject["user_profile_id"] as? Int,
-              let title = jsonObject["title"] as? String,
-              let summary = jsonObject["summary"] as? String,
-              let createdAt = jsonObject["created_at"] as? String,
-              let updatedAt = jsonObject["updated_at"] as? String else {
-            throw NetworkError.workoutPlanGenerationFailed("Missing fields in function response")
-        }
-        
-        let createdAtDate = try parseDateOrThrow(createdAt)
-        let updatedAtDate = try parseDateOrThrow(updatedAt)
-        
-        return WorkoutPlan(
-            id: id,
-            userProfileId: userProfileId,
-            title: title,
-            summary: summary,
-            createdAt: createdAtDate,
-            updatedAt: updatedAtDate
-        )
+        let data = try JSONSerialization.data(withJSONObject: jsonObject)
+        return try JSONDecoder().decode(WorkoutPlan.self, from: data)
     }
     
     private func parseDateOrThrow(_ dateString: String) throws -> Date {
-        if let date = iso8601Formatter.date(from: dateString) ?? iso8601FormatterNoFraction.date(from: dateString) {
-            return date
-        }
+        // This is now only used by legacy manual parsers (kept for safety). Prefer typed decoding.
+        if let date = ISO8601DateFormatter().date(from: dateString) { return date }
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime]
+        if let date = f.date(from: dateString) { return date }
         throw NetworkError.workoutPlanGenerationFailed("Invalid date format in function response")
     }
 
     // MARK: - Public fetching helpers (Workout Plans)
     func fetchWorkoutPlans(userProfileId: Int) async throws -> [WorkoutPlan] {
-        // Prefer manual parsing to avoid decoding issues
-        let response = try await supabase.database
+        try await supabase.database
             .from("workout_plans")
             .select()
             .eq("user_profile_id", value: userProfileId)
             .execute()
-        guard let data = response.data as? Data else {
-            // Fallback to typed decoding
-            let typed: [WorkoutPlan] = try await supabase.database
-                .from("workout_plans")
-                .select()
-                .eq("user_profile_id", value: userProfileId)
-                .execute()
-                .value
-            return typed
-        }
-        return try parseWorkoutPlansArray(from: data)
+            .value
     }
     
     func fetchWorkoutPlansByUserIdJoin(userId: UUID) async throws -> [WorkoutPlan] {
-        let response = try await supabase.database
+        try await supabase.database
             .from("workout_plans")
             .select("id,user_profile_id,title,summary,created_at,updated_at,user_profiles!inner(user_id)")
             .eq("user_profiles.user_id", value: userId)
             .execute()
-        guard let data = response.data as? Data else {
-            let typed: [WorkoutPlan] = try await supabase.database
-                .from("workout_plans")
-                .select("id,user_profile_id,title,summary,created_at,updated_at,user_profiles!inner(user_id)")
-                .eq("user_profiles.user_id", value: userId)
-                .execute()
-                .value
-            return typed
-        }
-        return try parseWorkoutPlansArray(from: data)
+            .value
     }
     
     private func parseWorkoutPlansArray(from data: Data) throws -> [WorkoutPlan] {
@@ -473,61 +431,31 @@ class NetworkService: NetworkServiceProtocol, ObservableObject {
     
     // MARK: - Complete plan fetching
     func fetchCompleteWorkoutPlan(for workoutPlan: WorkoutPlan) async throws -> CompleteWorkoutPlan {
-        // Step 1: Fetch weekly schedules (manual parse for dates)
-        let weeklySchedulesResponse = try await supabase.database
+        // Step 1: Fetch weekly schedules (typed)
+        let weeklySchedules: [WeeklySchedule] = try await supabase.database
             .from("weekly_schedules")
             .select()
             .eq("workout_plan_id", value: workoutPlan.id)
             .execute()
-        let weeklySchedules: [WeeklySchedule]
-        if let data = weeklySchedulesResponse.data as? Data {
-            weeklySchedules = try parseWeeklySchedulesArray(from: data)
-        } else {
-            weeklySchedules = try await supabase.database
-                .from("weekly_schedules")
-                .select()
-                .eq("workout_plan_id", value: workoutPlan.id)
-                .execute()
-                .value
-        }
+            .value
         
-        // Step 2: Fetch daily workouts for all weekly schedules (manual parse for dates)
+        // Step 2: Fetch daily workouts (typed)
         let weeklyScheduleIds = weeklySchedules.map { $0.id }
-        let dailyWorkoutsResponse = try await supabase.database
+        let dailyWorkouts: [DailyWorkout] = try await supabase.database
             .from("daily_workouts")
             .select()
             .`in`("weekly_schedule_id", values: weeklyScheduleIds)
             .execute()
-        let dailyWorkouts: [DailyWorkout]
-        if let data = dailyWorkoutsResponse.data as? Data {
-            dailyWorkouts = try parseDailyWorkoutsArray(from: data)
-        } else {
-            dailyWorkouts = try await supabase.database
-                .from("daily_workouts")
-                .select()
-                .`in`("weekly_schedule_id", values: weeklyScheduleIds)
-                .execute()
-                .value
-        }
+            .value
         
-        // Step 3: Fetch workout exercises for all daily workouts (manual parse for dates)
+        // Step 3: Fetch workout exercises (typed)
         let dailyWorkoutIds = dailyWorkouts.map { $0.id }
-        let workoutExercisesResponse = try await supabase.database
+        let workoutExercises: [WorkoutExercise] = try await supabase.database
             .from("workout_exercises")
             .select()
             .`in`("daily_workout_id", values: dailyWorkoutIds)
             .execute()
-        let workoutExercises: [WorkoutExercise]
-        if let data = workoutExercisesResponse.data as? Data {
-            workoutExercises = try parseWorkoutExercisesArray(from: data)
-        } else {
-            workoutExercises = try await supabase.database
-                .from("workout_exercises")
-                .select()
-                .`in`("daily_workout_id", values: dailyWorkoutIds)
-                .execute()
-                .value
-        }
+            .value
         
         // Step 4: Fetch exercises referenced by workout exercises (no dates; typed decoding fine)
         let exerciseIds = workoutExercises.map { $0.exerciseId }
@@ -548,65 +476,20 @@ class NetworkService: NetworkServiceProtocol, ObservableObject {
         )
     }
     
-    // MARK: - Parsers for entities with Date fields
+    // MARK: - Parsers retained for legacy/manual fallbacks (prefer typed decoding)
     private func parseWeeklySchedulesArray(from data: Data) throws -> [WeeklySchedule] {
-        guard let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
-        return try jsonArray.map { json in
-            guard let id = json["id"] as? Int,
-                  let workoutPlanId = json["workout_plan_id"] as? Int,
-                  let weekNumber = json["week_number"] as? Int,
-                  let createdAt = json["created_at"] as? String,
-                  let updatedAt = json["updated_at"] as? String else {
-                throw NetworkError.decodingError(NSError(domain: "WeeklySchedule", code: 0))
-            }
-            let createdAtDate = try parseDateOrThrow(createdAt)
-            let updatedAtDate = try parseDateOrThrow(updatedAt)
-            return WeeklySchedule(id: id, workoutPlanId: workoutPlanId, weekNumber: weekNumber, createdAt: createdAtDate, updatedAt: updatedAtDate)
-        }
+        let decoder = JSONDecoder()
+        return try decoder.decode([WeeklySchedule].self, from: data)
     }
     
     private func parseDailyWorkoutsArray(from data: Data) throws -> [DailyWorkout] {
-        guard let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
-        return try jsonArray.map { json in
-            guard let id = json["id"] as? Int,
-                  let weeklyScheduleId = json["weekly_schedule_id"] as? Int,
-                  let dayOfWeek = json["day_of_week"] as? String,
-                  let createdAt = json["created_at"] as? String,
-                  let updatedAt = json["updated_at"] as? String else {
-                throw NetworkError.decodingError(NSError(domain: "DailyWorkout", code: 0))
-            }
-            let createdAtDate = try parseDateOrThrow(createdAt)
-            let updatedAtDate = try parseDateOrThrow(updatedAt)
-            return DailyWorkout(id: id, weeklyScheduleId: weeklyScheduleId, dayOfWeek: dayOfWeek, createdAt: createdAtDate, updatedAt: updatedAtDate)
-        }
+        let decoder = JSONDecoder()
+        return try decoder.decode([DailyWorkout].self, from: data)
     }
     
     private func parseWorkoutExercisesArray(from data: Data) throws -> [WorkoutExercise] {
-        guard let jsonArray = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return [] }
-        return try jsonArray.map { json in
-            guard let id = json["id"] as? Int,
-                  let dailyWorkoutId = json["daily_workout_id"] as? Int,
-                  let exerciseId = json["exercise_id"] as? Int,
-                  let sets = json["sets"] as? Int,
-                  let reps = json["reps"] as? String,
-                  let createdAt = json["created_at"] as? String,
-                  let updatedAt = json["updated_at"] as? String else {
-                throw NetworkError.decodingError(NSError(domain: "WorkoutExercise", code: 0))
-            }
-            let weight = json["weight"] as? Double
-            let createdAtDate = try parseDateOrThrow(createdAt)
-            let updatedAtDate = try parseDateOrThrow(updatedAt)
-            return WorkoutExercise(
-                id: id,
-                dailyWorkoutId: dailyWorkoutId,
-                exerciseId: exerciseId,
-                sets: sets,
-                reps: reps,
-                weight: weight,
-                createdAt: createdAtDate,
-                updatedAt: updatedAtDate
-            )
-        }
+        let decoder = JSONDecoder()
+        return try decoder.decode([WorkoutExercise].self, from: data)
     }
     
     /// Save weekly schedule and its daily workouts
