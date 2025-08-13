@@ -18,6 +18,7 @@ struct EquipmentStep: View {
                 .font(.largeTitle)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
+
             
             Text("Select the option that best describes your setup")
                 .font(.subheadline)
@@ -65,6 +66,7 @@ struct EquipmentCard: View {
                     .font(.system(size: 40))
                     .foregroundColor(isSelected ? .white : .evolvePrimary)
                     .shadow(color: isSelected ? .black.opacity(0.2) : .clear, radius: 5, y: 5)
+                    .accessibilityHidden(true)
                 
                 Text(title)
                     .font(.headline)
@@ -84,6 +86,7 @@ struct EquipmentCard: View {
         .buttonStyle(PlainButtonStyle())
         .scaleEffect(isSelected ? 1.05 : 1.0)
         .animation(.spring(response: 0.4, dampingFraction: 0.6), value: isSelected)
+
     }
 }
 

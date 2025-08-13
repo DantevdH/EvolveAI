@@ -22,6 +22,7 @@ struct PersonalInfoStep: View {
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                     .padding(.top)
+                    .dynamicTypeSize(.large ... .accessibility3)
                 
                 Text("This helps us personalize your fitness plan")
                     .font(.subheadline)
@@ -41,8 +42,9 @@ struct PersonalInfoStep: View {
                         unit: $viewModel.userProfile.weightUnit,
                         units: ["kg", "lbs"]
                     )
-                    .onChange(of: viewModel.userProfile.weightUnit) { oldValue, newValue in
-                        viewModel.userProfile.weight = viewModel.convertWeight(value: viewModel.userProfile.weight, from: oldValue, to: newValue)
+                    .onChange(of: viewModel.userProfile.weightUnit) { _, newValue in
+                        let oldUnit = viewModel.userProfile.weightUnit
+                        viewModel.userProfile.weight = viewModel.convertWeight(value: viewModel.userProfile.weight, from: oldUnit, to: newValue)
                     }
                     
                     MeasurementField(
@@ -51,8 +53,9 @@ struct PersonalInfoStep: View {
                         unit: $viewModel.userProfile.heightUnit,
                         units: ["cm", "in"]
                     )
-                    .onChange(of: viewModel.userProfile.heightUnit) { oldValue, newValue in
-                        viewModel.userProfile.height = viewModel.convertHeight(value: viewModel.userProfile.height, from: oldValue, to: newValue)
+                    .onChange(of: viewModel.userProfile.heightUnit) { _, newValue in
+                        let oldUnit = viewModel.userProfile.heightUnit
+                        viewModel.userProfile.height = viewModel.convertHeight(value: viewModel.userProfile.height, from: oldUnit, to: newValue)
                     }
                     
                     GenderSelector(selection: $viewModel.userProfile.gender)
@@ -99,11 +102,12 @@ struct MeasurementField: View {
                     .font(.system(.title, design: .monospaced).weight(.bold))
                     .foregroundColor(.white)
                     .keyboardType(keyboardType)
-                    .onChange(of: stringValue) {
-                        value = Double(stringValue) ?? 0
+
+                    .onChange(of: stringValue) { _, newValue in
+                        value = Double(newValue) ?? 0
                     }
-                    .onChange(of: value) {
-                        let formattedValue = String(format: "%.1f", value)
+                    .onChange(of: value) { _, newValue in
+                        let formattedValue = String(format: "%.1f", newValue)
                         if stringValue != formattedValue {
                             stringValue = formattedValue
                         }
@@ -130,6 +134,18 @@ struct UnitToggle: View {
     
     private var isFirstOption: Bool { unit == options.first }
     
+    private var unitToggleBackground: some View {
+        ZStack {
+            Capsule()
+                .fill(Color.black.opacity(0.3))
+            
+            Capsule()
+                .fill(Color.evolvePrimary)
+                .frame(width: 50)
+                .offset(x: isFirstOption ? -25 : 25)
+        }
+    }
+    
     var body: some View {
         HStack(spacing: 0) {
             Text(options[0])
@@ -145,16 +161,7 @@ struct UnitToggle: View {
                 .onTapGesture { unit = options[1] }
         }
         .padding(4)
-        .background(
-            ZStack(alignment: isFirstOption ? .leading : .trailing) {
-                Capsule()
-                    .fill(Color.black.opacity(0.3))
-                
-                Capsule()
-                    .fill(Color.evolvePrimary)
-                    .frame(width: 50)
-            }
-        )
+        .background(unitToggleBackground)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isFirstOption)
     }
 }
@@ -181,6 +188,7 @@ struct GenderSelector: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(GenderButtonStyle(isSelected: selection == option))
+
                 }
             }
         }

@@ -22,6 +22,7 @@ struct LimitationsStep: View {
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                     .padding(.top)
+    
                 
                 Text("Do you have any injuries or physical limitations we should be aware of?")
                     .font(.subheadline)
@@ -52,8 +53,8 @@ struct LimitationsStep: View {
                                     RoundedRectangle(cornerRadius: 12)
                                         .stroke(Color.white.opacity(0.2), lineWidth: 1)
                                 )
-                                .onChange(of: viewModel.userProfile.limitationsDescription) {
-                                    let newValue = viewModel.userProfile.limitationsDescription
+
+                                .onChange(of: viewModel.userProfile.limitationsDescription) { _, newValue in
                                     if newValue.count > characterLimit {
                                         viewModel.userProfile.limitationsDescription = String(newValue.prefix(characterLimit))
                                     }
@@ -100,6 +101,7 @@ struct LimitationToggle: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(LimitationButtonStyle(isSelected: !hasLimitations))
+
             
             Button(action: { hasLimitations = true }) {
                 Text("Yes")
@@ -107,6 +109,7 @@ struct LimitationToggle: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(LimitationButtonStyle(isSelected: hasLimitations))
+
         }
         .padding(.horizontal)
     }

@@ -21,6 +21,7 @@ struct GoalsStep: View {
                     .fontWeight(.bold)
                     .foregroundColor(.white)
                     .padding(.top)
+    
                 
                 Text("Select your primary fitness objective")
                     .font(.subheadline)
@@ -63,10 +64,9 @@ struct GoalsStep: View {
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                                         .stroke(Color.white.opacity(0.2), lineWidth: 1)
                                 )
+
                                
-                                .onChange(of: viewModel.userProfile.primaryGoalDescription) {
-                                    // The old and new values are no longer passed directly in the closure
-                                    let newValue = viewModel.userProfile.primaryGoalDescription
+                                .onChange(of: viewModel.userProfile.primaryGoalDescription) { _, newValue in
                                     if newValue.count > characterLimit {
                                         viewModel.userProfile.primaryGoalDescription = String(newValue.prefix(characterLimit))
                                     }
@@ -115,6 +115,7 @@ struct GoalCard: View {
                 Image(systemName: icon)
                     .font(.system(size: 32))
                     .foregroundColor(isSelected ? .black : .evolvePrimary)
+                    .accessibilityHidden(true)
                 
                 Text(title)
                     .font(.headline)
@@ -139,5 +140,6 @@ struct GoalCard: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
+
     }
 }
