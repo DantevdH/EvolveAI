@@ -48,43 +48,54 @@ struct OnboardingFlow: View {
                     }
 
                     TabView(selection: $viewModel.currentStep) {
+                        // Group 1: Initial steps (always loaded)
+                        Group {
+                            WelcomeStep(onStart: { username in
+                                viewModel.userProfile.username = username
+                                withAnimation(.easeInOut) { viewModel.nextStep() }
+                            }, viewModel: viewModel).tag(0)
+
+                            ExperienceStep(viewModel: viewModel).tag(1)
+                        }
                         
-                        WelcomeStep(onStart: { username in
-                            viewModel.userProfile.username = username
-                            withAnimation(.easeInOut) { viewModel.nextStep() }
-                        }, viewModel: viewModel).tag(0)
+                        // Group 2: Middle steps (loaded when needed)
+                        Group {
+                            if viewModel.currentStep >= 2 && viewModel.currentStep <= 4 {
+                                PersonalInfoStep(viewModel: viewModel).tag(2)
 
-                        ExperienceStep(viewModel: viewModel).tag(1)
+                                GoalsStep(viewModel: viewModel).tag(3)
 
-                        PersonalInfoStep(viewModel: viewModel).tag(2)
-
-                        GoalsStep(
-                            viewModel: viewModel,
-                        ).tag(3)
-
-                        ScheduleStep(viewModel: viewModel).tag(4)
-
-                        EquipmentStep(viewModel: viewModel).tag(5)
-
-                        LimitationsStep(viewModel: viewModel).tag(6)
-
-                        FinalChatStep(
-                            viewModel: viewModel,
-                            coach: viewModel.workoutManager.selectedCoach,
-                            onReadyToGenerate: {
-                                viewModel.completeOnboarding(onSuccess: self.onComplete)
+                                ScheduleStep(viewModel: viewModel).tag(4)
                             }
-                        ).tag(7)
+                        }
+                        
+                        // Group 3: Final steps (loaded when needed)
+                        Group {
+                            if viewModel.currentStep >= 5 && viewModel.currentStep <= 7 {
+                                EquipmentStep(viewModel: viewModel).tag(5)
+
+                                LimitationsStep(viewModel: viewModel).tag(6)
+
+                                FinalChatStep(
+                                    viewModel: viewModel,
+                                    coach: viewModel.workoutManager.selectedCoach,
+                                    onReadyToGenerate: {
+                                        viewModel.completeOnboarding(onSuccess: self.onComplete)
+                                    }
+                                ).tag(7)
+                            }
+                        }
                     }
                     .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
 
                     if viewModel.currentStep > 0 && viewModel.currentStep < totalSteps - 1 {
                         HStack {
                             if viewModel.currentStep > 1 {
-                                Button("Back") {
-                                    withAnimation { viewModel.previousStep() }
-                                }
-                                .buttonStyle(SecondaryButtonStyle())
+                                                            Button("Back") {
+                                withAnimation { viewModel.previousStep() }
+                            }
+                            .buttonStyle(SecondaryButtonStyle())
+
                             }
 
                             Spacer()
@@ -94,6 +105,7 @@ struct OnboardingFlow: View {
                             }
                             .buttonStyle(NextButtonStyle())
                             .disabled(viewModel.isNextButtonDisabled)
+
                         }
                         .padding()
                     }
@@ -102,6 +114,7 @@ struct OnboardingFlow: View {
                 if viewModel.showErrorAlert {
                     ErrorView(
                         message: viewModel.errorMessage,
+                        canRetry: true,
                         retryAction: {
                             viewModel.showErrorAlert = false
                         }
@@ -133,12 +146,15 @@ struct ProgressBarView: View {
             }
         }
         .frame(height: 4)
+
     }
 }
 
 struct OnboardingBackground: View {
     @State private var gradientRotation: Double = 0
     @State private var particleOpacity: Double = 0.8
+    @State private var particlePositions: [(x: CGFloat, y: CGFloat, size: CGFloat, duration: Double)] = []
+    
     var body: some View {
         ZStack {
             LinearGradient(
@@ -158,21 +174,34 @@ struct OnboardingBackground: View {
                 withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
                     gradientRotation = 360
                 }
-            }
-            ForEach(0..<20, id: \.self) { index in
-                Circle()
-                    .fill(Color.evolvePrimary.opacity(0.3))
-                    .frame(width: CGFloat.random(in: 2...6))
-                    .position(
+                
+                // Calculate random values once instead of on every render
+                particlePositions = (0..<20).map { _ in
+                    (
                         x: CGFloat.random(in: 0...UIScreen.main.bounds.width),
-                        y: CGFloat.random(in: 0...UIScreen.main.bounds.height)
+                        y: CGFloat.random(in: 0...UIScreen.main.bounds.height),
+                        size: CGFloat.random(in: 2...6),
+                        duration: Double.random(in: 2...4)
                     )
-                    .opacity(particleOpacity)
-                    .animation(
-                        .easeInOut(duration: Double.random(in: 2...4))
-                        .repeatForever(autoreverses: true),
-                        value: particleOpacity
-                    )
+                }
+            }
+            
+            ForEach(0..<20, id: \.self) { index in
+                if index < particlePositions.count {
+                    Circle()
+                        .fill(Color.evolvePrimary.opacity(0.3))
+                        .frame(width: particlePositions[index].size)
+                        .position(
+                            x: particlePositions[index].x,
+                            y: particlePositions[index].y
+                        )
+                        .opacity(particleOpacity)
+                        .animation(
+                            .easeInOut(duration: particlePositions[index].duration)
+                            .repeatForever(autoreverses: true),
+                            value: particleOpacity
+                        )
+                }
             }
         }
     }

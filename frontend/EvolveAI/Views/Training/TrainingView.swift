@@ -20,9 +20,12 @@ struct WorkoutView: View {
                 // Use the initial workout plan if available, otherwise use workoutManager's plan
                 if let workoutPlan = currentWorkoutPlan {
                     let currentWeek = TrainingViewModel.calculateCurrentWeek(from: workoutPlan)
-                    if currentWeek > workoutPlan.totalWeeks {
+                    let totalWeeks = workoutManager.completeWorkoutPlan?.weeklySchedules.count ?? 0
+                    
+                    if currentWeek > totalWeeks && totalWeeks > 0 {
                         PlanCompleteView(
                             workoutPlan: workoutPlan,
+                            totalWeeks: totalWeeks,
                             onCreateNewPlan: {
                                 // TODO: Implement navigation to create new plan
                                 print("[DEBUG] Create New Plan tapped")
@@ -37,12 +40,20 @@ struct WorkoutView: View {
                         )
                         .onAppear {
                             viewModel.updateWorkoutPlan(workoutPlan)
+                            // Load complete workout plan if available
+                            if let completePlan = workoutManager.completeWorkoutPlan {
+                                viewModel.updateCompleteWorkoutPlan(completePlan)
+                            }
                             viewModel.loadFromServerData()
                         }
                         .onChange(of: workoutManager.workoutPlan) { newPlan in
                             if let plan = newPlan {
                                 viewModel.updateWorkoutPlan(plan)
-                                viewModel.loadFromServerData()
+                            }
+                        }
+                        .onChange(of: workoutManager.completeWorkoutPlan) { completePlan in
+                            if let plan = completePlan {
+                                viewModel.updateCompleteWorkoutPlan(plan)
                             }
                         }
                     }
@@ -90,14 +101,19 @@ struct WorkoutView: View {
 
 struct PlanCompleteView: View {
     let workoutPlan: WorkoutPlan
+    let totalWeeks: Int
     let onCreateNewPlan: () -> Void
     
     var totalWorkouts: Int {
-        workoutPlan.weekly_schedules.reduce(0) { $0 + $1.daily_workouts.filter { !$0.isRestDay }.count }
+        // Calculate total workouts from the complete workout plan
+        // For now, we'll use a placeholder
+        0 // TODO: Calculate from completeWorkoutPlan
     }
     
     var completedWorkouts: Int {
-        workoutPlan.weekly_schedules.reduce(0) { $0 + $1.daily_workouts.filter { !$0.isRestDay && $0.isCompleted }.count }
+        // Calculate completed workouts
+        // For now, we'll use a placeholder
+        0 // TODO: Calculate from progress tracking
     }
     
     var planTitle: String {
@@ -158,7 +174,7 @@ struct PlanCompleteView: View {
                         Text("Total Weeks")
                             .font(.caption)
                             .foregroundColor(.evolveMuted)
-                        Text("\(workoutPlan.totalWeeks)")
+                        Text("\(totalWeeks)")
                             .font(.title2)
                             .fontWeight(.semibold)
                             .foregroundColor(.evolvePrimary)
@@ -212,7 +228,9 @@ struct TrainingContentView: View {
     
     var body: some View {
         let currentWeek = TrainingViewModel.calculateCurrentWeek(from: workoutPlan)
-        if currentWeek > workoutPlan.totalWeeks {
+        let totalWeeks = workoutManager.completeWorkoutPlan?.weeklySchedules.count ?? 0
+        
+        if currentWeek > totalWeeks && totalWeeks > 0 {
             VStack {
                 Spacer()
                 Text("Plan Complete!")
@@ -223,7 +241,7 @@ struct TrainingContentView: View {
             }
             .background(Color.evolveBackground.ignoresSafeArea())
             .onAppear {
-                print("[DEBUG] Showing Plan Complete view (currentWeek=\(currentWeek), totalWeeks=\(workoutPlan.totalWeeks))")
+                print("[DEBUG] Showing Plan Complete view (currentWeek=\(currentWeek), totalWeeks=\(totalWeeks))")
             }
         } else {
             ScrollView {
@@ -256,7 +274,7 @@ struct TrainingContentView: View {
                 }
             }
             .onAppear {
-                print("[DEBUG] TrainingContentView: currentWeek=\(currentWeek), totalWeeks=\(workoutPlan.totalWeeks)")
+                print("[DEBUG] TrainingContentView: currentWeek=\(currentWeek), totalWeeks=\(totalWeeks)")
             }
         }
     }
@@ -268,62 +286,19 @@ struct TrainingContentView: View {
     let userManager = UserManager()
     let workoutManager = WorkoutManager()
     
-    // Set up mock progress data for week 1 (should match the first week)
-
-    workoutManager.workoutPlanResponse = WorkoutPlanResponse(
-        workoutPlan: mockWorkoutPlan,
-    )
-    
     return WorkoutView(workoutPlan: mockWorkoutPlan)
         .environmentObject(userManager)
         .environmentObject(workoutManager)
 }
 
-#Preview("Week 1 Progress") {
+#Preview("Complete Workout Plan") {
     let userManager = UserManager()
     let workoutManager = WorkoutManager()
     
-
-    workoutManager.workoutPlanResponse = WorkoutPlanResponse(
-        workoutPlan: mockWorkoutPlanWeek1WithProgress,
-    )
+    // Set the complete workout plan
+    workoutManager.completeWorkoutPlan = mockCompleteWorkoutPlan
     
-    return WorkoutView(workoutPlan: mockWorkoutPlanWeek1WithProgress)
-        .environmentObject(userManager)
-        .environmentObject(workoutManager)
-}
-
-#Preview("Week 3 Scenario") {
-    let userManager = UserManager()
-    let workoutManager = WorkoutManager()
-
-    workoutManager.workoutPlanResponse = WorkoutPlanResponse(
-        workoutPlan: mockWorkoutPlanWeek3
-    )
-    
-    return WorkoutView(workoutPlan: mockWorkoutPlanWeek3)
-        .environmentObject(userManager)
-        .environmentObject(workoutManager)
-}
-
-#Preview("Week 3 Started 1 Week Ago") {
-    let userManager = UserManager()
-    let workoutManager = WorkoutManager()
-    workoutManager.workoutPlanResponse = WorkoutPlanResponse(
-        workoutPlan: mockWorkoutPlanWeek3_OneWeekAgo
-    )
-    return WorkoutView(workoutPlan: mockWorkoutPlanWeek3_OneWeekAgo)
-        .environmentObject(userManager)
-        .environmentObject(workoutManager)
-}
-
-#Preview("Plan completed") {
-    let userManager = UserManager()
-    let workoutManager = WorkoutManager()
-    workoutManager.workoutPlanResponse = WorkoutPlanResponse(
-        workoutPlan: mockWorkoutPlanWeek3_FiveWeeksAgo
-    )
-    return WorkoutView(workoutPlan: mockWorkoutPlanWeek3_FiveWeeksAgo)
+    return WorkoutView(workoutPlan: mockWorkoutPlan)
         .environmentObject(userManager)
         .environmentObject(workoutManager)
 }

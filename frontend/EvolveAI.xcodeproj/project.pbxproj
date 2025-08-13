@@ -6,6 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		257C4C3B2E490D8800775032 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 257C4C3A2E490D8800775032 /* Supabase */; };
+		257C4C3D2E490D8E00775032 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 257C4C3C2E490D8E00775032 /* Supabase */; };
+		257C4C3F2E490E1F00775032 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 257C4C3E2E490E1F00775032 /* Supabase */; };
+		25D4613E96B98DDC4CC9B5B7 /* Pods_EvolveAI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7FA1CB1BF286B5C827A4695B /* Pods_EvolveAI.framework */; };
+		2BD12447979B0F4D4B5BDEAB /* Pods_EvolveAI_EvolveAIUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C01EBA03EF1AC5B8702A051E /* Pods_EvolveAI_EvolveAIUITests.framework */; };
+		A05033E54652C2326741AC81 /* Pods_EvolveAITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 072F73E738C20840BE427CEF /* Pods_EvolveAITests.framework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		25C883F22E25640D003677B2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -24,16 +33,25 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		072F73E738C20840BE427CEF /* Pods_EvolveAITests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_EvolveAITests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		16D0BDB427048A4B3154727E /* Pods-EvolveAI.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EvolveAI.debug.xcconfig"; path = "Target Support Files/Pods-EvolveAI/Pods-EvolveAI.debug.xcconfig"; sourceTree = "<group>"; };
 		25C883E42E25640C003677B2 /* EvolveAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EvolveAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		25C883F12E25640D003677B2 /* EvolveAITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EvolveAITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		25C883FB2E25640D003677B2 /* EvolveAIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EvolveAIUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		4399C2849265DE6106121585 /* Pods-EvolveAI-EvolveAIUITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EvolveAI-EvolveAIUITests.debug.xcconfig"; path = "Target Support Files/Pods-EvolveAI-EvolveAIUITests/Pods-EvolveAI-EvolveAIUITests.debug.xcconfig"; sourceTree = "<group>"; };
+		7FA1CB1BF286B5C827A4695B /* Pods_EvolveAI.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_EvolveAI.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		96F1ADBDD526F6110B4C635D /* Pods-EvolveAITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EvolveAITests.release.xcconfig"; path = "Target Support Files/Pods-EvolveAITests/Pods-EvolveAITests.release.xcconfig"; sourceTree = "<group>"; };
+		AF6199D9A5FE5746FF590C4F /* Pods-EvolveAI-EvolveAIUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EvolveAI-EvolveAIUITests.release.xcconfig"; path = "Target Support Files/Pods-EvolveAI-EvolveAIUITests/Pods-EvolveAI-EvolveAIUITests.release.xcconfig"; sourceTree = "<group>"; };
+		C01EBA03EF1AC5B8702A051E /* Pods_EvolveAI_EvolveAIUITests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_EvolveAI_EvolveAIUITests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		D8D940EAF718A655DF98D7F5 /* Pods-EvolveAITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EvolveAITests.debug.xcconfig"; path = "Target Support Files/Pods-EvolveAITests/Pods-EvolveAITests.debug.xcconfig"; sourceTree = "<group>"; };
+		EFD557426732A6D7ABD31D03 /* Pods-EvolveAI.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EvolveAI.release.xcconfig"; path = "Target Support Files/Pods-EvolveAI/Pods-EvolveAI.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		25C8846E2E2564DC003677B2 /* Exceptions for "EvolveAI" folder in "EvolveAI" target */ = {
+		256C5E932E3A6BDC00D7AB60 /* Exceptions for "EvolveAI" folder in "EvolveAI" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Application/Info.plist,
+				Info.plist,
 			);
 			target = 25C883E32E25640C003677B2 /* EvolveAI */;
 		};
@@ -43,7 +61,7 @@
 		25C883E62E25640C003677B2 /* EvolveAI */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				25C8846E2E2564DC003677B2 /* Exceptions for "EvolveAI" folder in "EvolveAI" target */,
+				256C5E932E3A6BDC00D7AB60 /* Exceptions for "EvolveAI" folder in "EvolveAI" target */,
 			);
 			path = EvolveAI;
 			sourceTree = "<group>";
@@ -65,6 +83,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				257C4C3B2E490D8800775032 /* Supabase in Frameworks */,
+				25D4613E96B98DDC4CC9B5B7 /* Pods_EvolveAI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -72,6 +92,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				257C4C3D2E490D8E00775032 /* Supabase in Frameworks */,
+				A05033E54652C2326741AC81 /* Pods_EvolveAITests.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -79,6 +101,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				257C4C3F2E490E1F00775032 /* Supabase in Frameworks */,
+				2BD12447979B0F4D4B5BDEAB /* Pods_EvolveAI_EvolveAIUITests.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -92,6 +116,8 @@
 				25C883F42E25640D003677B2 /* EvolveAITests */,
 				25C883FE2E25640D003677B2 /* EvolveAIUITests */,
 				25C883E52E25640C003677B2 /* Products */,
+				3F2F21814C64B069331D5861 /* Pods */,
+				987ADD7185201FA0E5132BA6 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -105,6 +131,29 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		3F2F21814C64B069331D5861 /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				16D0BDB427048A4B3154727E /* Pods-EvolveAI.debug.xcconfig */,
+				EFD557426732A6D7ABD31D03 /* Pods-EvolveAI.release.xcconfig */,
+				4399C2849265DE6106121585 /* Pods-EvolveAI-EvolveAIUITests.debug.xcconfig */,
+				AF6199D9A5FE5746FF590C4F /* Pods-EvolveAI-EvolveAIUITests.release.xcconfig */,
+				D8D940EAF718A655DF98D7F5 /* Pods-EvolveAITests.debug.xcconfig */,
+				96F1ADBDD526F6110B4C635D /* Pods-EvolveAITests.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
+		987ADD7185201FA0E5132BA6 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				7FA1CB1BF286B5C827A4695B /* Pods_EvolveAI.framework */,
+				C01EBA03EF1AC5B8702A051E /* Pods_EvolveAI_EvolveAIUITests.framework */,
+				072F73E738C20840BE427CEF /* Pods_EvolveAITests.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -112,9 +161,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 25C884052E25640D003677B2 /* Build configuration list for PBXNativeTarget "EvolveAI" */;
 			buildPhases = (
+				E4147EAB5E8963DEC2FA1A89 /* [CP] Check Pods Manifest.lock */,
 				25C883E02E25640C003677B2 /* Sources */,
 				25C883E12E25640C003677B2 /* Frameworks */,
 				25C883E22E25640C003677B2 /* Resources */,
+				7A4973FEF5AC40A4F767F060 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -124,8 +175,6 @@
 				25C883E62E25640C003677B2 /* EvolveAI */,
 			);
 			name = EvolveAI;
-			packageProductDependencies = (
-			);
 			productName = EvolveAI;
 			productReference = 25C883E42E25640C003677B2 /* EvolveAI.app */;
 			productType = "com.apple.product-type.application";
@@ -134,6 +183,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 25C884082E25640D003677B2 /* Build configuration list for PBXNativeTarget "EvolveAITests" */;
 			buildPhases = (
+				560475FD235A76B7A1602309 /* [CP] Check Pods Manifest.lock */,
 				25C883ED2E25640D003677B2 /* Sources */,
 				25C883EE2E25640D003677B2 /* Frameworks */,
 				25C883EF2E25640D003677B2 /* Resources */,
@@ -147,8 +197,6 @@
 				25C883F42E25640D003677B2 /* EvolveAITests */,
 			);
 			name = EvolveAITests;
-			packageProductDependencies = (
-			);
 			productName = EvolveAITests;
 			productReference = 25C883F12E25640D003677B2 /* EvolveAITests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
@@ -157,9 +205,11 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 25C8840B2E25640D003677B2 /* Build configuration list for PBXNativeTarget "EvolveAIUITests" */;
 			buildPhases = (
+				12D44B1314F58681A6C012B3 /* [CP] Check Pods Manifest.lock */,
 				25C883F72E25640D003677B2 /* Sources */,
 				25C883F82E25640D003677B2 /* Frameworks */,
 				25C883F92E25640D003677B2 /* Resources */,
+				90DE66FA59059C3A3E2E4052 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -170,8 +220,6 @@
 				25C883FE2E25640D003677B2 /* EvolveAIUITests */,
 			);
 			name = EvolveAIUITests;
-			packageProductDependencies = (
-			);
 			productName = EvolveAIUITests;
 			productReference = 25C883FB2E25640D003677B2 /* EvolveAIUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
@@ -208,6 +256,9 @@
 			);
 			mainGroup = 25C883DB2E25640C003677B2;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				256C5E942E3A93E700D7AB60 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 25C883E52E25640C003677B2 /* Products */;
 			projectDirPath = "";
@@ -243,6 +294,117 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		12D44B1314F58681A6C012B3 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-EvolveAI-EvolveAIUITests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		560475FD235A76B7A1602309 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-EvolveAITests-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		7A4973FEF5AC40A4F767F060 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-EvolveAI/Pods-EvolveAI-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-EvolveAI/Pods-EvolveAI-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-EvolveAI/Pods-EvolveAI-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		90DE66FA59059C3A3E2E4052 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-EvolveAI-EvolveAIUITests/Pods-EvolveAI-EvolveAIUITests-frameworks-${CONFIGURATION}-input-files.xcfilelist",
+			);
+			inputPaths = (
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputFileListPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-EvolveAI-EvolveAIUITests/Pods-EvolveAI-EvolveAIUITests-frameworks-${CONFIGURATION}-output-files.xcfilelist",
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-EvolveAI-EvolveAIUITests/Pods-EvolveAI-EvolveAIUITests-frameworks.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+		E4147EAB5E8963DEC2FA1A89 /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-EvolveAI-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		25C883E02E25640C003677B2 /* Sources */ = {
@@ -320,7 +482,7 @@
 				DEVELOPMENT_TEAM = 6WYBUHQGZR;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -335,6 +497,9 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = EvolveAI/Info.plist;
+				INFOPLIST_OTHER_PREPROCESSOR_FLAGS = EvolveAI/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
@@ -384,7 +549,7 @@
 				DEVELOPMENT_TEAM = 6WYBUHQGZR;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -393,6 +558,9 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = EvolveAI/Info.plist;
+				INFOPLIST_OTHER_PREPROCESSOR_FLAGS = EvolveAI/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
@@ -405,6 +573,7 @@
 		};
 		25C884062E25640D003677B2 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 16D0BDB427048A4B3154727E /* Pods-EvolveAI.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -412,12 +581,15 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6WYBUHQGZR;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = EvolveAI/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_OTHER_PREPROCESSOR_FLAGS = EvolveAI/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -433,6 +605,7 @@
 		};
 		25C884072E25640D003677B2 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = EFD557426732A6D7ABD31D03 /* Pods-EvolveAI.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -440,12 +613,15 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 6WYBUHQGZR;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = EvolveAI/Info.plist;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_OTHER_PREPROCESSOR_FLAGS = EvolveAI/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -461,6 +637,7 @@
 		};
 		25C884092E25640D003677B2 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = D8D940EAF718A655DF98D7F5 /* Pods-EvolveAITests.debug.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -480,6 +657,7 @@
 		};
 		25C8840A2E25640D003677B2 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 96F1ADBDD526F6110B4C635D /* Pods-EvolveAITests.release.xcconfig */;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
@@ -499,6 +677,7 @@
 		};
 		25C8840C2E25640D003677B2 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 4399C2849265DE6106121585 /* Pods-EvolveAI-EvolveAIUITests.debug.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -516,6 +695,7 @@
 		};
 		25C8840D2E25640D003677B2 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = AF6199D9A5FE5746FF590C4F /* Pods-EvolveAI-EvolveAIUITests.release.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -571,6 +751,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		256C5E942E3A93E700D7AB60 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase-community/supabase-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.5.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		257C4C3A2E490D8800775032 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 256C5E942E3A93E700D7AB60 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+		257C4C3C2E490D8E00775032 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 256C5E942E3A93E700D7AB60 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+		257C4C3E2E490E1F00775032 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 256C5E942E3A93E700D7AB60 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 25C883DC2E25640C003677B2 /* Project object */;
 }

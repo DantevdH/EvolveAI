@@ -31,55 +31,55 @@ struct NutritionView: View {
     }
 }
 
-struct NutritionTabBar: View {
-    @Binding var selectedTab: Int
+// struct NutritionTabBar: View {
+//     @Binding var selectedTab: Int
     
-    private let tabs = [
-        ("Today", "calendar.badge.clock"),
-        ("Meal Plan", "list.bullet.clipboard"),
-        ("Food Log", "plus.circle.fill")
-    ]
+//     private let tabs = [
+//         ("Today", "calendar.badge.clock"),
+//         ("Meal Plan", "list.bullet.clipboard"),
+//         ("Food Log", "plus.circle.fill")
+//     ]
     
-    var body: some View {
-        HStack(spacing: 0) {
-            ForEach(Array(tabs.enumerated()), id: \.offset) { index, tab in
-                Button(action: {
-                    selectedTab = index
-                }) {
-                    VStack(spacing: 4) {
-                        Image(systemName: tab.1)
-                            .font(.title3)
+//     var body: some View {
+//         HStack(spacing: 0) {
+//             ForEach(Array(tabs.enumerated()), id: \.offset) { index, tab in
+//                 Button(action: {
+//                     selectedTab = index
+//                 }) {
+//                     VStack(spacing: 4) {
+//                         Image(systemName: tab.1)
+//                             .font(.title3)
                         
-                        Text(tab.0)
-                            .font(.caption)
-                    }
-                    .foregroundColor(selectedTab == index ? .evolvePrimary : .secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                }
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.evolveCard)
-        )
-        .padding(.horizontal)
-    }
-}
+//                         Text(tab.0)
+//                             .font(.caption)
+//                     }
+//                     .foregroundColor(selectedTab == index ? .evolvePrimary : .secondary)
+//                     .frame(maxWidth: .infinity)
+//                     .padding(.vertical, 12)
+//                 }
+//             }
+//         }
+//         .background(
+//             RoundedRectangle(cornerRadius: 12)
+//                 .fill(Color.evolveCard)
+//         )
+//         .padding(.horizontal)
+//     }
+// }
 
-struct DailyNutritionView: View {
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                // Calorie Overview
-                CalorieOverviewCard()
+// struct DailyNutritionView: View {
+//     var body: some View {
+//         ScrollView {
+//             VStack(spacing: 16) {
+//                 // Calorie Overview
+//                 CalorieOverviewCard()
                 
-                // Macronutrient Breakdown
-                MacroBreakdownCard()
+//                 // Macronutrient Breakdown
+//                 MacroBreakdownCard()
                 
-                // Meal Summary
-                MealSummarySection()
-            }
-        }
-    }
-}
+//                 // Meal Summary
+//                 MealSummarySection()
+//             }
+//         }
+//     }
+// }

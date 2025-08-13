@@ -8,25 +8,28 @@
 import SwiftUI
 
 // 1. The Blueprint for a Coach
-// The Coach struct now just needs to be Codable and Identifiable
+// The Coach struct now works with Supabase database
 struct Coach: Codable, Identifiable, Hashable {
-    let id = UUID() // For SwiftUI lists
+    let id: Int
     let name: String
     let goal: String
     let iconName: String
     let tagline: String
     let primaryColorHex: String
+    let createdAt: Date?
+    let updatedAt: Date?
 
     var primaryColor: Color {
         Color(hex: primaryColorHex)
     }
 
     // This tells Swift how to map the JSON keys to the struct properties.
-    // It's good practice, even if the names are the same.
     enum CodingKeys: String, CodingKey {
-        case name, goal, tagline
-        case iconName
-        case primaryColorHex
+        case id, name, goal, tagline
+        case iconName = "icon_name"
+        case primaryColorHex = "primary_color_hex"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
     }
 }
 

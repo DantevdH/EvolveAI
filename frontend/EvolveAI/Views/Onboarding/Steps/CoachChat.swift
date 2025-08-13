@@ -78,8 +78,10 @@ struct FinalChatStep: View {
                     HStack(spacing: 12) {
                         Button("No, I'm ready!") { viewModel.chatPhase = .finished }
                              .buttonStyle(PrimaryButtonStyle())
+
                         Button("Yes, there's more") { viewModel.chatPhase = .userTyping }
                              .buttonStyle(PrimaryButtonStyle())
+
                     }
                     .padding()
                     
@@ -90,6 +92,7 @@ struct FinalChatStep: View {
                             .padding(12)
                             .background(Color.white.opacity(0.1))
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
                         
                         Button(action: viewModel.sendMessage) {
                             Image(systemName: "arrow.up.circle.fill")
@@ -97,6 +100,7 @@ struct FinalChatStep: View {
                                 // .foregroundColor(.evolvePrimary)
                         }
                         .disabled(viewModel.currentMessage.isEmpty)
+
                     }
                     .padding()
                     
@@ -104,6 +108,7 @@ struct FinalChatStep: View {
                     Button("Create My Schedule", action: onReadyToGenerate)
                          .buttonStyle(PrimaryButtonStyle())
                         .padding()
+
                 }
             }
             .animation(.easeInOut, value: viewModel.chatPhase)

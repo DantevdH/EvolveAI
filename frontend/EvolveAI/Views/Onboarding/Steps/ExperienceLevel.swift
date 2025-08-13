@@ -77,6 +77,7 @@ struct ExperienceCard: View {
                                 .padding()
                                 .presentationCompactAdaptation(.popover)
                         }
+
                     }
                     
                     Text(description)
@@ -89,6 +90,7 @@ struct ExperienceCard: View {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .foregroundColor(isSelected ? .black : .evolvePrimary) // Original color
                     .font(.title2)
+                    .accessibilityHidden(true)
             }
             .padding()
             .background(
@@ -101,5 +103,6 @@ struct ExperienceCard: View {
             )
         }
         .buttonStyle(.plain)
+
     }
 }

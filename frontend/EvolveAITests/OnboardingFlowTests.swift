@@ -17,10 +17,6 @@ class TestNetworkServiceOnboarding: NetworkServiceProtocol {
         self.result = .success(mockCoaches)
     }
 
-    func getAllCoaches(completion: @escaping (Result<[Coach], Error>) -> Void) {
-        completion(result)
-    }
-    
     // MARK: - Required Protocol Methods
     
     func getAuthToken() -> String? {
@@ -38,13 +34,88 @@ class TestNetworkServiceOnboarding: NetworkServiceProtocol {
         return currentScenario
     }
     
+    func setScenarioIfNeeded(completion: @escaping (Bool) -> Void) {
+        completion(true)
+    }
+    
+    func generateAndSaveWorkoutPlan(for profile: UserProfile) async throws -> WorkoutPlan {
+        // Simulate network delay
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        return mockWorkoutPlan
+    }
+    
+    func fetchUserProfile(for userId: UUID) async throws -> UserProfile {
+        // Simulate network delay
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        return mockUserProfile
+    }
+    
+    func generateWorkoutPlanFromAPI(profile: UserProfile) async throws -> GeneratedWorkoutPlan {
+        // Simulate network delay
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        
+        // Return a mock generated workout plan
+        return GeneratedWorkoutPlan(
+            title: "Mock Generated Plan",
+            summary: "A mock workout plan for testing",
+            weeklySchedules: [
+                GeneratedWeeklySchedule(
+                    weekNumber: 1,
+                    dailyWorkouts: [
+                        GeneratedDailyWorkout(
+                            dayOfWeek: "Monday",
+                            isRestDay: false,
+                            exercises: [
+                                GeneratedWorkoutExercise(
+                                    name: "Push-ups",
+                                    sets: 3,
+                                    reps: "10-15"
+                                )
+                            ]
+                        )
+                    ]
+                )
+            ]
+        )
+    }
+    
+    func saveWorkoutPlanToDatabase(generatedPlan: GeneratedWorkoutPlan, userProfile: UserProfile) async throws -> WorkoutPlan {
+        // Simulate network delay
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        return mockWorkoutPlan
+    }
+    
+    func fetchWorkoutPlans(userProfileId: Int) async throws -> [WorkoutPlan] {
+        // Simulate network delay
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        return [mockWorkoutPlan]
+    }
+    
+    func fetchWorkoutPlansByUserIdJoin(userId: UUID) async throws -> [WorkoutPlan] {
+        // Simulate network delay
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        return [mockWorkoutPlan]
+    }
+    
+    func fetchCompleteWorkoutPlan(for workoutPlan: WorkoutPlan) async throws -> CompleteWorkoutPlan {
+        // Simulate network delay
+        try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+        return mockCompleteWorkoutPlan
+    }
+    
+    // MARK: - Helper Methods for Onboarding Tests
+    
     func setScenario(_ scenario: String, completion: @escaping (Result<Void, Error>) -> Void) {
         self.currentScenario = scenario
         DispatchQueue.main.async {
             completion(.success(()))
         }
     }
-
+    
+    func getAllCoaches(completion: @escaping (Result<[Coach], Error>) -> Void) {
+        completion(result)
+    }
+    
     func login(credentials: [String: String], completion: @escaping (Result<String, Error>) -> Void) {
         DispatchQueue.main.async {
             completion(.success("mock-token"))
@@ -80,10 +151,6 @@ class TestNetworkServiceOnboarding: NetworkServiceProtocol {
             completion(.success(()))
         }
     }
-
-    func setScenarioIfNeeded(completion: @escaping (Bool) -> Void) {
-        completion(true)
-    }
 }
 
 class OnboardingFlowTests: XCTestCase {
@@ -98,9 +165,9 @@ class OnboardingFlowTests: XCTestCase {
         // We initialize our mock network service and inject it into the ViewModel.
         mockNetworkService = TestNetworkServiceOnboarding()
         
-        // Create mock managers for testing
-        let mockUserManager = UserManager(networkService: mockNetworkService)
-        let mockWorkoutManager = WorkoutManager(networkService: mockNetworkService)
+        // Create mock managers for testing - use default constructors since they don't support injection
+        let mockUserManager = UserManager()
+        let mockWorkoutManager = WorkoutManager()
         
         viewModel = OnboardingViewModel(
             networkService: mockNetworkService,

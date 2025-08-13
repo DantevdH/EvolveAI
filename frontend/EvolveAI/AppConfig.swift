@@ -7,14 +7,14 @@ enum AppEnvironment {
     // MARK: - API Configuration
     static let apiBaseURL: String = {
         #if DEBUG
-        return "http://localhost:8000/api"  // Local Django backend
+        return "http://localhost:8000/api"  // Local FastAPI backend
         #else
         return "https://api.evolveai.com/api"  // Production
         #endif
     }()
     
     // MARK: - Network Service
-    static let networkService: NetworkServiceProtocol = NetworkService(baseURL: apiBaseURL)
+    static let networkService: NetworkServiceProtocol = NetworkService()
     
     // MARK: - Development Scenario Management
     #if DEBUG

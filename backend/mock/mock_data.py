@@ -1,7 +1,6 @@
 # Centralized mock data for scenario-based development/testing
 
 MOCK_USER_PROFILE = {
-    'username': 'Dante',
     'id': 1,
     'primaryGoal': 'Increase Strength',
     'primaryGoalDescription': 'Focus on increasing raw power and lifting heavier.',
@@ -17,7 +16,6 @@ MOCK_USER_PROFILE = {
     'gender': 'Male',
     'hasLimitations': False,
     'limitationsDescription': '',
-    'trainingSchedule': 'Monday, Wednesday, Friday',
     'finalChatNotes': 'User is motivated and ready to start. Wants to focus on compound lifts.'
 }
 

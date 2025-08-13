@@ -12,69 +12,68 @@ struct Exercise: Codable, Identifiable, Equatable {
     }
 }
 
-struct WorkoutExercise: Codable, Identifiable, Equatable {
-    let id: Int
-    let exercise: Exercise
-    let sets: Int
-    let reps: String
-    let isCompleted: Bool
-    let progressId: Int?
-    
-    enum CodingKeys: String, CodingKey {
-        case id, exercise, sets, reps
-        case isCompleted = "is_completed"
-        case progressId = "progress_id"
-    }
-}
-
-struct DailyWorkout: Codable, Identifiable, Equatable {
-    let id: Int
-    let day_of_week: String
-    let exercises: [WorkoutExercise]
-    let isCompleted: Bool
-    let weekNumber: Int
-    
-    var isRestDay: Bool {
-        return exercises.isEmpty
-    }
-    
-    enum CodingKeys: String, CodingKey {
-        case id, day_of_week
-        case exercises = "workout_exercises"
-        case isCompleted = "is_completed"
-        case weekNumber = "week_number"
-    }
-}
-
-struct WeeklySchedule: Codable, Identifiable, Equatable {
-    let id: Int
-    let week_number: Int
-    let daily_workouts: [DailyWorkout]
-}
-
-struct WorkoutPlan: Codable, Identifiable, Equatable {
-    let id: Int
+// MARK: - Workout Plan Models
+struct GeneratedWorkoutPlan {
     let title: String
     let summary: String
-    let totalWeeks: Int
-    let createdAt: String
-    let updatedAt: String
-    let weekly_schedules: [WeeklySchedule]
-    
-    enum CodingKeys: String, CodingKey {
-        case id, title, summary
-        case totalWeeks = "total_weeks"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-        case weekly_schedules
-    }
-    
-    static func == (lhs: WorkoutPlan, rhs: WorkoutPlan) -> Bool {
-        lhs.id == rhs.id
-    }
+    let weeklySchedules: [GeneratedWeeklySchedule]
 }
 
-// MARK: - Progress Tracking Models
+struct GeneratedWeeklySchedule {
+    let weekNumber: Int
+    let dailyWorkouts: [GeneratedDailyWorkout]
+}
+
+struct GeneratedDailyWorkout {
+    let dayOfWeek: String
+    let isRestDay: Bool
+    let exercises: [GeneratedWorkoutExercise]
+}
+
+struct GeneratedWorkoutExercise {
+    let name: String
+    let sets: Int
+    let reps: String
+}
+
+// MARK: - Database Insert Models
+struct WorkoutPlanInsert: Encodable {
+    let user_profile_id: Int
+    let title: String
+    let summary: String
+    // Removed created_at and updated_at - Supabase handles these automatically
+    // with default now() and the update trigger
+}
+
+struct WeeklyScheduleInsert: Encodable {
+    let workout_plan_id: Int
+    let week_number: Int
+    // Removed created_at and updated_at - Supabase handles these automatically
+    // with default now() and the update trigger
+}
+
+struct DailyWorkoutInsert: Encodable {
+    let weekly_schedule_id: Int
+    let day_of_week: String
+    // Removed created_at and updated_at - Supabase handles these automatically
+    // with default now() and the update trigger
+}
+
+struct ExerciseInsert: Encodable {
+    let name: String
+    let description: String
+    let video_url: String?
+}
+
+struct WorkoutExerciseInsert: Encodable {
+    let daily_workout_id: Int
+    let exercise_id: Int
+    let sets: Int
+    let reps: String
+    let weight: Double?
+    // Removed created_at and updated_at - Supabase handles these automatically
+    // with default now() and the update trigger
+}
 
 struct ExerciseProgressUpdate: Codable {
     let exerciseId: Int

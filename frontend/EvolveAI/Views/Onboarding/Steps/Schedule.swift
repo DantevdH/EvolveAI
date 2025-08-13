@@ -75,9 +75,11 @@ struct ScheduleSelector: View {
                     value = max(range.lowerBound, value - step)
                 }) {
                     Image(systemName: "minus")
+                        .accessibilityHidden(true)
                 }
                 .buttonStyle(StepperButtonStyle())
                 .disabled(value <= range.lowerBound)
+
                 
                 // Digital Display
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -103,9 +105,11 @@ struct ScheduleSelector: View {
                     value = min(range.upperBound, value + step)
                 }) {
                     Image(systemName: "plus")
+                        .accessibilityHidden(true)
                 }
                 .buttonStyle(StepperButtonStyle())
                 .disabled(value >= range.upperBound)
+
             }
         }
         .padding()

@@ -9,7 +9,7 @@ import SwiftUI
 
 class OnboardingViewModel: ObservableObject {
     @Published var currentStep = 0
-    @Published var userProfile = UserProfile()
+    @Published var userProfile = UserProfile(userId: UUID()) // Will be updated with real userId
     @Published var isGenerating = false
     @Published var isGeneratingPlan = false
     @Published var availableCoaches: [Coach] = []
@@ -26,6 +26,20 @@ class OnboardingViewModel: ObservableObject {
         self.networkService = networkService
         self.userManager = userManager
         self.workoutManager = workoutManager
+        
+        // Initialize userProfile with the current user's ID if available
+        if let authToken = userManager.authToken {
+            Task {
+                do {
+                    let session = try await supabase.auth.session
+                    await MainActor.run {
+                        self.userProfile = UserProfile(userId: session.user.id)
+                    }
+                } catch {
+                    print("Failed to get user ID for onboarding: \(error)")
+                }
+            }
+        }
     }
 
     func nextStep() {
@@ -64,11 +78,19 @@ class OnboardingViewModel: ObservableObject {
         withAnimation {
             self.isGenerating = true
         }
-        
-        // Step 1: Show plan generation view (don't save profile yet)
-        DispatchQueue.main.async {
-            self.isGenerating = false
-            self.isGeneratingPlan = true
+
+        // Save user profile and let AppView handle plan generation
+        userManager.completeOnboarding(with: userProfile) { [weak self] success in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.isGenerating = false
+                if success {
+                    onSuccess()
+                } else {
+                    self.errorMessage = "Failed to save user profile"
+                    self.showErrorAlert = true
+                }
+            }
         }
     }
     
@@ -92,12 +114,11 @@ class OnboardingViewModel: ObservableObject {
             }
             
             // Step 2: Generate workout plan
-            self.workoutManager.createAndProvidePlan(for: self.userProfile, authToken: authToken) { [weak self] planSuccess in
+            self.workoutManager.createAndProvidePlan(for: self.userProfile) { [weak self] planSuccess in
                 DispatchQueue.main.async {
                     self?.isGeneratingPlan = false
                     if planSuccess {
-                        // Mark onboarding as complete after plan is generated
-                        self?.userManager.markOnboardingComplete()
+                        // Onboarding is already complete when userProfile is saved
                         onSuccess()
                     } else {
                         self?.errorMessage = "Failed to generate workout plan"

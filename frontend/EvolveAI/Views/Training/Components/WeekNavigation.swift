@@ -66,6 +66,6 @@ struct WeekNavigationView: View {
     }
     
     private var canGoToNextWeek: Bool {
-        currentWeekSelected < (workoutPlan.weekly_schedules.count)
+        currentWeekSelected < viewModel.totalWeeks
     }
 }

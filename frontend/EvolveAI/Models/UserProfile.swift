@@ -38,37 +38,102 @@ enum ExperienceLevel: String, CaseIterable, Identifiable {
     }
 }
 
-// This struct will temporarily hold all the user's answers
-// during the onboarding process.
+// Database model that matches the Supabase schema exactly
 struct UserProfile: Codable {
-
+    // User input fields (mutable for onboarding)
     var username: String = ""
-    // Properties for GoalsStep
     var primaryGoal: String = ""
-
     var primaryGoalDescription: String = ""
-    
-    // Properties for ExperienceStep
     var experienceLevel: String = ""
-    
-    // Properties for ScheduleStep
     var daysPerWeek: Int = 3
     var minutesPerSession: Int = 60
-    
-    // Property for EquipmentStep (changed from [String] to String for single selection)
     var equipment: String = ""
-    
-    // Properties for PersonalInfoStep
     var age: Int = 30
-
     var weight: Double = 70.0
     var weightUnit: String = "kg"
-    var height: Double = 70.0
+    var height: Double = 170.0
     var heightUnit: String = "cm"
     var gender: String = ""
-    
     var hasLimitations: Bool = false
     var limitationsDescription: String = ""
+    var finalChatNotes: String = ""
     
-    var finalChatNotes = ""
+    // Database fields (read-only)
+    let id: Int?
+    var userId: UUID?
+    let coachId: Int?
+    let createdAt: Date?
+    let updatedAt: Date?
+    
+    // Coding keys to map between snake_case (database) and camelCase (Swift)
+    enum CodingKeys: String, CodingKey {
+        case id
+        case userId = "user_id"
+        case username
+        case primaryGoal = "primary_goal"
+        case primaryGoalDescription = "primary_goal_description"
+        case coachId = "coach_id"
+        case experienceLevel = "experience_level"
+        case daysPerWeek = "days_per_week"
+        case minutesPerSession = "minutes_per_session"
+        case equipment
+        case age
+        case weight
+        case weightUnit = "weight_unit"
+        case height
+        case heightUnit = "height_unit"
+        case gender
+        case hasLimitations = "has_limitations"
+        case limitationsDescription = "limitations_description"
+        case finalChatNotes = "final_chat_notes"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+    
+    // Convenience initializer for creating a new profile during onboarding
+    init(userId: UUID) {
+        self.userId = userId
+        self.id = nil
+        self.coachId = nil
+        self.createdAt = nil
+        self.updatedAt = nil
+        // All other fields use their default values
+    }
+    
+    // Default initializer for creating an empty profile (used as fallback)
+    init() {
+        self.userId = nil
+        self.id = nil
+        self.coachId = nil
+        self.createdAt = nil
+        self.updatedAt = nil
+        // All other fields use their default values
+    }
+    
+    // Initializer for creating a profile with all values
+    init(userId: UUID, username: String, primaryGoal: String, primaryGoalDescription: String, coachId: Int? = nil, experienceLevel: String, daysPerWeek: Int, minutesPerSession: Int, equipment: String, age: Int, weight: Double, weightUnit: String, height: Double, heightUnit: String, gender: String, hasLimitations: Bool, limitationsDescription: String, finalChatNotes: String) {
+        self.userId = userId
+        self.username = username
+        self.primaryGoal = primaryGoal
+        self.primaryGoalDescription = primaryGoalDescription
+        self.coachId = coachId
+        self.experienceLevel = experienceLevel
+        self.daysPerWeek = daysPerWeek
+        self.minutesPerSession = minutesPerSession
+        self.equipment = equipment
+        self.age = age
+        self.weight = weight
+        self.weightUnit = weightUnit
+        self.height = height
+        self.heightUnit = heightUnit
+        self.gender = gender
+        self.hasLimitations = hasLimitations
+        self.limitationsDescription = limitationsDescription
+        self.finalChatNotes = finalChatNotes
+        self.id = nil
+        self.createdAt = nil
+        self.updatedAt = nil
+    }
 }
+
+

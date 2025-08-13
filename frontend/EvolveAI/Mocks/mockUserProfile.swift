@@ -1,7 +1,11 @@
+import SwiftUI
+
 let mockUserProfile = UserProfile(
+    userId: UUID(),
     username: "Dante",
     primaryGoal: "Increase Strength",
     primaryGoalDescription: "Focus on increasing raw power and lifting heavier.",
+    coachId: 3, // Coach Titan
     experienceLevel: "Intermediate",
     daysPerWeek: 3,
     minutesPerSession: 60,

@@ -36,6 +36,7 @@ struct WelcomeStep: View {
                         .fontWeight(.bold)
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
+        
                         .opacity(animate ? 1 : 0)
                         .offset(y: animate ? 0 : 10)
                         .animation(.easeOut(duration: 0.7).delay(0.2), value: animate)
@@ -60,7 +61,8 @@ struct WelcomeStep: View {
                             .foregroundColor(.white)
                             .font(.title2)
                             .padding(.vertical, 10)
-                        .onChange(of: username) { newValue in
+
+                        .onChange(of: username) { _, newValue in
                             viewModel.userProfile.username = newValue
                         }
                     }
@@ -92,11 +94,13 @@ struct WelcomeStep: View {
                 }) {
                     HStack {
                         Image(systemName: "arrow.right.circle.fill")
+                            .accessibilityHidden(true)
                         Text("Start")
                     }
                 }
                 .buttonStyle(NextButtonStyle())
                 .disabled(username.trimmingCharacters(in: .whitespaces).count < 5)
+
                 .opacity(animate ? 1 : 0)
                 .offset(y: animate ? 0 : 10)
                 .animation(.easeOut(duration: 0.7).delay(0.7), value: animate)
