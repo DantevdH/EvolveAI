@@ -36,8 +36,19 @@ struct AppView: View {
                     }
                 }
             )
-        case .error(let message):
-            ErrorView(message: message, retryAction: { appViewModel.fetchCoachesAndPlanIfNeeded() })
+        case .error(let message, let canRetry, _):
+            ErrorView(
+                message: message, 
+                canRetry: canRetry,
+                retryAction: { 
+                    if canRetry {
+                        appViewModel.retryFromError()
+                    } else {
+                        // Force restart the app flow
+                        appViewModel.logout()
+                    }
+                }
+            )
         }
     }
 }

@@ -102,6 +102,7 @@ struct OnboardingFlow: View {
                 if viewModel.showErrorAlert {
                     ErrorView(
                         message: viewModel.errorMessage,
+                        canRetry: true,
                         retryAction: {
                             viewModel.showErrorAlert = false
                         }
