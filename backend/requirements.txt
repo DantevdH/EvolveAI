@@ -1,7 +1,21 @@
+# Core FastAPI dependencies
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-pydantic==2.5.0
 python-dotenv==1.0.0
-openai==1.6.1
-httpx==0.25.2
-python-multipart==0.0.6 
+python-multipart==0.0.6
+
+# Pydantic - carefully controlled version for compatibility
+pydantic==2.5.0
+
+# OpenAI - use exact version known to work
+openai==1.10.0
+
+# Supabase - use stable version without breaking changes
+supabase==1.0.4
+
+# PDF Processing
+PyPDF2==3.0.1
+
+# Data processing
+numpy==1.24.3
+pandas==2.0.3 
