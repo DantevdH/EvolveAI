@@ -22,32 +22,49 @@ class TestScripts:
         assert supabase_key is not None, "SUPABASE_ANON_KEY should be set"
         assert openai_api_key is not None, "OPENAI_API_KEY should be set"
 
-    def test_supabase_connection_script(self):
-        """Test that the supabase connection test script can be imported and run."""
-        from scripts.test_connection import test_supabase_connection
-        
-        # This should not raise an exception if environment is set up correctly
-        try:
-            test_supabase_connection()
-        except AssertionError as e:
-            # This is expected if the database is not accessible
-            pytest.skip(f"Supabase connection test failed (expected in test environment): {e}")
-
-    def test_openai_connection_script(self):
-        """Test that the OpenAI connection test script can be imported and run."""
-        from scripts.test_connection import test_openai_connection
-        
-        # This should not raise an exception if environment is set up correctly
-        try:
-            test_openai_connection()
-        except AssertionError as e:
-            # This is expected if the API key is not valid
-            pytest.skip(f"OpenAI connection test failed (expected in test environment): {e}")
-
     def test_populate_script_import(self):
         """Test that the populate script can be imported."""
         try:
-            from scripts.populate_vector_db import VectorDBPopulator
+            from scripts.populate.populate_vector_db import VectorDBPopulator
             assert VectorDBPopulator is not None, "VectorDBPopulator should be importable"
+        except ImportError as e:
+            pytest.skip(f"Populate script not available: {e}")
+
+    def test_populate_script_class_methods(self):
+        """Test that the VectorDBPopulator class has expected methods."""
+        try:
+            from scripts.populate.populate_vector_db import VectorDBPopulator
+            
+            # Check that the class has the expected methods
+            expected_methods = [
+                'process_pdf',
+                'process_structured_file', 
+                'process_data_directory',
+                'process_single_file',
+                'chunk_text',
+                'generate_embeddings',
+                'populate_database'
+            ]
+            
+            for method in expected_methods:
+                assert hasattr(VectorDBPopulator, method), f"Missing method: {method}"
+                
+        except ImportError as e:
+            pytest.skip(f"Populate script not available: {e}")
+
+    def test_populate_script_no_sample_data(self):
+        """Test that the script no longer has hardcoded sample data methods."""
+        try:
+            from scripts.populate.populate_vector_db import VectorDBPopulator
+            
+            # These methods should no longer exist
+            deprecated_methods = [
+                'create_sample_documents',
+                'run_sample_population'
+            ]
+            
+            for method in deprecated_methods:
+                assert not hasattr(VectorDBPopulator, method), f"Deprecated method still exists: {method}"
+                
         except ImportError as e:
             pytest.skip(f"Populate script not available: {e}")

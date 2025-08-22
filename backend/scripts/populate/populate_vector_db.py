@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
 """
-Vector Database Population Script for EvolveAI
+Vector Database Population Script for EvolveAI - PDFs Only
 
-This script populates the Supabase vector database with:
-1. Sample fitness/nutrition data for testing
-2. Can be reused to process actual PDFs later
-
-Usage:
-    python populate_vector_db.py --mode=sample    # Populate with sample data
-    python populate_vector_db.py --mode=pdf --pdf-path=/path/to/pdf  # Process specific PDF
-    python populate_vector_db.py --mode=pdfs --pdf-dir=/path/to/pdfs  # Process directory of PDFs
+This script populates the Supabase vector database by processing PDF files.
+Optimized for PDF processing with enhanced text extraction and metadata handling.
 """
 
 import os
@@ -23,243 +17,55 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 import PyPDF2
 import hashlib
+import logging
+import time
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 
-class VectorDBPopulator:
+class PDFVectorDBPopulator:
+    """Handles population of the vector database with PDF documents."""
+    
     def __init__(self):
-        """Initialize the vector database populator."""
+        """Initialize the PDF vector database populator."""
+        self._validate_environment()
+        self._initialize_clients()
+        logger.info("✅ Connected to Supabase and OpenAI")
+
+    def _validate_environment(self):
+        """Validate that all required environment variables are set."""
+        required_vars = {
+            "SUPABASE_URL": os.getenv("SUPABASE_URL"),
+            "SUPABASE_ANON_KEY": os.getenv("SUPABASE_ANON_KEY"),
+            "OPENAI_API_KEY": os.getenv("OPENAI_API_KEY")
+        }
+        
+        missing_vars = [var for var, value in required_vars.items() if not value]
+        if missing_vars:
+            raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
+
+    def _initialize_clients(self):
+        """Initialize Supabase and OpenAI clients."""
         self.supabase_url = os.getenv("SUPABASE_URL")
         self.supabase_key = os.getenv("SUPABASE_ANON_KEY")
         self.openai_api_key = os.getenv("OPENAI_API_KEY")
         
-        if not all([self.supabase_url, self.supabase_key, self.openai_api_key]):
-            raise ValueError("Missing required environment variables. Check your .env file.")
-        
         # Initialize clients
         self.supabase: Client = create_client(self.supabase_url, self.supabase_key)
         self.openai_client = openai.OpenAI(api_key=self.openai_api_key)
-        
-        print("✅ Connected to Supabase and OpenAI")
-
-    def create_sample_documents(self) -> List[Dict[str, Any]]:
-        """Create sample fitness and nutrition documents for testing."""
-        
-        sample_docs = [
-            {
-                "title": "Beginner Strength Training Guide",
-                "content": """
-                Strength training is a form of exercise that uses resistance to build muscle, 
-                increase strength, and improve overall fitness. For beginners, it's important 
-                to start with proper form and gradually increase intensity.
-                
-                Key Principles:
-                1. Start with bodyweight exercises
-                2. Focus on compound movements
-                3. Maintain proper form
-                4. Progressive overload
-                5. Rest and recovery
-                
-                Basic Exercises for Beginners:
-                - Push-ups: 3 sets of 5-10 reps
-                - Bodyweight squats: 3 sets of 10-15 reps
-                - Planks: 3 sets of 20-30 seconds
-                - Lunges: 3 sets of 8-12 reps per leg
-                
-                Training Frequency: 2-3 times per week
-                Rest Days: Allow 48 hours between sessions
-                """,
-                "content_type": "guide",
-                "topic": "fitness",
-                "metadata": {
-                    "difficulty_level": "beginner",
-                    "body_part": "full_body",
-                    "sport_type": "strength_training",
-                    "equipment_needed": ["bodyweight"],
-                    "training_frequency": "2-3_times_per_week",
-                    "session_duration": "30-45_minutes"
-                }
-            },
-            {
-                "title": "Intermediate Hypertrophy Program",
-                "content": """
-                Hypertrophy training focuses on muscle growth through moderate weights 
-                and higher rep ranges. This program is designed for intermediate lifters 
-                who have mastered basic movements.
-                
-                Program Structure:
-                - 4-day split routine
-                - Push/Pull/Legs/Upper pattern
-                - 8-12 rep range for most exercises
-                - 60-90 seconds rest between sets
-                
-                Day 1 - Push (Chest, Shoulders, Triceps):
-                - Bench Press: 4 sets x 8-12 reps
-                - Incline Dumbbell Press: 3 sets x 10-12 reps
-                - Overhead Press: 3 sets x 8-10 reps
-                - Lateral Raises: 3 sets x 12-15 reps
-                - Tricep Dips: 3 sets x 10-12 reps
-                
-                Day 2 - Pull (Back, Biceps):
-                - Deadlifts: 4 sets x 6-8 reps
-                - Barbell Rows: 3 sets x 8-10 reps
-                - Pull-ups: 3 sets x 8-10 reps
-                - Bicep Curls: 3 sets x 10-12 reps
-                
-                Progressive Overload: Increase weight by 2.5-5 lbs when you can complete all sets
-                """,
-                "content_type": "program",
-                "topic": "fitness",
-                "metadata": {
-                    "difficulty_level": "intermediate",
-                    "body_part": "full_body",
-                    "sport_type": "bodybuilding",
-                    "equipment_needed": ["barbell", "dumbbells", "pull_up_bar"],
-                    "training_frequency": "4_times_per_week",
-                    "session_duration": "60-75_minutes",
-                    "goal": "muscle_growth"
-                }
-            },
-            {
-                "title": "Nutrition Fundamentals for Muscle Building",
-                "content": """
-                Proper nutrition is essential for muscle building and recovery. 
-                Understanding macronutrients and timing can significantly impact your results.
-                
-                Macronutrient Breakdown:
-                - Protein: 1.6-2.2g per kg body weight
-                - Carbohydrates: 4-7g per kg body weight
-                - Fats: 0.8-1.2g per kg body weight
-                
-                Protein Sources:
-                - Lean meats (chicken, turkey, lean beef)
-                - Fish (salmon, tuna, cod)
-                - Eggs and dairy
-                - Plant-based (tofu, tempeh, legumes)
-                
-                Carbohydrate Sources:
-                - Whole grains (brown rice, quinoa, oats)
-                - Fruits and vegetables
-                - Sweet potatoes and potatoes
-                - Pasta and bread (whole grain)
-                
-                Meal Timing:
-                - Pre-workout: 2-3 hours before, balanced meal
-                - Post-workout: Within 30 minutes, protein + carbs
-                - Daily: 4-6 meals, consistent protein distribution
-                
-                Hydration: Aim for 3-4 liters of water daily, more during training
-                """,
-                "content_type": "guide",
-                "topic": "nutrition",
-                "metadata": {
-                    "difficulty_level": "beginner",
-                    "goal": "muscle_building",
-                    "diet_type": "balanced",
-                    "meal_frequency": "4-6_times_per_day",
-                    "focus": "macronutrients"
-                }
-            },
-            {
-                "title": "Running Training for Beginners",
-                "content": """
-                Running is an excellent cardiovascular exercise that can be started 
-                at any fitness level. This guide will help beginners start safely 
-                and build endurance gradually.
-                
-                Getting Started:
-                - Start with walking and jogging intervals
-                - Begin with 20-30 minute sessions
-                - Run 3-4 times per week
-                - Listen to your body and rest when needed
-                
-                Week 1-2: Walk-Run Intervals
-                - 5 minutes warm-up walk
-                - 1 minute run, 2 minutes walk (repeat 8 times)
-                - 5 minutes cool-down walk
-                
-                Week 3-4: Increase Running Time
-                - 5 minutes warm-up walk
-                - 2 minutes run, 1 minute walk (repeat 8 times)
-                - 5 minutes cool-down walk
-                
-                Week 5-6: Build Endurance
-                - 5 minutes warm-up walk
-                - 5 minutes run, 1 minute walk (repeat 4 times)
-                - 5 minutes cool-down walk
-                
-                Safety Tips:
-                - Invest in proper running shoes
-                - Start on flat, even surfaces
-                - Stay hydrated
-                - Don't increase distance by more than 10% per week
-                """,
-                "content_type": "guide",
-                "topic": "running",
-                "metadata": {
-                    "difficulty_level": "beginner",
-                    "sport_type": "endurance",
-                    "training_frequency": "3-4_times_per_week",
-                    "session_duration": "20-30_minutes",
-                    "goal": "build_endurance"
-                }
-            },
-            {
-                "title": "Injury Prevention and Recovery",
-                "content": """
-                Preventing injuries is crucial for long-term fitness success. 
-                Understanding proper warm-up, form, and recovery can help you 
-                stay injury-free and make consistent progress.
-                
-                Warm-up Protocol (10-15 minutes):
-                - Light cardio (5 minutes)
-                - Dynamic stretching
-                - Movement preparation exercises
-                - Progressive loading
-                
-                Common Injury Prevention:
-                - Always warm up before training
-                - Focus on proper form over weight
-                - Don't skip rest days
-                - Listen to pain signals
-                - Gradual progression
-                
-                Recovery Strategies:
-                - Sleep: 7-9 hours per night
-                - Nutrition: Adequate protein and calories
-                - Stretching: Post-workout and rest days
-                - Foam rolling: 10-15 minutes daily
-                - Active recovery: Light walking, swimming
-                
-                Warning Signs:
-                - Sharp pain during exercise
-                - Pain that persists after 48 hours
-                - Swelling or inflammation
-                - Loss of range of motion
-                
-                When to Seek Help:
-                - Persistent pain
-                - Severe swelling
-                - Inability to bear weight
-                - Pain that interferes with daily activities
-                """,
-                "content_type": "guide",
-                "topic": "physiotherapy",
-                "metadata": {
-                    "difficulty_level": "all_levels",
-                    "focus": "injury_prevention",
-                    "applicable_to": "all_sports",
-                    "session_duration": "10-15_minutes",
-                    "frequency": "daily"
-                }
-            }
-        ]
-        
-        return sample_docs
 
     def chunk_text(self, text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
         """Split text into overlapping chunks for better vector search."""
+        if not text.strip():
+            return []
+            
         chunks = []
         start = 0
         
@@ -278,70 +84,358 @@ class VectorDBPopulator:
         return chunks
 
     def generate_embeddings(self, texts: List[str]) -> List[List[float]]:
-        """Generate OpenAI embeddings for text chunks."""
-        try:
-            response = self.openai_client.embeddings.create(
-                model="text-embedding-3-small",  # Best performance and quality
-                input=texts
-            )
-            return [embedding.embedding for embedding in response.data]
-        except Exception as e:
-            print(f"❌ Error generating embeddings: {e}")
+        """Generate OpenAI embeddings for text chunks with retry logic and batch processing."""
+        if not texts:
             return []
+        
+        # Process in smaller batches to avoid rate limits
+        batch_size = 10
+        all_embeddings = []
+        
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            max_retries = 3
+            retry_delay = 1
+            
+            for attempt in range(max_retries):
+                try:
+                    logger.info(f"Generating embeddings for batch {i//batch_size + 1}/{(len(texts) + batch_size - 1)//batch_size} ({len(batch)} chunks)")
+                    
+                    response = self.openai_client.embeddings.create(
+                        model="text-embedding-3-small",
+                        input=batch
+                    )
+                    
+                    batch_embeddings = [embedding.embedding for embedding in response.data]
+                    all_embeddings.extend(batch_embeddings)
+                    
+                    logger.info(f"✅ Successfully generated {len(batch_embeddings)} embeddings")
+                    
+                    # Small delay between batches to avoid rate limits
+                    if i + batch_size < len(texts):
+                        time.sleep(0.5)
+                    
+                    break  # Success, exit retry loop
+                    
+                except Exception as e:
+                    if "rate_limit" in str(e).lower() or "too_many_requests" in str(e).lower():
+                        wait_time = retry_delay * (2 ** attempt)
+                        logger.warning(f"Rate limit hit, waiting {wait_time}s before retry {attempt + 1}/{max_retries}")
+                        time.sleep(wait_time)
+                    elif attempt < max_retries - 1:
+                        logger.warning(f"Embedding generation failed (attempt {attempt + 1}/{max_retries}): {e}")
+                        time.sleep(retry_delay)
+                    else:
+                        logger.error(f"Failed to generate embeddings after {max_retries} attempts: {e}")
+                        return []
+        
+        return all_embeddings
 
     def process_pdf(self, pdf_path: str) -> Optional[Dict[str, Any]]:
-        """Process a PDF file and extract text content."""
+        """Process a PDF file and extract text content with enhanced extraction."""
+        try:
+            pdf_path = Path(pdf_path)
+            if not pdf_path.exists():
+                logger.error(f"PDF file not found: {pdf_path}")
+                return None
+                
+            # Try multiple PDF extraction methods
+            text_content = self._extract_pdf_text_enhanced(pdf_path)
+            
+            if not text_content.strip():
+                logger.warning(f"PDF contains no extractable text: {pdf_path}")
+                return None
+            
+            # Clean and normalize text
+            cleaned_text = self._clean_text_content(text_content)
+            
+            # Generate a title from filename
+            title = pdf_path.stem.replace('_', ' ').title()
+            
+            # Create document object with enhanced metadata
+            document = {
+                "title": title,
+                "content": cleaned_text,
+                "content_type": "pdf",
+                "topic": self._detect_topic(cleaned_text),
+                "keywords": self._extract_keywords(cleaned_text),
+                "file_size": pdf_path.stat().st_size,
+                "extraction_method": "enhanced",
+                "metadata": {
+                    "difficulty_level": self._detect_difficulty(cleaned_text),
+                    "body_parts": self._extract_body_parts(cleaned_text),
+                    "equipment_needed": self._extract_equipment(cleaned_text),
+                    "training_type": self._extract_training_type(cleaned_text),
+                    "target_goals": self._extract_goals(cleaned_text),
+                    "experience_required": self._extract_experience(cleaned_text)
+                }
+            }
+            
+            logger.info(f"Processed PDF: {title} ({len(cleaned_text)} characters)")
+            return document
+                
+        except Exception as e:
+            logger.error(f"Error processing PDF {pdf_path}: {e}")
+            return None
+
+    def _extract_pdf_text_enhanced(self, pdf_path: Path) -> str:
+        """Try multiple methods to extract PDF text."""
+        # Method 1: PyPDF2
         try:
             with open(pdf_path, 'rb') as file:
                 pdf_reader = PyPDF2.PdfReader(file)
                 text_content = ""
-                
                 for page in pdf_reader.pages:
                     text_content += page.extract_text() + "\n"
-                
-                # Generate a title from filename
-                title = Path(pdf_path).stem.replace('_', ' ').title()
-                
-                # Create document object
-                document = {
-                    "title": title,
-                    "content": text_content.strip(),
-                    "content_type": "pdf",
-                    "topic": self._detect_topic(text_content),
-                    "metadata": {
-                        "source_file": pdf_path,
-                        "file_size": os.path.getsize(pdf_path),
-                        "page_count": len(pdf_reader.pages),
-                        "extraction_date": str(pdf_reader.metadata.get('/CreationDate', ''))
-                    }
-                }
-                
-                return document
-                
+            if text_content.strip():
+                return text_content
         except Exception as e:
-            print(f"❌ Error processing PDF {pdf_path}: {e}")
-            return None
+            logger.warning(f"PyPDF2 extraction failed: {e}")
+        
+        # Method 2: Try pdfplumber if available
+        try:
+            import pdfplumber
+            with pdfplumber.open(pdf_path) as pdf:
+                text_content = ""
+                for page in pdf.pages:
+                    text_content += page.extract_text() + "\n"
+            if text_content.strip():
+                return text_content
+        except ImportError:
+            logger.info("pdfplumber not available, skipping")
+        except Exception as e:
+            logger.warning(f"pdfplumber extraction failed: {e}")
+        
+        # Method 3: Try pymupdf if available
+        try:
+            import fitz  # pymupdf
+            doc = fitz.open(pdf_path)
+            text_content = ""
+            for page in doc:
+                text_content += page.get_text() + "\n"
+            doc.close()
+            if text_content.strip():
+                return text_content
+        except ImportError:
+            logger.info("pymupdf not available, skipping")
+        except Exception as e:
+            logger.warning(f"pymupdf extraction failed: {e}")
+        
+        return ""
+
+    def _clean_text_content(self, text: str) -> str:
+        """Clean and normalize extracted text."""
+        import re
+        
+        # Remove excessive whitespace
+        text = re.sub(r'\n\s*\n', '\n\n', text)
+        text = re.sub(r' +', ' ', text)
+        
+        # Remove common PDF artifacts
+        text = re.sub(r'[^\w\s\.\,\;\:\!\?\-\(\)]', ' ', text)
+        
+        # Normalize line breaks
+        text = text.replace('\r\n', '\n').replace('\r', '\n')
+        
+        return text.strip()
+
+    def _extract_keywords(self, text: str, max_keywords: int = 15) -> List[str]:
+        """Extract keywords using TF-IDF analysis."""
+        if not text or not text.strip():
+            return []
+        
+        try:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            import re
+            
+            # Clean and preprocess text
+            cleaned_text = re.sub(r'[^\w\s]', ' ', text.lower())
+            words = cleaned_text.split()
+            
+            # Filter out very short words and common stop words
+            stop_words = {
+                'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with',
+                'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has',
+                'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may',
+                'might', 'can', 'this', 'that', 'these', 'those', 'a', 'an', 'as', 'from'
+            }
+            
+            # Filter words
+            filtered_words = [word for word in words if len(word) >= 3 and word not in stop_words and not word.isdigit()]
+            
+            if len(filtered_words) < 5:
+                return []
+            
+            # Create TF-IDF vectorizer
+            vectorizer = TfidfVectorizer(
+                max_features=100,
+                min_df=1,
+                max_df=1.0,
+                ngram_range=(1, 2),
+                stop_words='english'
+            )
+            
+            # Fit and transform the text
+            tfidf_matrix = vectorizer.fit_transform([cleaned_text])
+            feature_names = vectorizer.get_feature_names_out()
+            
+            # Get TF-IDF scores
+            tfidf_scores = tfidf_matrix.toarray()[0]
+            
+            # Create (score, feature) pairs and sort by score
+            feature_scores = list(zip(tfidf_scores, feature_names))
+            feature_scores.sort(reverse=True)
+            
+            # Extract top keywords
+            keywords = []
+            for score, feature in feature_scores:
+                if score > 0 and len(keywords) < max_keywords:
+                    clean_feature = ' '.join(feature.split())
+                    if clean_feature not in keywords:
+                        keywords.append(clean_feature)
+            
+            return keywords
+            
+        except ImportError:
+            logger.error("scikit-learn is required for keyword extraction")
+            raise
+        except Exception as e:
+            logger.error(f"TF-IDF analysis failed: {e}")
+            raise
 
     def _detect_topic(self, text: str) -> str:
-        """Simple topic detection based on keywords."""
+        """Detect topic based on content keywords."""
+        if not text or not text.strip():
+            return 'general'
+        
         text_lower = text.lower()
         
-        if any(word in text_lower for word in ['workout', 'exercise', 'training', 'fitness']):
-            return 'fitness'
-        elif any(word in text_lower for word in ['nutrition', 'diet', 'food', 'meal']):
-            return 'nutrition'
-        elif any(word in text_lower for word in ['running', 'cardio', 'endurance']):
-            return 'running'
-        elif any(word in text_lower for word in ['injury', 'recovery', 'physio', 'therapy']):
-            return 'physiotherapy'
+        # Enhanced topic keywords with weighted scoring
+        topic_keywords = {
+            'fitness': [
+                'workout', 'exercise', 'training', 'fitness', 'strength', 'muscle', 'cardio',
+                'gym', 'lifting', 'squat', 'bench', 'deadlift', 'push-up', 'pull-up',
+                'reps', 'sets', 'routine', 'program', 'plan', 'bodybuilding', 'powerlifting'
+            ],
+            'nutrition': [
+                'nutrition', 'diet', 'food', 'meal', 'protein', 'carbohydrate', 'vitamin',
+                'calories', 'macros', 'supplements', 'vitamins', 'minerals', 'eating'
+            ],
+            'running': [
+                'running', 'cardio', 'endurance', 'marathon', 'sprint', 'jogging',
+                'race', 'pace', 'distance', 'speed', 'stamina', 'aerobic', 'track'
+            ],
+            'physiotherapy': [
+                'injury', 'recovery', 'physio', 'therapy', 'rehabilitation', 'pain',
+                'mobility', 'flexibility', 'stretching', 'massage', 'treatment'
+            ]
+        }
+        
+        # Calculate topic scores
+        topic_scores = {}
+        for topic, keywords in topic_keywords.items():
+            score = 0
+            for keyword in keywords:
+                count = text_lower.count(keyword)
+                if count > 0:
+                    score += count * 2
+                    if len(keyword) > 6:
+                        score += 1
+            
+            topic_scores[topic] = score
+        
+        # Find the best topic
+        if topic_scores:
+            best_topic = max(topic_scores, key=topic_scores.get)
+            best_score = topic_scores[best_topic]
+            
+            if best_score >= 2:
+                return best_topic
+        
+        return 'general'
+
+    def _detect_difficulty(self, text: str) -> str:
+        """Detect difficulty level from content."""
+        text_lower = text.lower()
+        
+        if any(word in text_lower for word in ['beginner', 'basic', 'starting', 'first time']):
+            return 'beginner'
+        elif any(word in text_lower for word in ['advanced', 'expert', 'professional', 'elite']):
+            return 'advanced'
         else:
-            return 'general'
+            return 'intermediate'
+
+    def _extract_body_parts(self, text: str) -> List[str]:
+        """Extract body parts mentioned in text."""
+        body_parts = ['legs', 'chest', 'back', 'shoulders', 'arms', 'core', 'full body']
+        text_lower = text.lower()
+        
+        found_parts = []
+        for part in body_parts:
+            if part in text_lower:
+                found_parts.append(part)
+        
+        return found_parts
+
+    def _extract_equipment(self, text: str) -> List[str]:
+        """Extract equipment mentioned in text."""
+        equipment_types = ['bodyweight', 'dumbbells', 'barbell', 'machine', 'cable', 'kettlebell']
+        text_lower = text.lower()
+        
+        found_equipment = []
+        for equip in equipment_types:
+            if equip in text_lower:
+                found_equipment.append(equip)
+        
+        return found_equipment
+
+    def _extract_training_type(self, text: str) -> List[str]:
+        """Extract training type from text."""
+        training_types = ['strength', 'cardio', 'flexibility', 'endurance', 'power', 'hypertrophy']
+        text_lower = text.lower()
+        
+        found_types = []
+        for train_type in training_types:
+            if train_type in text_lower:
+                found_types.append(train_type)
+        
+        return found_types
+
+    def _extract_goals(self, text: str) -> List[str]:
+        """Extract training goals from text."""
+        goals = ['weight_loss', 'muscle_gain', 'strength', 'endurance', 'flexibility', 'performance']
+        text_lower = text.lower()
+        
+        found_goals = []
+        for goal in goals:
+            if goal.replace('_', ' ') in text_lower:
+                found_goals.append(goal)
+        
+        return found_goals
+
+    def _extract_experience(self, text: str) -> str:
+        """Extract required experience level."""
+        text_lower = text.lower()
+        
+        if any(word in text_lower for word in ['beginner', 'new', 'starting']):
+            return 'beginner'
+        elif any(word in text_lower for word in ['advanced', 'expert', 'professional']):
+            return 'advanced'
+        else:
+            return 'intermediate'
 
     def populate_database(self, documents: List[Dict[str, Any]]) -> bool:
         """Populate the database with documents and their embeddings."""
-        try:
-            for doc in documents:
-                print(f"📝 Processing: {doc['title']}")
+        if not documents:
+            logger.warning("No documents to process")
+            return False
+            
+        success_count = 0
+        total_count = len(documents)
+        
+        for doc in documents:
+            try:
+                logger.info(f"�� Processing: {doc['title']}")
                 
                 # Insert document
                 doc_response = self.supabase.table('documents').insert(doc).execute()
@@ -349,13 +443,17 @@ class VectorDBPopulator:
                 
                 # Chunk the content
                 chunks = self.chunk_text(doc['content'])
-                print(f"   📄 Created {len(chunks)} chunks")
+                if not chunks:
+                    logger.warning(f"No chunks created for: {doc['title']}")
+                    continue
+                    
+                logger.info(f"   📄 Created {len(chunks)} chunks")
                 
                 # Generate embeddings for chunks
                 embeddings = self.generate_embeddings(chunks)
                 
                 if not embeddings:
-                    print(f"   ⚠️  Skipping document due to embedding generation failure")
+                    logger.error(f"   ⚠️  Skipping document due to embedding generation failure")
                     continue
                 
                 # Prepare chunk data
@@ -365,124 +463,134 @@ class VectorDBPopulator:
                         "document_id": doc_id,
                         "chunk_index": i,
                         "chunk_text": chunk,
-                        "embedding": embedding,  # text-embedding-ada-002 has 1536 dimensions
-                        "chunk_metadata": {
-                            "chunk_type": "content",
-                            "word_count": len(chunk.split())
-                        }
+                        "embedding": embedding
                     })
                 
                 # Insert chunks with embeddings
                 self.supabase.table('document_embeddings').insert(chunk_data).execute()
-                print(f"   ✅ Stored {len(chunks)} chunks with embeddings")
-            
-            return True
-            
-        except Exception as e:
-            print(f"❌ Error populating database: {e}")
+                logger.info(f"   ✅ Stored {len(chunks)} chunks with embeddings")
+                success_count += 1
+                
+            except Exception as e:
+                logger.error(f"❌ Error processing document {doc['title']}: {e}")
+                continue
+        
+        logger.info(f"📊 Processing complete: {success_count}/{total_count} documents successful")
+        return success_count > 0
+
+    def process_pdf_directory(self, pdf_dir: str) -> bool:
+        """Process all PDF files in a directory."""
+        pdf_path = Path(pdf_dir)
+        if not pdf_path.exists() or not pdf_path.is_dir():
+            logger.error(f"PDF directory not found: {pdf_dir}")
             return False
-
-    def run_sample_population(self):
-        """Populate database with sample data."""
-        print("🚀 Starting sample data population...")
         
-        sample_docs = self.create_sample_documents()
-        print(f"📚 Created {len(sample_docs)} sample documents")
-        
-        success = self.populate_database(sample_docs)
-        
-        if success:
-            print("✅ Sample data population completed successfully!")
-            self._print_summary()
-        else:
-            print("❌ Sample data population failed!")
-
-    def run_pdf_processing(self, pdf_path: str):
-        """Process a single PDF file."""
-        print(f"📄 Processing PDF: {pdf_path}")
-        
-        document = self.process_pdf(pdf_path)
-        if document:
-            success = self.populate_database([document])
-            if success:
-                print(f"✅ PDF processing completed: {document['title']}")
-            else:
-                print("❌ PDF processing failed!")
-        else:
-            print("❌ Could not process PDF!")
-
-    def run_pdf_directory_processing(self, pdf_dir: str):
-        """Process all PDFs in a directory."""
-        pdf_dir_path = Path(pdf_dir)
-        pdf_files = list(pdf_dir_path.glob("*.pdf"))
+        # Find all PDF files
+        pdf_files = list(pdf_path.glob("*.pdf"))
         
         if not pdf_files:
-            print(f"❌ No PDF files found in {pdf_dir}")
-            return
+            logger.warning(f"No PDF files found in {pdf_dir}")
+            return False
         
-        print(f"📁 Found {len(pdf_files)} PDF files in {pdf_dir}")
+        logger.info(f"📁 Found {len(pdf_files)} PDF files to process in {pdf_dir}")
         
+        # Process files
+        documents = []
         for pdf_file in pdf_files:
-            self.run_pdf_processing(str(pdf_file))
+            doc = self.process_pdf(str(pdf_file))
+            if doc:
+                documents.append(doc)
         
-        print("✅ PDF directory processing completed!")
+        # Populate database
+        if documents:
+            return self.populate_database(documents)
+        else:
+            logger.warning("No documents were successfully processed")
+            return False
 
-    def _print_summary(self):
-        """Print a summary of the database contents."""
-        try:
-            # Count documents
-            doc_count = self.supabase.table('documents').select('id', count='exact').execute()
-            doc_total = doc_count.count if doc_count.count is not None else 0
-            
-            # Count embeddings
-            emb_count = self.supabase.table('document_embeddings').select('id', count='exact').execute()
-            emb_total = emb_count.count if emb_count.count is not None else 0
-            
-            print(f"\n📊 Database Summary:")
-            print(f"   Documents: {doc_total}")
-            print(f"   Embeddings: {emb_total}")
-            
-            # Show topics distribution
-            topics = self.supabase.table('documents').select('topic').execute()
-            topic_counts = {}
-            for doc in topics.data:
-                topic = doc['topic']
-                topic_counts[topic] = topic_counts.get(topic, 0) + 1
-            
-            print(f"   Topics: {topic_counts}")
-            
-        except Exception as e:
-            print(f"⚠️  Could not generate summary: {e}")
+    def process_single_pdf(self, pdf_path: str) -> bool:
+        """Process a single PDF file."""
+        pdf_path = Path(pdf_path)
+        
+        if not pdf_path.exists():
+            logger.error(f"PDF file not found: {pdf_path}")
+            return False
+        
+        if pdf_path.suffix.lower() != '.pdf':
+            logger.error(f"File is not a PDF: {pdf_path}")
+            return False
+        
+        document = self.process_pdf(str(pdf_path))
+        
+        if document:
+            return self.populate_database([document])
+        else:
+            return False
 
 def main():
-    """Main function to run the script."""
-    parser = argparse.ArgumentParser(description="Populate Supabase vector database")
-    parser.add_argument("--mode", choices=["sample", "pdf", "pdfs"], default="sample",
-                       help="Mode: sample (sample data), pdf (single PDF), pdfs (directory)")
-    parser.add_argument("--pdf-path", help="Path to single PDF file")
-    parser.add_argument("--pdf-dir", help="Path to directory containing PDFs")
+    """Main function to run the PDF population script."""
+    parser = argparse.ArgumentParser(
+        description="Populate Supabase vector database with PDF documents",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python populate_vector_db.py --mode=directory --pdf-dir=./data/pdf
+  python populate_vector_db.py --mode=file --pdf-path=./data/document.pdf
+        """
+    )
+    
+    parser.add_argument(
+        "--mode", 
+        choices=["directory", "file"], 
+        default="directory",
+        help="Processing mode"
+    )
+    parser.add_argument(
+        "--pdf-dir", 
+        help="Directory containing PDF files to process"
+    )
+    parser.add_argument(
+        "--pdf-path", 
+        help="Path to single PDF file to process"
+    )
+    parser.add_argument(
+        "--verbose", "-v", 
+        action="store_true",
+        help="Enable verbose logging"
+    )
     
     args = parser.parse_args()
     
+    # Set logging level
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+    
     try:
-        populator = VectorDBPopulator()
+        populator = PDFVectorDBPopulator()
         
-        if args.mode == "sample":
-            populator.run_sample_population()
-        elif args.mode == "pdf":
-            if not args.pdf_path:
-                print("❌ PDF path required for pdf mode")
-                return
-            populator.run_pdf_processing(args.pdf_path)
-        elif args.mode == "pdfs":
+        success = False
+        
+        if args.mode == "directory":
             if not args.pdf_dir:
-                print("❌ PDF directory required for pdfs mode")
-                return
-            populator.run_pdf_directory_processing(args.pdf_dir)
+                logger.error("PDF directory required for directory mode")
+                sys.exit(1)
+            success = populator.process_pdf_directory(args.pdf_dir)
+            
+        elif args.mode == "file":
+            if not args.pdf_path:
+                logger.error("PDF path required for file mode")
+                sys.exit(1)
+            success = populator.process_single_pdf(args.pdf_path)
+        
+        if success:
+            logger.info("✅ PDF processing completed successfully!")
+        else:
+            logger.error("❌ PDF processing failed!")
+            sys.exit(1)
             
     except Exception as e:
-        print(f"❌ Script failed: {e}")
+        logger.error(f"❌ Script failed: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
-    main() 
+    main()

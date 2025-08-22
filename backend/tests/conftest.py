@@ -6,10 +6,19 @@ import pytest
 import os
 import sys
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables first
+load_dotenv()
 
 # Add the backend directory to the path so we can import our modules
-backend_dir = Path(__file__).parent.parent.parent
+backend_dir = Path(__file__).parent.parent  # This points to 'backend/'
 sys.path.insert(0, str(backend_dir))
+
+# Also add the current working directory as a backup
+current_dir = Path.cwd()
+if str(current_dir) not in sys.path:
+    sys.path.insert(0, str(current_dir))
 
 @pytest.fixture(scope="session")
 def test_environment():

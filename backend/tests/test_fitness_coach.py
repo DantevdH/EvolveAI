@@ -10,12 +10,12 @@ class TestFitnessCoach:
 
     def test_fitness_coach_import(self):
         """Test that FitnessCoach can be imported."""
-        from agents.specialists.fitness_coach import FitnessCoach
+        from core.agents.specialists.fitness_coach import FitnessCoach
         assert FitnessCoach is not None, "FitnessCoach should be importable"
 
     def test_fitness_coach_initialization(self):
         """Test that FitnessCoach can be initialized."""
-        from agents.specialists.fitness_coach import FitnessCoach
+        from core.agents.specialists.fitness_coach import FitnessCoach
         
         # Mock the BaseAgent dependencies
         with patch('agents.specialists.fitness_coach.BaseAgent.__init__') as mock_base_init:
@@ -45,11 +45,11 @@ class TestFitnessCoach:
 
     def test_fitness_coach_capabilities(self):
         """Test that FitnessCoach has the expected capabilities."""
-        from agents.specialists.fitness_coach import FitnessCoach
+        from core.agents.specialists.fitness_coach import FitnessCoach
         
-        with patch('agents.specialists.fitness_coach.BaseAgent.__init__'):
-            with patch('agents.specialists.fitness_coach.RAGTool'):
-                with patch('agents.specialists.fitness_coach.WorkoutPromptGenerator'):
+        with patch('core.agents.specialists.fitness_coach.BaseAgent.__init__'):
+            with patch('core.agents.specialists.fitness_coach.RAGTool'):
+                with patch('core.agents.specialists.fitness_coach.WorkoutPromptGenerator'):
                     coach = FitnessCoach()
                     capabilities = coach._get_capabilities()
                     
@@ -69,11 +69,11 @@ class TestFitnessCoach:
 
     def test_fitness_coach_topic_filtering(self):
         """Test that FitnessCoach automatically filters for fitness documents."""
-        from agents.specialists.fitness_coach import FitnessCoach
+        from core.agents.specialists.fitness_coach import FitnessCoach
         
-        with patch('agents.specialists.fitness_coach.BaseAgent.__init__'):
-            with patch('agents.specialists.fitness_coach.RAGTool'):
-                with patch('agents.specialists.fitness_coach.WorkoutPromptGenerator'):
+        with patch('core.agents.specialists.fitness_coach.BaseAgent.__init__'):
+            with patch('core.agents.specialists.fitness_coach.RAGTool'):
+                with patch('core.agents.specialists.fitness_coach.WorkoutPromptGenerator'):
                     coach = FitnessCoach()
                     
                     # The topic should be "fitness" to automatically filter documents
@@ -81,14 +81,14 @@ class TestFitnessCoach:
 
     def test_workout_plan_generation(self):
         """Test workout plan generation functionality."""
-        from agents.specialists.fitness_coach import FitnessCoach
+        from core.agents.specialists.fitness_coach import FitnessCoach
         
-        with patch('agents.specialists.fitness_coach.BaseAgent.__init__'):
-            with patch('agents.specialists.fitness_coach.RAGTool'):
-                with patch('agents.specialists.fitness_coach.WorkoutPromptGenerator'):
+        with patch('core.agents.specialists.fitness_coach.BaseAgent.__init__'):
+            with patch('core.agents.specialists.fitness_coach.RAGTool'):
+                with patch('core.agents.specialists.fitness_coach.WorkoutPromptGenerator'):
                     with patch.object(FitnessCoach, 'search_knowledge_base') as mock_search:
-                        with patch('agents.specialists.fitness_coach.os.getenv') as mock_getenv:
-                            with patch('agents.specialists.fitness_coach.json.loads') as mock_json:
+                        with patch('core.agents.specialists.fitness_coach.os.getenv') as mock_getenv:
+                            with patch('core.agents.specialists.fitness_coach.json.loads') as mock_json:
                                 # Mock search to return some documents
                                 mock_search.return_value = [
                                     {
@@ -143,11 +143,11 @@ class TestFitnessCoach:
 
     def test_exercise_recommendations(self):
         """Test exercise recommendation functionality."""
-        from agents.specialists.fitness_coach import FitnessCoach
+        from core.agents.specialists.fitness_coach import FitnessCoach
         
-        with patch('agents.specialists.fitness_coach.BaseAgent.__init__'):
-            with patch('agents.specialists.fitness_coach.RAGTool'):
-                with patch('agents.specialists.fitness_coach.WorkoutPromptGenerator'):
+        with patch('core.agents.specialists.fitness_coach.BaseAgent.__init__'):
+            with patch('core.agents.specialists.fitness_coach.RAGTool'):
+                with patch('core.agents.specialists.fitness_coach.WorkoutPromptGenerator'):
                     with patch.object(FitnessCoach, 'search_knowledge_base') as mock_search:
                         # Mock search to return some documents
                         mock_search.return_value = [
@@ -170,11 +170,11 @@ class TestFitnessCoach:
 
     def test_fallback_response(self):
         """Test fallback response when no documents are found."""
-        from agents.specialists.fitness_coach import FitnessCoach
+        from core.agents.specialists.fitness_coach import FitnessCoach
         
-        with patch('agents.specialists.fitness_coach.BaseAgent.__init__'):
-            with patch('agents.specialists.fitness_coach.RAGTool'):
-                with patch('agents.specialists.fitness_coach.WorkoutPromptGenerator'):
+        with patch('core.agents.specialists.fitness_coach.BaseAgent.__init__'):
+            with patch('core.agents.specialists.fitness_coach.RAGTool'):
+                with patch('core.agents.specialists.fitness_coach.WorkoutPromptGenerator'):
                     with patch.object(FitnessCoach, 'search_knowledge_base') as mock_search:
                         # Mock search to return no documents
                         mock_search.return_value = []
@@ -188,11 +188,11 @@ class TestFitnessCoach:
 
     def test_error_handling(self):
         """Test error handling in request processing."""
-        from agents.specialists.fitness_coach import FitnessCoach
+        from core.agents.specialists.fitness_coach import FitnessCoach
         
-        with patch('agents.specialists.fitness_coach.BaseAgent.__init__'):
-            with patch('agents.specialists.fitness_coach.RAGTool'):
-                with patch('agents.specialists.fitness_coach.WorkoutPromptGenerator'):
+        with patch('core.agents.specialists.fitness_coach.BaseAgent.__init__'):
+            with patch('core.agents.specialists.fitness_coach.RAGTool'):
+                with patch('core.agents.specialists.fitness_coach.WorkoutPromptGenerator'):
                     with patch.object(FitnessCoach, 'search_knowledge_base') as mock_search:
                         # Mock search to raise an exception
                         mock_search.side_effect = Exception("Database error")
@@ -207,11 +207,11 @@ class TestFitnessCoach:
 class TestFitnessCoachIntegration:
     """Test FitnessCoach integration with other components."""
 
-    @patch('agents.specialists.fitness_coach.create_client')
-    @patch('agents.specialists.fitness_coach.openai.OpenAI')
+    @patch('core.agents.specialists.fitness_coach.create_client')
+    @patch('core.agents.specialists.fitness_coach.openai.OpenAI')
     def test_fitness_coach_with_real_clients(self, mock_openai, mock_create_client):
         """Test FitnessCoach with mocked but realistic clients."""
-        from agents.specialists.fitness_coach import FitnessCoach
+        from core.agents.specialists.fitness_coach import FitnessCoach
         
         # Mock the clients
         mock_supabase = MagicMock()

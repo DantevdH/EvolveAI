@@ -15,7 +15,7 @@ MOCK_USER_PROFILE_DATA = {
     "experience_level": "Intermediate",
     "days_per_week": 3,
     "minutes_per_session": 60,
-    "equipment": ["Full Gym"],
+    "equipment": "Full Gym",
     "age": 32,
     "weight": 85.5,
     "weight_unit": "kg",
@@ -25,7 +25,6 @@ MOCK_USER_PROFILE_DATA = {
     "has_limitations": False,
     "limitations_description": "",
     "final_chat_notes": "User is motivated and ready to start. Wants to focus on compound lifts.",
-    "training_schedule": "flexible"
 }
 
 # Mock exercise data

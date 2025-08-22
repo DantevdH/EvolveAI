@@ -2,6 +2,13 @@
 Test the mock data utilities for debug mode.
 """
 
+import sys
+from pathlib import Path
+
+# Add the backend directory to the path so we can import our modules
+backend_dir = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(backend_dir))
+
 import pytest
 from utils.mock_data import (
     create_mock_user_profile,
@@ -10,6 +17,7 @@ from utils.mock_data import (
     MOCK_USER_PROFILE_DATA,
     MOCK_EXERCISES
 )
+
 
 class TestMockData:
     """Test mock data generation functionality."""

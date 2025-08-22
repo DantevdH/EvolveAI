@@ -5,10 +5,6 @@ Test connections and basic infrastructure for EvolveAI Agent System.
 import os
 import pytest
 from unittest.mock import patch, MagicMock
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 class TestConnections:
     """Test basic connections and infrastructure."""
@@ -86,7 +82,7 @@ class TestInfrastructure:
     def test_base_agent_import(self):
         """Test that BaseAgent can be imported."""
         try:
-            from agents.base.base_agent import BaseAgent
+            from core.agents.base.base_agent import BaseAgent
             assert BaseAgent is not None, "BaseAgent should be importable"
         except ImportError as e:
             pytest.fail(f"Failed to import BaseAgent: {e}")
@@ -94,7 +90,7 @@ class TestInfrastructure:
     def test_rag_tool_import(self):
         """Test that RAGTool can be imported."""
         try:
-            from agents.base.rag_tool import RAGTool
+            from core.agents.base.rag_tool import RAGTool
             assert RAGTool is not None, "RAGTool should be importable"
         except ImportError as e:
             pytest.fail(f"Failed to import RAGTool: {e}")
@@ -102,14 +98,14 @@ class TestInfrastructure:
     def test_agent_coordinator_import(self):
         """Test that AgentCoordinator can be imported."""
         try:
-            from agents.base.agent_coordinator import AgentCoordinator
+            from core.agents.base.agent_coordinator import AgentCoordinator
             assert AgentCoordinator is not None, "AgentCoordinator should be importable"
         except ImportError as e:
             pytest.fail(f"Failed to import AgentCoordinator: {e}")
 
     def test_base_agent_structure(self):
         """Test that BaseAgent has required abstract methods."""
-        from agents.base.base_agent import BaseAgent
+        from core.agents.base.base_agent import BaseAgent
         
         # Check that required abstract methods exist
         assert hasattr(BaseAgent, '_get_capabilities'), "BaseAgent should have _get_capabilities method"
@@ -121,7 +117,7 @@ class TestInfrastructure:
 
     def test_rag_tool_structure(self):
         """Test that RAGTool has required methods."""
-        from agents.base.rag_tool import RAGTool
+        from core.agents.base.rag_tool import RAGTool
         
         # Check that required methods exist
         assert hasattr(RAGTool, 'extract_metadata_filters'), "RAGTool should have extract_metadata_filters method"
@@ -130,7 +126,7 @@ class TestInfrastructure:
 
     def test_agent_coordinator_structure(self):
         """Test that AgentCoordinator has required methods."""
-        from agents.base.agent_coordinator import AgentCoordinator
+        from core.agents.base.agent_coordinator import AgentCoordinator
         
         # Check that required methods exist
         assert hasattr(AgentCoordinator, 'register_agent'), "AgentCoordinator should have register_agent method"

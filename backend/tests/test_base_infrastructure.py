@@ -16,12 +16,12 @@ class TestBaseAgent:
 
     def test_base_agent_import(self):
         """Test that BaseAgent can be imported."""
-        from agents.base.base_agent import BaseAgent
+        from core.agents.base.base_agent import BaseAgent
         assert BaseAgent is not None, "BaseAgent should be importable"
 
     def test_base_agent_abstract_methods(self):
         """Test that BaseAgent has required abstract methods."""
-        from agents.base.base_agent import BaseAgent
+        from core.agents.base.base_agent import BaseAgent
         import inspect
         
         # Check that required abstract methods exist
@@ -33,7 +33,7 @@ class TestBaseAgent:
 
     def test_base_agent_cannot_instantiate(self):
         """Test that BaseAgent cannot be instantiated directly."""
-        from agents.base.base_agent import BaseAgent
+        from core.agents.base.base_agent import BaseAgent
         
         with pytest.raises(TypeError, match="Can't instantiate abstract class"):
             BaseAgent("Test", "Test Description", "test")
@@ -43,12 +43,12 @@ class TestRAGTool:
 
     def test_rag_tool_import(self):
         """Test that RAGTool can be imported."""
-        from agents.base.rag_tool import RAGTool
+        from core.agents.base.rag_tool import RAGTool
         assert RAGTool is not None, "RAGTool should be importable"
 
     def test_rag_tool_structure(self):
         """Test that RAGTool has required methods."""
-        from agents.base.rag_tool import RAGTool
+        from core.agents.base.rag_tool import RAGTool
         
         # Check that required methods exist
         assert hasattr(RAGTool, 'extract_metadata_filters'), "RAGTool should have extract_metadata_filters method"
@@ -58,7 +58,7 @@ class TestRAGTool:
 
     def test_rag_tool_instantiation(self):
         """Test that RAGTool can be instantiated with a mock agent."""
-        from agents.base.rag_tool import RAGTool
+        from core.agents.base.rag_tool import RAGTool
         
         # Create a mock agent
         mock_agent = MagicMock()
@@ -74,12 +74,12 @@ class TestAgentCoordinator:
 
     def test_agent_coordinator_import(self):
         """Test that AgentCoordinator can be imported."""
-        from agents.base.agent_coordinator import AgentCoordinator
+        from core.agents.base.agent_coordinator import AgentCoordinator
         assert AgentCoordinator is not None, "AgentCoordinator should be importable"
 
     def test_agent_coordinator_structure(self):
         """Test that AgentCoordinator has required methods."""
-        from agents.base.agent_coordinator import AgentCoordinator
+        from core.agents.base.agent_coordinator import AgentCoordinator
         
         # Check that required methods exist
         assert hasattr(AgentCoordinator, 'register_agent'), "AgentCoordinator should have register_agent method"
@@ -89,7 +89,7 @@ class TestAgentCoordinator:
 
     def test_agent_coordinator_instantiation(self):
         """Test that AgentCoordinator cannot be instantiated directly."""
-        from agents.base.agent_coordinator import AgentCoordinator
+        from core.agents.base.agent_coordinator import AgentCoordinator
         
         with pytest.raises(TypeError, match="Can't instantiate abstract class"):
             AgentCoordinator()
@@ -143,7 +143,7 @@ class TestConcreteImplementations:
 
     def test_concrete_agent_coordinator_implementation(self):
         """Test that we can create a concrete AgentCoordinator implementation."""
-        from agents.base.agent_coordinator import AgentCoordinator
+        from core.agents.base.agent_coordinator import AgentCoordinator
         
         # Create a concrete implementation that inherits from AgentCoordinator
         class ConcreteAgentCoordinator(AgentCoordinator):
@@ -168,8 +168,8 @@ class TestConcreteImplementations:
 class TestIntegration:
     """Test integration between components."""
 
-    @patch('agents.base.base_agent.create_client')
-    @patch('agents.base.base_agent.openai.OpenAI')
+    @patch('core.agents.base.base_agent.create_client')
+    @patch('core.agents.base.base_agent.openai.OpenAI')
     def test_agent_with_mocked_clients(self, mock_openai, mock_create_client):
         """Test that agents can work with mocked clients."""
         # Mock the clients
