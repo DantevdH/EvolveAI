@@ -8,7 +8,7 @@
 # Packages/
 .build/
 .swiftpm/
-
+.vscode/
 ### Xcode ###
 # Xcode
 #
@@ -187,3 +187,7 @@ venv.bak/
 frontend/EvolveAI/Resources/Config.plist
 frontend/Pods/
 
+# Specific files that need to be ignored
+*.pdf
+*.xlsx
+*.csv

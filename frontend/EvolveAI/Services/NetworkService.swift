@@ -275,17 +275,18 @@ class NetworkService: NetworkServiceProtocol, ObservableObject {
                 if !isRestDay, let exercisesData = dailyWorkoutData["exercises"] as? [[String: Any]] {
                     print("--- [DEBUG] 💪 Parsing \(exercisesData.count) exercises for \(dayOfWeek) ---")
                     for exerciseData in exercisesData {
-                        guard let name = exerciseData["name"] as? String,
+                        guard let exerciseId = exerciseData["exercise_id"] as? Int,
                               let sets = exerciseData["sets"] as? Int,
-                              let reps = exerciseData["reps"] as? String else {
+                              let repsArray = exerciseData["reps"] as? [Int] else {
                             print("--- [DEBUG] ⚠️ Failed to parse exercise data ---")
+                            print("--- [DEBUG] exerciseData: \(exerciseData) ---")
                             continue
                         }
                         
                         exercises.append(GeneratedWorkoutExercise(
-                            name: name,
+                            name: String(exerciseId),  // Convert exercise_id to string for storage
                             sets: sets,
-                            reps: reps
+                            reps: repsArray  // Keep as array of integers
                         ))
                     }
                 }
@@ -559,51 +560,21 @@ class NetworkService: NetworkServiceProtocol, ObservableObject {
     private func saveWorkoutExercise(_ exercise: GeneratedWorkoutExercise, dailyWorkoutId: Int) async throws {
         print("--- [DEBUG] 🏋️ Saving exercise: \(exercise.name) (\(exercise.sets) sets, \(exercise.reps) reps) ---")
         
-        // First, find or create the exercise
-        let exerciseResponse: [Exercise] = try await supabase.database
-            .from("exercises")
-            .select()
-            .eq("name", value: exercise.name)
-            .execute()
-            .value
-        
-        let exerciseId: Int
-        if let existingExercise = exerciseResponse.first {
-            exerciseId = existingExercise.id
-            print("--- [DEBUG] 🔍 Found existing exercise with ID: \(exerciseId) ---")
-        } else {
-            // Create new exercise
-            print("--- [DEBUG] 🆕 Creating new exercise: \(exercise.name) ---")
-            
-            let newExercise = ExerciseInsert(
-                name: exercise.name,
-                description: "Generated exercise",
-                video_url: nil
-            )
-            
-            let createdExerciseResponse: [Exercise] = try await supabase.database
-                .from("exercises")
-                .insert(newExercise)
-                .select()
-                .execute()
-                .value
-            
-            guard let createdExercise = createdExerciseResponse.first else {
-                print("--- [DEBUG] ❌ Failed to create exercise ---")
-                throw NetworkError.workoutPlanGenerationFailed("Failed to create exercise")
-            }
-            
-            exerciseId = createdExercise.id
-            print("--- [DEBUG] ✅ Created new exercise with ID: \(exerciseId) ---")
+        // Extract exercise_id from the name field (which contains the exercise_id from backend)
+        guard let exerciseId = Int(exercise.name) else {
+            print("--- [DEBUG] ❌ Invalid exercise_id: \(exercise.name) ---")
+            throw NetworkError.workoutPlanGenerationFailed("Invalid exercise_id format")
         }
         
-        // Create workout exercise
+        print("--- [DEBUG] 🔍 Using exercise_id: \(exerciseId) ---")
+        
+        // Create workout exercise directly with the provided exercise_id
         let newWorkoutExercise = WorkoutExerciseInsert(
             daily_workout_id: dailyWorkoutId,
             exercise_id: exerciseId,
             sets: exercise.sets,
             reps: exercise.reps,
-            weight: nil
+            weight: Array(repeating: nil, count: exercise.sets)  // Array of NULLs matching sets length
         )
         
         try await supabase.database
