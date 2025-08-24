@@ -6,6 +6,7 @@ These models define the data structures for API communication.
 
 from pydantic import BaseModel, Field
 from typing import List, Optional
+from .schemas import WorkoutPlanSchema
 
 class GenerateWorkoutRequest(BaseModel):
     """Request model for workout plan generation."""
@@ -15,7 +16,7 @@ class GenerateWorkoutRequest(BaseModel):
     experienceLevel: str = Field(..., description="User's experience level")
     daysPerWeek: int = Field(..., description="Number of training days per week")
     minutesPerSession: int = Field(..., description="Duration of each training session")
-    equipment: List[str] = Field(..., description="Available equipment")
+    equipment: str = Field(..., description="Available equipment")
     age: int = Field(..., description="User's age")
     weight: float = Field(..., description="User's weight")
     weightUnit: str = Field(..., description="Weight unit (kg/lbs)")
@@ -31,7 +32,7 @@ class GenerateWorkoutResponse(BaseModel):
     
     status: str = Field(..., description="Response status")
     message: str = Field(..., description="Response message")
-    workout_plan: dict = Field(..., description="Generated workout plan")
+    workout_plan: WorkoutPlanSchema = Field(..., description="Generated workout plan")
 
 class MockDataRequest(BaseModel):
     """Request model for mock data generation."""

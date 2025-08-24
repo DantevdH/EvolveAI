@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional
 from enum import Enum
 
 
@@ -32,20 +32,35 @@ class UserProfileSchema(BaseModel):
     gender: str = Field(..., description="User's gender")
     has_limitations: bool = Field(..., description="Whether user has physical limitations")
     limitations_description: str = Field(default="", description="Description of limitations")
-    training_schedule: str = Field(..., description="Preferred training schedule")
     final_chat_notes: str = Field(default="", description="Additional notes from chat interaction")
 
 
 class ExerciseSchema(BaseModel):
-    """Schema for individual exercises in the workout plan."""
-
-    name: str = Field(
-        ..., description="The name of the exercise, e.g., 'Barbell Squat'"
-    )
-    sets: int = Field(..., ge=1, le=10, description="Number of sets (1-10)")
-    reps: str = Field(
-        ..., description="Rep range or duration, e.g., '8-12' or '45 seconds'"
-    )
+    """
+    Single exercise schema for workout plans.
+    Contains workout-specific data (sets, reps, weight) and references exercise database.
+    """
+    
+    exercise_id: int = Field(..., description="ID of the exercise from the database")
+    sets: int = Field(..., ge=1, le=10, description="Number of sets")
+    reps: List[int] = Field(..., description="Rep targets for each set")
+    description: str = Field(..., description="Description for fallback replacement")
+    weight: Optional[List[float]] = Field(default=None, description="Weight per set (user fills in)")
+    
+    # Validation
+    @classmethod
+    def validate_reps_match_sets(cls, v, values):
+        """Ensure reps list length matches sets count."""
+        if 'sets' in values and len(v) != values['sets']:
+            raise ValueError(f"Reps list length ({len(v)}) must match sets count ({values['sets']})")
+        return v
+    
+    @classmethod
+    def validate_weight_match_sets(cls, v, values):
+        """Ensure weight list length matches sets count if provided."""
+        if v is not None and 'sets' in values and len(v) != values['sets']:
+            raise ValueError(f"Weight list length ({len(v)}) must match sets count ({values['sets']})")
+        return v
 
 
 class DailyWorkoutSchema(BaseModel):

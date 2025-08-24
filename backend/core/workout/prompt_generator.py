@@ -39,7 +39,6 @@ class WorkoutPromptGenerator:
                 - Available Equipment: {user_profile.equipment}
                 - Age: {user_profile.age} years old
                 - Gender: {user_profile.gender}
-                - Weight: {user_profile.weight} {user_profile.weight_unit}
                 - Height: {user_profile.height} {user_profile.height_unit}
                 - Physical Limitations: {limitations_text}
                 - Additional Notes: {user_profile.final_chat_notes or 'None provided'}
@@ -54,16 +53,17 @@ class WorkoutPromptGenerator:
                 4. If you need a different exercise, choose the closest alternative from the list
                 5. Each exercise in your workout plan must have a valid exercise_id from the list
 
-                **SPECIFIC REQUIREMENTS:**
-                1. Generate exactly 4 weeks of workout plans
-                2. Each week must have exactly 7 days (Monday through Sunday)
-                3. Training days should match the user's requested frequency ({user_profile.days_per_week} days/week)
-                4. Remaining days should be rest days (is_rest_day=True, empty exercises array)
-                5. For training days: is_rest_day=False with appropriate exercises
-                6. Keep sessions within the {user_profile.minutes_per_session}-minute timeframe
-                7. Exercise names should be clear and specific (e.g., "Barbell Back Squat" not just "Squat")
-                8. Reps can be ranges (e.g., "8-12") or time-based (e.g., "30 seconds", "1 minute")
-                9. Each exercise must include the exercise_id field from the provided list
+                **EXERCISE REQUIREMENTS:**
+                1. Training days should match the user's requested frequency ({user_profile.days_per_week} days/week)
+                2. Remaining days should be rest days (is_rest_day=True, empty exercises array)
+                3. For training days: is_rest_day=False with appropriate exercises
+                4. Keep sessions within the {user_profile.minutes_per_session}-minute timeframe
+                5. Exercise names should be clear and specific (e.g., "Barbell Back Squat" not just "Squat")
+                6. Reps must be a list of integers matching the number of sets (e.g., [8, 10, 8, 10] for 4 sets)
+                7. Each exercise must include the exercise_id field from the provided list
+                8. You only need to specify: exercise_id, sets, and reps - other exercise details come from the database
+                9. Provide a brief description for each exercise to help with fallback replacement if needed
+                10. Do not specify weights - users will fill these in based on their capabilities
 
                 **OUTPUT FORMAT:**
                 Return a structured workout plan with a motivating title and clear summary.

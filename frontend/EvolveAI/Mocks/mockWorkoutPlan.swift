@@ -149,8 +149,8 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 1,
         exerciseId: 1,
         sets: 4,
-        reps: "8-10",
-        weight: nil,
+        reps: [8, 10, 8, 10],
+        weight: Array(repeating: nil, count: 4),
         createdAt: today,
         updatedAt: today
     ),
@@ -159,8 +159,8 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 1,
         exerciseId: 2,
         sets: 3,
-        reps: "10-12",
-        weight: nil,
+        reps: [10, 12, 10],
+        weight: Array(repeating: nil, count: 3),
         createdAt: today,
         updatedAt: today
     ),
@@ -169,8 +169,8 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 1,
         exerciseId: 3,
         sets: 3,
-        reps: "10-12",
-        weight: nil,
+        reps: [10, 12, 10],
+        weight: Array(repeating: nil, count: 3),
         createdAt: today,
         updatedAt: today
     ),
@@ -180,8 +180,8 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 3,
         exerciseId: 4,
         sets: 3,
-        reps: "5-8",
-        weight: nil,
+        reps: [5, 8, 5],
+        weight: Array(repeating: nil, count: 3),
         createdAt: today,
         updatedAt: today
     ),
@@ -190,8 +190,8 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 3,
         exerciseId: 5,
         sets: 4,
-        reps: "8-10",
-        weight: nil,
+        reps: [8, 10, 8, 10],
+        weight: Array(repeating: nil, count: 4),
         createdAt: today,
         updatedAt: today
     ),
@@ -200,8 +200,8 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 3,
         exerciseId: 6,
         sets: 3,
-        reps: "45 seconds",
-        weight: nil,
+        reps: [45, 45, 45], // 45 seconds for each set
+        weight: Array(repeating: nil, count: 3),
         createdAt: today,
         updatedAt: today
     ),
@@ -211,8 +211,8 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 5,
         exerciseId: 7,
         sets: 4,
-        reps: "As many as possible",
-        weight: nil,
+        reps: [0, 0, 0, 0], // "As many as possible" represented as 0
+        weight: Array(repeating: nil, count: 4),
         createdAt: today,
         updatedAt: today
     ),
@@ -221,8 +221,8 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 5,
         exerciseId: 8,
         sets: 3,
-        reps: "12-15",
-        weight: nil,
+        reps: [12, 15, 12],
+        weight: Array(repeating: nil, count: 3),
         createdAt: today,
         updatedAt: today
     ),
@@ -231,8 +231,8 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 5,
         exerciseId: 9,
         sets: 3,
-        reps: "12-15",
-        weight: nil,
+        reps: [12, 15, 12],
+        weight: Array(repeating: nil, count: 3),
         createdAt: today,
         updatedAt: today
     ),
@@ -242,8 +242,8 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 8,
         exerciseId: 1,
         sets: 4,
-        reps: "10-12",
-        weight: nil,
+        reps: [10, 12, 10, 12],
+        weight: Array(repeating: nil, count: 4),
         createdAt: today,
         updatedAt: today
     ),
@@ -252,8 +252,8 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 8,
         exerciseId: 10,
         sets: 3,
-        reps: "10-12",
-        weight: nil,
+        reps: [10, 12, 10],
+        weight: Array(repeating: nil, count: 3),
         createdAt: today,
         updatedAt: today
     ),
@@ -262,8 +262,8 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 8,
         exerciseId: 11,
         sets: 3,
-        reps: "12-15",
-        weight: nil,
+        reps: [12, 15, 12],
+        weight: Array(repeating: nil, count: 3),
         createdAt: today,
         updatedAt: today
     )
@@ -293,9 +293,3 @@ let mockCompleteWorkoutPlan = CompleteWorkoutPlan(
     exercises: mockExercises
 )
 
-// MARK: - Legacy Workout Conversion Helper
-extension Workout {
-    static func fromDailyWorkout(_ dailyWorkout: DailyWorkout, exercises: [Exercise], workoutExercises: [WorkoutExercise]) -> Workout {
-        return Workout(from: dailyWorkout, exercises: exercises, workoutExercises: workoutExercises)
-    }
-}

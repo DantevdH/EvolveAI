@@ -27,32 +27,27 @@ MOCK_USER_PROFILE_DATA = {
     "final_chat_notes": "User is motivated and ready to start. Wants to focus on compound lifts.",
 }
 
-# Mock exercise data
+# Mock exercise data with proper schema fields
 MOCK_EXERCISES = {
     "barbell_squat": {
-        "name": "Barbell Squat",
-        "description": "Compound lower body exercise targeting quads, glutes, and core",
-        "video_url": None
+        "exercise_id": 1302,
+        "description": "Compound lower body exercise targeting quads, glutes, and core"
     },
     "bench_press": {
-        "name": "Bench Press", 
-        "description": "Compound upper body exercise targeting chest, shoulders, and triceps",
-        "video_url": None
+        "exercise_id": 1286, 
+        "description": "Compound upper body exercise targeting chest, shoulders, and triceps"
     },
     "deadlift": {
-        "name": "Deadlift",
-        "description": "Compound posterior chain exercise targeting hamstrings, glutes, and lower back", 
-        "video_url": None
+        "exercise_id": 1291,
+        "description": "Compound posterior chain exercise targeting hamstrings, glutes, and lower back"
     },
     "bent_over_row": {
-        "name": "Bent Over Row",
-        "description": "Compound back exercise targeting lats, rhomboids, and biceps",
-        "video_url": None
+        "exercise_id": 1295,
+        "description": "Compound back exercise targeting lats, rhomboids, and biceps"
     },
     "overhead_press": {
-        "name": "Overhead Press",
-        "description": "Compound shoulder exercise targeting deltoids and triceps",
-        "video_url": None
+        "exercise_id": 1275,
+        "description": "Compound shoulder exercise targeting deltoids and triceps"
     }
 }
 
@@ -71,150 +66,95 @@ def create_mock_workout_plan(user_request: Any = None) -> WorkoutPlanSchema:
         Mock WorkoutPlanSchema instance
     """
     
-    # Create mock exercises
+    # Create mock exercises using the new schema structure
     exercises = []
-    for i, (key, exercise_data) in enumerate(MOCK_EXERCISES.items(), 1):
-        exercises.append(ExerciseSchema(
-            id=i,
-            name=exercise_data["name"],
-            description=exercise_data["description"],
-            video_url=exercise_data["video_url"]
-        ))
+    for key, exercise_data in MOCK_EXERCISES.items():
+        # Create different exercise configurations for variety
+        if key == "barbell_squat":
+            exercises.append(ExerciseSchema(
+                exercise_id=exercise_data["exercise_id"],
+                sets=4,
+                reps=[8, 10, 8, 10],
+                description=exercise_data["description"]
+            ))
+        elif key == "bench_press":
+            exercises.append(ExerciseSchema(
+                exercise_id=exercise_data["exercise_id"],
+                sets=3,
+                reps=[8, 12, 10],
+                description=exercise_data["description"]
+            ))
+        elif key == "deadlift":
+            exercises.append(ExerciseSchema(
+                exercise_id=exercise_data["exercise_id"],
+                sets=4,
+                reps=[6, 8, 6, 8],
+                description=exercise_data["description"]
+            ))
+        elif key == "bent_over_row":
+            exercises.append(ExerciseSchema(
+                exercise_id=exercise_data["exercise_id"],
+                sets=3,
+                reps=[10, 12, 11],
+                description=exercise_data["description"]
+            ))
+        elif key == "overhead_press":
+            exercises.append(ExerciseSchema(
+                exercise_id=exercise_data["exercise_id"],
+                sets=3,
+                reps=[8, 10, 9],
+                description=exercise_data["description"]
+            ))
     
-    # Create mock daily workouts
+    # Create mock daily workouts using the new schema structure
     daily_workouts = [
         DailyWorkoutSchema(
-            id=1,
             day_of_week="Monday",
             is_rest_day=False,
-            is_completed=False,
-            week_number=1,
-            workout_exercises=[
-                {
-                    "id": 1,
-                    "exercise": exercises[0],  # Barbell Squat
-                    "sets": 4,
-                    "reps": "8-10",
-                    "is_completed": False,
-                    "progress_id": None
-                },
-                {
-                    "id": 2,
-                    "exercise": exercises[1],  # Bench Press
-                    "sets": 3,
-                    "reps": "8-12", 
-                    "is_completed": False,
-                    "progress_id": None
-                },
-                {
-                    "id": 3,
-                    "exercise": exercises[3],  # Bent Over Row
-                    "sets": 3,
-                    "reps": "10-12",
-                    "is_completed": False,
-                    "progress_id": None
-                }
-            ]
+            exercises=[exercises[0], exercises[1], exercises[3]]  # Squat, Bench, Row
         ),
         DailyWorkoutSchema(
-            id=2,
             day_of_week="Tuesday",
             is_rest_day=True,
-            is_completed=False,
-            week_number=1,
-            workout_exercises=[]
+            exercises=[]
         ),
         DailyWorkoutSchema(
-            id=3,
             day_of_week="Wednesday",
             is_rest_day=False,
-            is_completed=False,
-            week_number=1,
-            workout_exercises=[
-                {
-                    "id": 4,
-                    "exercise": exercises[2],  # Deadlift
-                    "sets": 4,
-                    "reps": "6-8",
-                    "is_completed": False,
-                    "progress_id": None
-                },
-                {
-                    "id": 5,
-                    "exercise": exercises[4],  # Overhead Press
-                    "sets": 3,
-                    "reps": "8-10",
-                    "is_completed": False,
-                    "progress_id": None
-                }
-            ]
+            exercises=[exercises[2], exercises[4]]  # Deadlift, Overhead Press
         ),
         DailyWorkoutSchema(
-            id=4,
             day_of_week="Thursday",
             is_rest_day=True,
-            is_completed=False,
-            week_number=1,
-            workout_exercises=[]
+            exercises=[]
         ),
         DailyWorkoutSchema(
-            id=5,
             day_of_week="Friday",
             is_rest_day=False,
-            is_completed=False,
-            week_number=1,
-            workout_exercises=[
-                {
-                    "id": 6,
-                    "exercise": exercises[0],  # Barbell Squat
-                    "sets": 3,
-                    "reps": "10-12",
-                    "is_completed": False,
-                    "progress_id": None
-                },
-                {
-                    "id": 7,
-                    "exercise": exercises[1],  # Bench Press
-                    "sets": 4,
-                    "reps": "6-8",
-                    "is_completed": False,
-                    "progress_id": None
-                }
-            ]
+            exercises=[exercises[0], exercises[1]]  # Squat, Bench
         ),
         DailyWorkoutSchema(
-            id=6,
             day_of_week="Saturday",
             is_rest_day=True,
-            is_completed=False,
-            week_number=1,
-            workout_exercises=[]
+            exercises=[]
         ),
         DailyWorkoutSchema(
-            id=7,
             day_of_week="Sunday",
             is_rest_day=True,
-            is_completed=False,
-            week_number=1,
-            workout_exercises=[]
+            exercises=[]
         )
     ]
     
     # Create weekly schedule
     weekly_schedule = WeeklyScheduleSchema(
-        id=1,
         week_number=1,
         daily_workouts=daily_workouts
     )
     
-    # Create the workout plan
+    # Create the workout plan using the new schema structure
     workout_plan = WorkoutPlanSchema(
-        id=1,
-        name="Strength Builder Pro",
-        description="A comprehensive 3-day strength training program designed for intermediate lifters focusing on compound movements and progressive overload",
-        total_weeks=4,
-        created_at="2025-01-27T10:00:00Z",
-        updated_at="2025-01-27T10:00:00Z",
+        title="Strength Builder Pro",
+        summary="A comprehensive 3-day strength training program designed for intermediate lifters focusing on compound movements and progressive overload",
         weekly_schedules=[weekly_schedule]
     )
     
@@ -225,6 +165,25 @@ def get_mock_data_summary() -> Dict[str, Any]:
     return {
         "user_profile": "Mock user profile for testing",
         "workout_plan": "Complete 3-day strength training program",
-        "exercises": f"{len(MOCK_EXERCISES)} compound exercises",
+        "exercises": [
+            {
+                "name": "Barbell Squat",
+                "sets": 4,
+                "reps": [8, 10, 8, 10],
+                "description": "Compound lower body exercise for building strength and muscle"
+            },
+            {
+                "name": "Bench Press",
+                "sets": 3,
+                "reps": [8, 12, 10],
+                "description": "Compound upper body push exercise for chest development"
+            },
+            {
+                "name": "Deadlift",
+                "sets": 4,
+                "reps": [6, 8, 6, 8],
+                "description": "Posterior chain compound exercise for overall strength"
+            }
+        ],
         "usage": "Set DEBUG=true in .env to use mock data"
     }

@@ -1,20 +1,16 @@
 import Foundation
 
 enum ExperienceLevel: String, CaseIterable, Identifiable {
-    case beginner
-    case intermediate
-    case advanced
+    case beginner = "Beginner"
+    case intermediate = "Intermediate"
+    case advanced = "Advanced"
     
     // The 'id' for Identifiable conformance is simply the case itself.
     var id: Self { self }
     
-    // Title for display in the UI.
+    // Title for display in the UI - now just returns the raw value.
     var title: String {
-        switch self {
-        case .beginner: return "Beginner"
-        case .intermediate: return "Intermediate"
-        case .advanced: return "Advanced"
-        }
+        return self.rawValue
     }
     
     // Description for display in the UI.

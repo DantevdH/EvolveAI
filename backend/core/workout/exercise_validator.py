@@ -2,27 +2,35 @@
 Exercise Validator Service for EvolveAI
 
 This service validates workout plans to ensure all referenced exercises exist
-in the database and provides fallback alternatives when needed.
+in the database and provides fallback alternatives when needed using cosine similarity.
 """
 
 import re
 from typing import List, Dict, Any, Optional, Tuple
 from .exercise_selector import ExerciseSelector
 import logging
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
 class ExerciseValidator:
-    """Validates workout plans and ensures exercise authenticity."""
+    """Validates workout plans and ensures exercise authenticity using cosine similarity fallback."""
     
     def __init__(self):
         """Initialize the exercise validator."""
         self.exercise_selector = ExerciseSelector()
-        logger.info("✅ Exercise Validator initialized")
+        self.vectorizer = TfidfVectorizer(
+            max_features=1000,
+            stop_words='english',
+            ngram_range=(1, 2)
+        )
+        logger.info("✅ Exercise Validator initialized with cosine similarity support")
     
     def validate_workout_plan(self, workout_plan: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
         """
-        Validate a workout plan and fix any invalid exercise references.
+        Validate a workout plan and fix any invalid exercise references using cosine similarity.
         
         Args:
             workout_plan: The workout plan to validate
@@ -47,8 +55,8 @@ class ExerciseValidator:
             if invalid_ids:
                 validation_messages.append(f"Found {len(invalid_ids)} invalid exercise IDs: {invalid_ids}")
                 
-                # Fix invalid exercises
-                validated_workout = self._fix_invalid_exercises(
+                # Fix invalid exercises using cosine similarity
+                validated_workout = self._fix_invalid_exercises_with_similarity(
                     validated_workout, invalid_ids, valid_ids
                 )
             else:
@@ -148,7 +156,7 @@ class ExerciseValidator:
         
         Args:
             original_exercise: The original exercise data
-            valid_ids: List of valid exercise IDs
+            valid_ids: List of valid exercise IDs (not used for replacement filtering)
             
         Returns:
             Replacement exercise data or None
@@ -161,19 +169,17 @@ class ExerciseValidator:
             if not target_muscle:
                 return None
             
-            # Get replacement candidates
+            # Get replacement candidates (no valid_ids restriction)
             candidates = self.exercise_selector.get_muscle_group_exercises(
                 muscle_group=target_muscle,
-                difficulty=original_exercise.get('difficulty', 'Intermediate'),
-                equipment=original_exercise.get('equipment', ['bodyweight'])
+                difficulty=original_exercise.get('difficulty', None),
+                equipment=original_exercise.get('equipment', None)
             )
             
-            # Filter to only valid IDs
-            valid_candidates = [c for c in candidates if str(c['id']) in valid_ids]
-            
-            if valid_candidates:
+            # No need to filter by valid_ids - we can use any exercise from the database
+            if candidates:
                 # Return the best candidate
-                best_candidate = valid_candidates[0]
+                best_candidate = candidates[0]
                 return {
                     'id': best_candidate['id'],
                     'name': best_candidate['name'],
@@ -187,6 +193,166 @@ class ExerciseValidator:
         except Exception as e:
             logger.error(f"Error finding replacement exercise: {e}")
             return None
+    
+    def _fix_invalid_exercises_with_similarity(self, 
+                                             workout_plan: Dict[str, Any], 
+                                             invalid_ids: List[str],
+                                             valid_ids: List[str]) -> Dict[str, Any]:
+        """
+        Replace invalid exercises using cosine similarity on descriptions and muscle groups.
+        
+        Args:
+            workout_plan: The workout plan to fix
+            invalid_ids: List of invalid exercise IDs
+            valid_ids: List of valid exercise IDs
+            
+        Returns:
+            Fixed workout plan
+        """
+        fixed_workout = workout_plan.copy()
+        
+        try:
+            weeks = fixed_workout.get('weeks', [])
+            
+            for week in weeks:
+                days = week.get('days', [])
+                
+                for day in days:
+                    if not day.get('is_rest_day', False):
+                        exercises = day.get('exercises', [])
+                        
+                        for exercise in exercises:
+                            exercise_id = str(exercise.get('exercise_id', ''))
+                            
+                            if exercise_id in invalid_ids:
+                                # Find a replacement exercise using cosine similarity
+                                replacement = self._find_replacement_with_similarity(
+                                    exercise, valid_ids
+                                )
+                                
+                                if replacement:
+                                    # Update the exercise with replacement data
+                                    exercise.update(replacement)
+                                    logger.info(f"Replaced invalid exercise {exercise_id} with {replacement['id']} using similarity")
+                                else:
+                                    # Remove the exercise if no replacement found
+                                    exercises.remove(exercise)
+                                    logger.warning(f"Removed invalid exercise {exercise_id} - no replacement found")
+            
+            return fixed_workout
+            
+        except Exception as e:
+            logger.error(f"Error fixing invalid exercises with similarity: {e}")
+            return workout_plan
+    
+    def _find_replacement_with_similarity(self, 
+                                        original_exercise: Dict[str, Any], 
+                                        valid_ids: List[str]) -> Optional[Dict[str, Any]]:
+        """
+        Find a suitable replacement exercise using cosine similarity on descriptions and muscle groups.
+        
+        Args:
+            original_exercise: The original exercise data
+            valid_ids: List of valid exercise IDs (not used for replacement filtering)
+            
+        Returns:
+            Replacement exercise data or None
+        """
+        try:
+            # Get the original exercise description and target muscle
+            original_description = original_exercise.get('description', '')
+            target_muscle = self._extract_muscle_from_name(original_exercise.get('name', ''))
+            
+            if not target_muscle:
+                logger.warning(f"No target muscle found for exercise: {original_exercise.get('name', '')}")
+                return None
+            
+            # Get replacement candidates from the same muscle group (no valid_ids restriction)
+            candidates = self.exercise_selector.get_muscle_group_exercises(
+                muscle_group=target_muscle,
+                difficulty=original_exercise.get('difficulty', "Beginner"),
+                equipment=original_exercise.get('equipment', None)
+            )
+            
+            # No need to filter by valid_ids - we can use any exercise from the database
+            if not candidates:
+                logger.warning(f"No candidates found for muscle group: {target_muscle}")
+                return None
+            
+            # If we have a description, use cosine similarity
+            if original_description and len(candidates) > 1:
+                replacement = self._find_best_match_by_similarity(
+                    original_description, candidates
+                )
+            else:
+                # Fallback to first candidate
+                replacement = candidates[0]
+            
+            if replacement:
+                return {
+                    'id': replacement['id'],
+                    'name': replacement['name'],
+                    'exercise_id': replacement['id'],
+                    'difficulty': replacement['difficulty'],
+                    'equipment': replacement['equipment'],
+                    'description': f"Replacement for: {original_description}" if original_description else "Exercise replacement"
+                }
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error finding replacement with similarity: {e}")
+            return None
+    
+    def _find_best_match_by_similarity(self, 
+                                     target_description: str, 
+                                     candidates: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Find the best matching exercise using cosine similarity on descriptions.
+        
+        Args:
+            target_description: The target exercise description
+            candidates: List of candidate exercises
+            
+        Returns:
+            Best matching exercise or None
+        """
+        try:
+            if not candidates:
+                return None
+            
+            # Prepare text for vectorization
+            texts = [target_description]
+            for candidate in candidates:
+                # Combine exercise name, description, and muscle group for better matching
+                candidate_text = f"{candidate.get('name', '')} {candidate.get('description', '')} {candidate.get('main_muscle', '')}"
+                texts.append(candidate_text)
+            
+            # Create TF-IDF vectors
+            tfidf_matrix = self.vectorizer.fit_transform(texts)
+            
+            # Calculate cosine similarity between target and all candidates
+            target_vector = tfidf_matrix[0:1]
+            candidate_vectors = tfidf_matrix[1:]
+            
+            similarities = cosine_similarity(target_vector, candidate_vectors).flatten()
+            
+            # Find the best match
+            best_idx = np.argmax(similarities)
+            best_similarity = similarities[best_idx]
+            
+            logger.info(f"Best similarity score: {best_similarity:.3f} for exercise: {candidates[best_idx]['name']}")
+            
+            # Return the best candidate if similarity is above threshold
+            if best_similarity > 0.1:  # Adjustable threshold
+                return candidates[best_idx]
+            else:
+                logger.warning(f"Best similarity score too low: {best_similarity:.3f}")
+                return candidates[0]  # Fallback to first candidate
+            
+        except Exception as e:
+            logger.error(f"Error calculating cosine similarity: {e}")
+            return candidates[0] if candidates else None
     
     def _extract_muscle_from_name(self, exercise_name: str) -> Optional[str]:
         """Extract target muscle group from exercise name."""

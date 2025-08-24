@@ -18,6 +18,7 @@ from ...workout.exercise_validator import ExerciseValidator
 
 import os
 import json
+import openai
 
 class FitnessCoach(BaseAgent):
     """Specialist agent for fitness training and workout planning."""
@@ -88,7 +89,7 @@ class FitnessCoach(BaseAgent):
     
     def generate_workout_plan(self, 
                             user_profile: UserProfileSchema,
-                            openai_client) -> WorkoutPlanSchema:
+                            openai_client: openai.OpenAI) -> WorkoutPlanSchema:
         """
         Generate a comprehensive workout plan using your existing system + RAG enhancement.
         
@@ -153,7 +154,7 @@ class FitnessCoach(BaseAgent):
             # Log validation results
             for message in validation_messages:
                 print(f"   {message}")
-            
+            print(validated_plan)
             # Step 7: Create final workout plan schema
             workout_plan = WorkoutPlanSchema(**validated_plan)
             
@@ -178,25 +179,15 @@ class FitnessCoach(BaseAgent):
             # Determine target muscle groups based on user goals
             target_muscles = self._get_target_muscle_groups(user_profile)
             
-            # Map experience level to difficulty
-            difficulty_mapping = {
-                'beginner': 'Beginner',
-                'intermediate': 'Intermediate',
-                'advanced': 'Advanced'
-            }
-            difficulty = difficulty_mapping.get(
-                user_profile.experience_level.lower(), 'Intermediate'
-            )
-            
             # Convert equipment string to list for the exercise selector
             equipment_list = [user_profile.equipment] if user_profile.equipment else []
             
             # Get exercise candidates
             candidates = self.exercise_selector.get_exercise_candidates(
                 muscle_groups=target_muscles,
-                difficulty=difficulty,
+                difficulty=user_profile.experience_level,
                 equipment=equipment_list,
-                max_exercises=25  # Get more candidates for variety
+                max_exercises=50
             )
             
             return candidates
@@ -217,26 +208,18 @@ class FitnessCoach(BaseAgent):
         """
         goal = user_profile.primary_goal.lower()
         
-        # Map to actual database muscle group values
-        if goal in ['weight_loss', 'general_fitness']:
-            # Full body workouts for general fitness and weight loss
-            return ['Chest', 'Back', 'Thighs', 'Shoulder', 'Upper Arms', 'Back']  # 'core' -> 'Back'
-        elif goal == 'muscle_building':
-            # Focus on major muscle groups for muscle building
-            return ['Chest', 'Back', 'Thighs', 'Shoulder', 'Upper Arms', 'Back']  # 'core' -> 'Back'
-        elif goal == 'strength':
-            # Compound movements for strength
-            return ['Chest', 'Back', 'Thighs', 'Shoulder']
-        elif goal == 'endurance':
-            # Full body with focus on endurance
-            return ['Chest', 'Back', 'Thighs', 'Back']  # 'core' -> 'Back'
-        elif goal == 'flexibility':
-            # Full body with focus on mobility
-            return ['Chest', 'Back', 'Thighs', 'Back']  # 'core' -> 'Back'
+        all_muscle_groups = ["Upper Arms", "Neck", "Chest", "Shoulder", "Calves", "Back", "Hips", "Thighs", "Forearm"]
+        
+        if goal != "bodybuilding":
+            # for Improve Endurance, Increase Strength, General Fitness, Weight Loss, Power & Speed, we want to exclude the smaller muscle groups
+            # TODO: for some goals, such as improve endurance, general fitness and weight loss we want to redirect to a different specialist agent including cardio and mobility exercises
+            smaller_muscles = ["Upper Arms", "Neck", "Calves", "Forearm"]
+            # Filter out smaller muscle groups for non-bodybuilding goals
+            return [muscle for muscle in all_muscle_groups if muscle not in smaller_muscles]
         else:
-            # Default to full body - use actual database values
-            return ['Chest', 'Back', 'Thighs', 'Shoulder', 'Upper Arms', 'Back']  # 'core' -> 'Back'
-    
+            # Bodybuilding goal: target all muscle groups
+            return all_muscle_groups
+        
     def _build_profile_query(self, user_profile: UserProfileSchema) -> str:
         """Build a comprehensive search query based on user profile."""
         query_parts = []
@@ -289,33 +272,7 @@ class FitnessCoach(BaseAgent):
         else:
             return "seeking fitness training workout plan recommendations"
     
-    def _extract_profile_filters(self, user_profile: UserProfileSchema) -> Dict[str, Any]:
-        """Extract metadata filters from user profile for better document retrieval."""
-        filters = {}
-        
-        # Only use specific user profile fields for filtering
-        if user_profile.primary_goal:
-            filters["goal"] = user_profile.primary_goal.lower()
-        
-        if user_profile.primary_goal_description:
-            filters["goal_description"] = user_profile.primary_goal_description.lower()
-        
-        if user_profile.weight:
-            filters["weight"] = user_profile.weight
-        
-        if user_profile.age:
-            filters["age"] = user_profile.age
-        
-        if user_profile.has_limitations:
-            filters["limitations"] = user_profile.has_limitations
-        
-        if user_profile.limitations_description:
-            filters["limitations_description"] = user_profile.limitations_description.lower()
-        
-        if user_profile.final_chat_notes:
-            filters["final_chat_notes"] = user_profile.final_chat_notes.lower()
-        
-        return filters
+
     
     def search_fitness_documents(self, user_profile: UserProfileSchema, 
                                 query: str = None, max_results: int = 8) -> List[Dict[str, Any]]:
@@ -510,23 +467,14 @@ class FitnessCoach(BaseAgent):
         
         return formatted_response
     
-    def _extract_exercise_recommendations(self, relevant_docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Extract exercise recommendations from retrieved documents."""
-        exercises = []
-        for doc in relevant_docs:
-            # Extract exercise information from document chunks
-            chunk_text = doc.get('chunk_text', '')
-            if chunk_text:
-                exercises.append({
-                    "name": f"Exercise from {doc.get('document_title', 'Unknown')}",
-                    "description": chunk_text[:100] + "..." if len(chunk_text) > 100 else chunk_text,
-                    "source": doc.get('document_title', 'Unknown')
-                })
-        
-        return exercises
+
     
     def _get_default_exercises(self, muscle_group: str, difficulty: str) -> List[Dict[str, Any]]:
         """Get default exercises when no context is available."""
+        # Handle None values gracefully
+        if muscle_group is None:
+            muscle_group = "general"
+        
         # Basic exercise recommendations
         default_exercises = {
             "chest": ["Push-ups", "Dumbbell Press", "Bench Press"],
@@ -534,7 +482,8 @@ class FitnessCoach(BaseAgent):
             "legs": ["Squats", "Lunges", "Deadlifts"],
             "shoulders": ["Overhead Press", "Lateral Raises", "Front Raises"],
             "arms": ["Bicep Curls", "Tricep Dips", "Hammer Curls"],
-            "core": ["Planks", "Crunches", "Russian Twists"]
+            "core": ["Planks", "Crunches", "Russian Twists"],
+            "general": ["Push-ups", "Squats", "Planks", "Jumping Jacks", "Burpees"]
         }
         
         exercises = default_exercises.get(muscle_group.lower(), ["General exercises"])

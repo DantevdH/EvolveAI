@@ -30,15 +30,14 @@ class TestMockData:
         assert user_profile.primary_goal == "Increase Strength"
         assert user_profile.experience_level == "Intermediate"
         assert user_profile.days_per_week == 3
-        assert user_profile.equipment == ["Full Gym"]
+        assert user_profile.equipment == "Full Gym"
 
     def test_mock_workout_plan_creation(self):
         """Test that mock workout plan can be created."""
         workout_plan = create_mock_workout_plan()
         
         assert workout_plan is not None
-        assert workout_plan.name == "Strength Builder Pro"
-        assert workout_plan.total_weeks == 4
+        assert workout_plan.title == "Strength Builder Pro"
         assert len(workout_plan.weekly_schedules) == 1
         
         # Check weekly schedule
@@ -50,7 +49,7 @@ class TestMockData:
         monday_workout = weekly_schedule.daily_workouts[0]
         assert monday_workout.day_of_week == "Monday"
         assert not monday_workout.is_rest_day
-        assert len(monday_workout.workout_exercises) == 3
+        assert len(monday_workout.exercises) == 3
         
         tuesday_workout = weekly_schedule.daily_workouts[1]
         assert tuesday_workout.day_of_week == "Tuesday"
@@ -67,7 +66,7 @@ class TestMockData:
         
         # Check exercise details
         squat = MOCK_EXERCISES["barbell_squat"]
-        assert squat["name"] == "Barbell Squat"
+        assert "barbell_squat_001" in squat["exercise_id"]
         assert "quads" in squat["description"].lower()
 
     def test_mock_data_summary(self):
@@ -78,7 +77,7 @@ class TestMockData:
         assert "workout_plan" in summary
         assert "exercises" in summary
         assert "usage" in summary
-        assert "5 compound exercises" in summary["exercises"]
+        assert "Compound lower body exercise" in summary["exercises"][0]["description"]
 
     def test_mock_workout_plan_with_custom_request(self):
         """Test that mock workout plan can be created with custom request."""
@@ -87,7 +86,7 @@ class TestMockData:
         
         # Should still create a valid workout plan
         assert workout_plan is not None
-        assert workout_plan.name == "Strength Builder Pro"
+        assert workout_plan.title == "Strength Builder Pro"
 
 class TestMockDataIntegration:
     """Test mock data integration with schemas."""

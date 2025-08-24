@@ -29,7 +29,6 @@ class Settings:
     FALLBACK_TO_FREE: bool = os.getenv("FALLBACK_TO_FREE", "true").lower() == "true"
     
     # Development Configuration
-    DEVELOPMENT_MODE: bool = os.getenv("DEVELOPMENT_MODE", "false").lower() == "true"
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     
     # Server Configuration

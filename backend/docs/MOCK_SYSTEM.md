@@ -17,9 +17,6 @@ The mock system provides realistic workout plans and user profiles when `DEBUG=t
 ```bash
 # Set this to true to use mock data
 DEBUG=true
-
-# Legacy setting (still supported)
-DEVELOPMENT_MODE=true
 ```
 
 ### **How It Works**
