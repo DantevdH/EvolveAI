@@ -6,45 +6,215 @@ struct ExerciseRowView: View {
     let workoutExercise: WorkoutExercise?
     let isCompleted: Bool
     let canModify: Bool
-    let onToggleCompletion: () -> Void
     let onShowDetail: () -> Void
+    let onUpdateSet: (Int, Int, Double?) -> Void // (setIndex, reps, weight)
+    
+    @State private var isExpanded = false
+    @State private var showingSetDetail = false
+    @State private var selectedSetIndex = 0
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Main exercise row
+            HStack(spacing: 12) {
+                // Completion status indicator (same style as "This Week")
+                Circle()
+                    .frame(width: 24, height: 24)
+                    .foregroundColor(isCompleted ? .evolvePrimary : .evolvePrimary.opacity(0.3))
+                    .overlay(
+                        Group {
+                            if isCompleted {
+                                Image(systemName: "checkmark")
+                                    .font(.caption)
+                                    .foregroundColor(.white)
+                            } else {
+                                Circle()
+                                    .fill(Color.white)
+                                    .frame(width: 4, height: 4)
+                            }
+                        }
+                    )
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(exercise.name)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.evolveText)
+                    
+                    if let workoutExercise = workoutExercise {
+                        HStack(spacing: 8) {
+                            Text("\(workoutExercise.sets) sets")
+                                .font(.caption)
+                                .foregroundColor(.evolveMuted)
+                            
+                            Button(action: {
+                                isExpanded.toggle()
+                            }) {
+                                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                                    .font(.caption)
+                                    .foregroundColor(.evolvePrimary)
+                            }
+                            .disabled(!canModify)
+                        }
+                    }
+                }
+                
+                Spacer()
+                
+                Button(action: onShowDetail) {
+                    Image(systemName: "info.circle")
+                        .font(.title3)
+                        .foregroundColor(.evolvePrimary)
+                }
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.evolveCard)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.clear, lineWidth: 1)
+            )
+            .opacity(canModify ? 1.0 : 0.6)
+            
+            // Expanded sets detail
+            if isExpanded, let workoutExercise = workoutExercise, canModify {
+                VStack(spacing: 8) {
+                    // Set management header
+                    HStack {
+                        Text("Sets")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.evolveMuted)
+                        
+                        Spacer()
+                        
+                        // Add/Remove set buttons
+                        HStack(spacing: 8) {
+                            Button(action: {
+                                onUpdateSet(-1, 0, nil) // -1 indicates add set
+                            }) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.title3)
+                                    .foregroundColor(.evolvePrimary)
+                            }
+                            
+                            Button(action: {
+                                onUpdateSet(-2, 0, nil) // -2 indicates remove set
+                            }) {
+                                Image(systemName: "minus.circle.fill")
+                                    .font(.title3)
+                                    .foregroundColor(.evolvePrimary)
+                            }
+                            .disabled(workoutExercise.sets <= 1)
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                    
+                    ForEach(0..<workoutExercise.sets, id: \.self) { setIndex in
+                        SetRowView(
+                            setNumber: setIndex + 1,
+                            reps: workoutExercise.reps[setIndex],
+                            weight: workoutExercise.weight[setIndex],
+                            onUpdate: { reps, weight in
+                                onUpdateSet(setIndex, reps, weight)
+                            }
+                        )
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 0)
+                        .fill(Color.evolveCard.opacity(0.5))
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Set Row View
+struct SetRowView: View {
+    let setNumber: Int
+    let reps: Int
+    let weight: Double?
+    let onUpdate: (Int, Double?) -> Void
+    
+    @State private var currentReps: Int
+    @State private var currentWeight: Double?
+    
+    init(setNumber: Int, reps: Int, weight: Double?, onUpdate: @escaping (Int, Double?) -> Void) {
+        self.setNumber = setNumber
+        self.reps = reps
+        self.weight = weight
+        self.onUpdate = onUpdate
+        self._currentReps = State(initialValue: reps)
+        self._currentWeight = State(initialValue: weight)
+    }
     
     var body: some View {
         HStack(spacing: 12) {
-            Button(action: onToggleCompletion) {
-                Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundColor(isCompleted ? .green : .evolveMuted)
-            }
-            .disabled(!canModify)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(exercise.name)
+            // Set number
+            Text("Set \(setNumber)")
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(.evolveMuted)
+                .frame(width: 40, alignment: .leading)
+            
+            // Reps controls
+            HStack(spacing: 8) {
+                Button(action: {
+                    if currentReps > 1 {
+                        currentReps -= 1
+                        onUpdate(currentReps, currentWeight)
+                    }
+                }) {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.evolvePrimary)
+                }
+                
+                Text("\(currentReps)")
                     .font(.subheadline)
-                    .fontWeight(.medium)
+                    .fontWeight(.semibold)
                     .foregroundColor(.evolveText)
-                if let workoutExercise = workoutExercise {
-                    Text("\(workoutExercise.sets) sets × \(workoutExercise.reps) reps")
-                        .font(.caption)
-                        .foregroundColor(.evolveMuted)
+                    .frame(minWidth: 30)
+                    .multilineTextAlignment(.center)
+                
+                Button(action: {
+                    currentReps += 1
+                    onUpdate(currentReps, currentWeight)
+                }) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.evolvePrimary)
                 }
             }
+            
             Spacer()
-            Button(action: onShowDetail) {
-                Image(systemName: "info.circle")
-                    .font(.title3)
-                    .foregroundColor(.evolvePrimary)
+            
+            // Weight input
+            HStack(spacing: 8) {
+                TextField("0", value: $currentWeight, format: .number)
+                    .keyboardType(.decimalPad)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .frame(width: 60)
+                    .onChange(of: currentWeight) { newWeight in
+                        onUpdate(currentReps, newWeight)
+                    }
+                
+                Text("kg")
+                    .font(.caption)
+                    .foregroundColor(.evolveMuted)
             }
         }
-        .padding()
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(isCompleted ? Color.green.opacity(0.1) : Color.evolveCard)
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.evolveBackground)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(isCompleted ? Color.green.opacity(0.3) : Color.clear, lineWidth: 1)
-        )
-        .opacity(canModify ? 1.0 : 0.6)
     }
 }
 

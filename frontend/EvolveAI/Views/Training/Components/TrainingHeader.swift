@@ -25,7 +25,26 @@ struct TrainingHeaderView: View {
                 
                 Spacer()
                 
-                ProgressRingView(progress: weekProgress)
+                VStack(spacing: 8) {
+                    ProgressRingView(progress: weekProgress)
+                    
+                    // Weight unit indicator (kg only)
+                    HStack(spacing: 4) {
+                        Image(systemName: "scalemass")
+                            .font(.caption)
+                            .foregroundColor(.evolveMuted)
+                        Text("KG")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.evolveMuted)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.evolveMuted.opacity(0.2))
+                    )
+                }
             }
             
             // Week progress summary

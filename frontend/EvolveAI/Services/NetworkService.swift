@@ -605,5 +605,49 @@ class NetworkService: NetworkServiceProtocol, ObservableObject {
         print("--- [DEBUG] 🔍 Stored auth token check: \(hasToken ? "Found" : "Not found") ---")
         return hasToken
     }
+    
+    // MARK: - Workout Progress Updates
+    
+    /// Update workout exercise details (reps and weights) in the database
+    func updateWorkoutExerciseDetails(
+        workoutExerciseId: Int,
+        sets: Int,
+        reps: [Int],
+        weight: [Double?]
+    ) async throws {
+        print("--- [DEBUG] 🔄 Updating workout exercise details for ID: \(workoutExerciseId) ---")
+        
+        struct WorkoutExerciseUpdate: Encodable {
+            let sets: Int
+            let reps: [Int]
+            let weight: [Double?]
+        }
+        
+        let updateData = WorkoutExerciseUpdate(sets: sets, reps: reps, weight: weight)
+        
+        try await supabase.database
+            .from("workout_exercises")
+            .update(updateData)
+            .eq("id", value: workoutExerciseId)
+            .execute()
+        
+        print("--- [DEBUG] ✅ Successfully updated workout exercise details ---")
+    }
+    
+    /// Batch update multiple workout exercises
+    func batchUpdateWorkoutExercises(_ updates: [(id: Int, sets: Int, reps: [Int], weight: [Double?])]) async throws {
+        print("--- [DEBUG] 🔄 Batch updating \(updates.count) workout exercises ---")
+        
+        for update in updates {
+            try await updateWorkoutExerciseDetails(
+                workoutExerciseId: update.id,
+                sets: update.sets,
+                reps: update.reps,
+                weight: update.weight
+            )
+        }
+        
+        print("--- [DEBUG] ✅ Successfully batch updated all workout exercises ---")
+    }
 }
 

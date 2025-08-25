@@ -76,9 +76,9 @@ struct WorkoutExercise: Codable, Identifiable, Equatable {
     let id: Int
     let dailyWorkoutId: Int
     let exerciseId: Int
-    let sets: Int
-    let reps: [Int]
-    let weight: [Double?]  // Array of optional doubles (each weight can be nil)
+    var sets: Int
+    var reps: [Int]
+    var weight: [Double?]  // Array of optional doubles (each weight can be nil)
     @ISO8601DateValue var createdAt: Date
     @ISO8601DateValue var updatedAt: Date
     
@@ -97,11 +97,11 @@ struct WorkoutExercise: Codable, Identifiable, Equatable {
 // MARK: - Complete Workout Structure (for API responses and data fetching)
 /// Complete workout plan structure for API responses and database operations
 struct CompleteWorkoutPlan: Codable, Equatable {
-    let workoutPlan: WorkoutPlan
-    let weeklySchedules: [WeeklySchedule]
-    let dailyWorkouts: [DailyWorkout]
-    let workoutExercises: [WorkoutExercise]
-    let exercises: [Exercise]
+    var workoutPlan: WorkoutPlan
+    var weeklySchedules: [WeeklySchedule]
+    var dailyWorkouts: [DailyWorkout]
+    var workoutExercises: [WorkoutExercise]
+    var exercises: [Exercise]
 }
 
 // MARK: - AI-Generated Workout Models (for API responses from backend)
