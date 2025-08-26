@@ -89,7 +89,8 @@ class FitnessCoach(BaseAgent):
     
     def generate_workout_plan(self, 
                             user_profile: UserProfileSchema,
-                            openai_client: openai.OpenAI) -> WorkoutPlanSchema:
+                            openai_client: openai.OpenAI,
+                            enrich_with_knowledge: bool = False) -> WorkoutPlanSchema:
         """
         Generate a comprehensive workout plan using your existing system + RAG enhancement.
         
@@ -112,7 +113,7 @@ class FitnessCoach(BaseAgent):
                     muscle_groups=['full_body'],
                     difficulty=user_profile.experience_level,
                     equipment=user_profile.equipment,
-                    max_exercises=20
+                    max_exercises=200
                 )
             
             print(f"✅ Found {len(exercise_candidates)} exercise candidates")
@@ -128,11 +129,18 @@ class FitnessCoach(BaseAgent):
                 user_profile, 
                 exercise_candidates
             )
+
+            # Step 4: Add the foundations of creating a workout plan
+            base_prompt_w_foundations = self._add_foundations_of_creating_a_workout_plan(base_prompt)
             
-            # Step 4: Enhance prompt with retrieved knowledge if available
-            enhanced_prompt = self._enhance_prompt_with_knowledge(base_prompt, relevant_docs)
+            # Step 5: Enhance prompt with retrieved knowledge if available
+            # TODO: we can add extra information to the prompt based on primary goal description and physical limitations (user profided textual fiels)
+            if enrich_with_knowledge:
+                enhanced_prompt = self._enhance_prompt_with_knowledge(base_prompt_w_foundations, relevant_docs)
+            else:
+                enhanced_prompt = base_prompt_w_foundations
             
-            # Step 5: Generate workout plan using OpenAI (same as your current system)
+            # Step 6: Generate workout plan using OpenAI (same as your current system)
             print("🤖 Generating workout plan with OpenAI...")
             completion = openai_client.chat.completions.parse(
                 model=os.getenv("OPENAI_MODEL", "gpt-4"),
@@ -145,7 +153,7 @@ class FitnessCoach(BaseAgent):
             response_content = completion.choices[0].message.content
             workout_plan_data = json.loads(response_content)
             
-            # Step 6: Validate and fix the generated workout plan
+            # Step 7: Validate and fix the generated workout plan
             print("🔍 Validating generated workout plan...")
             validated_plan, validation_messages = self.exercise_validator.validate_workout_plan(
                 workout_plan_data
@@ -155,7 +163,8 @@ class FitnessCoach(BaseAgent):
             for message in validation_messages:
                 print(f"   {message}")
             print(validated_plan)
-            # Step 7: Create final workout plan schema
+
+            # Step 8: Create final workout plan schema
             workout_plan = WorkoutPlanSchema(**validated_plan)
             
             print("✅ Workout plan generated and validated successfully!")
@@ -380,6 +389,56 @@ class FitnessCoach(BaseAgent):
         # Calculate quality based on relevance score
         relevance_score = doc.get('relevance_score', 0.0)
         return self._get_quality_indicators(relevance_score)
+    
+    def _add_foundations_of_creating_a_workout_plan(self, base_prompt: str) -> str:
+        """
+        Retrieve the entire Evidence-Based Fitness Training PDF directly from the documents table.
+        This provides the AI with the complete document as workout plan foundations.
+        
+        Args:
+            base_prompt: The original prompt from WorkoutPromptGenerator
+            
+        Returns:
+            Enhanced prompt with the entire fitness training document
+        """
+        try:
+            print("🔍 Retrieving Evidence-Based Fitness Training document from documents table...")
+            
+            # Directly query the documents table for the specific document
+            response = self.supabase.table('documents').select('*').eq('title', 'Evidence-Based Fitness Training').execute()
+            
+            if response.data and len(response.data) > 0:
+                document = response.data[0]
+                full_content = document.get('content', '')
+                
+                if full_content:
+                    print("✅ Retrieved complete Evidence-Based Fitness Training document")
+                    
+                    # Build the foundations context with the entire document
+                    foundations_context = f"\n\n**COMPLETE EVIDENCE-BASED FITNESS TRAINING DOCUMENT:**\n\n{full_content}"
+                    
+                    enhanced_prompt = base_prompt + foundations_context
+                    
+                    # Add instructions for using the complete document
+                    enhanced_prompt += """
+                    
+**INSTRUCTIONS:** Use the complete Evidence-Based Fitness Training document above as your comprehensive foundation for creating workout plans. 
+This document contains all the principles, guidelines, and evidence-based practices you need. 
+Apply the appropriate methodologies, training principles, and best practices based on the user's profile and goals. 
+Ensure your workout plan follows the scientific foundations and recommendations outlined in this document."""
+                    
+                    return enhanced_prompt
+                else:
+                    print("⚠️  Document found but content is empty")
+                    return base_prompt
+            else:
+                print("⚠️  Evidence-Based Fitness Training document not found in documents table")
+                return base_prompt
+                
+        except Exception as e:
+            print(f"❌ Error retrieving Evidence-Based Fitness Training document: {e}")
+            print("⚠️  Falling back to base prompt only")
+            return base_prompt
     
     def _get_quality_emoji(self, quality_level: str) -> str:
         """Get emoji for a quality level."""

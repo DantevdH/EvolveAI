@@ -159,16 +159,6 @@ class PDFVectorDBPopulator:
                 "content_type": "pdf",
                 "topic": self._detect_topic(cleaned_text),
                 "keywords": self._extract_keywords(cleaned_text),
-                "file_size": pdf_path.stat().st_size,
-                "extraction_method": "enhanced",
-                "metadata": {
-                    "difficulty_level": self._detect_difficulty(cleaned_text),
-                    "body_parts": self._extract_body_parts(cleaned_text),
-                    "equipment_needed": self._extract_equipment(cleaned_text),
-                    "training_type": self._extract_training_type(cleaned_text),
-                    "target_goals": self._extract_goals(cleaned_text),
-                    "experience_required": self._extract_experience(cleaned_text)
-                }
             }
             
             logger.info(f"Processed PDF: {title} ({len(cleaned_text)} characters)")

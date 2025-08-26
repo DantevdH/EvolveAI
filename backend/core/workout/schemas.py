@@ -67,10 +67,16 @@ class DailyWorkoutSchema(BaseModel):
     """Schema for a single day's workout."""
 
     day_of_week: DayOfWeek
+    warming_up_instructions: str = Field(..., description="Warming up instructions for the day")
     is_rest_day: bool = Field(..., description="True if this is a rest day")
     exercises: List[ExerciseSchema] = Field(
         default_factory=list, description="List of exercises (empty if rest day)"
     )
+    daily_justification: str = Field(
+        ..., 
+        description="AI explanation for exercise selection and workout structure for this specific day, including: why these specific exercises were chosen, how they work together, muscle group targeting rationale, and how this day fits into the weekly progression"
+    )
+    cooling_down_instructions: str = Field(..., description="Cooling down instructions for the day")
 
     def validate_rest_day(self):
         """Ensure rest days have no exercises."""
@@ -90,6 +96,10 @@ class WeeklyScheduleSchema(BaseModel):
         max_items=7,
         description="Exactly 7 daily workouts (one for each day)",
     )
+    weekly_justification: str = Field(
+        ..., 
+        description="AI explanation for the weekly training structure focusing on: workout day variety and splits, recovery considerations between training days, how this week's intensity and volume are balanced, and progression strategy within the week"
+    )
 
 
 class WorkoutPlanSchema(BaseModel):
@@ -99,4 +109,8 @@ class WorkoutPlanSchema(BaseModel):
     summary: str = Field(..., description="Brief 1-2 sentence plan summary")
     weekly_schedules: List[WeeklyScheduleSchema] = Field(
         ..., min_items=1, max_items=12, description="1-12 weeks of workout schedules"
+    )
+    program_justification: str = Field(
+        ..., 
+        description="AI explanation for the overall program design covering: resistance training phases linked to user goals and experience level, periodization strategies (linear, undulating, block), progressive overload principles, variety and overload prevention strategies, and a brief note on what the next training phase would look like and this fits in the long-term goal"
     )

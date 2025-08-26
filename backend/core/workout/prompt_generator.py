@@ -64,10 +64,36 @@ class WorkoutPromptGenerator:
                 8. You only need to specify: exercise_id, sets, and reps - other exercise details come from the database
                 9. Provide a brief description for each exercise to help with fallback replacement if needed
                 10. Do not specify weights - users will fill these in based on their capabilities
+                11. For training days, provide specific warming_up_instructions based on the provided documentation
+                12. For training days, provide specific cooling_down_instructions based on the provided documentation
+
+                **JUSTIFICATION REQUIREMENTS:**
+                
+                **Program-Level Justification (program_justification):**
+                - Explain the resistance training phases chosen (one or more of: muscular endurance, strength, hypertrophy, power) based on user goals and experience level
+                - Detail the periodization strategy (linear, undulating, block, etc.)
+                - Describe progressive overload principles and how they're implemented
+                - Explain variety and overload prevention strategies
+                - Include a brief note on what the next training phase would look like and this fits in the long-term goal
+                
+                **Weekly-Level Justification (weekly_justification):**
+                - Focus on workout day variety and training splits
+                - Explain recovery considerations between training days
+                - Describe how intensity and volume are balanced within the week
+                - Explain the weekly progression strategy
+                
+                **Daily-Level Justification (daily_justification):**
+                - Justify why specific exercises were chosen for each day
+                - Explain how exercises work together and complement each other
+                - Describe muscle group targeting rationale
+                - Explain how each day fits into the weekly progression
+                - For rest days, explain the recovery reasoning and what can be done to improve even on a rest day
+                - Explain the rationale for warm-up and cool-down activities based on the day's workout intensity and muscle groups targeted
 
                 **OUTPUT FORMAT:**
                 Return a structured workout plan with a motivating title and clear summary.
                 Ensure every exercise in the plan has a valid exercise_id from the provided list.
+                Provide comprehensive justifications at all three levels as specified above.
         """
 
         return prompt.strip()
