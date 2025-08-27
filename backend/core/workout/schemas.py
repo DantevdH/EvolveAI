@@ -45,6 +45,7 @@ class ExerciseSchema(BaseModel):
     sets: int = Field(..., ge=1, le=10, description="Number of sets")
     reps: List[int] = Field(..., description="Rep targets for each set")
     description: str = Field(..., description="Description for fallback replacement")
+    weight_1rm: List[int] = Field(..., description="Weight as percentage of 1RM (e.g., 80.0 for 80% of 1RM) that the AI provides as a standard reference")
     weight: Optional[List[float]] = Field(default=None, description="Weight per set (user fills in)")
     
     # Validation

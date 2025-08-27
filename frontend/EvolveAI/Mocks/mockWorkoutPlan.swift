@@ -151,6 +151,7 @@ let mockWorkoutExercises = [
         sets: 4,
         reps: [8, 10, 8, 10],
         weight: Array(repeating: nil, count: 4),
+        weight1rm: [85, 75, 85, 75],
         createdAt: today,
         updatedAt: today
     ),
@@ -161,6 +162,7 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: [10, 12, 10],
         weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     ),
@@ -171,6 +173,7 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: [10, 12, 10],
         weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     ),
@@ -182,6 +185,7 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: [5, 8, 5],
         weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     ),
@@ -192,6 +196,7 @@ let mockWorkoutExercises = [
         sets: 4,
         reps: [8, 10, 8, 10],
         weight: Array(repeating: nil, count: 4),
+        weight1rm: [85, 75, 85, 75],
         createdAt: today,
         updatedAt: today
     ),
@@ -202,6 +207,7 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: [45, 45, 45], // 45 seconds for each set
         weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     ),
@@ -213,6 +219,7 @@ let mockWorkoutExercises = [
         sets: 4,
         reps: [0, 0, 0, 0], // "As many as possible" represented as 0
         weight: Array(repeating: nil, count: 4),
+        weight1rm: [85, 75, 85, 95],
         createdAt: today,
         updatedAt: today
     ),
@@ -223,6 +230,7 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: [12, 15, 12],
         weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     ),
@@ -233,6 +241,7 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: [12, 15, 12],
         weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     ),
@@ -244,6 +253,7 @@ let mockWorkoutExercises = [
         sets: 4,
         reps: [10, 12, 10, 12],
         weight: Array(repeating: nil, count: 4),
+        weight1rm: [85, 75, 85, 75],
         createdAt: today,
         updatedAt: today
     ),
@@ -254,6 +264,7 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: [10, 12, 10],
         weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     ),
@@ -264,6 +275,7 @@ let mockWorkoutExercises = [
         sets: 3,
         reps: [12, 15, 12],
         weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     )

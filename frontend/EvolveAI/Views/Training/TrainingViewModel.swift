@@ -164,15 +164,21 @@ class TrainingViewModel: ObservableObject {
     }
     
     func isExerciseCompleted(_ exerciseId: Int) -> Bool {
-        // Exercise is completed when all sets have weights filled in
-        guard let completePlan = completeWorkoutPlan else { return false }
-        
-        if let workoutExercise = completePlan.workoutExercises.first(where: { $0.exerciseId == exerciseId }) {
-            // Check if all sets have weights filled in
-            return workoutExercise.weight.allSatisfy { $0 != nil }
+        // Exercise completion is now manually controlled by user tapping the completion indicator
+        return completedExercises.contains(exerciseId)
+    }
+    
+    func toggleExerciseCompletion(_ exerciseId: Int) {
+        if completedExercises.contains(exerciseId) {
+            completedExercises.remove(exerciseId)
+            print("DEBUG: Exercise \(exerciseId) marked as incomplete")
+        } else {
+            completedExercises.insert(exerciseId)
+            print("DEBUG: Exercise \(exerciseId) marked as complete")
         }
         
-        return false
+        // Update workout completion status
+        updateWorkoutCompletionStatus()
     }
     
     func isWorkoutCompleted(_ workoutId: Int) -> Bool {
@@ -332,10 +338,15 @@ class TrainingViewModel: ObservableObject {
         if let workoutExerciseIndex = completePlan.workoutExercises.firstIndex(where: { $0.exerciseId == exerciseId }) {
             var updatedWorkoutExercise = completePlan.workoutExercises[workoutExerciseIndex]
             
-            // Add new set with default values
-            updatedWorkoutExercise.reps.append(10) // Default to 10 reps
-            updatedWorkoutExercise.weight.append(nil) // Default to no weight
+            // Add new set with values similar to previous set
+            let previousReps = updatedWorkoutExercise.reps.last ?? 10 // Use last set's reps or default to 10
+            let previousWeight = updatedWorkoutExercise.weight.last ?? nil // Use last set's weight or nil
+            
+            updatedWorkoutExercise.reps.append(previousReps)
+            updatedWorkoutExercise.weight.append(previousWeight)
             updatedWorkoutExercise.sets += 1 // Increment sets count
+            
+            print("[DEBUG] Added new set with reps: \(previousReps), weight: \(previousWeight?.description ?? "nil")")
             
             // Update the local data
             completeWorkoutPlan?.workoutExercises[workoutExerciseIndex] = updatedWorkoutExercise

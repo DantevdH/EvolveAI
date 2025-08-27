@@ -774,7 +774,8 @@ extension AppViewModel {
         // Check if we're in a loading state that should have completed
         if case .loading = state {
             // If we've been loading for too long, something might be wrong
-            let loadingTimeout: TimeInterval = 30 // 30 seconds
+            // Extended timeout for workout plan generation which can take 2-5 minutes
+            let loadingTimeout: TimeInterval = 300 // 5 minutes for complex operations like workout generation
             if let backgroundedAt = backgroundedAt,
                Date().timeIntervalSince(backgroundedAt) > loadingTimeout {
                 print("[DEBUG] AppViewModel: Loading timeout exceeded, checking state")

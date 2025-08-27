@@ -93,20 +93,34 @@ class ExerciseSelector:
         print(f"🔍 Finding exercises: {muscle_groups} + {difficulty} + {equipment}")
 
         try:
-            # Calculate exercise distribution based on tiers
-            foundational_count = max(1, max_exercises // 2)  # 50% foundational
-            variety_count = max_exercises - foundational_count  # Remaining for variety
+            # Calculate exercise distribution based on tiers - 40/40/20 approach
+            # Use the actual max_exercises parameter, not hardcoded 100
+            foundational_count = max(2, int(max_exercises * 0.4))  # 40% of max_exercises
+            standard_count = max(2, int(max_exercises * 0.4))     # 40% of max_exercises
+            variety_count = max_exercises - foundational_count - standard_count  # Remaining for variety
             
-            print(f"📊 Target distribution: {foundational_count} foundational + {variety_count} variety")
+            print(f"📊 Distribution calculation: {max_exercises} total exercises")
+            print(f"   📚 Foundational: {foundational_count} (40% of {max_exercises})")
+            print(f"   🔧 Standard: {standard_count} (40% of {max_exercises})")
+            print(f"   🌟 Variety: {variety_count} (remaining: {max_exercises - foundational_count - standard_count})")
+            
+            print(f"📊 Target distribution: {foundational_count} foundational + {standard_count} standard + {variety_count} variety")
             
             # 1. Get foundational exercises (core, essential movements)
             foundational_exercises = self._get_tier_exercises(
                 muscle_groups, difficulty, equipment, 'foundational', foundational_count
             )
             
-            print(f"✅ Found {len(foundational_exercises)} foundational exercises")
+            print(f"✅ Found {len(foundational_exercises)} foundational exercises (target: {foundational_count})")
             
-            # 2. Get variety exercises (additional movements for variety)
+            # 2. Get standard exercises (common, reliable movements)
+            standard_exercises = self._get_tier_exercises(
+                muscle_groups, difficulty, equipment, 'standard', standard_count
+            )
+            
+            print(f"✅ Found {len(standard_exercises)} standard exercises (target: {standard_count})")
+            
+            # 3. Get variety exercises (additional movements for variety)
             # Get more variety exercises than needed to allow for popularity-based selection
             variety_pool_size = variety_count * 2
             variety_pool = self._get_tier_exercises(
@@ -116,14 +130,17 @@ class ExerciseSelector:
             # Sort variety exercises by popularity score and select the best ones
             variety_exercises = self._select_best_variety_exercises(variety_pool, variety_count)
             
-            print(f"✅ Selected {len(variety_exercises)} variety exercises (from {len(variety_pool)} candidates)")
+            print(f"✅ Selected {len(variety_exercises)} variety exercises (target: {variety_count}, from {len(variety_pool)} candidates)")
             
-            # 3. Combine and ensure muscle group balance
-            all_exercises = foundational_exercises + variety_exercises
+            # 4. Combine and ensure muscle group balance
+            all_exercises = foundational_exercises + standard_exercises + variety_exercises
+            print(f"📊 Combined exercises: {len(all_exercises)} total")
             
-            # 4. Remove duplicates and ensure we don't exceed max_exercises
+            # 5. Remove duplicates and ensure we don't exceed max_exercises
             unique_exercises = self._remove_duplicates(all_exercises)
+            print(f"🔍 After deduplication: {len(unique_exercises)} unique exercises")
             final_exercises = unique_exercises[:max_exercises]
+            print(f"📏 Final selection: {len(final_exercises)} exercises (max: {max_exercises})")
             
             if not final_exercises:
                 print("⚠️  No exercises found matching the criteria")
@@ -131,10 +148,12 @@ class ExerciseSelector:
             
             # 5. Log the final selection breakdown
             foundational_final = [ex for ex in final_exercises if ex.get('exercise_tier') == 'foundational']
+            standard_final = [ex for ex in final_exercises if ex.get('exercise_tier') == 'standard']
             variety_final = [ex for ex in final_exercises if ex.get('exercise_tier') == 'variety']
             
             print(f"✅ Final selection: {len(final_exercises)} exercises")
             print(f"   📚 Foundational: {len(foundational_final)} exercises")
+            print(f"   🔧 Standard: {len(standard_final)} exercises")
             print(f"   🌟 Variety: {len(variety_final)} exercises")
             
             return final_exercises
@@ -375,7 +394,25 @@ class ExerciseSelector:
         try:
             # Build query for this muscle group and tier
             query = self.supabase.table("exercises").select("*")
-            query = query.eq("difficulty", difficulty)
+            
+            # Progressive difficulty inclusion: include exercises up to user's level
+            # Beginner: only beginner exercises
+            # Intermediate: beginner + intermediate exercises  
+            # Advanced: beginner + intermediate + advanced exercises
+            if difficulty.lower() == "beginner":
+                query = query.eq("difficulty", "Beginner")
+                print(f"   🎯 Including difficulty: Beginner only")
+            elif difficulty.lower() == "intermediate":
+                query = query.in_("difficulty", ["Beginner", "Intermediate"])
+                print(f"   🎯 Including difficulties: Beginner + Intermediate")
+            elif difficulty.lower() == "advanced":
+                query = query.in_("difficulty", ["Beginner", "Intermediate", "Advanced"])
+                print(f"   🎯 Including difficulties: Beginner + Intermediate + Advanced")
+            else:
+                # Default to exact match for unknown difficulty levels
+                query = query.eq("difficulty", difficulty)
+                print(f"   🎯 Including difficulty: {difficulty} (exact match)")
+            
             query = query.eq("main_muscle", muscle)
             query = query.eq("exercise_tier", tier)
             
@@ -398,13 +435,14 @@ class ExerciseSelector:
             
             # Get more exercises than needed to allow for variety selection
             query = query.limit(count * 2)
+            print(f"      🔍 Query limit: {count * 2} exercises for {tier} tier")
             result = query.execute()
             
             if not result.data:
                 return []
             
             # Select exercises with variety in equipment and force types
-            return self._select_varied_exercises(result.data, count)
+            return self._select_best_variety_exercises(result.data, count)
             
         except Exception as e:
             print(f"❌ Error getting {tier} exercises for {muscle}: {e}")

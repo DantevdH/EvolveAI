@@ -90,7 +90,8 @@ class FitnessCoach(BaseAgent):
     def generate_workout_plan(self, 
                             user_profile: UserProfileSchema,
                             openai_client: openai.OpenAI,
-                            enrich_with_knowledge: bool = False) -> WorkoutPlanSchema:
+                            enrich_with_knowledge: bool = False,
+                            max_exercises: int = 100) -> WorkoutPlanSchema:
         """
         Generate a comprehensive workout plan using your existing system + RAG enhancement.
         
@@ -104,7 +105,7 @@ class FitnessCoach(BaseAgent):
         try:
             # Step 1: Get relevant exercise candidates based on user profile
             print("🔍 Selecting exercise candidates...")
-            exercise_candidates = self._get_exercise_candidates_for_profile(user_profile)
+            exercise_candidates = self._get_exercise_candidates_for_profile(user_profile, max_exercises)
             
             if not exercise_candidates:
                 print("⚠️  No exercise candidates found, using fallback approach")
@@ -113,16 +114,10 @@ class FitnessCoach(BaseAgent):
                     muscle_groups=['full_body'],
                     difficulty=user_profile.experience_level,
                     equipment=user_profile.equipment,
-                    max_exercises=200
+                    max_exercises=max_exercises
                 )
             
             print(f"✅ Found {len(exercise_candidates)} exercise candidates")
-            
-            # Step 2: Search knowledge base for relevant fitness documents using profile
-            relevant_docs = self.search_fitness_documents(
-                user_profile=user_profile,
-                max_results=5
-            )
             
             # Step 3: Use your existing prompt generator with exercise candidates
             base_prompt = self.prompt_generator.create_initial_plan_prompt(
@@ -136,6 +131,11 @@ class FitnessCoach(BaseAgent):
             # Step 5: Enhance prompt with retrieved knowledge if available
             # TODO: we can add extra information to the prompt based on primary goal description and physical limitations (user profided textual fiels)
             if enrich_with_knowledge:
+                # Step 5.1: Search knowledge base for relevant fitness documents using profile
+                relevant_docs = self.search_fitness_documents(
+                    user_profile=user_profile,
+                    max_results=5
+                )
                 enhanced_prompt = self._enhance_prompt_with_knowledge(base_prompt_w_foundations, relevant_docs)
             else:
                 enhanced_prompt = base_prompt_w_foundations
@@ -174,7 +174,7 @@ class FitnessCoach(BaseAgent):
             print(f"❌ Error generating workout plan: {e}")
             raise
     
-    def _get_exercise_candidates_for_profile(self, user_profile: UserProfileSchema) -> List[Dict[str, Any]]:
+    def _get_exercise_candidates_for_profile(self, user_profile: UserProfileSchema, max_exercises: int = 200) -> List[Dict[str, Any]]:
         """
         Get exercise candidates based on user profile for workout generation.
         
@@ -191,12 +191,12 @@ class FitnessCoach(BaseAgent):
             # Convert equipment string to list for the exercise selector
             equipment_list = [user_profile.equipment] if user_profile.equipment else []
             
-            # Get exercise candidates
+            # Get exercise candidates - use higher number to allow for better variety selection
             candidates = self.exercise_selector.get_exercise_candidates(
                 muscle_groups=target_muscles,
                 difficulty=user_profile.experience_level,
                 equipment=equipment_list,
-                max_exercises=50
+                max_exercises=max_exercises
             )
             
             return candidates

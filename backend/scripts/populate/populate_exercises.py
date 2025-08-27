@@ -83,7 +83,7 @@ class ExercisePopulator:
         logger.info("🔍 Validating exercise data...")
         
         # Check required columns
-        required_columns = ["Exercise Name", "Force", "Instructions", "Equipment", "Main Muscle", "Secondary Muscles", "Difficulty"]
+        required_columns = ["Exercise Name", "Force", "Instructions", "Equipment", "Main Muscle", "Secondary Muscles", "Difficulty", "Tier", "Popularity Score"]
         missing_columns = [col for col in required_columns if col not in df.columns]
         
         if missing_columns:
@@ -113,6 +113,12 @@ class ExercisePopulator:
         
         # Clean Difficulty
         df_clean["Difficulty"] = df_clean["Difficulty"].apply(self._standardize_difficulty)
+        
+        # Clean Tier
+        df_clean["Tier"] = df_clean["Tier"].apply(self._clean_tier)
+        
+        # Clean Popularity Score
+        df_clean["Popularity Score"] = df_clean["Popularity Score"].apply(self._parse_popularity_score)
         
         # Remove rows with missing critical data
         initial_count = len(df_clean)
@@ -161,6 +167,47 @@ class ExercisePopulator:
         else:
             return "Intermediate"
 
+    def _clean_tier(self, tier: str) -> str:
+        """Clean and standardize tier values."""
+        if pd.isna(tier) or tier == '':
+            return "variety"
+        
+        # Convert to string and strip whitespace
+        tier_str = str(tier).strip()
+        
+        # Remove leading and trailing brackets
+        tier_str = tier_str.strip('[]')
+        
+        # Convert to lowercase
+        tier_str = tier_str.lower().strip()
+        
+        # If empty after cleaning, return default
+        if not tier_str:
+            return "variety"
+        
+        return tier_str
+
+    def _parse_popularity_score(self, score: Any) -> float:
+        """Parse and validate popularity score."""
+        if pd.isna(score) or score == '':
+            return 0.5
+        
+        try:
+            # Convert to float
+            score_float = float(score)
+            
+            # Clamp between 0 and 1
+            if score_float < 0:
+                return 0.0
+            elif score_float > 1:
+                return 1.0
+            else:
+                return score_float
+                
+        except (ValueError, TypeError):
+            logger.warning(f"Invalid popularity score '{score}', using default 0.5")
+            return 0.5
+
     def transform_to_database_format(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
         """Transform DataFrame to database insert format."""
         exercises = []
@@ -173,7 +220,9 @@ class ExercisePopulator:
                 "equipment": row["Equipment"],
                 "main_muscle": row["Main Muscle"],
                 "secondary_muscles": row["Secondary Muscles"],
-                "difficulty": row["Difficulty"]
+                "difficulty": row["Difficulty"],
+                "exercise_tier": row["Tier"],
+                "popularity_score": row["Popularity Score"]
             }
             exercises.append(exercise)
         

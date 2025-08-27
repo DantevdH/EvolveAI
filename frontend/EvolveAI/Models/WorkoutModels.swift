@@ -79,6 +79,7 @@ struct WorkoutExercise: Codable, Identifiable, Equatable {
     var sets: Int
     var reps: [Int]
     var weight: [Double?]  // Array of optional doubles (each weight can be nil)
+    let weight1rm: [Int]  // Weight as percentage of 1RM (e.g., "80%")
     @ISO8601DateValue var createdAt: Date
     @ISO8601DateValue var updatedAt: Date
     
@@ -89,6 +90,7 @@ struct WorkoutExercise: Codable, Identifiable, Equatable {
         case sets
         case reps
         case weight
+        case weight1rm = "weight_1rm"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -130,6 +132,7 @@ struct GeneratedWorkoutExercise {
     let name: String
     let sets: Int
     let reps: [Int]
+    let weight1rm: [Int]  // Weight as percentage of 1RM for each set (e.g., [80, 75, 70])
 }
 
 // MARK: - Database Insert Models (for creating new records)
@@ -162,6 +165,7 @@ struct WorkoutExerciseInsert: Encodable {
     let sets: Int
     let reps: [Int]
     let weight: [Double?]  // Array of optional doubles (each weight can be nil)
+    let weight_1rm: [Int]  // Weight as percentage of 1RM for each set (e.g., [80, 75, 70])
 }
 
 // MARK: - Progress Tracking Models (for user progress updates)

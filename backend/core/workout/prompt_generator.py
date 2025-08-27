@@ -30,6 +30,7 @@ class WorkoutPromptGenerator:
                 3. **Equipment Constraints**: Only use the available equipment listed.
                 4. **Progressive Structure**: Plan should be challenging but achievable for the user's level.
                 5. **Exercise Authenticity**: ONLY use exercises from the provided exercise list. Do NOT create new exercises.
+                6. **Program Duration**: Generate a comprehensive program with at least 4 weeks based on the Evidence-Based Fitness Training documentation, following the training phases and periodization strategies outlined therein.
 
                 **USER PROFILE:**
                 - Primary Goal: {user_profile.primary_goal} ({user_profile.primary_goal_description})
@@ -52,20 +53,36 @@ class WorkoutPromptGenerator:
                 3. Do NOT create new exercise names or variations
                 4. If you need a different exercise, choose the closest alternative from the list
                 5. Each exercise in your workout plan must have a valid exercise_id from the list
+                6. **Popularity Score Guidance**: Use popularity scores to prioritize exercises:
+                   - 🌟 (0.8-1.0): Essential, well-known exercises - use these for foundational movements
+                   - ⭐ (0.6-0.8): Popular, reliable exercises - use these for standard movements
+                   - ✅ (0.4-0.6): Good exercises - use these for variety when needed
+                   - ⚠️ (0.2-0.4): Less popular - use sparingly, only when specific targeting is needed
+                   - ❓ (0.0-0.2): Obscure exercises - avoid unless absolutely necessary
 
                 **EXERCISE REQUIREMENTS:**
                 1. Training days should match the user's requested frequency ({user_profile.days_per_week} days/week)
                 2. Remaining days should be rest days (is_rest_day=True, empty exercises array)
                 3. For training days: is_rest_day=False with appropriate exercises
-                4. Keep sessions within the {user_profile.minutes_per_session}-minute timeframe
+                4. Keep sessions within the {user_profile.minutes_per_session}-minute timeframe. Calculate workout duration using:
+                   - Each rep takes approximately 3 seconds
+                   - Rest between sets (depends on intensity and training phase)
+                   - Example calculation: 3 exercises × 4 sets × 12 reps × 3 seconds/60 + (3×4-1) × rest time = total minutes
+                   - Ensure total time fits within {user_profile.minutes_per_session} minutes
                 5. Exercise names should be clear and specific (e.g., "Barbell Back Squat" not just "Squat")
                 6. Reps must be a list of integers matching the number of sets (e.g., [8, 10, 8, 10] for 4 sets)
                 7. Each exercise must include the exercise_id field from the provided list
-                8. You only need to specify: exercise_id, sets, and reps - other exercise details come from the database
+                8. You only need to specify: exercise_id, sets, reps, and weight_1rm - other exercise details come from the database
                 9. Provide a brief description for each exercise to help with fallback replacement if needed
-                10. Do not specify weights - users will fill these in based on their capabilities
-                11. For training days, provide specific warming_up_instructions based on the provided documentation
-                12. For training days, provide specific cooling_down_instructions based on the provided documentation
+                10. Do not specify working weights per set - users will fill these in based on their capabilities
+                11. ALWAYS provide the weight as percentage of 1RM (weight_1rm) for each exercise as a list matching the number of sets (e.g., [80, 75, 70] for 3 sets). This should be linked to the goal of the user, the resistance training phase chosen, and the periodization strategy chosen.
+                12. **IMPORTANT**: Follow the inverse relationship principle: as reps increase, weight (% of 1RM) should decrease, and vice versa. For example:
+                    - High reps (12-15): Lower weight (60-70% of 1RM)
+                    - Medium reps (8-12): Medium weight (70-80% of 1RM)  
+                    - Low reps (3-6): Higher weight (80-90% of 1RM)
+                    - Power reps (1-3): Highest weight (85-95% of 1RM)
+                13. For training days, provide specific warming_up_instructions based on the provided documentation
+                14. For training days, provide specific cooling_down_instructions based on the provided documentation
 
                 **JUSTIFICATION REQUIREMENTS:**
                 
@@ -83,7 +100,8 @@ class WorkoutPromptGenerator:
                 - Explain the weekly progression strategy
                 
                 **Daily-Level Justification (daily_justification):**
-                - Justify why specific exercises were chosen for each day
+                - Justify why specific exercises were chosen for each day and the number of exercises (related to the users timeframe for training which is: {user_profile.minutes_per_session} minutes per session)
+                - Explain why the weight_1rm percentages were chosen for each set and how they follow the inverse relationship principle (reps vs weight)
                 - Explain how exercises work together and complement each other
                 - Describe muscle group targeting rationale
                 - Explain how each day fits into the weekly progression
@@ -91,6 +109,15 @@ class WorkoutPromptGenerator:
                 - Explain the rationale for warm-up and cool-down activities based on the day's workout intensity and muscle groups targeted
 
                 **OUTPUT FORMAT:**
+                **IMPORTANT**: Your response must include multiple weeks (not just 1 week). The program should demonstrate progressive overload and periodization across weeks.
+                
+                **Program Structure Requirements:**
+                - Generate a program with at least 4 weeks based on the Evidence-Based Fitness Training documentation
+                - The exact number of weeks should follow the training phases and periodization strategies outlined in the documentation
+                - Each week should show progression from the previous week
+                - Include periodization (e.g., volume/intensity waves, deload weeks) as specified in the documentation
+                - Demonstrate progressive overload principles across weeks according to the documentation guidelines
+                
                 Return a structured workout plan with a motivating title and clear summary.
                 Ensure every exercise in the plan has a valid exercise_id from the provided list.
                 Provide comprehensive justifications at all three levels as specified above.
@@ -119,14 +146,32 @@ class WorkoutPromptGenerator:
         for muscle_group, exercises in muscle_groups.items():
             exercise_text += f"**{muscle_group.upper()}:**\n"
             for exercise in exercises:
+                # Get popularity score with fallback
+                popularity_score = exercise.get('popularity_score', 0.5)
+                popularity_emoji = self._get_popularity_emoji(popularity_score)
+                
                 exercise_text += f"  - ID: {exercise['id']} | {exercise['name']} "
-                exercise_text += f"({exercise['difficulty']}, {exercise['equipment']}, {exercise.get('force', 'Unknown')})\n"
+                exercise_text += f"({exercise['difficulty']}, {exercise['equipment']}, {exercise.get('force', 'Unknown')}) "
+                exercise_text += f"{popularity_emoji} {popularity_score:.2f}\n"
             exercise_text += "\n"
         
         exercise_text += f"**Total Available Exercises: {len(exercise_candidates)}**\n"
         exercise_text += "**IMPORTANT: Only use exercises from this list. Reference by ID.**"
         
         return exercise_text
+    
+    def _get_popularity_emoji(self, popularity_score: float) -> str:
+        """Get emoji representation for popularity score."""
+        if popularity_score >= 0.8:
+            return "🌟"  # Very popular/essential
+        elif popularity_score >= 0.6:
+            return "⭐"  # Popular
+        elif popularity_score >= 0.4:
+            return "✅"  # Good
+        elif popularity_score >= 0.2:
+            return "⚠️"  # Less popular
+        else:
+            return "❓"  # Unknown/obscure
     
     def create_exercise_recommendation_prompt(self, 
                                            muscle_group: str,

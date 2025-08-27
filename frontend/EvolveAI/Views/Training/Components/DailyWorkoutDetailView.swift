@@ -61,6 +61,9 @@ struct DailyWorkoutDetailView: View {
                                             reps: reps,
                                             weight: weight
                                         )
+                                    },
+                                    onToggleCompletion: {
+                                        viewModel.toggleExerciseCompletion(exercise.id)
                                     }
                                 )
                             }
@@ -81,7 +84,7 @@ struct DailyWorkoutDetailView: View {
                                         HStack(spacing: 8) {
                                             Image(systemName: "circle")
                                                 .foregroundColor(.evolveMuted)
-                                            Text("Fill in all weights to complete workout")
+                                            Text("Workout Incomplete")
                                                 .font(.subheadline)
                                                 .foregroundColor(.evolveMuted)
                                         }
