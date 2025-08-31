@@ -1,0 +1,1332 @@
+[
+    {
+      "exercise_name": "Chest Dip",
+      "equipment": "Assisted",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.8
+    },
+    {
+      "exercise_name": "Chest Dip: kneeling",
+      "equipment": "Assisted",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Bench Press",
+      "equipment": "Barbell",
+      "variation": "No",
+      "tier": "foundational",
+      "popularity_score": 1.0
+    },
+    {
+      "exercise_name": "Bench Press: Power Lift",
+      "equipment": "Barbell",
+      "variation": "Yes",
+      "tier": "standard",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Decline Bench Press",
+      "equipment": "Barbell",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Flies",
+      "equipment": "Cable",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Flies: Lying Fly",
+      "equipment": "Cable",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Flies: Seated Fly",
+      "equipment": "Cable",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Flies: Standing Fly",
+      "equipment": "Cable",
+      "variation": "Yes",
+      "tier": "standard",
+      "popularity_score": 0.8
+    },
+    {
+      "exercise_name": "Presses",
+      "equipment": "Cable",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.6
+    },
+    {
+      "exercise_name": "Presses: Bench Press",
+      "equipment": "Cable",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Presses: Chest Press Standing",
+      "equipment": "Cable",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Presses: Decline Chest Press",
+      "equipment": "Cable",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Bench Press",
+      "equipment": "Dumbbell",
+      "variation": "No",
+      "tier": "foundational",
+      "popularity_score": 0.9
+    },
+    {
+      "exercise_name": "Decline Bench Press",
+      "equipment": "Dumbbell",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.3
+    },
+    {
+      "exercise_name": "Fly",
+      "equipment": "Dumbbell",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.6
+    },
+    {
+      "exercise_name": "Pullover",
+      "equipment": "Dumbbell",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Bench Press",
+      "equipment": "Machine (plate loaded)",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Chest Dip",
+      "equipment": "Machine (plate loaded)",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Chest Press",
+      "equipment": "Machine (plate loaded)",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.8
+    },
+    {
+      "exercise_name": "Decline Chest Press",
+      "equipment": "Machine (plate loaded)",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Chest Dip",
+      "equipment": "Machine (selectorized)",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.6
+    },
+    {
+      "exercise_name": "Flies",
+      "equipment": "Machine (selectorized)",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.6
+    },
+    {
+      "exercise_name": "Flies: Lying Fly",
+      "equipment": "Machine (selectorized)",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Flies: Pec Deck Fly",
+      "equipment": "Machine (selectorized)",
+      "variation": "Yes",
+      "tier": "standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Flies: Seated Fly",
+      "equipment": "Machine (selectorized)",
+      "variation": "Yes",
+      "tier": "standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Presses",
+      "equipment": "Machine (selectorized)",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.6
+    },
+    {
+      "exercise_name": "Presses: Bench Press",
+      "equipment": "Machine (selectorized)",
+      "variation": "Yes",
+      "tier": "standard",
+      "popularity_score": 0.8
+    },
+    {
+      "exercise_name": "Presses: Chest Press alternative machine",
+      "equipment": "Machine (selectorized)",
+      "variation": "Yes",
+      "tier": "standard",
+      "popularity_score": 0.8
+    },
+    {
+      "exercise_name": "Presses: Decline Chest Press",
+      "equipment": "Machine (selectorized)",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.3
+    },
+    {
+      "exercise_name": "Standing Chest Dip",
+      "equipment": "Sled",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.1
+    },
+    {
+      "exercise_name": "Bench Press",
+      "equipment": "Smith",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.6
+    },
+    {
+      "exercise_name": "Decline Bench Press",
+      "equipment": "Smith",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.3
+    },
+    {
+      "exercise_name": "Chest Dip",
+      "equipment": "Weighted",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.8
+    },
+    {
+      "exercise_name": "Push-up",
+      "equipment": "Weighted",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.8
+    },
+    {
+      "exercise_name": "Chest Dip",
+      "equipment": "Band-assisted",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.3
+    },
+    {
+      "exercise_name": "Chest Dip",
+      "equipment": "Body Weight",
+      "variation": "No",
+      "tier": "foundational",
+      "popularity_score": 0.9
+    },
+    {
+      "exercise_name": "Push-up",
+      "equipment": "Body Weight",
+      "variation": "No",
+      "tier": "foundational",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Push-up: Archer",
+      "equipment": "Body Weight",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Push-up: Incline",
+      "equipment": "Body Weight",
+      "variation": "Yes",
+      "tier": "standard",
+      "popularity_score": 0.8
+    },
+    {
+      "exercise_name": "Push-up: on knees",
+      "equipment": "Body Weight",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.3
+    },
+    {
+      "exercise_name": "Chest Dip",
+      "equipment": "Self-assisted",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Chest Dip",
+      "equipment": "Suspended",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Chest Press",
+      "equipment": "Suspended",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Fly",
+      "equipment": "Suspended",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Clap Push-up",
+      "equipment": "Plyometric",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.6
+    },
+    {
+      "exercise_name": "Depth Push-up",
+      "equipment": "Plyometric",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Incline Bench Press",
+      "equipment": "Barbell",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.9
+    },
+    {
+      "exercise_name": "Incline Bench Press",
+      "equipment": "Cable",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Incline Chest Press",
+      "equipment": "Cable",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Incline Fly",
+      "equipment": "Cable",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.8
+    },
+    {
+      "exercise_name": "Incline Bench Press",
+      "equipment": "Dumbbell",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.9
+    },
+    {
+      "exercise_name": "Incline Fly",
+      "equipment": "Dumbbell",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Incline Chest Press",
+      "equipment": "Machine (plate loaded)",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.8
+    },
+    {
+      "exercise_name": "Incline Chest Press: on Military Press Machine",
+      "equipment": "Machine (plate loaded)",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.3
+    },
+    {
+      "exercise_name": "Incline Bench Press",
+      "equipment": "Machine (selectorized)",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Incline Chest Press",
+      "equipment": "Machine (selectorized)",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.9
+    },
+    {
+      "exercise_name": "Incline Fly",
+      "equipment": "Machine (selectorized)",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.6
+    },
+    {
+      "exercise_name": "Incline Bench Press",
+      "equipment": "Smith",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.6
+    },
+    {
+      "exercise_name": "Decline Push-up",
+      "equipment": "Body Weight",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Decline Push-up: on stability ball",
+      "equipment": "Body Weight",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Chest Dip",
+      "equipment": "Assisted",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Standing Fly",
+      "equipment": "Cable",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Chest Dip",
+      "equipment": "Machine (selectorized)",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Chest Dip",
+      "equipment": "Weighted",
+      "variation": "No",
+      "tier": "standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Incline Shoulder Raise",
+      "equipment": "Barbell",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Incline Shoulder Raise",
+      "equipment": "Cable",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Incline Shoulder Raise",
+      "equipment": "Dumbbell",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Incline Shoulder Raise",
+      "equipment": "Machine (plate loaded)",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.3
+    },
+    {
+      "exercise_name": "Incline Shoulder Raise",
+      "equipment": "Machine (selectorized)",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.3
+    },
+    {
+      "exercise_name": "Incline Shoulder Raise",
+      "equipment": "Smith",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.3
+    },
+    {
+      "exercise_name": "Push-up Plus",
+      "equipment": "Body Weight",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Bent-over Row",
+      "equipment": "Barbell",
+      "variation": "No",
+      "tier": "Foundational",
+      "popularity_score": 0.9
+    },
+    {
+      "exercise_name": "Bent-over Row: Underhand",
+      "equipment": "Barbell",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.8
+    },
+    {
+      "exercise_name": "One Arm Bent-over Row",
+      "equipment": "Cable",
+      "variation": "No",
+      "tier": "Standard",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "One Arm Straight Back Seated High Row",
+      "equipment": "Cable",
+      "variation": "No",
+      "tier": "Variety",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Seated Row",
+      "equipment": "Cable",
+      "variation": "No",
+      "tier": "Foundational",
+      "popularity_score": 0.9
+    },
+    {
+      "exercise_name": "Seated Row: Straight Back",
+      "equipment": "Cable",
+      "variation": "Yes",
+      "tier": "Standard",
+      "popularity_score": 0.8
+    },
+    {
+      "exercise_name": "Seated Wide Grip Row",
+      "equipment": "Cable",
+      "variation": "No",
+      "tier": "Standard",
+      "popularity_score": 0.8
+    },
+    {
+      "exercise_name": "Seated Wide Grip Row: Straight Back",
+      "equipment": "Cable",
+      "variation": "Yes",
+      "tier": "Variety",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Bent-over Row",
+      "equipment": "Dumbbell",
+      "variation": "No",
+      "tier": "Foundational",
+      "popularity_score": 0.9
+    },
+    {
+      "exercise_name": "Lying Row",
+      "equipment": "Dumbbell",
+      "variation": "No",
+      "tier": "Variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Incline Row",
+      "equipment": "Machine (plate loaded)",
+      "variation": "No",
+      "tier": "Standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Incline Row: Close Grip",
+      "equipment": "Machine (plate loaded)",
+      "variation": "Yes",
+      "tier": "Variety",
+      "popularity_score": 0.6
+    },
+    {
+      "exercise_name": "Seated Rows",
+      "equipment": "Machine (plate loaded)",
+      "variation": "No",
+      "tier": "Foundational",
+      "popularity_score": 0.9
+    },
+    {
+      "exercise_name": "Seated Rows: Narrow Grip",
+      "equipment": "Machine (plate loaded)",
+      "variation": "Yes",
+      "tier": "Standard",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Seated Rows: Wide Grip Low Bar",
+      "equipment": "Machine (plate loaded)",
+      "variation": "Yes",
+      "tier": "Standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Seated Rows (Others)",
+      "equipment": "Machine (plate loaded)",
+      "variation": "No",
+      "tier": "Variety",
+      "popularity_score": 0.2
+    },
+    {
+      "exercise_name": "Seated Rows (Others): Seated Low Row",
+      "equipment": "Machine (plate loaded)",
+      "variation": "Yes",
+      "tier": "Variety",
+      "popularity_score": 0.2
+    },
+    {
+      "exercise_name": "Seated Rows (Others): Seated High Row",
+      "equipment": "Machine (plate loaded)",
+      "variation": "Yes",
+      "tier": "Standard",
+      "popularity_score": 0.2
+    },
+    {
+      "exercise_name": "T-bar Row",
+      "equipment": "Machine (plate loaded)",
+      "variation": "No",
+      "tier": "Foundational",
+      "popularity_score": 0.9
+    },
+    {
+      "exercise_name": "T-bar Row: Close Grip",
+      "equipment": "Machine (plate loaded)",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.6
+    },
+    {
+      "exercise_name": "Seated Row",
+      "equipment": "Machine (selectorized)",
+      "variation": "No",
+      "tier": "Foundational",
+      "popularity_score": 0.9
+    },
+    {
+      "exercise_name": "Seated Row: Wide Grip",
+      "equipment": "Machine (selectorized)",
+      "variation": "Yes",
+      "tier": "Standard",
+      "popularity_score": 0.8
+    },
+    {
+      "exercise_name": "Seated Row (no chest pad)",
+      "equipment": "Machine (selectorized)",
+      "variation": "No",
+      "tier": "Standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Seated Row (no chest pad): Straight Back",
+      "equipment": "Machine (selectorized)",
+      "variation": "Yes",
+      "tier": "Variety",
+      "popularity_score": 0.6
+    },
+    {
+      "exercise_name": "Underhand Seated Row",
+      "equipment": "Machine (selectorized)",
+      "variation": "No",
+      "tier": "Standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Bent-over Row",
+      "equipment": "Smith",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.3
+    },
+    {
+      "exercise_name": "Inverted Row",
+      "equipment": "Weighted",
+      "variation": "No",
+      "tier": "variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Inverted Row",
+      "equipment": "Body Weight",
+      "variation": "No",
+      "tier": "Standard",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Inverted Row: Feet Elevated",
+      "equipment": "Body Weight",
+      "variation": "Yes",
+      "tier": "variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Inverted Row: High Bar",
+      "equipment": "Body Weight",
+      "variation": "Yes",
+      "tier": "Variety",
+      "popularity_score": 0.3
+    },
+    {
+      "exercise_name": "Inverted Row: On Hips",
+      "equipment": "Body Weight",
+      "variation": "Yes",
+      "tier": "Variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Inverted Row",
+      "equipment": "Suspended",
+      "variation": "No",
+      "tier": "Standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Inverted Row: One Arm",
+      "equipment": "Suspended",
+      "variation": "Yes",
+      "tier": "Variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Row",
+      "equipment": "Suspended",
+      "variation": "No",
+      "tier": "Variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Row: One Arm",
+      "equipment": "Suspended",
+      "variation": "Yes",
+      "tier": "Variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Shrug",
+      "equipment": "Barbell",
+      "variation": "No",
+      "tier": "Standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Shrug",
+      "equipment": "Dumbbell",
+      "variation": "No",
+      "tier": "Standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Shrug",
+      "equipment": "Cable",
+      "variation": "No",
+      "tier": "Variety",
+      "popularity_score": 0.4
+    },
+    {
+      "exercise_name": "Shrug",
+      "equipment": "Machine (plate loaded)",
+      "variation": "No",
+      "tier": "Standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Shrug",
+      "equipment": "Machine (selectorized)",
+      "variation": "No",
+      "tier": "Standard",
+      "popularity_score": 0.7
+    },
+    {
+      "exercise_name": "Internal Rotation",
+      "equipment": "Band",
+      "variation": "No",
+      "tier": "Variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "External Rotation",
+      "equipment": "Band",
+      "variation": "No",
+      "tier": "Variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "External Rotation",
+      "equipment": "Cable",
+      "variation": "No",
+      "tier": "Variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "Internal Rotation",
+      "equipment": "Cable",
+      "variation": "No",
+      "tier": "Variety",
+      "popularity_score": 0.5
+    },
+    {
+      "exercise_name": "External Rotation",
+      "equipment": "Dumbbell",
+      "variation": "No",
+      "tier": "Variety",
+      "popularity_score": 0.4
+    },
+    {
+      "name": "Standing Calf Raise",
+      "equipment": "Barbell",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Foundational",
+      "popularity": 1.0
+    },
+    {
+      "name": "Standing Calf Raise",
+      "equipment": "Cable",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Standard",
+      "popularity": 0.7
+    },
+    {
+      "name": "One Arm Single Leg Calf Raise",
+      "equipment": "Cable",
+      "unilateral": true,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Standard",
+      "popularity": 0.6
+    },
+    {
+      "name": "Standing Calf Raise",
+      "equipment": "Dumbbell",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Foundational",
+      "popularity": 1.0
+    },
+    {
+      "name": "Single Leg Standing Calf Raise",
+      "equipment": "Dumbbell",
+      "unilateral": true,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Foundational",
+      "popularity": 0.9
+    },
+    {
+      "name": "45° Calf Press",
+      "equipment": "Machine (plate loaded)",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Foundational",
+      "popularity": 1.0
+    },
+    {
+      "name": "Calf Extension",
+      "equipment": "Machine (plate loaded)",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Standard",
+      "popularity": 0.8
+    },
+    {
+      "name": "Seated Calf Press",
+      "equipment": "Machine (plate loaded)",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Foundational",
+      "popularity": 1.0
+    },
+    {
+      "name": "Standing Calf Raise",
+      "equipment": "Machine (plate loaded)",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Foundational",
+      "popularity": 1.0
+    },
+    {
+      "name": "45° Calf Raise",
+      "equipment": "Machine (selectorized)",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Standard",
+      "popularity": 0.8
+    },
+    {
+      "name": "Calf Extension",
+      "equipment": "Machine (selectorized)",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Standard",
+      "popularity": 0.9
+    },
+    {
+      "name": "Donkey Calf Raise",
+      "equipment": "Machine (selectorized)",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Standard",
+      "popularity": 0.7
+    },
+    {
+      "name": "Seated Calf Press",
+      "equipment": "Machine (selectorized)",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Foundational",
+      "popularity": 1.0
+    },
+    {
+      "name": "Standing Calf Raise",
+      "equipment": "Machine (selectorized)",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Foundational",
+      "popularity": 1.0
+    },
+    {
+      "name": "45° Calf Press",
+      "equipment": "Sled",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Foundational",
+      "popularity": 1.0
+    },
+    {
+      "name": "45° Calf Raise",
+      "equipment": "Sled",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Foundational",
+      "popularity": 1.0
+    },
+    {
+      "name": "Donkey Calf Raise",
+      "equipment": "Sled",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Standard",
+      "popularity": 0.6
+    },
+    {
+      "name": "Lying Calf Press",
+      "equipment": "Sled",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Standard",
+      "popularity": 0.7
+    },
+    {
+      "name": "Seated Calf Press",
+      "equipment": "Sled",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Standard",
+      "popularity": 0.8
+    },
+    {
+      "name": "Standing Calf Raise",
+      "equipment": "Sled",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Standard",
+      "popularity": 0.7
+    },
+    {
+      "name": "Donkey Calf Raise",
+      "equipment": "Smith",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Standard",
+      "popularity": 0.5
+    },
+    {
+      "name": "Standing Calf Raise",
+      "equipment": "Smith",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Standard",
+      "popularity": 0.9
+    },
+    {
+      "name": "Single Leg Calf Raise",
+      "equipment": "Weighted",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Standard",
+      "popularity": 0.8
+    },
+    {
+      "name": "Standing Calf Raise",
+      "equipment": "Body Weight",
+      "unilateral": false,
+      "classification": "Basic",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Foundational",
+      "popularity": 0.9
+    },
+    {
+      "name": "Single Leg Standing Calf Raise",
+      "equipment": "Body Weight",
+      "unilateral": true,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Foundational",
+      "popularity": 0.9
+    },
+    {
+      "name": "Single Leg Calf Raise",
+      "equipment": "Self-assisted",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Variety",
+      "popularity": 0.4
+    },
+    {
+      "name": "Forward Angled Single Leg Calf Raise",
+      "equipment": "Suspended",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Variety",
+      "popularity": 0.2
+    },
+    {
+      "name": "Safety Barbell Seated Calf Raise",
+      "equipment": "Barbell",
+      "unilateral": false,
+      "classification": "Auxiliary",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Variety",
+      "popularity": 0.3
+    },
+    {
+      "name": "Seated Calf Raise",
+      "equipment": "Machine (plate loaded)",
+      "unilateral": false,
+      "classification": "Auxiliary",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Foundational",
+      "popularity": 1.0
+    },
+    {
+      "name": "Seated Calf Raise",
+      "equipment": "Machine (selectorized)",
+      "unilateral": false,
+      "classification": "Auxiliary",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Foundational",
+      "popularity": 1.0
+    },
+    {
+      "name": "Seated Calf Raise",
+      "equipment": "Smith",
+      "unilateral": false,
+      "classification": "Auxiliary",
+      "type": "Isolated",
+      "force": "Push",
+      "tier": "Standard",
+      "popularity": 0.8
+    },
+    {
+      "name": "Safety Bar Reverse Calf Raise",
+      "equipment": "Barbell",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.2
+    },
+    {
+      "name": "Reverse Calf Raise",
+      "equipment": "Cable",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.4
+    },
+    {
+      "name": "Single Leg Reverse Calf Raise",
+      "equipment": "Cable",
+      "unilateral": true,
+      "classification": "Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.3
+    },
+    {
+      "name": "Reverse Calf Raise",
+      "equipment": "Dumbbell",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.5
+    },
+    {
+      "name": "Single Leg Reverse Calf Raise",
+      "equipment": "Dumbbell",
+      "unilateral": true,
+      "classification": "Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.4
+    },
+    {
+      "name": "45° Reverse Calf Press",
+      "equipment": "Machine (plate loaded)",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.3
+    },
+    {
+      "name": "45° Reverse Calf Raise",
+      "equipment": "Machine (plate loaded)",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.3
+    },
+    {
+      "name": "Reverse Calf Raise",
+      "equipment": "Machine (plate loaded)",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.4
+    },
+    {
+      "name": "Reverse Calf Extension",
+      "equipment": "Machine (plate loaded)",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.3
+    },
+    {
+      "name": "Reverse Calf Extension",
+      "equipment": "Machine (selectorized)",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.4
+    },
+    {
+      "name": "Reverse Calf Raise",
+      "equipment": "Machine (selectorized)",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.5
+    },
+    {
+      "name": "45° Reverse Calf Press",
+      "equipment": "Sled",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.3
+    },
+    {
+      "name": "45° Reverse Calf Raise (plate loaded)",
+      "equipment": "Sled",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.3
+    },
+    {
+      "name": "45° Reverse Calf Raise (on hack press)",
+      "equipment": "Sled",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.3
+    },
+    {
+      "name": "Hack Reverse Calf Raise",
+      "equipment": "Sled",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.3
+    },
+    {
+      "name": "Lying Reverse Calf Press",
+      "equipment": "Sled",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.2
+    },
+    {
+      "name": "Seated Reverse Calf Press",
+      "equipment": "Sled",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.3
+    },
+    {
+      "name": "Reverse Calf Raise",
+      "equipment": "Smith",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.4
+    },
+    {
+      "name": "Reverse Calf Raise",
+      "equipment": "Body Weight",
+      "unilateral": false,
+      "classification": "Basic or Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.5
+    },
+    {
+      "name": "Single Leg Reverse Calf Raise",
+      "equipment": "Body Weight",
+      "unilateral": true,
+      "classification": "Auxiliary",
+      "type": "Isolated",
+      "force": "Pull",
+      "tier": "Variety",
+      "popularity": 0.4
+    }
+  ]
+  

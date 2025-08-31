@@ -77,10 +77,10 @@ class ExerciseValidator:
         exercise_ids = []
         
         try:
-            weeks = workout_plan.get('weeks', [])
+            weeks = workout_plan.get('weekly_schedules', [])
             
             for week in weeks:
-                days = week.get('days', [])
+                days = week.get('daily_workouts', [])
                 
                 for day in days:
                     if not day.get('is_rest_day', False):
@@ -325,7 +325,7 @@ class ExerciseValidator:
             texts = [target_description]
             for candidate in candidates:
                 # Combine exercise name, description, and muscle group for better matching
-                candidate_text = f"{candidate.get('name', '')} {candidate.get('description', '')} {candidate.get('main_muscle', '')}"
+                candidate_text = f"{candidate.get('name', '')} {candidate.get('description', '')} {candidate.get('target_area', '')}"
                 texts.append(candidate_text)
             
             # Create TF-IDF vectors
@@ -440,7 +440,7 @@ class ExerciseValidator:
                     validated_ref['exercise_details'] = {
                         'difficulty': exercise['difficulty'],
                         'equipment': exercise['equipment'],
-                        'main_muscle': exercise['main_muscle']
+                        'target_area': exercise['target_area']
                     }
                     validated_references.append(validated_ref)
                 else:

@@ -106,8 +106,8 @@ class NetworkService: NetworkServiceProtocol, ObservableObject {
     // - RAG-enhanced knowledge retrieval
     private lazy var workoutPlanSession: URLSession = {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 180.0  // 3 minutes for request timeout
-        config.timeoutIntervalForResource = 300.0 // 5 minutes for total resource timeout
+        config.timeoutIntervalForRequest = 600.0  // 3 minutes for request timeout
+        config.timeoutIntervalForResource = 900.0 // 5 minutes for total resource timeout
         return URLSession(configuration: config)
     }()
     
