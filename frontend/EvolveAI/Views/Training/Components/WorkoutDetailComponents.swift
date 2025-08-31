@@ -53,6 +53,8 @@ struct ExerciseRowView: View {
                             .fontWeight(.medium)
                             .foregroundColor(.evolveText)
                         
+                        Spacer()
+                        
                         // 1RM Calculator Button (exercise-specific)
                         if canModify {
                             Button(action: {
@@ -370,54 +372,590 @@ struct ProgressRingView: View {
 struct ExerciseDetailView: View {
     let exercise: Exercise
     @Environment(\.presentationMode) var presentationMode
+    @State private var selectedTab: ExerciseTab = .general
+    
+    enum ExerciseTab: String, CaseIterable {
+        case general = "General Info"
+        case instructions = "Instructions"
+        case history = "History"
+        
+        var icon: String {
+            switch self {
+            case .general: return "info.circle.fill"
+            case .instructions: return "list.bullet"
+            case .history: return "chart.line.uptrend.xyaxis"
+            }
+        }
+    }
+    
     var body: some View {
-        NavigationView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text(exercise.name)
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(.evolveText)
-                    if let description = exercise.description, !description.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Description")
-                                .font(.headline)
-                                .foregroundColor(.evolveText)
-                            Text(description)
-                                .font(.body)
+        ZStack {
+            // Background with blur effect
+            Color.black.opacity(0.7)
+                .ignoresSafeArea(.all)
+                .onTapGesture {
+                    presentationMode.wrappedValue.dismiss()
+                }
+            
+            // Exercise detail popup
+            VStack(spacing: 0) {
+                // Header
+                VStack(spacing: 24) {
+                    HStack {
+                        Text(exercise.name)
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        
+                        Spacer()
+                        
+                        Button(action: {
+                            presentationMode.wrappedValue.dismiss()
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.title2)
                                 .foregroundColor(.evolveMuted)
                         }
                     }
-                    if let videoURL = exercise.video_url, !videoURL.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Video Guide")
+                }
+                
+                // Add extra vertical spacing
+                Spacer()
+                    .frame(height: 20)
+                
+                // Tab Switcher
+                TabSwitcherView(selectedTab: $selectedTab)
+                
+                // Tab Content
+                TabView(selection: $selectedTab) {
+                    GeneralInfoTab(exercise: exercise)
+                        .tag(ExerciseTab.general)
+                    
+                    InstructionsTab(exercise: exercise)
+                        .tag(ExerciseTab.instructions)
+                    
+                    HistoryTab(exercise: exercise)
+                        .tag(ExerciseTab.history)
+                }
+                .tabViewStyle(PageTabViewStyle(indexDisplayMode: .never))
+            }
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color.evolveBackground)
+                    .shadow(color: .black.opacity(0.3), radius: 25, x: 0, y: 15)
+            )
+            .frame(maxWidth: 380, maxHeight: 600)
+        }
+        .background(ClearBackgroundView())
+    }
+}
+
+// MARK: - Tab Switcher
+struct TabSwitcherView: View {
+    @Binding var selectedTab: ExerciseDetailView.ExerciseTab
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(ExerciseDetailView.ExerciseTab.allCases, id: \.self) { tab in
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        selectedTab = tab
+                    }
+                }) {
+                    VStack(spacing: 6) {
+                        Image(systemName: tab.icon)
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundColor(selectedTab == tab ? .evolvePrimary : .evolveMuted)
+                        
+                        Text(tab.rawValue)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(selectedTab == tab ? .evolvePrimary : .evolveMuted)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.clear)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.evolveCard)
+        )
+        .padding(.horizontal, 4)
+    }
+    
+    @Namespace private var namespace
+}
+
+// MARK: - General Info Tab
+struct GeneralInfoTab: View {
+    let exercise: Exercise
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Exercise Details Section
+                VStack(spacing: 16) {
+                    // Target Area and Difficulty
+                    HStack(spacing: 16) {
+                        if let targetArea = exercise.target_area {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Target Area")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.evolveMuted)
+                                Text(targetArea)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.evolvePrimary)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color.evolvePrimary.opacity(0.1))
+                                    )
+                            }
+                        }
+                        
+                        if let difficulty = exercise.difficulty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Difficulty")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.evolveMuted)
+                                Text(difficulty)
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(difficultyColor(difficulty))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(difficultyColor(difficulty).opacity(0.1))
+                                    )
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                    
+                    // Equipment and Tier
+                    HStack(spacing: 16) {
+                        if let equipment = exercise.equipment {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Equipment")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.evolveMuted)
+                                Text(equipment)
+                                    .font(.subheadline)
+                                    .foregroundColor(.evolveText)
+                            }
+                        }
+                        
+                        if let tier = exercise.exercise_tier {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Exercise Tier")
+                                    .font(.caption)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.evolveMuted)
+                                Text(tier.capitalized)
+                                    .font(.subheadline)
+                                    .foregroundColor(.evolveText)
+                            }
+                        }
+                        
+                        Spacer()
+                    }
+                }
+                
+                                // Muscles Worked
+                if let mainMuscles = exercise.main_muscles, !mainMuscles.isEmpty {
+                    VStack(alignment: .leading, spacing: 16) {
+                        HStack {
+                            Image(systemName: "figure.strengthtraining.traditional")
+                                .font(.subheadline)
+                                .foregroundColor(.evolvePrimary)
+                            
+                            Text("Muscles Worked")
                                 .font(.headline)
+                                .fontWeight(.semibold)
                                 .foregroundColor(.evolveText)
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.evolveBackground)
-                                .frame(height: 200)
-                                .overlay(
-                                    VStack {
-                                        Image(systemName: "play.circle")
-                                            .font(.system(size: 48))
-                                            .foregroundColor(.evolvePrimary)
-                                        Text("Video Guide")
-                                            .font(.subheadline)
-                                            .foregroundColor(.evolveMuted)
+                        }
+                        
+                        VStack(spacing: 16) {
+                            // Primary Muscles
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    // Image(systemName: "star.fill")
+                                    //     .font(.caption)
+                                    //     .foregroundColor(.yellow)
+                                    Text("Primary Muscles")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.evolveText)
+                                }
+                                
+                                LazyVStack(alignment: .leading, spacing: 6) {
+                                    ForEach(mainMuscles, id: \.self) { muscle in
+                                        Text(muscle)
+                                            .font(.caption)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 8)
+                                            .padding(.vertical, 4)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 12)
+                                                    .fill(Color.evolvePrimary)
+                                            )
                                     }
-                                )
+                                }
+                            }
+                            
+                            // Secondary Muscles
+                            if let secondaryMuscles = exercise.secondary_muscles, !secondaryMuscles.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    HStack {
+                    
+                                        Text("Secondary Muscles")
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.evolveText)
+                                    }
+                                    
+                                    LazyVStack(alignment: .leading, spacing: 6) {
+                                        ForEach(secondaryMuscles, id: \.self) { muscle in
+                                            Text(muscle)
+                                                .font(.caption)
+                                                .fontWeight(.medium)
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 12)
+                                                        .fill(Color.evolvePrimary.opacity(0.2))
+                                                )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
-                    Spacer()
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.evolveCard)
+                    )
+                }
+                
+
+            }
+            .padding(.horizontal, 4)
+            .padding(.top, 20)
+        }
+    }
+    
+    // Helper function for difficulty colors
+    private func difficultyColor(_ difficulty: String) -> Color {
+        switch difficulty.lowercased() {
+        case "beginner":
+            return .green
+        case "intermediate":
+            return .orange
+        case "advanced":
+            return .red
+        default:
+            return .evolvePrimary
+        }
+    }
+}
+
+// MARK: - Instructions Tab
+struct InstructionsTab: View {
+    let exercise: Exercise
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Exercise Instructions
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Image(systemName: "list.bullet")
+                            .font(.subheadline)
+                            .foregroundColor(.evolvePrimary)
+                        
+                        Text("Step-by-Step Instructions")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.evolveText)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("1. Start in a standing position with feet shoulder-width apart")
+                            .font(.subheadline)
+                            .foregroundColor(.evolveText)
+                        
+                        Text("2. Hold the weight at chest level with both hands")
+                            .font(.subheadline)
+                            .foregroundColor(.evolveText)
+                        
+                        Text("3. Lower your body by bending at the knees and hips")
+                            .font(.subheadline)
+                            .foregroundColor(.evolveText)
+                        
+                        Text("4. Keep your back straight and chest up throughout the movement")
+                            .font(.subheadline)
+                            .foregroundColor(.evolveText)
+                        
+                        Text("5. Return to the starting position by pushing through your heels")
+                            .font(.subheadline)
+                            .foregroundColor(.evolveText)
+                    }
+                    .padding(.leading, 8)
                 }
                 .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.evolveCard)
+                )
+                
+                // Video Guide
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Image(systemName: "play.circle.fill")
+                            .font(.subheadline)
+                            .foregroundColor(.evolvePrimary)
+                        
+                        Text("Video Demonstration")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.evolveText)
+                    }
+                    
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.evolveBackground)
+                        .frame(height: 200)
+                        .overlay(
+                            VStack(spacing: 12) {
+                                Image(systemName: "play.circle")
+                                    .font(.system(size: 48))
+                                    .foregroundColor(.evolvePrimary)
+                                Text("Exercise Demonstration")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.evolveMuted)
+                                Text("Tap to play video guide")
+                                    .font(.caption)
+                                    .foregroundColor(.evolveMuted.opacity(0.8))
+                            }
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.evolvePrimary.opacity(0.3), lineWidth: 1)
+                        )
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.evolveCard)
+                )
+                
+                // Tips Section
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Image(systemName: "lightbulb.fill")
+                            .font(.subheadline)
+                            .foregroundColor(.yellow)
+                        
+                        Text("Pro Tips")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.evolveText)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("• Keep your core engaged throughout the movement")
+                            .font(.subheadline)
+                            .foregroundColor(.evolveText)
+                        
+                        Text("• Breathe steadily - exhale on the way up")
+                            .font(.subheadline)
+                            .foregroundColor(.evolveText)
+                        
+                        Text("• Focus on form over weight initially")
+                            .font(.subheadline)
+                            .foregroundColor(.evolveText)
+                    }
+                    .padding(.leading, 8)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.evolveCard)
+                )
             }
-            .background(Color.evolveBackground.ignoresSafeArea())
-            .navigationTitle("Exercise Details")
-            .navigationBarTitleDisplayMode(.inline)
-            .navigationBarItems(trailing: Button("Done") {
-                presentationMode.wrappedValue.dismiss()
-            })
+            .padding(.horizontal, 4)
+            .padding(.top, 20)
+        }
+    }
+}
+
+// MARK: - History Tab
+struct HistoryTab: View {
+    let exercise: Exercise
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // Progress Chart Placeholder
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .font(.subheadline)
+                            .foregroundColor(.evolvePrimary)
+                        
+                        Text("Progress Over Time")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.evolveText)
+                    }
+                    
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.evolveBackground)
+                        .frame(height: 180)
+                        .overlay(
+                            VStack(spacing: 12) {
+                                Image(systemName: "chart.line.uptrend.xyaxis")
+                                    .font(.system(size: 48))
+                                    .foregroundColor(.evolvePrimary)
+                                Text("Progress Chart")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.evolveMuted)
+                                Text("Your performance data will appear here")
+                                    .font(.caption)
+                                    .foregroundColor(.evolveMuted.opacity(0.8))
+                            }
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.evolvePrimary.opacity(0.3), lineWidth: 1)
+                        )
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.evolveCard)
+                )
+                
+                // Recent Workouts
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.subheadline)
+                            .foregroundColor(.evolvePrimary)
+                        
+                        Text("Recent Workouts")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.evolveText)
+                    }
+                    
+                    VStack(spacing: 12) {
+                        // Placeholder workout entries
+                        ForEach(1...3, id: \.self) { index in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("Workout \(index)")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.evolveText)
+                                    Text("\(3 - index) days ago")
+                                        .font(.caption)
+                                        .foregroundColor(.evolveMuted)
+                                }
+                                
+                                Spacer()
+                                
+                                VStack(alignment: .trailing, spacing: 4) {
+                                    Text("3 sets × 12 reps")
+                                        .font(.subheadline)
+                                        .foregroundColor(.evolveText)
+                                    Text("45 kg")
+                                        .font(.caption)
+                                        .foregroundColor(.evolvePrimary)
+                                }
+                            }
+                            .padding()
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(Color.evolveBackground)
+                            )
+                        }
+                    }
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.evolveCard)
+                )
+                
+                // Personal Records
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Image(systemName: "trophy.fill")
+                            .font(.subheadline)
+                            .foregroundColor(.yellow)
+                        
+                        Text("Personal Records")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.evolveText)
+                    }
+                    
+                    HStack(spacing: 20) {
+                        VStack(spacing: 8) {
+                            Text("1RM")
+                                .font(.caption)
+                                .foregroundColor(.evolveMuted)
+                            Text("60 kg")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.evolvePrimary)
+                        }
+                        
+                        VStack(spacing: 8) {
+                            Text("Max Reps")
+                                .font(.caption)
+                                .foregroundColor(.evolveMuted)
+                            Text("15")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.evolvePrimary)
+                        }
+                        
+                        VStack(spacing: 8) {
+                            Text("Max Weight")
+                                .font(.caption)
+                                .foregroundColor(.evolveMuted)
+                            Text("55 kg")
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.evolvePrimary)
+                        }
+                    }
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.evolveCard)
+                )
+            }
+            .padding(.horizontal, 4)
+            .padding(.top, 20)
         }
     }
 }

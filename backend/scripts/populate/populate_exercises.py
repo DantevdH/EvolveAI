@@ -83,7 +83,7 @@ class ExercisePopulator:
         logger.info("🔍 Validating exercise data...")
         
         # Check required columns
-        required_columns = ["Exercise Name", "Force", "Instructions", "Equipment", "Main Muscle", "Secondary Muscles", "Difficulty", "Tier", "Popularity Score"]
+        required_columns = ["Exercise Name", "Force", "Instructions", "Equipment", "Main Muscle", "Target_Muscles", "Secondary Muscles", "Difficulty", "Tier", "Popularity Score"]
         missing_columns = [col for col in required_columns if col not in df.columns]
         
         if missing_columns:
@@ -105,11 +105,14 @@ class ExercisePopulator:
         # Clean Equipment
         df_clean["Equipment"] = df_clean["Equipment"].astype(str).str.strip()
         
-        # Clean Main Muscle
+        # Clean Main Muscle (this will become target_area)
         df_clean["Main Muscle"] = df_clean["Main Muscle"].astype(str).str.strip()
         
+        # Clean Target_Muscles (convert to list for main_muscles)
+        df_clean["Target_Muscles"] = df_clean["Target_Muscles"].apply(self._parse_muscle_list)
+        
         # Clean Secondary Muscles (convert to list)
-        df_clean["Secondary Muscles"] = df_clean["Secondary Muscles"].apply(self._parse_secondary_muscles)
+        df_clean["Secondary Muscles"] = df_clean["Secondary Muscles"].apply(self._parse_muscle_list)
         
         # Clean Difficulty
         df_clean["Difficulty"] = df_clean["Difficulty"].apply(self._standardize_difficulty)
@@ -128,7 +131,7 @@ class ExercisePopulator:
         if initial_count != final_count:
             logger.warning(f"Removed {initial_count - final_count} rows with missing critical data")
         
-        # Check for duplicates based on composite key (name + equipment + main_muscle)
+        # Check for duplicates based on composite key (name + equipment + target_area)
         logger.info("🔍 Checking for duplicate exercise combinations...")
         duplicates = df_clean[df_clean.duplicated(subset=["Exercise Name", "Equipment", "Main Muscle"], keep=False)]
         if not duplicates.empty:
@@ -142,8 +145,8 @@ class ExercisePopulator:
         logger.info(f"✅ Data validation complete. {len(df_clean)} valid exercises remaining")
         return df_clean
 
-    def _parse_secondary_muscles(self, muscles_str: str) -> List[str]:
-        """Parse secondary muscles string into a list."""
+    def _parse_muscle_list(self, muscles_str: str) -> List[str]:
+        """Parse muscle string into a list."""
         if pd.isna(muscles_str) or muscles_str == '':
             return []
         
@@ -218,7 +221,8 @@ class ExercisePopulator:
                 "force": row["Force"],
                 "instructions": row["Instructions"],
                 "equipment": row["Equipment"],
-                "main_muscle": row["Main Muscle"],
+                "target_area": row["Main Muscle"],  # Main Muscle maps to target_area
+                "main_muscles": row["Target_Muscles"],  # Target_Muscles maps to main_muscles array
                 "secondary_muscles": row["Secondary Muscles"],
                 "difficulty": row["Difficulty"],
                 "exercise_tier": row["Tier"],
@@ -300,17 +304,17 @@ class ExercisePopulator:
                 difficulty = exercise['difficulty']
                 difficulty_counts[difficulty] = difficulty_counts.get(difficulty, 0) + 1
             
-            # Get muscle group distribution
-            muscle_response = self.supabase.table('exercises').select('main_muscle').execute()
+            # Get target area distribution
+            muscle_response = self.supabase.table('exercises').select('target_area').execute()
             muscle_counts = {}
             for exercise in muscle_response.data:
-                muscle = exercise['main_muscle']
+                muscle = exercise['target_area']
                 muscle_counts[muscle] = muscle_counts.get(muscle, 0) + 1
             
             return {
                 "total_exercises": total_exercises,
                 "difficulty_distribution": difficulty_counts,
-                "muscle_group_distribution": muscle_counts
+                "target_area_distribution": muscle_counts
             }
             
         except Exception as e:

@@ -8,9 +8,8 @@ import json
 
 # Import your existing training schemas and services
 from core.workout.schemas import WorkoutPlanSchema, UserProfileSchema
-from core.workout.prompt_generator import WorkoutPromptGenerator
-from core.workout.workout_service import create_workout_service
 from core.workout.models import GenerateWorkoutRequest, GenerateWorkoutResponse
+from core.agents.specialists.fitness_coach import FitnessCoach
 from utils.mock_data import create_mock_workout_plan
 
 import openai
@@ -33,8 +32,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize the workout service
-workout_service = create_workout_service()
+# Initialize the fitness coach
+fitness_coach = FitnessCoach()
 
 # Dependency to get OpenAI client
 def get_openai_client():
@@ -129,8 +128,8 @@ async def generate_workout_plan(
         user_profile = UserProfileSchema(**user_profile_data)
         
         
-        # Use the workout service
-        result = workout_service.generate_workout_plan(
+        # Use the fitness coach
+        result = fitness_coach.generate_enhanced_workout_plan(
             user_profile=user_profile,
             openai_client=openai_client
         )
@@ -160,7 +159,7 @@ async def health_check():
         "status": "healthy",
         "openai_configured": bool(os.getenv("OPENAI_API_KEY")),
         "model": os.getenv("OPENAI_MODEL", "gpt-4"),
-        "workout_service_available": workout_service is not None
+        "fitness_coach_available": fitness_coach is not None
     }
 
 @app.get("/api/stats/")
@@ -168,7 +167,7 @@ async def get_service_stats():
     """Get workout service statistics."""
     return {
         "service_status": "operational",
-        "workout_service_available": workout_service is not None
+        "fitness_coach_available": fitness_coach is not None
     }
 
 @app.post("/api/config/")

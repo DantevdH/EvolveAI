@@ -7,10 +7,18 @@ struct Exercise: Codable, Identifiable, Equatable {
     let name: String
     let description: String?
     let video_url: String?
+    let target_area: String?        // Primary muscle group targeted
+    let main_muscles: [String]?     // Array of main muscles worked
+    let secondary_muscles: [String]? // Array of secondary muscles worked
+    let equipment: String?          // Required equipment
+    let difficulty: String?         // Difficulty level (Beginner, Intermediate, Advanced)
+    let exercise_tier: String?      // Exercise tier (foundational, standard, variety)
+    let popularity_score: Double?   // Popularity score (0.0 to 1.0)
     
     enum CodingKeys: String, CodingKey {
         case id, name, description
-        case video_url
+        case video_url, target_area, main_muscles, secondary_muscles
+        case equipment, difficulty, exercise_tier, popularity_score
     }
 }
 

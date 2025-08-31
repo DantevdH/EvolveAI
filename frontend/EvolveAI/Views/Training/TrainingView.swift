@@ -268,7 +268,7 @@ struct TrainingContentView: View {
                 }
             }
             .background(Color.evolveBackground.ignoresSafeArea())
-            .sheet(isPresented: $viewModel.isShowingExerciseDetail) {
+            .fullScreenCover(isPresented: $viewModel.isShowingExerciseDetail) {
                 if let exercise = viewModel.selectedExercise {
                     ExerciseDetailView(exercise: exercise)
                 }

@@ -15,6 +15,7 @@ from ...workout.schemas import WorkoutPlanSchema, UserProfileSchema
 from ...workout.prompt_generator import WorkoutPromptGenerator
 from ...workout.exercise_selector import ExerciseSelector
 from ...workout.exercise_validator import ExerciseValidator
+from ...workout.training_rules_engine import TrainingRulesEngine
 
 import os
 import json
@@ -40,6 +41,9 @@ class FitnessCoach(BaseAgent):
         # Initialize exercise services
         self.exercise_selector = ExerciseSelector()
         self.exercise_validator = ExerciseValidator()
+        
+        # Initialize training rules engine
+        self.training_rules_engine = TrainingRulesEngine()
     
     def _get_capabilities(self) -> List[str]:
         """Get the agent's capabilities."""
@@ -91,7 +95,7 @@ class FitnessCoach(BaseAgent):
                             user_profile: UserProfileSchema,
                             openai_client: openai.OpenAI,
                             enrich_with_knowledge: bool = False,
-                            max_exercises: int = 100) -> WorkoutPlanSchema:
+                            max_exercises: int = 300) -> WorkoutPlanSchema:
         """
         Generate a comprehensive workout plan using your existing system + RAG enhancement.
         
@@ -125,8 +129,8 @@ class FitnessCoach(BaseAgent):
                 exercise_candidates
             )
 
-            # Step 4: Add the foundations of creating a workout plan
-            base_prompt_w_foundations = self._add_foundations_of_creating_a_workout_plan(base_prompt)
+            # Step 4: Add the foundations of creating a workout plan with user-specific rules
+            base_prompt_w_foundations = self._add_foundations_of_creating_a_workout_plan(base_prompt, user_profile)
             
             # Step 5: Enhance prompt with retrieved knowledge if available
             # TODO: we can add extra information to the prompt based on primary goal description and physical limitations (user profided textual fiels)
@@ -174,7 +178,7 @@ class FitnessCoach(BaseAgent):
             print(f"❌ Error generating workout plan: {e}")
             raise
     
-    def _get_exercise_candidates_for_profile(self, user_profile: UserProfileSchema, max_exercises: int = 200) -> List[Dict[str, Any]]:
+    def _get_exercise_candidates_for_profile(self, user_profile: UserProfileSchema, max_exercises: int) -> List[Dict[str, Any]]:
         """
         Get exercise candidates based on user profile for workout generation.
         
@@ -219,7 +223,7 @@ class FitnessCoach(BaseAgent):
         
         all_muscle_groups = ["Upper Arms", "Neck", "Chest", "Shoulder", "Calves", "Back", "Hips", "Thighs", "Forearm"]
         
-        if goal != "bodybuilding":
+        if goal not in ["bodybuilding", "increase strength"]:
             # for Improve Endurance, Increase Strength, General Fitness, Weight Loss, Power & Speed, we want to exclude the smaller muscle groups
             # TODO: for some goals, such as improve endurance, general fitness and weight loss we want to redirect to a different specialist agent including cardio and mobility exercises
             smaller_muscles = ["Upper Arms", "Neck", "Calves", "Forearm"]
@@ -313,10 +317,9 @@ class FitnessCoach(BaseAgent):
             
             if relevant_docs:
                 print(f"✅ Found {len(relevant_docs)} relevant documents")
-                # Log top results with quality indicators
+                # Log top results
                 for i, doc in enumerate(relevant_docs[:3]):
-                    quality_level, weight, emoji = self._get_document_quality(doc)
-                    print(f"   {i+1}. {doc['document_title']} (Score: {doc['relevance_score']:.3f}, Quality: {emoji} {quality_level.upper()}, Weight: {weight:.1f})")
+                    print(f"   {i+1}. {doc['document_title']} (Score: {doc['relevance_score']:.3f})")
             else:
                 print("⚠️  No relevant documents found, trying broader search...")
                 # Try broader search without filters
@@ -335,11 +338,11 @@ class FitnessCoach(BaseAgent):
             return []
     
     def _enhance_prompt_with_knowledge(self, base_prompt: str, relevant_docs: List[Dict[str, Any]]) -> str:
-        """Enhance the base prompt with retrieved knowledge with quality indicators."""
+        """Enhance the base prompt with retrieved knowledge."""
         if not relevant_docs:
             return base_prompt
         
-        # Add knowledge context to the prompt with quality indicators
+        # Add knowledge context to the prompt
         knowledge_context = "\n\n**Additional Knowledge Base Context (Ranked by Relevance):**\n"
         
         for i, doc in enumerate(relevant_docs, 1):
@@ -347,171 +350,134 @@ class FitnessCoach(BaseAgent):
             relevance_score = doc.get('relevance_score', 0.0)
             
             if chunk_text:
-                # Determine quality level and weight
-                quality_level, weight, emoji = self._get_document_quality(doc)
-                
-                knowledge_context += f"\n{i}. **{emoji} {quality_level.upper()} QUALITY** (Relevance: {relevance_score:.3f}, Weight: {weight:.1f})\n"
+                knowledge_context += f"\n{i}. **Relevance Score: {relevance_score:.3f}**\n"
                 knowledge_context += f"   {chunk_text}\n"
         
         enhanced_prompt = base_prompt + knowledge_context
         
-        # Add weighted instructions
+        # Add instructions
         enhanced_prompt += "\n\n**Instructions:** Use the knowledge base context above to enhance your workout plan recommendations. "
-        enhanced_prompt += "**Pay special attention to HIGH and VERY GOOD quality sources** - these are most relevant to the user's profile. "
-        enhanced_prompt += "Use GOOD quality sources as supporting information. "
-        enhanced_prompt += "ACCEPTABLE quality sources should be used sparingly and only when they provide unique insights not available in higher-quality sources. "
+        enhanced_prompt += "Higher relevance scores indicate more relevant information. "
         enhanced_prompt += "Ensure the plan is evidence-based and follows best practices from the provided context."
         
         return enhanced_prompt
     
-    def _get_quality_indicators(self, relevance_score: float) -> tuple[str, float, str]:
-        """Get quality level, weight, and emoji for a relevance score."""
-        if relevance_score >= 0.55:
-            return "excellent", 1.0, "🌟"
-        elif relevance_score >= 0.50:
-            return "very good", 0.9, "⭐"
-        elif relevance_score >= 0.45:
-            return "good", 0.8, "✅"
-        elif relevance_score >= 0.40:
-            return "acceptable", 0.6, "⚠️"
-        else:
-            return "poor", 0.0, "❌"
+    # Note: Quality indicator methods removed as they're no longer needed
+    # The TrainingRulesEngine now provides all the necessary training guidelines
     
-    def _get_document_quality(self, doc: Dict[str, Any]) -> tuple[str, float, str]:
-        """Get quality level, weight, and emoji for a document, handling pre-set quality levels."""
-        # Check if quality level was already set (e.g., for poor quality fallback)
-        if 'quality_level' in doc:
-            quality_level = doc['quality_level']
-            weight = doc.get('weight', 0.0)
-            emoji = self._get_quality_emoji(quality_level)
-            return quality_level, weight, emoji
-        
-        # Calculate quality based on relevance score
-        relevance_score = doc.get('relevance_score', 0.0)
-        return self._get_quality_indicators(relevance_score)
-    
-    def _add_foundations_of_creating_a_workout_plan(self, base_prompt: str) -> str:
+
+
+
+    def _add_foundations_of_creating_a_workout_plan(self, base_prompt: str, user_profile: UserProfileSchema = None) -> str:
         """
-        Retrieve the entire Evidence-Based Fitness Training PDF directly from the documents table.
-        This provides the AI with the complete document as workout plan foundations.
+        Add evidence-based fitness training foundations using the TrainingRulesEngine.
+        This provides the AI with comprehensive, rule-based training guidelines instead of PDF content.
         
         Args:
             base_prompt: The original prompt from WorkoutPromptGenerator
+            user_profile: User profile to generate specific training rules
             
         Returns:
-            Enhanced prompt with the entire fitness training document
+            Enhanced prompt with comprehensive training rules and foundations
         """
         try:
-            print("🔍 Retrieving Evidence-Based Fitness Training document from documents table...")
+            print("🔍 Generating evidence-based fitness training foundations using TrainingRulesEngine...")
             
-            # Directly query the documents table for the specific document
-            response = self.supabase.table('documents').select('*').eq('title', 'Evidence-Based Fitness Training').execute()
+            # Start with the base prompt
+            enhanced_prompt = base_prompt
             
-            if response.data and len(response.data) > 0:
-                document = response.data[0]
-                full_content = document.get('content', '')
+            # Add comprehensive training foundations
+            foundations_context = """
+            
+**EVIDENCE-BASED FITNESS TRAINING FOUNDATIONS:**
+
+The following training principles and guidelines are based on scientific research and evidence-based practices:
+
+**CORE TRAINING PRINCIPLES:**
+1. **Progressive Overload**: Gradually increase training stimulus to continue adaptation
+2. **Specificity**: Training should match the desired outcome
+3. **Individualization**: Programs must be tailored to individual needs and capabilities
+4. **Variation**: Systematic variation prevents plateaus and maintains progress
+5. **Recovery**: Adequate rest and recovery are essential for adaptation
+
+**TRAINING PHASES (Periodization):**
+- **Muscular Endurance**: 12+ reps, 50-70% 1RM, focus on work capacity
+- **Hypertrophy**: 6-12 reps, 65-85% 1RM, focus on muscle growth
+- **Strength**: 1-6 reps, 80-95% 1RM, focus on maximal force production
+- **Power**: 1-5 reps, 75-95% 1RM, focus on explosive movements
+
+**PERIODIZATION STRATEGIES:**
+- **Linear Periodization**: Gradual increase in intensity, decrease in volume
+- **Undulating Periodization**: Variation in intensity and volume within cycles
+- **Block Periodization**: Focused training blocks with specific objectives
+- **Daily Undulating Periodization (DUP)**: Different training focus each day
+
+**EXERCISE SELECTION PRINCIPLES:**
+- **Compound Movements**: Multi-joint exercises for efficiency and functional strength
+- **Progressive Complexity**: Start simple, progress to more complex movements
+- **Balanced Development**: Target all major muscle groups and movement patterns
+- **Equipment Appropriateness**: Use available equipment effectively and safely
+
+**RECOVERY AND ADAPTATION:**
+- **Rest Periods**: Appropriate rest between sets based on training goal
+- **Frequency**: Training frequency should match recovery capacity
+- **Deloading**: Planned reduction in training stress to prevent overtraining
+- **Sleep and Nutrition**: Essential for optimal recovery and adaptation
+"""
+            
+            enhanced_prompt += foundations_context
+            
+            # Add user-specific rules if user profile is provided
+            if user_profile:
+                print("✅ Generating user-specific training rules...")
                 
-                if full_content:
-                    print("✅ Retrieved complete Evidence-Based Fitness Training document")
-                    
-                    # Build the foundations context with the entire document
-                    foundations_context = f"\n\n**COMPLETE EVIDENCE-BASED FITNESS TRAINING DOCUMENT:**\n\n{full_content}"
-                    
-                    enhanced_prompt = base_prompt + foundations_context
-                    
-                    # Add instructions for using the complete document
-                    enhanced_prompt += """
-                    
-**INSTRUCTIONS:** Use the complete Evidence-Based Fitness Training document above as your comprehensive foundation for creating workout plans. 
-This document contains all the principles, guidelines, and evidence-based practices you need. 
-Apply the appropriate methodologies, training principles, and best practices based on the user's profile and goals. 
-Ensure your workout plan follows the scientific foundations and recommendations outlined in this document."""
-                    
-                    return enhanced_prompt
-                else:
-                    print("⚠️  Document found but content is empty")
-                    return base_prompt
+                # Use the training rules engine to generate comprehensive user-specific rules
+                user_rules = self.training_rules_engine.generate_user_specific_rules(user_profile)
+                personalized_instructions = self.training_rules_engine.generate_personalized_instructions(user_profile)
+                # Add the specific rules to the prompt
+                enhanced_prompt += f"\n\n{user_rules}\n\n{personalized_instructions}"
+                
+                print("✅ User-specific rules added to prompt")
             else:
-                print("⚠️  Evidence-Based Fitness Training document not found in documents table")
-                return base_prompt
+                print("⚠️  No user profile provided, using general foundations only")
+            
+            # Add final instructions for using the training foundations
+            enhanced_prompt += """
+            
+**CRITICAL TRAINING INSTRUCTIONS - READ CAREFULLY:**
+
+🚨 **RULE COMPLIANCE IS MANDATORY:**
+The user-specific rules above are NOT suggestions - they are MANDATORY requirements that MUST be followed exactly.
+
+**BEFORE GENERATING THE WORKOUT PLAN:**
+1. **READ ALL RULES COMPLETELY** - Every single rule must be understood
+2. **FOLLOW EXERCISE COUNT REQUIREMENTS** - Minimum exercises per workout is mandatory
+3. **USE CORRECT REP SCHEMES** - Rep ranges must match the specified training parameters
+4. **IMPLEMENT PROPER TRAINING SPLITS** - Follow the exact split structure outlined
+5. **AVOID CONFLICTING EXERCISES** - Never combine movements that interfere with each other
+6. **APPLY PERIODIZATION STRATEGY** - Use the exact approach specified for the user's level
+
+**WORKOUT PLAN VALIDATION:**
+Before submitting your response, verify that:
+- Exercise count meets minimum requirements
+- Rep schemes match the specified ranges  
+- Training split follows the correct structure
+- No conflicting exercise combinations exist
+- Periodization strategy is properly implemented
+- ALL rules from the training engine are followed
+
+**CONSEQUENCES OF NON-COMPLIANCE:**
+If you don't follow these rules exactly, the workout plan will be REJECTED and the user will NOT receive proper training guidance.
+
+**REMEMBER:** These are evidence-based, scientifically-proven training principles. Follow them precisely for optimal results and safety."""
+            
+            print("✅ Evidence-based fitness training foundations added successfully")
+            return enhanced_prompt
                 
         except Exception as e:
-            print(f"❌ Error retrieving Evidence-Based Fitness Training document: {e}")
+            print(f"❌ Error generating training foundations: {e}")
             print("⚠️  Falling back to base prompt only")
             return base_prompt
-    
-    def _get_quality_emoji(self, quality_level: str) -> str:
-        """Get emoji for a quality level."""
-        emoji_map = {
-            'excellent': '🌟',
-            'very_good': '⭐',
-            'good': '✅',
-            'acceptable': '⚠️',
-            'poor': '❌'
-        }
-        return emoji_map.get(quality_level, '❓')
-    
-    def recommend_exercises(self, 
-                           muscle_group: str, 
-                           difficulty: str,
-                           equipment: List[str] = None,
-                           user_profile: UserProfileSchema = None) -> List[Dict[str, Any]]:
-        """
-        Recommend exercises for a specific muscle group.
-        
-        Args:
-            muscle_group: Target muscle group (chest, back, legs, etc.)
-            difficulty: Exercise difficulty level
-            equipment: Available equipment
-            user_profile: Optional user profile for better recommendations
-            
-        Returns:
-            List of recommended exercises with details
-        """
-        try:
-            # Use the exercise selector service for better recommendations
-            if user_profile:
-                # Use user profile for enhanced filtering
-                equipment_list = [equipment] if isinstance(equipment, str) else (equipment or [user_profile.equipment])
-                candidates = self.exercise_selector.get_exercise_candidates(
-                    muscle_groups=[muscle_group],
-                    difficulty=difficulty,
-                    equipment=equipment_list,
-                    max_exercises=10
-                )
-            else:
-                # Basic filtering without user profile
-                equipment_list = [equipment] if isinstance(equipment, str) else (equipment or ['Body Weight'])
-                candidates = self.exercise_selector.get_exercise_candidates(
-                    muscle_groups=[muscle_group],
-                    difficulty=difficulty,
-                    equipment=equipment_list,
-                    max_exercises=10
-                )
-            
-            if candidates:
-                # Convert to the expected format
-                exercises = []
-                for candidate in candidates:
-                    exercise = {
-                        "name": candidate['name'],
-                        "description": f"{candidate['difficulty']} {candidate['main_muscle']} exercise using {candidate['equipment']}",
-                        "source": "Database",
-                        "exercise_id": candidate['id'],
-                        "difficulty": candidate['difficulty'],
-                        "equipment": candidate['equipment'],
-                        "main_muscle": candidate['main_muscle']
-                    }
-                    exercises.append(exercise)
-                
-                return exercises
-            else:
-                # Fallback to default exercises
-                return self._get_default_exercises(muscle_group, difficulty)
-                
-        except Exception as e:
-            print(f"❌ Error recommending exercises: {e}")
-            return self._get_default_exercises(muscle_group, difficulty)
     
     def _format_fitness_response(self, response: str, relevant_docs: List[Dict[str, Any]]) -> str:
         """Format the fitness response with additional context."""
@@ -574,3 +540,43 @@ This might be due to:
 - Complex request format
 
 Please try rephrasing your request or contact support if the issue persists."""
+    
+    def generate_enhanced_workout_plan(self, 
+                                     user_profile: UserProfileSchema,
+                                     openai_client) -> dict:
+        """
+        Simple workout service function that generates enhanced workout plans.
+        
+        Args:
+            user_profile: User profile data
+            openai_client: OpenAI client instance
+            
+        Returns:
+            Dictionary with workout plan and metadata
+        """
+        try:
+            # Generate enhanced workout plan using existing method
+            workout_plan = self.generate_workout_plan(
+                user_profile=user_profile,
+                openai_client=openai_client
+            )
+            
+            return {
+                "status": "success",
+                "message": "Enhanced workout plan generated using AI Fitness Coach",
+                "workout_plan": workout_plan,
+                "enhancements": {
+                    "knowledge_base_used": True,
+                    "rag_enhanced": True,
+                    "context_aware": True
+                },
+                "metadata": {
+                    "agent_used": "Fitness Coach",
+                    "knowledge_sources": "Fitness database + OpenAI",
+                    "generation_method": "RAG-enhanced LLM"
+                }
+            }
+            
+        except Exception as e:
+            print(f"❌ Error generating enhanced workout plan: {e}")
+            raise

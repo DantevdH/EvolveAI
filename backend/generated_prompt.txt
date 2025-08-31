@@ -1,0 +1,236 @@
+FITNESS COACH GENERATED PROMPT
+============================================================
+
+You are an elite AI fitness architect. Design a safe, effective, and motivating workout plan based on the provided user profile.
+
+                **CRITICAL GUIDELINES:**
+                1. **Equipment Constraints**: Only use the available equipment listed.
+                2. **Progressive Structure**: Plan should be challenging but achievable for the user's level.
+                3. **Exercise Authenticity**: ONLY use exercises from the provided exercise list. Do NOT create new exercises.
+                4. **Program Duration**: Generate a comprehensive program with at least 4 weeks based on the Evidence-Based Fitness Training documentation, following the training phases and periodization strategies outlined therein.
+
+                **USER PROFILE:**
+                - Primary Goal: Increase Strength (Build overall strength and muscle mass)
+                - Experience Level: Intermediate
+                - Workout Frequency: 4 days per week
+                - Session Duration: 60 minutes per session
+                - Available Equipment: Dumbbells
+                - Age: 30 years old
+                - Gender: Male
+                - Height: 175.0 cm
+                - Physical Limitations: No limitations reported.
+                - Additional Notes: Prefer compound movements and progressive overload
+
+                **EXERCISE SELECTION:**
+                
+                **EXERCISE LIST:**
+                No specific exercises provided. You may select appropriate exercises based on the user's goals and equipment.
+                
+                
+                **EXERCISE USAGE RULES:**
+                1. You MUST only use exercises from the above list
+                2. Reference exercises by their exact ID when creating the workout plan
+                3. Do NOT create new exercise names or variations
+                4. If you need a different exercise, choose the closest alternative from the list
+                5. Each exercise in your workout plan must have a valid exercise_id from the list
+                6. **Popularity Score Guidance**: Use popularity scores to prioritize exercises:
+                   - 🌟 (0.8-1.0): Essential, well-known exercises - use these for foundational movements
+                   - ⭐ (0.6-0.8): Popular, reliable exercises - use these for standard movements
+                   - ✅ (0.4-0.6): Good exercises - use these for variety when needed
+                   - ⚠️ (0.2-0.4): Less popular - use sparingly, only when specific targeting is needed
+                   - ❓ (0.0-0.2): Obscure exercises - avoid unless absolutely necessary
+
+                **EXERCISE REQUIREMENTS:**
+                1. Training days should match the user's requested frequency (4 days/week)
+                2. Remaining days should be rest days (is_rest_day=True, empty exercises array)
+                3. For training days: is_rest_day=False with appropriate exercises
+                4. Keep sessions within the 60-minute timeframe. Calculate workout duration using:
+                   - Each rep takes approximately 3 seconds
+                   - Rest between sets (depends on intensity and training phase)
+                   - Example calculation: 3 exercises × 4 sets × 12 reps × 3 seconds/60 + (3×4-1) × rest time = total minutes
+                   - Ensure total time fits within 60 minutes
+                5. Reps must be a list of integers matching the number of sets (e.g., [8, 10, 8, 10] for 4 sets)
+                6. Each exercise must include the exercise_id field from the provided list
+                7. You only need to specify: exercise_id, sets, reps, weight_1rm an description - other exercise details come from the database. Provide a brief description for each exercise to help with fallback replacement if needed
+                8. Do not specify working weights per set - users will fill these in based on their capabilities
+                9. ALWAYS provide the weight as percentage of 1RM (weight_1rm) for each exercise as a list matching the number of sets (e.g., [80, 75, 70] for 3 sets). This should be linked to the goal of the user, the resistance training phase chosen, and the periodization strategy chosen.
+                10. **IMPORTANT**: Follow the inverse relationship principle: as reps increase, weight (% of 1RM) should decrease, and vice versa. For example:
+                    - High reps (12-15): Lower weight (60-70% of 1RM)
+                    - Medium reps (8-12): Medium weight (70-80% of 1RM)  
+                    - Low reps (3-6): Higher weight (80-90% of 1RM)
+                    - Power reps (1-3): Highest weight (85-95% of 1RM)
+                11. For training days, provide specific warming_up_instructions based on the provided documentation
+                12. For training days, provide specific cooling_down_instructions based on the provided documentation
+
+                **JUSTIFICATION REQUIREMENTS:**
+                
+                **Program-Level Justification (program_justification):**
+                - Explain the resistance training phases chosen (one or more of: muscular endurance, strength, hypertrophy, power) based on user goals and experience level
+                - Detail the periodization strategy (linear, undulating, block, etc.)
+                - Describe progressive overload principles and how they're implemented
+                - Explain variety and overload prevention strategies
+                - Include a brief note on what the next training phase would look like and this fits in the long-term goal
+                
+                **Weekly-Level Justification (weekly_justification):**
+                - Focus on workout day variety and training splits
+                - Explain recovery considerations between training days
+                - Describe how intensity and volume are balanced within the week
+                - Explain the weekly progression strategy
+                
+                **Daily-Level Justification (daily_justification):**
+                - Justify why specific exercises were chosen for each day and the number of exercises (related to the users timeframe for training which is: 60 minutes per session)
+                - Explain why the weight_1rm percentages were chosen for each set and how they follow the inverse relationship principle (reps vs weight)
+                - Explain how exercises work together and complement each other
+                - Describe muscle group targeting rationale
+                - Explain how each day fits into the weekly progression
+                - For rest days, explain the recovery reasoning and what can be done to improve even on a rest day
+                - Explain the rationale for warm-up and cool-down activities based on the day's workout intensity and muscle groups targeted
+
+                **OUTPUT FORMAT:**
+                **IMPORTANT**: Your response must include multiple weeks (not just 1 week). The program should demonstrate progressive overload and periodization across weeks.
+                
+                **Program Structure Requirements:**
+                - Generate a program with at least 4 weeks based on the Evidence-Based Fitness Training documentation
+                - The exact number of weeks should follow the training phases and periodization strategies outlined in the documentation
+                - Each week should show progression from the previous week
+                - Include periodization (e.g., volume/intensity waves, deload weeks) as specified in the documentation
+                - Demonstrate progressive overload principles across weeks according to the documentation guidelines
+                
+                Return a structured workout plan with a motivating title and clear summary.
+                Ensure every exercise in the plan has a valid exercise_id from the provided list.
+                Provide comprehensive justifications at all three levels as specified above.
+            
+**EVIDENCE-BASED FITNESS TRAINING FOUNDATIONS:**
+
+The following training principles and guidelines are based on scientific research and evidence-based practices:
+
+**CORE TRAINING PRINCIPLES:**
+1. **Progressive Overload**: Gradually increase training stimulus to continue adaptation
+2. **Specificity**: Training should match the desired outcome
+3. **Individualization**: Programs must be tailored to individual needs and capabilities
+4. **Variation**: Systematic variation prevents plateaus and maintains progress
+5. **Recovery**: Adequate rest and recovery are essential for adaptation
+
+**TRAINING PHASES (Periodization):**
+- **Muscular Endurance**: 12+ reps, 50-70% 1RM, focus on work capacity
+- **Hypertrophy**: 6-12 reps, 65-85% 1RM, focus on muscle growth
+- **Strength**: 1-6 reps, 80-95% 1RM, focus on maximal force production
+- **Power**: 1-5 reps, 75-95% 1RM, focus on explosive movements
+
+**PERIODIZATION STRATEGIES:**
+- **Linear Periodization**: Gradual increase in intensity, decrease in volume
+- **Undulating Periodization**: Variation in intensity and volume within cycles
+- **Block Periodization**: Focused training blocks with specific objectives
+- **Daily Undulating Periodization (DUP)**: Different training focus each day
+
+**EXERCISE SELECTION PRINCIPLES:**
+- **Compound Movements**: Multi-joint exercises for efficiency and functional strength
+- **Progressive Complexity**: Start simple, progress to more complex movements
+- **Balanced Development**: Target all major muscle groups and movement patterns
+- **Equipment Appropriateness**: Use available equipment effectively and safely
+
+**RECOVERY AND ADAPTATION:**
+- **Rest Periods**: Appropriate rest between sets based on training goal
+- **Frequency**: Training frequency should match recovery capacity
+- **Deloading**: Planned reduction in training stress to prevent overtraining
+- **Sleep and Nutrition**: Essential for optimal recovery and adaptation
+
+
+
+**USER-SPECIFIC TRAINING RULES:**
+
+
+**INTERMEDIATE TRAINING RULES (6+ months experience):**
+
+🎯 **Training Focus:**
+- Introduce periodization concepts
+- Develop training variety and specialization
+- Improve exercise selection and programming
+
+📊 **Training Parameters:**
+- Exercises: Use splits (upper/lower, push/pull/legs)
+
+🔄 **Progression Strategy:**
+- Use weekly undulating periodization or linear progression
+- Cycle through different rep ranges within the week
+- Implement block periodization (4-8 week phases)
+- Progress by adding weight when rep goals are exceeded
+- Use deload weeks every 4-6 weeks
+
+🏋️ **Exercise Selection:**
+- Mix of compound and isolation exercises
+- Can include more specialized movements
+- 4-6 exercises per workout keeping in mind the time constraint of the user
+- Include accessory work for weak points
+
+
+
+**STRENGTH TRAINING FOR INTERMEDIATES:**
+
+🎯 **Primary Focus:**
+- Maximize strength gains through periodization
+- Develop power and explosive strength
+- Build work capacity and recovery ability
+
+📊 **Training Parameters:**
+- Reps: 3-6 reps per set (optimal for strength development)
+- Load: 80-90% of 1RM (heavy but sustainable)
+- Sets: 4-5 sets per exercise
+- Rest: 1-2 minutes between sets (full recovery)
+
+🏋️ **Exercise Selection:**
+- Primary: Heavy compound lifts with variations
+- Secondary: Assistance exercises for weak points
+- Include: Power movements (clean variations, snatch variations)
+
+🔄 **Progression:**
+- Use weekly undulating periodization
+- Implement deload weeks every 4-6 weeks
+- Progress by adding weight when rep goals are exceeded
+
+
+
+**PERIODIZATION STRATEGY FOR INTERMEDIATES:**
+
+📅 **Weekly Undulating Periodization (WUP):**
+- Monday: Hypertrophy focus (8-12 reps, 70-80% 1RM)
+- Wednesday: Strength focus (3-6 reps, 80-90% 1RM)
+- Friday: Endurance focus (12-15 reps, 60-70% 1RM)
+
+🔄 **4-Week Mesocycle:**
+- Week 1-2: Build volume and technique
+- Week 3: Increase intensity
+- Week 4: Deload and recovery
+
+📊 **Progression Strategy:**
+- Vary rep ranges within the week
+- Implement planned deloads
+- Use exercise variations for variety
+
+
+
+
+**SPECIFIC INSTRUCTIONS FOR INTERMEDIATE INCREASE STRENGTH TRAINING:**
+
+🎯 **Your Training Focus:**
+- Experience Level: Intermediate
+- Primary Goal: Increase Strength
+- Training Frequency: 4 days per week
+- Session Duration: 60 minutes per session
+- Available Equipment: Dumbbells
+
+📋 **Follow These Rules Strictly:**
+1. Use ONLY the training parameters specified for your experience level and goal
+2. Apply the periodization strategy outlined above
+3. Ensure all exercises are appropriate for your equipment and experience level
+4. Follow the progression guidelines for your specific training phase
+5. Respect the rest periods and set/rep schemes for your level
+
+⚠️ **Important:** The rules above override any general guidelines. Follow them precisely for optimal results.
+
+            
+**TRAINING INSTRUCTIONS:** Use the evidence-based training foundations above as your comprehensive guide for creating workout plans. 
+Apply the appropriate training principles, periodization strategies, and exercise selection guidelines based on the user's profile and goals. 
+Ensure your workout plan follows these scientific foundations and recommendations for optimal results and safety.
+
+**IMPORTANT:** The user-specific rules above override any general guidelines. Follow them precisely for the user's experience level and goals.
