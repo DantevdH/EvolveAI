@@ -187,53 +187,36 @@ venv.bak/
 frontend/EvolveAI/Resources/Config.plist
 frontend/Pods/
 
-# React Native / Node.js
-frontend-react/node_modules/
-frontend-react/npm-debug.log
-frontend-react/yarn-error.log
+# React Native Global Patterns
+# Note: frontend-react/ has its own .gitignore for detailed patterns
+# These are global patterns that might escape subdirectory .gitignore
 
-# React Native build artifacts
-frontend-react/android/app/build/
-frontend-react/android/.gradle/
-frontend-react/android/build/
-frontend-react/android/local.properties
-frontend-react/android/*.keystore
-frontend-react/android/app/release/
+# Node.js (global patterns that might escape subdirs)
+node_modules/
+npm-debug.log
+yarn-error.log
 
-# iOS build artifacts
-frontend-react/ios/build/
-frontend-react/ios/DerivedData/
-frontend-react/ios/Pods/
-frontend-react/ios/*.xcworkspace
-frontend-react/ios/*.xcuserstate
+# React Native Bundle artifacts (can be generated anywhere)
+*.jsbundle
 
-# Metro bundler
-frontend-react/.metro-health-check*
+# Android/IntelliJ (global patterns)
+.idea/
+.gradle/
+local.properties
+*.iml
 
-# React Native debugging
-frontend-react/flipper-rn-addons.json
-frontend-react/.vscode/
-frontend-react/*.log
+# BUCK (can appear at project root)
+buck-out/
+\.buckd/
 
-# Environment files
-frontend-react/.env
-frontend-react/.env.local
-frontend-react/.env.development.local
-frontend-react/.env.test.local
-frontend-react/.env.production.local
+# Keystore files (Note: debug.keystore is allowed in frontend-react)
+*.keystore
+!**/debug.keystore
 
-# Temporary files
-frontend-react/.tmp/
-frontend-react/temp/
-
-# Coverage
-frontend-react/coverage/
-
-# Watchman
-frontend-react/.watchmanconfig
-
-# Bundle artifacts
-frontend-react/*.jsbundle
+# Additional Fastlane patterns (global)
+*/fastlane/report.xml
+*/fastlane/Preview.html
+*/fastlane/screenshots
 
 # Specific files that need to be ignored
 *.pdf
