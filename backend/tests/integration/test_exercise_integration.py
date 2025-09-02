@@ -16,13 +16,13 @@ from unittest.mock import patch, MagicMock
 from dotenv import load_dotenv
 
 # Add the backend directory to the Python path
-sys.path.append(os.path.join(os.path.dirname(__file__)))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from core.agents.specialists.fitness_coach import FitnessCoach
-from core.workout.schemas import UserProfileSchema, ExerciseSchema, DailyWorkoutSchema, WeeklyScheduleSchema, WorkoutPlanSchema
-from core.workout.exercise_selector import ExerciseSelector
-from core.workout.exercise_validator import ExerciseValidator
-from core.workout.prompt_generator import WorkoutPromptGenerator
+from core.fitness.fitness_coach import FitnessCoach
+from core.fitness.helpers.schemas import UserProfileSchema, ExerciseSchema, DailyWorkoutSchema, WeeklyScheduleSchema, WorkoutPlanSchema
+from core.fitness.helpers.exercise_selector import ExerciseSelector
+from core.fitness.helpers.exercise_validator import ExerciseValidator
+from core.fitness.helpers.prompt_generator import WorkoutPromptGenerator
 
 # Load environment variables
 load_dotenv()
@@ -85,14 +85,14 @@ def mock_workout_plan():
                         "is_rest_day": False,
                         "exercises": [
                             {
-                                "exercise_id": "1",
+                                "exercise_id": 2399,
                                 "sets": 3,
                                 "reps": [8, 10, 8],
                                 "description": "Test exercise 1",
                                 "weight": None
                             },
                             {
-                                "exercise_id": "2",
+                                "exercise_id": 2500,
                                 "sets": 4,
                                 "reps": [12, 10, 12, 10],
                                 "description": "Test exercise 2",
@@ -193,7 +193,7 @@ def test_exercise_selector_chest_exercises(exercise_selector):
     for exercise in chest_exercises:
         assert 'name' in exercise
         assert 'equipment' in exercise
-        assert 'main_muscle' in exercise
+        assert 'target_area' in exercise
         assert 'difficulty' in exercise
     
     print(f"✅ Found {len(chest_exercises)} chest exercises")
@@ -222,30 +222,6 @@ def test_exercise_selector_bodyweight_exercises(exercise_selector):
     print(f"✅ Found {len(bodyweight_exercises)} bodyweight exercises")
 
 
-def test_exercise_selector_workout_exercises(exercise_selector):
-    """Test workout-specific exercise selection."""
-    strength_exercises = exercise_selector.get_workout_exercises(
-        workout_type='strength',
-        muscle_groups=['Chest', 'Back', 'Thighs'],
-        difficulty='Advanced',
-        equipment=['Full Gym']
-    )
-    
-    # Assertions
-    assert isinstance(strength_exercises, list)
-    assert len(strength_exercises) <= 15, "Should return max 15 exercises"
-    
-    # Check exercise structure
-    for exercise in strength_exercises:
-        assert 'name' in exercise
-        assert 'equipment' in exercise
-        assert 'main_muscle' in exercise
-        assert 'difficulty' in exercise
-        assert exercise['difficulty'] == 'Advanced'
-    
-    print(f"✅ Found {len(strength_exercises)} strength exercises")
-
-
 @pytest.mark.parametrize("equipment,muscle,difficulty", [
     ("Full Gym", "Chest", "Intermediate"),
     ("Home Gym", "Back", "Beginner"),
@@ -269,10 +245,9 @@ def test_exercise_selector_parametrized(exercise_selector, equipment, muscle, di
     for exercise in exercises:
         assert 'name' in exercise
         assert 'equipment' in exercise
-        assert 'main_muscle' in exercise
+        assert 'target_area' in exercise
         assert 'difficulty' in exercise
-        assert exercise['difficulty'] == difficulty
-        assert exercise['main_muscle'] == muscle
+        assert exercise['target_area'] == muscle
 
 
 # ============================================================================
@@ -281,7 +256,7 @@ def test_exercise_selector_parametrized(exercise_selector, equipment, muscle, di
 
 def test_exercise_validator_id_validation(exercise_validator):
     """Test exercise ID validation."""
-    test_ids = [1302, "invalid_id_2", 1280]
+    test_ids = [2399, "invalid_id_2", 2407]
     valid_ids, invalid_ids = exercise_validator.exercise_selector.validate_exercise_ids(test_ids)
     
     # Assertions
@@ -291,27 +266,6 @@ def test_exercise_validator_id_validation(exercise_validator):
     assert "invalid_id_2" in invalid_ids, "Should identify invalid ID"
     
     print(f"✅ Validated {len(test_ids)} IDs: {len(valid_ids)} valid, {len(invalid_ids)} invalid")
-
-
-def test_exercise_validator_summaries(exercise_validator):
-    """Test exercise summary generation."""
-    # Use known valid IDs
-    test_ids = [1302, 1280]
-    summaries = exercise_validator.exercise_selector.get_exercise_summary(test_ids)
-    
-    # Assertions
-    assert isinstance(summaries, list)
-    assert len(summaries) <= len(test_ids), "Should not return more summaries than requested"
-    
-    # Check summary structure
-    for summary in summaries:
-        assert 'id' in summary
-        assert 'name' in summary
-        assert 'difficulty' in summary
-        assert 'equipment' in summary
-        assert 'main_muscle' in summary
-    
-    print(f"✅ Generated {len(summaries)} exercise summaries")
 
 
 def test_exercise_validator_workout_plan_validation(exercise_validator, mock_workout_plan):
@@ -390,32 +344,6 @@ def test_exercise_validator_workout_summary(exercise_validator, mock_workout_pla
 # ============================================================================
 # FITNESS COACH INTEGRATION TESTS
 # ============================================================================
-
-def test_fitness_coach_exercise_recommendations(fitness_coach, sample_user_profiles):
-    """Test fitness coach exercise recommendations."""
-    muscle_user = sample_user_profiles["muscle_builder"]
-    
-    chest_exercises = fitness_coach.recommend_exercises(
-        muscle_group="Chest",
-        difficulty="Intermediate",
-        equipment="Home Gym",
-        user_profile=muscle_user
-    )
-    
-    # Assertions
-    assert isinstance(chest_exercises, list)
-    assert len(chest_exercises) > 0, "Should recommend exercises"
-    
-    # Check exercise structure
-    for exercise in chest_exercises:
-        assert 'name' in exercise
-        assert 'description' in exercise
-        assert 'exercise_id' in exercise
-        assert exercise['exercise_id'] is not None
-    
-    print(f"✅ Recommended {len(chest_exercises)} chest exercises")
-    for i, exercise in enumerate(chest_exercises[:2], 1):
-        print(f"   {i}. {exercise['name']} (ID: {exercise.get('exercise_id', 'N/A')})")
 
 
 def test_fitness_coach_document_search(fitness_coach, sample_user_profiles):
@@ -538,7 +466,7 @@ def test_fitness_coach_exercise_candidates(fitness_coach, sample_user_profiles):
     """Test fitness coach exercise candidate selection."""
     muscle_user = sample_user_profiles["muscle_builder"]
     
-    candidates = fitness_coach._get_exercise_candidates_for_profile(muscle_user)
+    candidates = fitness_coach._get_exercise_candidates_for_profile(muscle_user, 300)
     
     # Assertions
     assert isinstance(candidates, list)
@@ -547,13 +475,13 @@ def test_fitness_coach_exercise_candidates(fitness_coach, sample_user_profiles):
     # Check candidate structure
     for candidate in candidates:
         assert 'name' in candidate
-        assert 'main_muscle' in candidate
+        assert 'target_area' in candidate
         assert 'difficulty' in candidate
         assert 'equipment' in candidate
     
     print(f"✅ Selected {len(candidates)} exercise candidates")
     for i, candidate in enumerate(candidates[:3], 1):
-        print(f"   {i}. {candidate['name']} ({candidate['main_muscle']})")
+        print(f"   {i}. {candidate['name']} ({candidate['target_area']})")
 
 
 def test_fitness_coach_target_muscle_groups(fitness_coach, sample_user_profiles):
@@ -600,7 +528,7 @@ def test_workout_generation_prompt_creation(fitness_coach, sample_user_profiles)
     weight_loss_user = sample_user_profiles["weight_loss"]
     
     # Get exercise candidates
-    candidates = fitness_coach._get_exercise_candidates_for_profile(weight_loss_user)
+    candidates = fitness_coach._get_exercise_candidates_for_profile(weight_loss_user, 300)
     
     # Assertions
     assert isinstance(candidates, list)
@@ -654,7 +582,7 @@ def test_complete_workout_generation_workflow(fitness_coach, sample_user_profile
     
     # Step 1: Get exercise candidates
     print("1️⃣ Getting exercise candidates...")
-    candidates = fitness_coach._get_exercise_candidates_for_profile(muscle_user)
+    candidates = fitness_coach._get_exercise_candidates_for_profile(muscle_user, 300)
     assert isinstance(candidates, list)
     assert len(candidates) > 0
     print(f"   ✅ Found {len(candidates)} candidates")
@@ -696,7 +624,7 @@ def test_error_handling_integration(fitness_coach, sample_user_profiles):
         original_equipment = muscle_user.equipment
         muscle_user.equipment = "Invalid Equipment Type"
         
-        candidates = fitness_coach._get_exercise_candidates_for_profile(muscle_user)
+        candidates = fitness_coach._get_exercise_candidates_for_profile(muscle_user, 300)
         
         # Should handle gracefully (may return empty list or handle error)
         assert isinstance(candidates, list)

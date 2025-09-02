@@ -66,7 +66,7 @@ class TestMockData:
         
         # Check exercise details
         squat = MOCK_EXERCISES["barbell_squat"]
-        assert "barbell_squat_001" in squat["exercise_id"]
+        assert squat["exercise_id"] == 1302
         assert "quads" in squat["description"].lower()
 
     def test_mock_data_summary(self):
@@ -93,7 +93,7 @@ class TestMockDataIntegration:
 
     def test_mock_data_uses_correct_schemas(self):
         """Test that mock data uses the correct Pydantic schemas."""
-        from core.workout.schemas import UserProfileSchema, WorkoutPlanSchema
+        from core.fitness.helpers.schemas import UserProfileSchema, WorkoutPlanSchema
         
         # User profile should be valid
         user_profile = create_mock_user_profile()

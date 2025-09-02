@@ -132,13 +132,13 @@ class WorkoutPromptGenerator:
         
         for exercise in exercise_candidates:
             # Use main_muscles for cleaner grouping
-            main_muscles = exercise.get('main_muscles', 'Other')
+            target_area = exercise.get('target_area', 'Other')
             
             # Handle both string and list formats
-            if isinstance(main_muscles, list):
-                primary_muscle = main_muscles[0] if main_muscles else 'Other'
+            if isinstance(target_area, list):
+                primary_muscle = target_area[0] if target_area else 'Other'
             else:
-                primary_muscle = main_muscles
+                primary_muscle = target_area
             
             if primary_muscle not in muscle_groups:
                 muscle_groups[primary_muscle] = []
@@ -152,7 +152,7 @@ class WorkoutPromptGenerator:
             
             for exercise in exercises:
                 exercise_text += f"  - ID: {exercise['id']} | {exercise['name']} "
-                exercise_text += f"({exercise['difficulty']}, {exercise['equipment']}, {exercise['exercise_tier']})\n"
+                exercise_text += f"({exercise.get('difficulty', 'N/A')}, {exercise.get('equipment', 'N/A')}, {exercise.get('exercise_tier', 'N/A')})\n"
             exercise_text += "\n"
         
         # Add simple, clear guidance

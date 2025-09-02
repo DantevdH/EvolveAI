@@ -6,13 +6,19 @@ Tests all Pydantic models including validation, field constraints, and custom va
 
 import pytest
 from pydantic import ValidationError
-from core.workout.models import (
+import os
+import sys
+
+# Add the backend directory to the Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+
+from core.fitness.helpers.models import (
     GenerateWorkoutRequest,
     GenerateWorkoutResponse,
     MockDataRequest,
     MockDataResponse
 )
-from core.workout.schemas import (
+from core.fitness.helpers.schemas import (
     DayOfWeek,
     UserProfileSchema,
     ExerciseSchema,
@@ -51,7 +57,7 @@ class TestGenerateWorkoutRequest:
             experienceLevel="Intermediate",
             daysPerWeek=4,
             minutesPerSession=60,
-            equipment=["Barbell", "Dumbbells"],
+            equipment="Home Gym",
             age=28,
             weight=75.0,
             weightUnit="kg",
@@ -65,7 +71,7 @@ class TestGenerateWorkoutRequest:
         
         assert request.primaryGoal == "Strength Training"
         assert request.daysPerWeek == 4
-        assert request.equipment == ["Barbell", "Dumbbells"]
+        assert request.equipment == "Home Gym"
         assert request.age == 28
         assert request.weight == 75.0
     
@@ -88,7 +94,7 @@ class TestGenerateWorkoutRequest:
             experienceLevel="Beginner",
             daysPerWeek=3,
             minutesPerSession=45,
-            equipment=["Body Weight"],
+            equipment="Body Weight",
             age=25,
             weight=70.0,
             weightUnit="kg",
@@ -110,12 +116,108 @@ class TestGenerateWorkoutResponse:
         response = GenerateWorkoutResponse(
             status="success",
             message="Workout plan generated successfully",
-            workout_plan={"title": "Test Plan", "weeks": []}
+            workout_plan=WorkoutPlanSchema(
+                title="Test Plan",
+                summary="A brief summary of the test plan.",
+                weekly_schedules=[
+                    WeeklyScheduleSchema(
+                        week_number=1,
+                        daily_workouts=[
+                            DailyWorkoutSchema(
+                                day_of_week=DayOfWeek.MONDAY,
+                                warming_up_instructions="Warm-up for Monday.",
+                                is_rest_day=False,
+                                exercises=[
+                                    ExerciseSchema(
+                                        exercise_id=101,
+                                        sets=3,
+                                        reps=[8, 8, 8],
+                                        description="Monday's main exercise.",
+                                        weight_1rm=[75, 70, 65]
+                                    )
+                                ],
+                                daily_justification="Justification for Monday's workout.",
+                                cooling_down_instructions="Cool-down for Monday."
+                            ),
+                            DailyWorkoutSchema(
+                                day_of_week=DayOfWeek.TUESDAY,
+                                warming_up_instructions="Light stretching.",
+                                is_rest_day=True,
+                                exercises=[],
+                                daily_justification="Justification for Tuesday's rest day.",
+                                cooling_down_instructions="Relaxation."
+                            ),
+                            DailyWorkoutSchema(
+                                day_of_week=DayOfWeek.WEDNESDAY,
+                                warming_up_instructions="Warm-up for Wednesday.",
+                                is_rest_day=False,
+                                exercises=[
+                                    ExerciseSchema(
+                                        exercise_id=102,
+                                        sets=3,
+                                        reps=[10, 10, 10],
+                                        description="Wednesday's main exercise.",
+                                        weight_1rm=[80, 75, 70]
+                                    )
+                                ],
+                                daily_justification="Justification for Wednesday's workout.",
+                                cooling_down_instructions="Cool-down for Wednesday."
+                            ),
+                            DailyWorkoutSchema(
+                                day_of_week=DayOfWeek.THURSDAY,
+                                warming_up_instructions="Light stretching.",
+                                is_rest_day=True,
+                                exercises=[],
+                                daily_justification="Justification for Thursday's rest day.",
+                                cooling_down_instructions="Relaxation."
+                            ),
+                            DailyWorkoutSchema(
+                                day_of_week=DayOfWeek.FRIDAY,
+                                warming_up_instructions="Warm-up for Friday.",
+                                is_rest_day=False,
+                                exercises=[
+                                    ExerciseSchema(
+                                        exercise_id=103,
+                                        sets=3,
+                                        reps=[12, 12, 12],
+                                        description="Friday's main exercise.",
+                                        weight_1rm=[70, 65, 60]
+                                    )
+                                ],
+                                daily_justification="Justification for Friday's workout.",
+                                cooling_down_instructions="Cool-down for Friday."
+                            ),
+                            DailyWorkoutSchema(
+                                day_of_week=DayOfWeek.SATURDAY,
+                                warming_up_instructions="Light stretching.",
+                                is_rest_day=True,
+                                exercises=[],
+                                daily_justification="Justification for Saturday's rest day.",
+                                cooling_down_instructions="Relaxation."
+                            ),
+                            DailyWorkoutSchema(
+                                day_of_week=DayOfWeek.SUNDAY,
+                                warming_up_instructions="Light stretching.",
+                                is_rest_day=True,
+                                exercises=[],
+                                daily_justification="Justification for Sunday's rest day.",
+                                cooling_down_instructions="Relaxation."
+                            )
+                        ],
+                        weekly_justification="This week focuses on a balanced full-body training split with adequate rest days."
+                    )
+                ],
+                program_justification="This 1-week program serves as a foundational example for beginners."
+            )
         )
         
         assert response.status == "success"
         assert response.message == "Workout plan generated successfully"
-        assert response.workout_plan == {"title": "Test Plan", "weeks": []}
+        assert response.workout_plan.title == "Test Plan"
+        assert len(response.workout_plan.weekly_schedules) == 1
+        assert response.workout_plan.weekly_schedules[0].week_number == 1
+        assert response.workout_plan.weekly_schedules[0].daily_workouts[0].day_of_week == DayOfWeek.MONDAY
+        assert response.workout_plan.weekly_schedules[0].daily_workouts[0].exercises[0].exercise_id == 101
     
     def test_missing_required_fields(self):
         """Test that missing required fields raise validation errors."""
@@ -332,28 +434,32 @@ class TestExerciseSchema:
     def test_valid_exercise(self):
         """Test creating a valid exercise."""
         exercise = ExerciseSchema(
-            exercise_id="ex_001",
+            exercise_id=101,
             sets=3,
             reps=[8, 8, 8],
-            description="Barbell Squat exercise"
+            description="Barbell Squat exercise",
+            weight_1rm=[75, 70, 65] # Added required field
         )
         
-        assert exercise.exercise_id == "ex_001"
+        assert exercise.exercise_id == 101
         assert exercise.sets == 3
         assert exercise.reps == [8, 8, 8]
         assert exercise.description == "Barbell Squat exercise"
+        assert exercise.weight_1rm == [75, 70, 65]
         assert exercise.weight is None
     
     def test_exercise_with_weight(self):
         """Test creating an exercise with weight data."""
         exercise = ExerciseSchema(
-            exercise_id="ex_002",
+            exercise_id=102,
             sets=4,
             reps=[10, 10, 10, 10],
             description="Bench Press exercise",
+            weight_1rm=[80, 75, 70, 65],
             weight=[100.0, 100.0, 95.0, 95.0]
         )
         
+        assert exercise.weight_1rm == [80, 75, 70, 65]
         assert exercise.weight == [100.0, 100.0, 95.0, 95.0]
     
     def test_field_constraints(self):
@@ -361,10 +467,11 @@ class TestExerciseSchema:
         # Test sets constraint (1-10)
         with pytest.raises(ValidationError) as exc_info:
             ExerciseSchema(
-                exercise_id="ex_001",
+                exercise_id=101,
                 sets=0,  # Invalid: less than 1
                 reps=[8],
-                description="Test exercise"
+                description="Test exercise",
+                weight_1rm=[75]
             )
         
         errors = exc_info.value.errors()
@@ -372,10 +479,11 @@ class TestExerciseSchema:
         
         with pytest.raises(ValidationError) as exc_info:
             ExerciseSchema(
-                exercise_id="ex_001",
+                exercise_id=101,
                 sets=15,  # Invalid: greater than 10
                 reps=[8] * 15,
-                description="Test exercise"
+                description="Test exercise",
+                weight_1rm=[75] * 15
             )
         
         errors = exc_info.value.errors()
@@ -383,13 +491,12 @@ class TestExerciseSchema:
     
     def test_reps_validation(self):
         """Test that reps list length matches sets count."""
-        # This validation is not currently implemented in the schema
-        # but we can test the basic structure
         exercise = ExerciseSchema(
-            exercise_id="ex_001",
+            exercise_id=101,
             sets=3,
             reps=[8, 8, 8],
-            description="Test exercise"
+            description="Test exercise",
+            weight_1rm=[75, 70, 65]
         )
         
         assert len(exercise.reps) == exercise.sets
@@ -398,10 +505,11 @@ class TestExerciseSchema:
         """Test weight list validation when provided."""
         # Test that weight list length matches sets count
         exercise = ExerciseSchema(
-            exercise_id="ex_002",
+            exercise_id=102,
             sets=3,
             reps=[10, 10, 10],
             description="Test exercise",
+            weight_1rm=[80, 75, 70],
             weight=[100.0, 100.0, 100.0]
         )
         
@@ -438,40 +546,56 @@ class TestDailyWorkoutSchema:
         """Test creating a valid training day."""
         workout = DailyWorkoutSchema(
             day_of_week=DayOfWeek.MONDAY,
+            warming_up_instructions="Dynamic warm-up for training day.",
             is_rest_day=False,
             exercises=[
                 ExerciseSchema(
-                    exercise_id="ex_001",
+                    exercise_id=101,
                     sets=3,
                     reps=[8, 8, 8],
-                    description="Squat"
+                    description="Squat exercise.",
+                    weight_1rm=[75, 70, 65]
                 )
-            ]
+            ],
+            daily_justification="Focus on lower body strength and compound movements.",
+            cooling_down_instructions="Static stretching for lower body."
         )
         
         assert workout.day_of_week == DayOfWeek.MONDAY
+        assert workout.warming_up_instructions == "Dynamic warm-up for training day."
         assert workout.is_rest_day is False
         assert len(workout.exercises) == 1
+        assert workout.daily_justification == "Focus on lower body strength and compound movements."
+        assert workout.cooling_down_instructions == "Static stretching for lower body."
     
     def test_valid_rest_day(self):
         """Test creating a valid rest day."""
         workout = DailyWorkoutSchema(
             day_of_week=DayOfWeek.TUESDAY,
+            warming_up_instructions="Light mobility work.",
             is_rest_day=True,
-            exercises=[]
+            exercises=[],
+            daily_justification="Rest day for recovery.",
+            cooling_down_instructions="Gentle stretching."
         )
         
         assert workout.day_of_week == DayOfWeek.TUESDAY
+        assert workout.warming_up_instructions == "Light mobility work."
         assert workout.is_rest_day is True
         assert len(workout.exercises) == 0
+        assert workout.daily_justification == "Rest day for recovery."
+        assert workout.cooling_down_instructions == "Gentle stretching."
     
     def test_rest_day_validation(self):
         """Test rest day validation logic."""
         # Test that rest days have no exercises
         workout = DailyWorkoutSchema(
             day_of_week=DayOfWeek.WEDNESDAY,
+            warming_up_instructions="Light mobility work.",
             is_rest_day=True,
-            exercises=[]
+            exercises=[],
+            daily_justification="Rest day.",
+            cooling_down_instructions="Cool-down."
         )
         
         # This should not raise an error
@@ -480,15 +604,19 @@ class TestDailyWorkoutSchema:
         # Test that training days have exercises
         workout = DailyWorkoutSchema(
             day_of_week=DayOfWeek.THURSDAY,
+            warming_up_instructions="Dynamic warm-up.",
             is_rest_day=False,
             exercises=[
                 ExerciseSchema(
-                    exercise_id="ex_001",
+                    exercise_id=102,
                     sets=3,
                     reps=[8, 8, 8],
-                    description="Squat"
+                    description="Bench press.",
+                    weight_1rm=[70, 65, 60]
                 )
-            ]
+            ],
+            daily_justification="Training day.",
+            cooling_down_instructions="Cool-down."
         )
         
         # This should not raise an error
@@ -498,15 +626,19 @@ class TestDailyWorkoutSchema:
         """Test that rest days with exercises raise validation error."""
         workout = DailyWorkoutSchema(
             day_of_week=DayOfWeek.FRIDAY,
+            warming_up_instructions="No warm-up needed.",
             is_rest_day=True,
             exercises=[
                 ExerciseSchema(
-                    exercise_id="ex_001",
+                    exercise_id=103,
                     sets=3,
                     reps=[8, 8, 8],
-                    description="Squat"
+                    description="Squat",
+                    weight_1rm=[60, 55, 50]
                 )
-            ]
+            ],
+            daily_justification="Should not have exercises.",
+            cooling_down_instructions="No cool-down needed."
         )
         
         with pytest.raises(ValueError, match="Rest days should not have exercises"):
@@ -516,8 +648,11 @@ class TestDailyWorkoutSchema:
         """Test that training days without exercises raise validation error."""
         workout = DailyWorkoutSchema(
             day_of_week=DayOfWeek.SATURDAY,
+            warming_up_instructions="Warm-up.",
             is_rest_day=False,
-            exercises=[]
+            exercises=[],
+            daily_justification="Should have exercises.",
+            cooling_down_instructions="Cool-down."
         )
         
         with pytest.raises(ValueError, match="Training days must have exercises"):
@@ -535,31 +670,40 @@ class TestWeeklyScheduleSchema:
             if i % 2 == 0:  # Even days are training days
                 daily_workouts.append(DailyWorkoutSchema(
                     day_of_week=day,
+                    warming_up_instructions="Dynamic warm-up.",
                     is_rest_day=False,
                     exercises=[
                         ExerciseSchema(
-                            exercise_id=f"ex_{i:03d}",
+                            exercise_id=i + 1,
                             sets=3,
                             reps=[8, 8, 8],
-                            description=f"Exercise for {day.value}"
+                            description=f"Exercise for {day.value}",
+                            weight_1rm=[70, 65, 60]
                         )
-                    ]
+                    ],
+                    daily_justification=f"Training for {day.value}.",
+                    cooling_down_instructions="Static stretch."
                 ))
             else:  # Odd days are rest days
                 daily_workouts.append(DailyWorkoutSchema(
                     day_of_week=day,
+                    warming_up_instructions="Light mobility.",
                     is_rest_day=True,
-                    exercises=[]
+                    exercises=[],
+                    daily_justification=f"Rest day for {day.value}.",
+                    cooling_down_instructions="Gentle stretch."
                 ))
         
         schedule = WeeklyScheduleSchema(
             week_number=1,
-            daily_workouts=daily_workouts
+            daily_workouts=daily_workouts,
+            weekly_justification="Weekly plan balances training and recovery."
         )
         
         assert schedule.week_number == 1
         assert len(schedule.daily_workouts) == 7
         assert all(isinstance(workout, DailyWorkoutSchema) for workout in schedule.daily_workouts)
+        assert schedule.weekly_justification == "Weekly plan balances training and recovery."
     
     def test_field_constraints(self):
         """Test field constraints and validation."""
@@ -567,7 +711,17 @@ class TestWeeklyScheduleSchema:
         with pytest.raises(ValidationError) as exc_info:
             WeeklyScheduleSchema(
                 week_number=0,  # Invalid: less than 1
-                daily_workouts=[]
+                daily_workouts=[
+                    DailyWorkoutSchema(
+                        day_of_week=DayOfWeek.MONDAY,
+                        warming_up_instructions="Warm-up.",
+                        is_rest_day=True,
+                        exercises=[],
+                        daily_justification="Rest.",
+                        cooling_down_instructions="Cool-down."
+                    ) for _ in range(7) # Provide 7 valid daily workouts
+                ],
+                weekly_justification="Valid justification."
             )
         
         errors = exc_info.value.errors()
@@ -576,7 +730,17 @@ class TestWeeklyScheduleSchema:
         with pytest.raises(ValidationError) as exc_info:
             WeeklyScheduleSchema(
                 week_number=53,  # Invalid: greater than 52
-                daily_workouts=[]
+                daily_workouts=[
+                    DailyWorkoutSchema(
+                        day_of_week=DayOfWeek.MONDAY,
+                        warming_up_instructions="Warm-up.",
+                        is_rest_day=True,
+                        exercises=[],
+                        daily_justification="Rest.",
+                        cooling_down_instructions="Cool-down."
+                    ) for _ in range(7) # Provide 7 valid daily workouts
+                ],
+                weekly_justification="Valid justification."
             )
         
         errors = exc_info.value.errors()
@@ -586,7 +750,8 @@ class TestWeeklyScheduleSchema:
         with pytest.raises(ValidationError) as exc_info:
             WeeklyScheduleSchema(
                 week_number=1,
-                daily_workouts=[]  # Invalid: less than 7
+                daily_workouts=[],  # Invalid: less than 7
+                weekly_justification="Valid justification."
             )
         
         errors = exc_info.value.errors()
@@ -598,13 +763,17 @@ class TestWeeklyScheduleSchema:
             for i in range(8):
                 daily_workouts.append(DailyWorkoutSchema(
                     day_of_week=DayOfWeek.MONDAY,
+                    warming_up_instructions="Warm-up.",
                     is_rest_day=True,
-                    exercises=[]
+                    exercises=[],
+                    daily_justification="Rest.",
+                    cooling_down_instructions="Cool-down."
                 ))
             
             WeeklyScheduleSchema(
                 week_number=1,
-                daily_workouts=daily_workouts
+                daily_workouts=daily_workouts,
+                weekly_justification="Valid justification."
             )
         
         errors = exc_info.value.errors()
@@ -622,38 +791,48 @@ class TestWorkoutPlanSchema:
             if day in [DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY]:
                 daily_workouts.append(DailyWorkoutSchema(
                     day_of_week=day,
+                    warming_up_instructions=f"Dynamic warm-up for {day.value}.",
                     is_rest_day=False,
                     exercises=[
                         ExerciseSchema(
-                            exercise_id="ex_001",
+                            exercise_id=101,
                             sets=3,
                             reps=[8, 8, 8],
-                            description="Compound exercise"
+                            description=f"Compound exercise for {day.value}",
+                            weight_1rm=[75, 70, 65]
                         )
-                    ]
+                    ],
+                    daily_justification=f"Focus on strength for {day.value}.",
+                    cooling_down_instructions=f"Static stretch for {day.value}."
                 ))
             else:
                 daily_workouts.append(DailyWorkoutSchema(
                     day_of_week=day,
+                    warming_up_instructions=f"Light mobility for {day.value}.",
                     is_rest_day=True,
-                    exercises=[]
+                    exercises=[],
+                    daily_justification=f"Rest day for {day.value}.",
+                    cooling_down_instructions=f"Gentle stretch for {day.value}."
                 ))
         
         weekly_schedule = WeeklyScheduleSchema(
             week_number=1,
-            daily_workouts=daily_workouts
+            daily_workouts=daily_workouts,
+            weekly_justification="This week focuses on a balanced training split."
         )
         
         workout_plan = WorkoutPlanSchema(
             title="12-Week Strength Program",
             summary="A comprehensive strength training program focusing on compound movements",
-            weekly_schedules=[weekly_schedule]
+            weekly_schedules=[weekly_schedule],
+            program_justification="This program is designed for intermediate strength training, focusing on compound movements."
         )
         
         assert workout_plan.title == "12-Week Strength Program"
         assert workout_plan.summary == "A comprehensive strength training program focusing on compound movements"
         assert len(workout_plan.weekly_schedules) == 1
         assert workout_plan.weekly_schedules[0].week_number == 1
+        assert workout_plan.program_justification == "This program is designed for intermediate strength training, focusing on compound movements."
     
     def test_field_constraints(self):
         """Test field constraints and validation."""
@@ -664,7 +843,23 @@ class TestWorkoutPlanSchema:
             WorkoutPlanSchema(
                 title=long_title,
                 summary="Test summary",
-                weekly_schedules=[]
+                weekly_schedules=[
+                    WeeklyScheduleSchema(
+                        week_number=1,
+                        daily_workouts=[
+                            DailyWorkoutSchema(
+                                day_of_week=DayOfWeek.MONDAY,
+                                warming_up_instructions="Warm-up.",
+                                is_rest_day=True,
+                                exercises=[],
+                                daily_justification="Rest.",
+                                cooling_down_instructions="Cool-down."
+                            ) for _ in range(7)
+                        ],
+                        weekly_justification="Valid justification."
+                    )
+                ],
+                program_justification="Valid justification."
             )
         
         errors = exc_info.value.errors()
@@ -675,7 +870,8 @@ class TestWorkoutPlanSchema:
             WorkoutPlanSchema(
                 title="Test Plan",
                 summary="Test summary",
-                weekly_schedules=[]  # Invalid: less than 1
+                weekly_schedules=[],  # Invalid: less than 1
+                program_justification="Valid justification."
             )
         
         errors = exc_info.value.errors()
@@ -692,38 +888,48 @@ class TestWorkoutPlanSchema:
                 if day in [DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY]:
                     daily_workouts.append(DailyWorkoutSchema(
                         day_of_week=day,
+                        warming_up_instructions="Dynamic warm-up.",
                         is_rest_day=False,
                         exercises=[
                             ExerciseSchema(
-                                exercise_id=f"ex_{week_num:03d}",
+                                exercise_id=100 + week_num,
                                 sets=3 + week_num,  # Progressive overload
                                 reps=[8] * (3 + week_num),
-                                description=f"Week {week_num} exercise"
+                                description=f"Week {week_num} exercise",
+                                weight_1rm=[70 + week_num, 65 + week_num, 60 + week_num]
                             )
-                        ]
+                        ],
+                        daily_justification=f"Training for week {week_num}, {day.value}.",
+                        cooling_down_instructions="Static stretch."
                     ))
                 else:
                     daily_workouts.append(DailyWorkoutSchema(
                         day_of_week=day,
+                        warming_up_instructions="Light mobility.",
                         is_rest_day=True,
-                        exercises=[]
+                        exercises=[],
+                        daily_justification=f"Rest day for week {week_num}, {day.value}.",
+                        cooling_down_instructions="Gentle stretch."
                     ))
             
             weekly_schedule = WeeklyScheduleSchema(
                 week_number=week_num,
-                daily_workouts=daily_workouts
+                daily_workouts=daily_workouts,
+                weekly_justification=f"Weekly plan for week {week_num} balances training and recovery."
             )
             weekly_schedules.append(weekly_schedule)
         
         workout_plan = WorkoutPlanSchema(
             title="Progressive Strength Program",
             summary="4-week progressive overload program",
-            weekly_schedules=weekly_schedules
+            weekly_schedules=weekly_schedules,
+            program_justification="This program incorporates linear periodization over 4 weeks."
         )
         
         assert len(workout_plan.weekly_schedules) == 4
         assert workout_plan.weekly_schedules[0].week_number == 1
         assert workout_plan.weekly_schedules[3].week_number == 4
+        assert workout_plan.program_justification == "This program incorporates linear periodization over 4 weeks."
         
         # Check progressive overload
         assert workout_plan.weekly_schedules[0].daily_workouts[0].exercises[0].sets == 4  # Week 1: 3+1

@@ -11,11 +11,11 @@ from ..base.base_agent import BaseAgent
 from ..base.rag_tool import RAGTool
 
 # Import your existing schemas and prompt generator
-from ...workout.schemas import WorkoutPlanSchema, UserProfileSchema
-from ...workout.prompt_generator import WorkoutPromptGenerator
-from ...workout.exercise_selector import ExerciseSelector
-from ...workout.exercise_validator import ExerciseValidator
-from ...workout.training_rules_engine import TrainingRulesEngine
+from .helpers.schemas import WorkoutPlanSchema, UserProfileSchema
+from .helpers.prompt_generator import WorkoutPromptGenerator
+from .helpers.exercise_selector import ExerciseSelector
+from .helpers.exercise_validator import ExerciseValidator
+from .helpers.training_rules_engine import TrainingRulesEngine
 
 import os
 import json

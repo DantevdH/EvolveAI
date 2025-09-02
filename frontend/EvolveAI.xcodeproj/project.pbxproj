@@ -7,11 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		257C4C3B2E490D8800775032 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 257C4C3A2E490D8800775032 /* Supabase */; };
 		257C4C3D2E490D8E00775032 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 257C4C3C2E490D8E00775032 /* Supabase */; };
 		257C4C3F2E490E1F00775032 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 257C4C3E2E490E1F00775032 /* Supabase */; };
-		25D4613E96B98DDC4CC9B5B7 /* Pods_EvolveAI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7FA1CB1BF286B5C827A4695B /* Pods_EvolveAI.framework */; };
-		2BD12447979B0F4D4B5BDEAB /* Pods_EvolveAI_EvolveAIUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C01EBA03EF1AC5B8702A051E /* Pods_EvolveAI_EvolveAIUITests.framework */; };
+		25943E102E663028003CC8E8 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 25943E0F2E663028003CC8E8 /* Supabase */; };
+		2617152E4C1476BF0494608C /* Pods_EvolveAI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7FA1CB1BF286B5C827A4695B /* Pods_EvolveAI.framework */; };
+		350F53C727D8D78EC08C1B4F /* Pods_EvolveAIUITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7BFBDE6128712D0C1541F2AC /* Pods_EvolveAIUITests.framework */; };
 		A05033E54652C2326741AC81 /* Pods_EvolveAITests.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 072F73E738C20840BE427CEF /* Pods_EvolveAITests.framework */; };
 /* End PBXBuildFile section */
 
@@ -38,13 +38,15 @@
 		25C883E42E25640C003677B2 /* EvolveAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = EvolveAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		25C883F12E25640D003677B2 /* EvolveAITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EvolveAITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		25C883FB2E25640D003677B2 /* EvolveAIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EvolveAIUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3B665411B54028DCAB5D7D8D /* Pods-EvolveAIUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EvolveAIUITests.release.xcconfig"; path = "Target Support Files/Pods-EvolveAIUITests/Pods-EvolveAIUITests.release.xcconfig"; sourceTree = "<group>"; };
 		4399C2849265DE6106121585 /* Pods-EvolveAI-EvolveAIUITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EvolveAI-EvolveAIUITests.debug.xcconfig"; path = "Target Support Files/Pods-EvolveAI-EvolveAIUITests/Pods-EvolveAI-EvolveAIUITests.debug.xcconfig"; sourceTree = "<group>"; };
+		7BFBDE6128712D0C1541F2AC /* Pods_EvolveAIUITests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_EvolveAIUITests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		7FA1CB1BF286B5C827A4695B /* Pods_EvolveAI.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_EvolveAI.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		96F1ADBDD526F6110B4C635D /* Pods-EvolveAITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EvolveAITests.release.xcconfig"; path = "Target Support Files/Pods-EvolveAITests/Pods-EvolveAITests.release.xcconfig"; sourceTree = "<group>"; };
 		AF6199D9A5FE5746FF590C4F /* Pods-EvolveAI-EvolveAIUITests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EvolveAI-EvolveAIUITests.release.xcconfig"; path = "Target Support Files/Pods-EvolveAI-EvolveAIUITests/Pods-EvolveAI-EvolveAIUITests.release.xcconfig"; sourceTree = "<group>"; };
-		C01EBA03EF1AC5B8702A051E /* Pods_EvolveAI_EvolveAIUITests.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_EvolveAI_EvolveAIUITests.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		D8D940EAF718A655DF98D7F5 /* Pods-EvolveAITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EvolveAITests.debug.xcconfig"; path = "Target Support Files/Pods-EvolveAITests/Pods-EvolveAITests.debug.xcconfig"; sourceTree = "<group>"; };
 		EFD557426732A6D7ABD31D03 /* Pods-EvolveAI.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EvolveAI.release.xcconfig"; path = "Target Support Files/Pods-EvolveAI/Pods-EvolveAI.release.xcconfig"; sourceTree = "<group>"; };
+		F4442488EAB79E934A150EDD /* Pods-EvolveAIUITests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-EvolveAIUITests.debug.xcconfig"; path = "Target Support Files/Pods-EvolveAIUITests/Pods-EvolveAIUITests.debug.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -83,8 +85,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				257C4C3B2E490D8800775032 /* Supabase in Frameworks */,
-				25D4613E96B98DDC4CC9B5B7 /* Pods_EvolveAI.framework in Frameworks */,
+				25943E102E663028003CC8E8 /* Supabase in Frameworks */,
+				2617152E4C1476BF0494608C /* Pods_EvolveAI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -102,7 +104,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				257C4C3F2E490E1F00775032 /* Supabase in Frameworks */,
-				2BD12447979B0F4D4B5BDEAB /* Pods_EvolveAI_EvolveAIUITests.framework in Frameworks */,
+				350F53C727D8D78EC08C1B4F /* Pods_EvolveAIUITests.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -140,6 +142,8 @@
 				AF6199D9A5FE5746FF590C4F /* Pods-EvolveAI-EvolveAIUITests.release.xcconfig */,
 				D8D940EAF718A655DF98D7F5 /* Pods-EvolveAITests.debug.xcconfig */,
 				96F1ADBDD526F6110B4C635D /* Pods-EvolveAITests.release.xcconfig */,
+				F4442488EAB79E934A150EDD /* Pods-EvolveAIUITests.debug.xcconfig */,
+				3B665411B54028DCAB5D7D8D /* Pods-EvolveAIUITests.release.xcconfig */,
 			);
 			path = Pods;
 			sourceTree = "<group>";
@@ -148,8 +152,8 @@
 			isa = PBXGroup;
 			children = (
 				7FA1CB1BF286B5C827A4695B /* Pods_EvolveAI.framework */,
-				C01EBA03EF1AC5B8702A051E /* Pods_EvolveAI_EvolveAIUITests.framework */,
 				072F73E738C20840BE427CEF /* Pods_EvolveAITests.framework */,
+				7BFBDE6128712D0C1541F2AC /* Pods_EvolveAIUITests.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -209,7 +213,6 @@
 				25C883F72E25640D003677B2 /* Sources */,
 				25C883F82E25640D003677B2 /* Frameworks */,
 				25C883F92E25640D003677B2 /* Resources */,
-				90DE66FA59059C3A3E2E4052 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -311,7 +314,7 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
-				"$(DERIVED_FILE_DIR)/Pods-EvolveAI-EvolveAIUITests-checkManifestLockResult.txt",
+				"$(DERIVED_FILE_DIR)/Pods-EvolveAIUITests-checkManifestLockResult.txt",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
@@ -359,27 +362,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-EvolveAI/Pods-EvolveAI-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		90DE66FA59059C3A3E2E4052 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-EvolveAI-EvolveAIUITests/Pods-EvolveAI-EvolveAIUITests-frameworks-${CONFIGURATION}-input-files.xcfilelist",
-			);
-			inputPaths = (
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputFileListPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-EvolveAI-EvolveAIUITests/Pods-EvolveAI-EvolveAIUITests-frameworks-${CONFIGURATION}-output-files.xcfilelist",
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-EvolveAI-EvolveAIUITests/Pods-EvolveAI-EvolveAIUITests-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		E4147EAB5E8963DEC2FA1A89 /* [CP] Check Pods Manifest.lock */ = {
@@ -677,7 +659,7 @@
 		};
 		25C8840C2E25640D003677B2 /* Debug */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = 4399C2849265DE6106121585 /* Pods-EvolveAI-EvolveAIUITests.debug.xcconfig */;
+			baseConfigurationReference = F4442488EAB79E934A150EDD /* Pods-EvolveAIUITests.debug.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -695,7 +677,7 @@
 		};
 		25C8840D2E25640D003677B2 /* Release */ = {
 			isa = XCBuildConfiguration;
-			baseConfigurationReference = AF6199D9A5FE5746FF590C4F /* Pods-EvolveAI-EvolveAIUITests.release.xcconfig */;
+			baseConfigurationReference = 3B665411B54028DCAB5D7D8D /* Pods-EvolveAIUITests.release.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -764,17 +746,17 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		257C4C3A2E490D8800775032 /* Supabase */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 256C5E942E3A93E700D7AB60 /* XCRemoteSwiftPackageReference "supabase-swift" */;
-			productName = Supabase;
-		};
 		257C4C3C2E490D8E00775032 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 256C5E942E3A93E700D7AB60 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
 		};
 		257C4C3E2E490E1F00775032 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 256C5E942E3A93E700D7AB60 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
+		25943E0F2E663028003CC8E8 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 256C5E942E3A93E700D7AB60 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;

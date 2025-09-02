@@ -7,8 +7,14 @@ re-ranking, and context augmentation.
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from core.agents.base.rag_tool import RAGTool
-from core.agents.base.base_agent import BaseAgent
+import os
+import sys
+
+# Add the backend directory to the Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+
+from core.base.base_agent import BaseAgent
+from core.base.rag_tool import RAGTool
 
 
 class TestRAGTool:

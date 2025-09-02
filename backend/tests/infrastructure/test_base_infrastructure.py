@@ -16,12 +16,12 @@ class TestBaseAgent:
 
     def test_base_agent_import(self):
         """Test that BaseAgent can be imported."""
-        from core.agents.base.base_agent import BaseAgent
+        from core.base.base_agent import BaseAgent
         assert BaseAgent is not None, "BaseAgent should be importable"
 
     def test_base_agent_abstract_methods(self):
         """Test that BaseAgent has required abstract methods."""
-        from core.agents.base.base_agent import BaseAgent
+        from core.base.base_agent import BaseAgent
         import inspect
         
         # Check that required abstract methods exist
@@ -33,7 +33,7 @@ class TestBaseAgent:
 
     def test_base_agent_cannot_instantiate(self):
         """Test that BaseAgent cannot be instantiated directly."""
-        from core.agents.base.base_agent import BaseAgent
+        from core.base.base_agent import BaseAgent
         
         with pytest.raises(TypeError, match="Can't instantiate abstract class"):
             BaseAgent("Test", "Test Description", "test")
@@ -43,12 +43,12 @@ class TestRAGTool:
 
     def test_rag_tool_import(self):
         """Test that RAGTool can be imported."""
-        from core.agents.base.rag_tool import RAGTool
+        from core.base.rag_tool import RAGTool
         assert RAGTool is not None, "RAGTool should be importable"
 
     def test_rag_tool_structure(self):
         """Test that RAGTool has required methods."""
-        from core.agents.base.rag_tool import RAGTool
+        from core.base.rag_tool import RAGTool
         
         # Check that required methods exist
         assert hasattr(RAGTool, 'extract_metadata_filters'), "RAGTool should have extract_metadata_filters method"
@@ -58,7 +58,7 @@ class TestRAGTool:
 
     def test_rag_tool_instantiation(self):
         """Test that RAGTool can be instantiated with a mock agent."""
-        from core.agents.base.rag_tool import RAGTool
+        from core.base.rag_tool import RAGTool
         
         # Create a mock agent
         mock_agent = MagicMock()
@@ -68,31 +68,6 @@ class TestRAGTool:
         rag_tool = RAGTool(mock_agent)
         assert rag_tool.base_agent == mock_agent
         assert rag_tool.base_agent.topic == "fitness"
-
-class TestAgentCoordinator:
-    """Test AgentCoordinator functionality."""
-
-    def test_agent_coordinator_import(self):
-        """Test that AgentCoordinator can be imported."""
-        from core.agents.base.agent_coordinator import AgentCoordinator
-        assert AgentCoordinator is not None, "AgentCoordinator should be importable"
-
-    def test_agent_coordinator_structure(self):
-        """Test that AgentCoordinator has required methods."""
-        from core.agents.base.agent_coordinator import AgentCoordinator
-        
-        # Check that required methods exist
-        assert hasattr(AgentCoordinator, 'register_agent'), "AgentCoordinator should have register_agent method"
-        assert hasattr(AgentCoordinator, 'route_request'), "AgentCoordinator should have route_request method"
-        assert hasattr(AgentCoordinator, 'coordinate_response'), "AgentCoordinator should have coordinate_response method"
-        assert hasattr(AgentCoordinator, 'get_agent_by_topic'), "AgentCoordinator should have get_agent_by_topic method"
-
-    def test_agent_coordinator_instantiation(self):
-        """Test that AgentCoordinator cannot be instantiated directly."""
-        from core.agents.base.agent_coordinator import AgentCoordinator
-        
-        with pytest.raises(TypeError, match="Can't instantiate abstract class"):
-            AgentCoordinator()
 
 class TestConcreteImplementations:
     """Test concrete implementations of abstract classes."""
@@ -141,35 +116,11 @@ class TestConcreteImplementations:
         assert coordinator.agents == {}
         assert coordinator.route_request("test") == {"decision": "test"}
 
-    def test_concrete_agent_coordinator_implementation(self):
-        """Test that we can create a concrete AgentCoordinator implementation."""
-        from core.agents.base.agent_coordinator import AgentCoordinator
-        
-        # Create a concrete implementation that inherits from AgentCoordinator
-        class ConcreteAgentCoordinator(AgentCoordinator):
-            def route_request(self, user_request: str) -> dict:
-                """Test implementation of request routing."""
-                return {
-                    "routing_decision": "single_agent",
-                    "assigned_agents": ["test_agent"],
-                    "complexity": "single_domain"
-                }
-            
-            def coordinate_response(self, user_request: str, agent_responses: dict) -> str:
-                """Test implementation of response coordination."""
-                return "coordinated response"
-        
-        # This should work
-        coordinator = ConcreteAgentCoordinator()
-        assert coordinator.agents == {}
-        assert coordinator.route_request("test")["routing_decision"] == "single_agent"
-        assert coordinator.coordinate_response("test", {}) == "coordinated response"
-
 class TestIntegration:
     """Test integration between components."""
 
-    @patch('core.agents.base.base_agent.create_client')
-    @patch('core.agents.base.base_agent.openai.OpenAI')
+    @patch('core.base.base_agent.create_client')
+    @patch('core.base.base_agent.openai.OpenAI')
     def test_agent_with_mocked_clients(self, mock_openai, mock_create_client):
         """Test that agents can work with mocked clients."""
         # Mock the clients

@@ -187,6 +187,54 @@ venv.bak/
 frontend/EvolveAI/Resources/Config.plist
 frontend/Pods/
 
+# React Native / Node.js
+frontend-react/node_modules/
+frontend-react/npm-debug.log
+frontend-react/yarn-error.log
+
+# React Native build artifacts
+frontend-react/android/app/build/
+frontend-react/android/.gradle/
+frontend-react/android/build/
+frontend-react/android/local.properties
+frontend-react/android/*.keystore
+frontend-react/android/app/release/
+
+# iOS build artifacts
+frontend-react/ios/build/
+frontend-react/ios/DerivedData/
+frontend-react/ios/Pods/
+frontend-react/ios/*.xcworkspace
+frontend-react/ios/*.xcuserstate
+
+# Metro bundler
+frontend-react/.metro-health-check*
+
+# React Native debugging
+frontend-react/flipper-rn-addons.json
+frontend-react/.vscode/
+frontend-react/*.log
+
+# Environment files
+frontend-react/.env
+frontend-react/.env.local
+frontend-react/.env.development.local
+frontend-react/.env.test.local
+frontend-react/.env.production.local
+
+# Temporary files
+frontend-react/.tmp/
+frontend-react/temp/
+
+# Coverage
+frontend-react/coverage/
+
+# Watchman
+frontend-react/.watchmanconfig
+
+# Bundle artifacts
+frontend-react/*.jsbundle
+
 # Specific files that need to be ignored
 *.pdf
 *.xlsx

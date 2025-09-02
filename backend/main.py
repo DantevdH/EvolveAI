@@ -7,9 +7,9 @@ from dotenv import load_dotenv
 import json
 
 # Import your existing training schemas and services
-from core.workout.schemas import WorkoutPlanSchema, UserProfileSchema
-from core.workout.models import GenerateWorkoutRequest, GenerateWorkoutResponse
-from core.agents.specialists.fitness_coach import FitnessCoach
+from core.fitness.helpers.schemas import WorkoutPlanSchema, UserProfileSchema
+from core.fitness.helpers.models import GenerateWorkoutRequest, GenerateWorkoutResponse
+from core.fitness.fitness_coach import FitnessCoach
 from utils.mock_data import create_mock_workout_plan
 
 import openai
@@ -68,8 +68,7 @@ async def generate_workout_plan(
         validation_errors = []
         if not request.primaryGoal or request.primaryGoal.strip() == "":
             validation_errors.append("primaryGoal cannot be empty")
-        if not request.primaryGoalDescription or request.primaryGoalDescription.strip() == "":
-            validation_errors.append("primaryGoalDescription cannot be empty")
+        # primaryGoalDescription is optional, so we don't validate it
         if not request.experienceLevel or request.experienceLevel.strip() == "":
             validation_errors.append("experienceLevel cannot be empty")
         if not request.equipment or request.equipment.strip() == "":
@@ -84,7 +83,7 @@ async def generate_workout_plan(
         
         # DEVELOPMENT MODE: Return mock data instead of calling OpenAI
         # Set DEBUG=true in .env to use mock data, false to use real OpenAI API
-        from config.settings import settings
+        from settings import settings
         
         
         if settings.DEBUG:

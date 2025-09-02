@@ -17,7 +17,7 @@ import time
 backend_dir = Path(__file__).parent.parent.parent
 sys.path.append(str(backend_dir))
 
-from services.openai_service import OpenAIService
+import openai
 from config.settings import settings
 
 
@@ -32,7 +32,10 @@ class ExerciseFeaturesFiller:
             excel_file_path: Path to the Excel file containing exercise features
         """
         self.excel_file_path = excel_file_path
-        self.openai_service = OpenAIService()
+        # Initialize OpenAI client directly using settings
+        self._openai_client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
+        self._openai_model = settings.OPENAI_MODEL
+        self._openai_temperature = settings.OPENAI_TEMPERATURE
         self.df = None
         self.backup_file = None
         
@@ -232,6 +235,25 @@ Format: "[SCORE]"
             
         except Exception as e:
             return None, f"Error parsing {response_type}: {str(e)}"
+
+    def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        """
+        Generate a chat completion using OpenAI directly.
+
+        Args:
+            messages: List of message dictionaries
+            **kwargs: Additional OpenAI parameters
+
+        Returns:
+            Generated response text
+        """
+        response = self._openai_client.chat.completions.create(
+            model=self._openai_model,
+            messages=messages,
+            temperature=self._openai_temperature,
+            **kwargs
+        )
+        return response.choices[0].message.content
     
     def fill_missing_tiers(self, missing_tier_rows: List[int]) -> Dict[int, Tuple[str, str]]:
         """
@@ -253,7 +275,7 @@ Format: "[SCORE]"
                 prompt = self.generate_tier_prompt(exercise_data)
                 
                 # Get AI response
-                response = self.openai_service.chat_completion([
+                response = self.chat_completion([
                     {"role": "user", "content": prompt}
                 ])
                 
@@ -294,7 +316,7 @@ Format: "[SCORE]"
                 prompt = self.generate_popularity_prompt(exercise_data)
                 
                 # Get AI response
-                response = self.openai_service.chat_completion([
+                response = self.chat_completion([
                     {"role": "user", "content": prompt}
                 ])
                 

@@ -26,7 +26,23 @@ class ExerciseValidator:
             stop_words='english',
             ngram_range=(1, 2)
         )
-        logger.info("✅ Exercise Validator initialized with cosine similarity support")
+        # Add caching for similarity calculations
+        self._similarity_cache = {}
+        self._candidate_cache = {}
+        logger.info("✅ Exercise Validator initialized with cosine similarity support and caching")
+    
+    def clear_cache(self):
+        """Clear all caches to free memory."""
+        self._similarity_cache.clear()
+        self._candidate_cache.clear()
+        logger.debug("Exercise validator caches cleared")
+    
+    def get_cache_stats(self) -> Dict[str, int]:
+        """Get cache statistics for monitoring."""
+        return {
+            'similarity_cache_size': len(self._similarity_cache),
+            'candidate_cache_size': len(self._candidate_cache)
+        }
     
     def validate_workout_plan(self, workout_plan: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
         """
@@ -39,63 +55,196 @@ class ExerciseValidator:
             Tuple of (validated_workout, validation_messages)
         """
         validation_messages = []
-        validated_workout = workout_plan.copy()
+        
+        # Early validation checks
+        if not workout_plan:
+            validation_messages.append("Workout plan is empty")
+            return workout_plan, validation_messages
+        
+        # Check for valid structure first
+        structure_messages = self._validate_workout_structure(workout_plan)
+        validation_messages.extend(structure_messages)
+        
+        # If structure is fundamentally broken, return early
+        if any("has no weeks" in msg or "error" in msg.lower() for msg in structure_messages):
+            return workout_plan, validation_messages
         
         try:
-            # Extract all exercise IDs from the workout plan
-            exercise_ids = self._extract_exercise_ids(workout_plan)
+            # Extract and validate exercise IDs in one pass
+            exercise_data = self._extract_and_validate_exercises(workout_plan)
             
-            if not exercise_ids:
+            if not exercise_data['all_ids']:
                 validation_messages.append("No exercise IDs found in workout plan")
-                return validated_workout, validation_messages
+                return workout_plan, validation_messages
             
-            # Validate exercise IDs
-            valid_ids, invalid_ids = self.exercise_selector.validate_exercise_ids(exercise_ids)
-            
-            if invalid_ids:
-                validation_messages.append(f"Found {len(invalid_ids)} invalid exercise IDs: {invalid_ids}")
-                
-                # Fix invalid exercises using cosine similarity
-                validated_workout = self._fix_invalid_exercises_with_similarity(
-                    validated_workout, invalid_ids, valid_ids
+            # Process invalid exercises if any found
+            if exercise_data['invalid_ids']:
+                validation_messages.append(
+                    f"Found {len(exercise_data['invalid_ids'])} invalid exercise IDs: {exercise_data['invalid_ids'][:5]}{'...' if len(exercise_data['invalid_ids']) > 5 else ''}"
                 )
+                
+                # Fix invalid exercises using optimized similarity matching
+                validated_workout = self._fix_invalid_exercises_optimized(
+                    workout_plan, exercise_data
+                )
+                validation_messages.append(f"Replaced {len(exercise_data['invalid_ids'])} invalid exercises")
             else:
                 validation_messages.append("All exercise IDs are valid")
-            
-            # Additional validation checks
-            validation_messages.extend(self._validate_workout_structure(validated_workout))
+                validated_workout = workout_plan
             
             return validated_workout, validation_messages
             
         except Exception as e:
             logger.error(f"Error validating workout plan: {e}")
-            validation_messages.append(f"Validation error: {e}")
+            validation_messages.append(f"Validation error: {str(e)}")
             return workout_plan, validation_messages
     
-    def _extract_exercise_ids(self, workout_plan: Dict[str, Any]) -> List[str]:
-        """Extract all exercise IDs from a workout plan."""
-        exercise_ids = []
+    def _extract_and_validate_exercises(self, workout_plan: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extract and validate exercise IDs from a workout plan in one pass.
+        
+        Args:
+            workout_plan: The workout plan to process
+            
+        Returns:
+            Dictionary containing all_ids, valid_ids, invalid_ids, and exercise_locations
+        """
+        all_ids = []
+        exercise_locations = []  # Track where each exercise is located for efficient replacement
         
         try:
-            weeks = workout_plan.get('weekly_schedules', [])
+            # Handle both 'weeks' and 'weekly_schedules' keys for compatibility
+            weeks = workout_plan.get('weeks', workout_plan.get('weekly_schedules', []))
             
-            for week in weeks:
-                days = week.get('daily_workouts', [])
+            for week_idx, week in enumerate(weeks):
+                # Handle both 'days' and 'daily_workouts' keys
+                days = week.get('days', week.get('daily_workouts', []))
                 
-                for day in days:
+                for day_idx, day in enumerate(days):
                     if not day.get('is_rest_day', False):
                         exercises = day.get('exercises', [])
                         
-                        for exercise in exercises:
+                        for exercise_idx, exercise in enumerate(exercises):
                             exercise_id = exercise.get('exercise_id')
                             if exercise_id:
-                                exercise_ids.append(str(exercise_id))
+                                exercise_id_str = exercise_id
+                                all_ids.append(exercise_id_str)
+                                
+                                # Store location for efficient replacement later
+                                exercise_locations.append({
+                                    'week_idx': week_idx,
+                                    'day_idx': day_idx,
+                                    'exercise_idx': exercise_idx,
+                                    'exercise_id': exercise_id_str,
+                                    'exercise_data': exercise
+                                })
             
-            return exercise_ids
+            # Validate all IDs at once
+            if all_ids:
+                valid_ids, invalid_ids = self.exercise_selector.validate_exercise_ids(all_ids)
+            else:
+                valid_ids, invalid_ids = [], []
+            
+            return {
+                'all_ids': all_ids,
+                'valid_ids': valid_ids,
+                'invalid_ids': invalid_ids,
+                'exercise_locations': exercise_locations
+            }
             
         except Exception as e:
-            logger.error(f"Error extracting exercise IDs: {e}")
-            return []
+            logger.error(f"Error extracting and validating exercises: {e}")
+            return {
+                'all_ids': [],
+                'valid_ids': [],
+                'invalid_ids': [],
+                'exercise_locations': []
+            }
+    
+    def _extract_exercise_ids(self, workout_plan: Dict[str, Any]) -> List[str]:
+        """
+        Extract all exercise IDs from a workout plan.
+        
+        Note: This method is kept for backward compatibility.
+        Use _extract_and_validate_exercises for better performance.
+        """
+        result = self._extract_and_validate_exercises(workout_plan)
+        return result['all_ids']
+    
+    def _fix_invalid_exercises_optimized(self, 
+                                       workout_plan: Dict[str, Any], 
+                                       exercise_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Optimized method to replace invalid exercises using location tracking.
+        
+        Args:
+            workout_plan: The workout plan to fix
+            exercise_data: Pre-extracted exercise data with locations
+            
+        Returns:
+            Fixed workout plan
+        """
+        if not exercise_data['invalid_ids']:
+            return workout_plan
+        
+        fixed_workout = workout_plan.copy()
+        invalid_ids_set = set(exercise_data['invalid_ids'])
+        replacement_cache = {}  # Cache replacements to avoid repeated similarity calculations
+        
+        try:
+            # Handle both structure types
+            weeks_key = 'weeks' if 'weeks' in fixed_workout else 'weekly_schedules'
+            days_key = 'days' if 'weeks' in fixed_workout else 'daily_workouts'
+            
+            weeks = fixed_workout.get(weeks_key, [])
+            
+            # Process invalid exercises using pre-computed locations
+            for location in exercise_data['exercise_locations']:
+                exercise_id = location['exercise_id']
+                
+                if exercise_id in invalid_ids_set:
+                    # Get replacement from cache or compute new one
+                    if exercise_id not in replacement_cache:
+                        replacement_cache[exercise_id] = self._find_replacement_with_similarity(
+                            location['exercise_data'], exercise_data['valid_ids']
+                        )
+                    
+                    replacement = replacement_cache[exercise_id]
+                    
+                    if replacement:
+                        # Direct access using stored indices
+                        week = weeks[location['week_idx']]
+                        days = week.get(days_key, [])
+                        day = days[location['day_idx']]
+                        exercises = day.get('exercises', [])
+                        
+                        # Update exercise with replacement data
+                        exercises[location['exercise_idx']].update(replacement)
+                        logger.info(f"Replaced invalid exercise {exercise_id} with {replacement['id']}")
+                    else:
+                        # Remove exercise if no replacement found
+                        week = weeks[location['week_idx']]
+                        days = week.get(days_key, [])
+                        day = days[location['day_idx']]
+                        exercises = day.get('exercises', [])
+                        
+                        # Mark for removal (we'll remove them in reverse order to maintain indices)
+                        exercises[location['exercise_idx']] = None
+                        logger.warning(f"Marked invalid exercise {exercise_id} for removal - no replacement found")
+            
+            # Remove None exercises (marked for deletion)
+            for week in weeks:
+                days = week.get(days_key, [])
+                for day in days:
+                    if not day.get('is_rest_day', False):
+                        exercises = day.get('exercises', [])
+                        day['exercises'] = [ex for ex in exercises if ex is not None]
+            
+            return fixed_workout
+            
+        except Exception as e:
+            logger.error(f"Error in optimized invalid exercise fixing: {e}")
+            return workout_plan
     
     def _fix_invalid_exercises(self, 
                               workout_plan: Dict[str, Any], 
@@ -125,7 +274,7 @@ class ExerciseValidator:
                         exercises = day.get('exercises', [])
                         
                         for exercise in exercises:
-                            exercise_id = str(exercise.get('exercise_id', ''))
+                            exercise_id = exercise.get('exercise_id', None)
                             
                             if exercise_id in invalid_ids:
                                 # Find a replacement exercise
@@ -222,7 +371,7 @@ class ExerciseValidator:
                         exercises = day.get('exercises', [])
                         
                         for exercise in exercises:
-                            exercise_id = str(exercise.get('exercise_id', ''))
+                            exercise_id = exercise.get('exercise_id', None)
                             
                             if exercise_id in invalid_ids:
                                 # Find a replacement exercise using cosine similarity
@@ -249,7 +398,7 @@ class ExerciseValidator:
                                         original_exercise: Dict[str, Any], 
                                         valid_ids: List[str]) -> Optional[Dict[str, Any]]:
         """
-        Find a suitable replacement exercise using cosine similarity on descriptions and muscle groups.
+        Find a suitable replacement exercise using cosine similarity with caching.
         
         Args:
             original_exercise: The original exercise data
@@ -259,50 +408,98 @@ class ExerciseValidator:
             Replacement exercise data or None
         """
         try:
-            # Get the original exercise description and target muscle
-            original_description = original_exercise.get('description', '')
-            target_muscle = self._extract_muscle_from_name(original_exercise.get('name', ''))
+            # Create cache key from exercise properties
+            exercise_name = original_exercise.get('name', '')
+            difficulty = original_exercise.get('difficulty', "Beginner")
+            equipment = original_exercise.get('equipment', None)
+            description = original_exercise.get('description', '')
+            
+            cache_key = f"{exercise_name}_{difficulty}_{equipment}"
+            
+            # Check cache first
+            if cache_key in self._similarity_cache:
+                cached_result = self._similarity_cache[cache_key]
+                logger.debug(f"Using cached replacement for {exercise_name}")
+                return cached_result
+            
+            # Get the target muscle
+            target_muscle = self._extract_muscle_from_name(exercise_name)
             
             if not target_muscle:
-                logger.warning(f"No target muscle found for exercise: {original_exercise.get('name', '')}")
+                logger.warning(f"No target muscle found for exercise: {exercise_name}")
+                self._similarity_cache[cache_key] = None
                 return None
             
-            # Get replacement candidates from the same muscle group (no valid_ids restriction)
-            candidates = self.exercise_selector.get_muscle_group_exercises(
-                muscle_group=target_muscle,
-                difficulty=original_exercise.get('difficulty', "Beginner"),
-                equipment=original_exercise.get('equipment', None)
-            )
+            # Check candidate cache
+            candidate_key = f"{target_muscle}_{difficulty}_{equipment}"
+            if candidate_key in self._candidate_cache:
+                candidates = self._candidate_cache[candidate_key]
+            else:
+                # Get replacement candidates from the same muscle group
+                candidates = self.exercise_selector.get_muscle_group_exercises(
+                    muscle_group=target_muscle,
+                    difficulty=difficulty,
+                    equipment=equipment
+                )
+                self._candidate_cache[candidate_key] = candidates
             
-            # No need to filter by valid_ids - we can use any exercise from the database
             if not candidates:
                 logger.warning(f"No candidates found for muscle group: {target_muscle}")
+                self._similarity_cache[cache_key] = None
                 return None
             
             # If we have a description, use cosine similarity
-            if original_description and len(candidates) > 1:
-                replacement = self._find_best_match_by_similarity(
-                    original_description, candidates
+            if description and len(candidates) > 1:
+                replacement = self._find_best_match_by_similarity_cached(
+                    description, candidates, cache_key
                 )
             else:
                 # Fallback to first candidate
                 replacement = candidates[0]
             
             if replacement:
-                return {
+                result = {
                     'id': replacement['id'],
                     'name': replacement['name'],
                     'exercise_id': replacement['id'],
                     'difficulty': replacement['difficulty'],
                     'equipment': replacement['equipment'],
-                    'description': f"Replacement for: {original_description}" if original_description else "Exercise replacement"
+                    'description': f"Replacement for: {description}" if description else "Exercise replacement"
                 }
+                self._similarity_cache[cache_key] = result
+                return result
             
+            self._similarity_cache[cache_key] = None
             return None
             
         except Exception as e:
             logger.error(f"Error finding replacement with similarity: {e}")
             return None
+    
+    def _find_best_match_by_similarity_cached(self, 
+                                            target_description: str, 
+                                            candidates: List[Dict[str, Any]], 
+                                            cache_key: str) -> Optional[Dict[str, Any]]:
+        """
+        Find the best matching exercise using cosine similarity with caching.
+        
+        Args:
+            target_description: The target exercise description
+            candidates: List of candidate exercises
+            cache_key: Key for caching the result
+            
+        Returns:
+            Best matching exercise or None
+        """
+        similarity_key = f"sim_{cache_key}_{len(candidates)}"
+        
+        # Check if we've already computed similarity for this combination
+        if similarity_key in self._similarity_cache:
+            return self._similarity_cache[similarity_key]
+        
+        result = self._find_best_match_by_similarity(target_description, candidates)
+        self._similarity_cache[similarity_key] = result
+        return result
     
     def _find_best_match_by_similarity(self, 
                                      target_description: str, 
@@ -378,35 +575,58 @@ class ExerciseValidator:
         return None
     
     def _validate_workout_structure(self, workout_plan: Dict[str, Any]) -> List[str]:
-        """Validate the overall structure of the workout plan."""
+        """Validate the overall structure of the workout plan with optimized checks."""
         messages = []
         
         try:
-            weeks = workout_plan.get('weeks', [])
+            # Handle both structure types
+            weeks = workout_plan.get('weeks', workout_plan.get('weekly_schedules', []))
             
             if not weeks:
                 messages.append("Workout plan has no weeks")
                 return messages
             
-            # Check each week
+            # Batch validation for better performance
+            total_exercises = 0
+            empty_workout_days = 0
+            missing_exercise_ids = 0
+            
             for week_idx, week in enumerate(weeks):
-                days = week.get('days', [])
+                # Handle both structure types
+                days = week.get('days', week.get('daily_workouts', []))
                 
-                if len(days) != 7:
-                    messages.append(f"Week {week_idx + 1} does not have exactly 7 days")
+                # Quick length check (more flexible than exactly 7)
+                if len(days) < 1:
+                    messages.append(f"Week {week_idx + 1} has no days")
+                    continue
+                elif len(days) > 14:  # Reasonable upper limit
+                    messages.append(f"Week {week_idx + 1} has too many days ({len(days)})")
                 
-                # Check each day
+                # Batch process all days in this week
                 for day_idx, day in enumerate(days):
                     if not day.get('is_rest_day', False):
                         exercises = day.get('exercises', [])
+                        total_exercises += len(exercises)
                         
                         if not exercises:
-                            messages.append(f"Day {day_idx + 1} in week {week_idx + 1} has no exercises but is not marked as rest day")
-                        
-                        # Validate each exercise
-                        for exercise_idx, exercise in enumerate(exercises):
-                            if not exercise.get('exercise_id'):
-                                messages.append(f"Exercise {exercise_idx + 1} in day {day_idx + 1}, week {week_idx + 1} has no exercise_id")
+                            empty_workout_days += 1
+                        else:
+                            # Quick scan for missing exercise_ids
+                            for exercise in exercises:
+                                if not exercise.get('exercise_id'):
+                                    missing_exercise_ids += 1
+            
+            # Generate summary messages instead of individual ones
+            if empty_workout_days > 0:
+                messages.append(f"Found {empty_workout_days} workout days with no exercises")
+            
+            if missing_exercise_ids > 0:
+                messages.append(f"Found {missing_exercise_ids} exercises missing exercise_id")
+            
+            if total_exercises == 0:
+                messages.append("Workout plan contains no exercises")
+            else:
+                messages.append(f"Workout structure validated: {len(weeks)} weeks, {total_exercises} total exercises")
             
             return messages
             
@@ -479,7 +699,7 @@ class ExerciseValidator:
                         for exercise in exercises:
                             exercise_id = exercise.get('exercise_id')
                             if exercise_id:
-                                unique_exercises.add(str(exercise_id))
+                                unique_exercises.add(exercise_id)
                             
                             # Extract muscle group from exercise name
                             muscle = self._extract_muscle_from_name(exercise.get('name', ''))

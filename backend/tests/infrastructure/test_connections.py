@@ -82,7 +82,7 @@ class TestInfrastructure:
     def test_base_agent_import(self):
         """Test that BaseAgent can be imported."""
         try:
-            from core.agents.base.base_agent import BaseAgent
+            from core.base.base_agent import BaseAgent
             assert BaseAgent is not None, "BaseAgent should be importable"
         except ImportError as e:
             pytest.fail(f"Failed to import BaseAgent: {e}")
@@ -90,22 +90,14 @@ class TestInfrastructure:
     def test_rag_tool_import(self):
         """Test that RAGTool can be imported."""
         try:
-            from core.agents.base.rag_tool import RAGTool
+            from core.base.rag_tool import RAGTool
             assert RAGTool is not None, "RAGTool should be importable"
         except ImportError as e:
             pytest.fail(f"Failed to import RAGTool: {e}")
 
-    def test_agent_coordinator_import(self):
-        """Test that AgentCoordinator can be imported."""
-        try:
-            from core.agents.base.agent_coordinator import AgentCoordinator
-            assert AgentCoordinator is not None, "AgentCoordinator should be importable"
-        except ImportError as e:
-            pytest.fail(f"Failed to import AgentCoordinator: {e}")
-
     def test_base_agent_structure(self):
         """Test that BaseAgent has required abstract methods."""
-        from core.agents.base.base_agent import BaseAgent
+        from core.base.base_agent import BaseAgent
         
         # Check that required abstract methods exist
         assert hasattr(BaseAgent, '_get_capabilities'), "BaseAgent should have _get_capabilities method"
@@ -117,18 +109,9 @@ class TestInfrastructure:
 
     def test_rag_tool_structure(self):
         """Test that RAGTool has required methods."""
-        from core.agents.base.rag_tool import RAGTool
+        from core.base.rag_tool import RAGTool
         
         # Check that required methods exist
         assert hasattr(RAGTool, 'extract_metadata_filters'), "RAGTool should have extract_metadata_filters method"
         assert hasattr(RAGTool, 'perform_hybrid_search'), "RAGTool should have perform_hybrid_search method"
         assert hasattr(RAGTool, 'augment_context'), "RAGTool should have augment_context method"
-
-    def test_agent_coordinator_structure(self):
-        """Test that AgentCoordinator has required methods."""
-        from core.agents.base.agent_coordinator import AgentCoordinator
-        
-        # Check that required methods exist
-        assert hasattr(AgentCoordinator, 'register_agent'), "AgentCoordinator should have register_agent method"
-        assert hasattr(AgentCoordinator, 'route_request'), "AgentCoordinator should have route_request method"
-        assert hasattr(AgentCoordinator, 'coordinate_response'), "AgentCoordinator should have coordinate_response method"

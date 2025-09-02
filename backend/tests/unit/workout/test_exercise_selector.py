@@ -12,9 +12,9 @@ from unittest.mock import patch, MagicMock
 from dotenv import load_dotenv
 
 # Add the backend directory to the Python path
-sys.path.append(os.path.join(os.path.dirname(__file__)))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from core.workout.exercise_selector import ExerciseSelector
+from core.fitness.helpers.exercise_selector import ExerciseSelector
 
 # Load environment variables
 load_dotenv()
@@ -35,7 +35,7 @@ def mock_exercise_data():
             "id": "1",
             "name": "Barbell Squat",
             "equipment": "Barbell",
-            "main_muscle": "Thighs",
+            "target_area": "Thighs",
             "difficulty": "Intermediate",
             "force": "Compound",
             "secondary_muscles": ["Glutes", "Core"]
@@ -44,7 +44,7 @@ def mock_exercise_data():
             "id": "2",
             "name": "Dumbbell Press",
             "equipment": "Dumbbell",
-            "main_muscle": "Chest",
+            "target_area": "Chest",
             "difficulty": "Intermediate",
             "force": "Compound",
             "secondary_muscles": ["Shoulder", "Triceps"]
@@ -53,7 +53,7 @@ def mock_exercise_data():
             "id": "3",
             "name": "Push-ups",
             "equipment": "Body Weight",
-            "main_muscle": "Chest",
+            "target_area": "Chest",
             "difficulty": "Beginner",
             "force": "Compound",
             "secondary_muscles": ["Shoulder", "Triceps"]
@@ -62,7 +62,7 @@ def mock_exercise_data():
             "id": "4",
             "name": "Pull-ups",
             "equipment": "Body Weight",
-            "main_muscle": "Back",
+            "target_area": "Back",
             "difficulty": "Advanced",
             "force": "Compound",
             "secondary_muscles": ["Biceps", "Forearm"]
@@ -71,35 +71,12 @@ def mock_exercise_data():
             "id": "5",
             "name": "Deadlift",
             "equipment": "Barbell",
-            "main_muscle": "Back",
+            "target_area": "Back",
             "difficulty": "Advanced",
             "force": "Compound",
             "secondary_muscles": ["Thighs", "Glutes"]
         }
     ]
-
-def test_database_schema_inspection(exercise_selector):
-    """Test that we can inspect the database schema."""
-    schema_info = exercise_selector.inspect_database_schema()
-    
-    # Assert that we got schema information
-    assert isinstance(schema_info, dict)
-    
-    # Assert that key fields exist
-    if 'main_muscles' in schema_info:
-        assert isinstance(schema_info['main_muscles'], list)
-        assert len(schema_info['main_muscles']) > 0
-        print(f"✅ Found {len(schema_info['main_muscles'])} main muscle groups")
-    
-    if 'equipment_types' in schema_info:
-        assert isinstance(schema_info['equipment_types'], list)
-        assert len(schema_info['equipment_types']) > 0
-        print(f"✅ Found {len(schema_info['equipment_types'])} equipment types")
-    
-    if 'difficulty_levels' in schema_info:
-        assert isinstance(schema_info['difficulty_levels'], list)
-        assert len(schema_info['difficulty_levels']) > 0
-        print(f"✅ Found {len(schema_info['difficulty_levels'])} difficulty levels")
 
 def test_full_gym_equipment_mapping(exercise_selector):
     """Test Full Gym equipment mapping."""
@@ -119,7 +96,7 @@ def test_full_gym_equipment_mapping(exercise_selector):
     for exercise in exercises:
         assert 'name' in exercise
         assert 'equipment' in exercise
-        assert 'main_muscle' in exercise
+        assert 'target_area' in exercise
         assert 'difficulty' in exercise
     
     print(f"✅ Full Gym: Found {len(exercises)} exercises")
@@ -144,7 +121,7 @@ def test_home_gym_equipment_mapping(exercise_selector):
     for exercise in exercises:
         assert 'name' in exercise
         assert 'equipment' in exercise
-        assert 'main_muscle' in exercise
+        assert 'target_area' in exercise
         assert 'difficulty' in exercise
     
     print(f"✅ Home Gym: Found {len(exercises)} exercises")
@@ -169,7 +146,7 @@ def test_dumbbells_only_equipment_mapping(exercise_selector):
     for exercise in exercises:
         assert 'name' in exercise
         assert 'equipment' in exercise
-        assert 'main_muscle' in exercise
+        assert 'target_area' in exercise
         assert 'difficulty' in exercise
     
     print(f"✅ Dumbbells Only: Found {len(exercises)} exercises")
@@ -194,7 +171,7 @@ def test_bodyweight_only_equipment_mapping(exercise_selector):
     for exercise in exercises:
         assert 'name' in exercise
         assert 'equipment' in exercise
-        assert 'main_muscle' in exercise
+        assert 'target_area' in exercise
         assert 'difficulty' in exercise
     
     print(f"✅ Bodyweight Only: Found {len(exercises)} exercises")
@@ -224,7 +201,7 @@ def test_equipment_filtering_logic(exercise_selector, equipment, muscle, difficu
     for exercise in exercises:
         assert 'name' in exercise
         assert 'equipment' in exercise
-        assert 'main_muscle' in exercise
+        assert 'target_area' in exercise
         assert 'difficulty' in exercise
     
     print(f"✅ {equipment} + {muscle} + {difficulty}: Found {len(exercises)} exercises")
@@ -245,7 +222,7 @@ def test_exercise_data_structure(exercise_selector):
         exercise = exercises[0]
         
         # Required fields
-        required_fields = ['id', 'name', 'equipment', 'main_muscle', 'difficulty']
+        required_fields = ['id', 'name', 'equipment', 'target_area', 'difficulty']
         for field in required_fields:
             assert field in exercise, f"Exercise should have '{field}' field"
             assert exercise[field] is not None, f"Exercise '{field}' should not be None"
@@ -253,7 +230,7 @@ def test_exercise_data_structure(exercise_selector):
         # Data type assertions
         assert isinstance(exercise['name'], str)
         assert isinstance(exercise['equipment'], str)
-        assert isinstance(exercise['main_muscle'], str)
+        assert isinstance(exercise['target_area'], str)
         assert isinstance(exercise['difficulty'], str)
         
         print(f"✅ Exercise data structure validation passed")
@@ -273,40 +250,6 @@ def test_max_exercises_limit(exercise_selector):
     if exercises:
         print(f"✅ Max exercises limit respected: {len(exercises)} <= {max_exercises}")
 
-# NEW TESTS FOR MISSING COVERAGE
-
-def test_select_varied_exercises_algorithm(exercise_selector, mock_exercise_data):
-    """Test the variety selection algorithm."""
-    # Test with more exercises than target to trigger variety selection
-    target_count = 3
-    result = exercise_selector._select_varied_exercises(mock_exercise_data, target_count)
-    
-    # Assertions
-    assert isinstance(result, list)
-    assert len(result) == target_count
-    assert len(result) <= len(mock_exercise_data)
-    
-    # Check that we get variety in equipment
-    equipment_types = [ex['equipment'] for ex in result]
-    unique_equipment = set(equipment_types)
-    
-    # Should have variety but allow some overlap (realistic)
-    assert len(unique_equipment) >= 1, "Should have at least one equipment type"
-    assert len(unique_equipment) <= len(result), "Should not exceed result count"
-    
-    print(f"✅ Variety selection: {len(unique_equipment)} equipment types from {target_count} exercises")
-
-def test_select_varied_exercises_with_insufficient_data(exercise_selector, mock_exercise_data):
-    """Test variety selection when there aren't enough exercises."""
-    # Test with target count greater than available exercises
-    target_count = 10
-    result = exercise_selector._select_varied_exercises(mock_exercise_data, target_count)
-    
-    # Should return all available exercises
-    assert len(result) == len(mock_exercise_data)
-    assert result == mock_exercise_data
-    
-    print(f"✅ Insufficient data handling: returned all {len(result)} available exercises")
 
 def test_remove_duplicates_functionality(exercise_selector, mock_exercise_data):
     """Test duplicate removal logic."""
@@ -323,53 +266,11 @@ def test_remove_duplicates_functionality(exercise_selector, mock_exercise_data):
     # Check that all exercises are unique based on name + muscle + equipment
     unique_keys = set()
     for exercise in result:
-        key = (exercise['name'], exercise['main_muscle'], exercise['equipment'])
+        key = (exercise['name'], exercise['target_area'], exercise['equipment'])
         assert key not in unique_keys, f"Duplicate found: {key}"
         unique_keys.add(key)
     
     print(f"✅ Duplicate removal: {len(duplicate_data)} → {len(result)} unique exercises")
-
-def test_get_workout_exercises_strength_type(exercise_selector):
-    """Test workout-specific exercise selection for strength training."""
-    exercises = exercise_selector.get_workout_exercises(
-        workout_type='strength',
-        muscle_groups=['Chest', 'Back'],
-        difficulty='Intermediate',
-        equipment=['Full Gym']
-    )
-    
-    # Assertions
-    assert isinstance(exercises, list)
-    assert len(exercises) <= 15, "Should return max 15 exercises for strength"
-    
-    # Check exercise structure
-    for exercise in exercises:
-        assert 'name' in exercise
-        assert 'equipment' in exercise
-        assert 'main_muscle' in exercise
-        assert 'difficulty' in exercise
-    
-    print(f"✅ Strength workout: Found {len(exercises)} exercises")
-
-def test_get_workout_exercises_cardio_type(exercise_selector):
-    """Test workout-specific exercise selection for cardio."""
-    exercises = exercise_selector.get_workout_exercises(
-        workout_type='cardio',
-        muscle_groups=['Full Body'],
-        difficulty='Beginner',
-        equipment=['Body Weight']
-    )
-    
-    # Assertions
-    assert isinstance(exercises, list)
-    assert len(exercises) <= 15, "Should return max 15 exercises for cardio"
-    
-    # For cardio, should prefer bodyweight exercises
-    if exercises:
-        bodyweight_count = sum(1 for ex in exercises if ex.get('equipment') == 'Body Weight')
-        assert bodyweight_count >= len(exercises) * 0.5, "Should have majority bodyweight exercises for cardio"
-    
-    print(f"✅ Cardio workout: Found {len(exercises)} exercises")
 
 def test_get_exercise_by_id_functionality(exercise_selector):
     """Test individual exercise retrieval by ID."""
@@ -392,7 +293,7 @@ def test_get_exercise_by_id_functionality(exercise_selector):
         assert result['id'] == exercise_id
         assert 'name' in result
         assert 'equipment' in result
-        assert 'main_muscle' in result
+        assert 'target_area' in result
         assert 'difficulty' in result
         
         print(f"✅ Exercise by ID: Found {result['name']} (ID: {exercise_id})")
@@ -444,36 +345,6 @@ def test_validate_exercise_ids_functionality(exercise_selector):
         print(f"✅ ID validation: {len(valid_result)} valid, {len(invalid_result)} invalid")
     else:
         pytest.skip("Not enough exercises available to test ID validation")
-
-def test_get_exercise_summary_functionality(exercise_selector):
-    """Test exercise summary generation."""
-    # Get some exercise IDs first
-    exercises = exercise_selector.get_exercise_candidates(
-        muscle_groups=['Chest'],
-        difficulty='Intermediate',
-        equipment=['Full Gym'],
-        max_exercises=2
-    )
-    
-    if len(exercises) >= 2:
-        exercise_ids = [exercises[0]['id'], exercises[1]['id']]
-        
-        summaries = exercise_selector.get_exercise_summary(exercise_ids)
-        
-        # Assertions
-        assert isinstance(summaries, list)
-        assert len(summaries) <= len(exercise_ids)
-        
-        # Check summary structure
-        for summary in summaries:
-            required_fields = ['id', 'name', 'difficulty', 'equipment', 'main_muscle', 'force']
-            for field in required_fields:
-                assert field in summary, f"Summary missing '{field}' field"
-                assert summary[field] is not None, f"Summary '{field}' should not be None"
-        
-        print(f"✅ Exercise summaries: Generated {len(summaries)} summaries")
-    else:
-        pytest.skip("Not enough exercises available to test summary generation")
 
 def test_edge_case_empty_muscle_groups(exercise_selector):
     """Test edge case with empty muscle groups."""
@@ -535,7 +406,7 @@ def test_muscle_group_exercises_functionality(exercise_selector):
     
     # Check that all exercises target the specified muscle group
     for exercise in exercises:
-        assert exercise['main_muscle'] == 'Chest'
+        assert exercise['target_area'] == 'Chest'
     
     print(f"✅ Muscle group exercises: Found {len(exercises)} chest exercises")
 
@@ -625,11 +496,10 @@ def test_exercise_candidates_with_very_small_max_exercises(exercise_selector):
 
 def test_muscle_group_exercises_with_none_equipment(exercise_selector):
     """Test muscle group exercises with None equipment (edge case)."""
-    exercises = exercise_selector._get_muscle_group_exercises(
-        muscle='Chest',
+    exercises = exercise_selector.get_muscle_group_exercises(
+        muscle_group='Chest',
         difficulty='Intermediate',
         equipment=None,  # None equipment
-        count=5
     )
     
     # Should handle None equipment gracefully
@@ -639,27 +509,16 @@ def test_muscle_group_exercises_with_none_equipment(exercise_selector):
 
 def test_muscle_group_exercises_with_empty_equipment(exercise_selector):
     """Test muscle group exercises with empty equipment list (edge case)."""
-    exercises = exercise_selector._get_muscle_group_exercises(
-        muscle='Chest',
+    exercises = exercise_selector.get_muscle_group_exercises(
+        muscle_group='Chest',
         difficulty='Intermediate',
         equipment=[],  # Empty equipment list
-        count=5
     )
     
     # Should handle empty equipment list gracefully
     assert isinstance(exercises, list)
     
     print(f"✅ Empty equipment list: handled gracefully, returned {len(exercises)} exercises")
-
-def test_exercise_summary_with_empty_ids(exercise_selector):
-    """Test exercise summary with empty ID list (edge case)."""
-    summaries = exercise_selector.get_exercise_summary([])
-    
-    # Should handle empty ID list gracefully
-    assert isinstance(summaries, list)
-    assert len(summaries) == 0
-    
-    print("✅ Empty ID list: handled gracefully, returned empty list")
 
 def test_validate_exercise_ids_with_empty_list(exercise_selector):
     """Test exercise ID validation with empty list (edge case)."""

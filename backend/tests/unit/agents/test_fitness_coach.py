@@ -12,8 +12,11 @@ from unittest.mock import Mock, patch, MagicMock
 import os
 import json
 from typing import List, Dict, Any
+import sys
+# Add the backend directory to the Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from core.agents.specialists.fitness_coach import FitnessCoach
+from core.fitness.fitness_coach import FitnessCoach
 
 
 class TestFitnessCoach:
@@ -81,18 +84,18 @@ class TestFitnessCoach:
     ):
         """Create FitnessCoach with mocked dependencies."""
         with patch(
-            "core.agents.specialists.fitness_coach.BaseAgent.__init__",
+            "core.fitness.fitness_coach.BaseAgent.__init__",
             return_value=None,
         ) as mock_base_init, patch(
-            "core.agents.specialists.fitness_coach.RAGTool", return_value=mock_rag_tool
+            "core.fitness.fitness_coach.RAGTool", return_value=mock_rag_tool
         ) as mock_rag_class, patch(
-            "core.agents.specialists.fitness_coach.WorkoutPromptGenerator",
+            "core.fitness.fitness_coach.WorkoutPromptGenerator",
             return_value=mock_prompt_generator,
         ) as mock_prompt_class, patch(
-            "core.agents.specialists.fitness_coach.ExerciseSelector",
+            "core.fitness.fitness_coach.ExerciseSelector",
             return_value=mock_exercise_selector,
         ) as mock_selector_class, patch(
-            "core.agents.specialists.fitness_coach.ExerciseValidator",
+            "core.fitness.fitness_coach.ExerciseValidator",
             return_value=mock_exercise_validator,
         ) as mock_validator_class:
 
@@ -177,18 +180,18 @@ class TestFitnessCoach:
     ):
         """Test FitnessCoach initialization."""
         with patch(
-            "core.agents.specialists.fitness_coach.BaseAgent.__init__",
+            "core.fitness.fitness_coach.BaseAgent.__init__",
             return_value=None,
         ) as mock_base_init, patch(
-            "core.agents.specialists.fitness_coach.RAGTool", return_value=mock_rag_tool
+            "core.fitness.fitness_coach.RAGTool", return_value=mock_rag_tool
         ) as mock_rag_class, patch(
-            "core.agents.specialists.fitness_coach.WorkoutPromptGenerator",
+            "core.fitness.fitness_coach.WorkoutPromptGenerator",
             return_value=mock_prompt_generator,
         ) as mock_prompt_class, patch(
-            "core.agents.specialists.fitness_coach.ExerciseSelector",
+            "core.fitness.fitness_coach.ExerciseSelector",
             return_value=mock_exercise_selector,
         ) as mock_selector_class, patch(
-            "core.agents.specialists.fitness_coach.ExerciseValidator",
+            "core.fitness.fitness_coach.ExerciseValidator",
             return_value=mock_exercise_validator,
         ) as mock_validator_class:
 
@@ -307,66 +310,92 @@ class TestFitnessCoach:
                         "daily_workouts": [
                             {
                                 "day_of_week": "Monday",
+                                "warming_up_instructions": "5-10 minutes dynamic warm-up",
                                 "is_rest_day": False,
                                 "exercises": [
                                     {
-                                        "exercise_id": "1",
-                                        "name": "Barbell Squat",
+                                        "exercise_id": 1,
                                         "sets": 3,
                                         "reps": [8, 8, 8],
-                                        "description": "Barbell Squat exercise",
+                                        "description": "Barbell Squat exercise targeting legs and glutes.",
+                                        "weight_1rm": [75, 70, 65],
+                                        "weight": None
                                     }
                                 ],
+                                "daily_justification": "Monday's workout focuses on compound movements for overall strength.",
+                                "cooling_down_instructions": "5-10 minutes static stretching"
                             },
                             {
                                 "day_of_week": "Tuesday",
+                                "warming_up_instructions": "Light mobility work and gentle stretching",
                                 "is_rest_day": True,
                                 "exercises": [],
+                                "daily_justification": "Tuesday is a rest day for recovery and muscle repair.",
+                                "cooling_down_instructions": "Gentle stretching and relaxation"
                             },
                             {
                                 "day_of_week": "Wednesday",
+                                "warming_up_instructions": "5-10 minutes dynamic warm-up",
                                 "is_rest_day": False,
                                 "exercises": [
                                     {
-                                        "exercise_id": "2",
-                                        "name": "Bench Press",
+                                        "exercise_id": 2,
                                         "sets": 3,
                                         "reps": [10, 10, 10],
-                                        "description": "Bench Press exercise",
+                                        "description": "Bench Press exercise for chest and triceps.",
+                                        "weight_1rm": [70, 68, 65],
+                                        "weight": None
                                     }
                                 ],
+                                "daily_justification": "Wednesday targets upper body pushing muscles with bench press.",
+                                "cooling_down_instructions": "5-10 minutes static stretching"
                             },
                             {
                                 "day_of_week": "Thursday",
+                                "warming_up_instructions": "Light mobility work and gentle stretching",
                                 "is_rest_day": True,
                                 "exercises": [],
+                                "daily_justification": "Thursday is a rest day for active recovery.",
+                                "cooling_down_instructions": "Gentle stretching and relaxation"
                             },
                             {
                                 "day_of_week": "Friday",
+                                "warming_up_instructions": "5-10 minutes dynamic warm-up",
                                 "is_rest_day": False,
                                 "exercises": [
                                     {
-                                        "exercise_id": "3",
-                                        "name": "Deadlift",
+                                        "exercise_id": 3,
                                         "sets": 3,
                                         "reps": [12, 12, 12],
-                                        "description": "Deadlift exercise",
+                                        "description": "Deadlift exercise for posterior chain strength.",
+                                        "weight_1rm": [65, 60, 55],
+                                        "weight": None
                                     }
                                 ],
+                                "daily_justification": "Friday focuses on the posterior chain with deadlifts for strength development.",
+                                "cooling_down_instructions": "5-10 minutes static stretching"
                             },
                             {
                                 "day_of_week": "Saturday",
+                                "warming_up_instructions": "Light mobility work and gentle stretching",
                                 "is_rest_day": True,
                                 "exercises": [],
+                                "daily_justification": "Saturday is a rest day, allowing muscles to recover before the next week.",
+                                "cooling_down_instructions": "Gentle stretching and relaxation"
                             },
                             {
                                 "day_of_week": "Sunday",
+                                "warming_up_instructions": "Light mobility work and gentle stretching",
                                 "is_rest_day": True,
                                 "exercises": [],
-                            },
+                                "daily_justification": "Sunday is a complete rest day for full recovery.",
+                                "cooling_down_instructions": "Gentle stretching and relaxation"
+                            }
                         ],
+                        "weekly_justification": "This week's plan balances compound movements with sufficient rest for progressive overload."
                     }
                 ],
+                "program_justification": "This program is designed for intermediate strength training, focusing on progressive overload and balanced muscle development over several weeks."
             }
         )
         mock_choice.message = mock_message
@@ -433,87 +462,6 @@ class TestFitnessCoach:
                 workout_plan = mock_fitness_coach.generate_workout_plan(
                     sample_user_profile, mock_openai_client
                 )
-
-    def test_recommend_exercises_success(self, mock_fitness_coach):
-        """Test successful exercise recommendation."""
-        muscle_group = "Chest"
-        difficulty = "Intermediate"
-        equipment = ["Barbell", "Dumbbell"]
-
-        # Mock exercise selector to return candidates
-        mock_fitness_coach.exercise_selector.get_exercise_candidates.return_value = [
-            {"id": "1", "name": "Bench Press", "main_muscle": "Chest"},
-            {"id": "2", "name": "Dumbbell Press", "main_muscle": "Chest"},
-        ]
-
-        recommendations = mock_fitness_coach.recommend_exercises(
-            muscle_group, difficulty, equipment
-        )
-
-        # Should call exercise selector
-        mock_fitness_coach.exercise_selector.get_exercise_candidates.assert_called_once()
-
-        # Should return recommendations (may include default exercises)
-        assert len(recommendations) >= 2
-        exercise_names = [ex.get("name", "") for ex in recommendations]
-        assert "Bench Press" in exercise_names
-        assert "Dumbbell Press" in exercise_names
-
-    def test_recommend_exercises_no_candidates(self, mock_fitness_coach):
-        """Test exercise recommendation with no candidates."""
-        muscle_group = "Unknown Muscle"
-        difficulty = "Advanced"
-        equipment = ["Special Equipment"]
-
-        # Mock exercise selector to return empty list
-        mock_fitness_coach.exercise_selector.get_exercise_candidates.return_value = []
-
-        recommendations = mock_fitness_coach.recommend_exercises(
-            muscle_group, difficulty, equipment
-        )
-
-        # Should return default exercises when no candidates found
-        assert len(recommendations) > 0
-        exercise_names = [ex.get("name", "") for ex in recommendations]
-        # Check for either general exercises or specific chest exercises
-        assert any(
-            name in exercise_names
-            for name in [
-                "General exercises",
-                "Push-ups",
-                "Dumbbell Press",
-                "Bench Press",
-            ]
-        )
-
-    def test_recommend_exercises_error_handling(self, mock_fitness_coach):
-        """Test exercise recommendation error handling."""
-        muscle_group = "Chest"
-        difficulty = "Intermediate"
-        equipment = ["Barbell"]
-
-        # Make exercise selector raise an exception
-        mock_fitness_coach.exercise_selector.get_exercise_candidates.side_effect = (
-            Exception("Database error")
-        )
-
-        recommendations = mock_fitness_coach.recommend_exercises(
-            muscle_group, difficulty, equipment
-        )
-
-        # Should return default exercises on error
-        assert len(recommendations) > 0
-        exercise_names = [ex.get("name", "") for ex in recommendations]
-        # Check for either general exercises or specific chest exercises
-        assert any(
-            name in exercise_names
-            for name in [
-                "General exercises",
-                "Push-ups",
-                "Dumbbell Press",
-                "Bench Press",
-            ]
-        )
 
     def test_validate_workout_plan(self, mock_fitness_coach):
         """Test workout plan validation using exercise validator directly."""
@@ -666,14 +614,14 @@ class TestFitnessCoachEdgeCases:
     def mock_fitness_coach_edge_cases(self):
         """Create FitnessCoach for edge case testing."""
         with patch(
-            "core.agents.specialists.fitness_coach.BaseAgent.__init__",
+            "core.fitness.fitness_coach.BaseAgent.__init__",
             return_value=None,
-        ), patch("core.agents.specialists.fitness_coach.RAGTool"), patch(
-            "core.agents.specialists.fitness_coach.WorkoutPromptGenerator"
+        ), patch("core.fitness.fitness_coach.RAGTool"), patch(
+            "core.fitness.fitness_coach.WorkoutPromptGenerator"
         ), patch(
-            "core.agents.specialists.fitness_coach.ExerciseSelector"
+            "core.fitness.fitness_coach.ExerciseSelector"
         ), patch(
-            "core.agents.specialists.fitness_coach.ExerciseValidator"
+            "core.fitness.fitness_coach.ExerciseValidator"
         ):
 
             coach = FitnessCoach()
@@ -775,63 +723,92 @@ class TestFitnessCoachEdgeCases:
                         "daily_workouts": [
                             {
                                 "day_of_week": "Monday",
+                                "warming_up_instructions": "5-10 minutes dynamic warm-up",
                                 "is_rest_day": False,
                                 "exercises": [
                                     {
-                                        "exercise_id": "1",
+                                        "exercise_id": 2397,
                                         "sets": 3,
                                         "reps": [8, 8, 8],
-                                        "description": "Barbell Squat exercise",
+                                        "description": "Barbell Squat exercise targeting legs and glutes.",
+                                        "weight_1rm": [75, 70, 65],
+                                        "weight": None
                                     }
                                 ],
+                                "daily_justification": "Monday's workout focuses on compound movements for overall strength.",
+                                "cooling_down_instructions": "5-10 minutes static stretching"
                             },
                             {
                                 "day_of_week": "Tuesday",
+                                "warming_up_instructions": "Light mobility work and gentle stretching",
                                 "is_rest_day": True,
                                 "exercises": [],
+                                "daily_justification": "Tuesday is a rest day for recovery and muscle repair.",
+                                "cooling_down_instructions": "Gentle stretching and relaxation"
                             },
                             {
                                 "day_of_week": "Wednesday",
+                                "warming_up_instructions": "5-10 minutes dynamic warm-up",
                                 "is_rest_day": False,
                                 "exercises": [
                                     {
-                                        "exercise_id": "2",
+                                        "exercise_id": 2399,
                                         "sets": 3,
                                         "reps": [10, 10, 10],
-                                        "description": "Bench Press exercise",
+                                        "description": "Bench Press exercise for chest and triceps.",
+                                        "weight_1rm": [70, 68, 65],
+                                        "weight": None
                                     }
                                 ],
+                                "daily_justification": "Wednesday targets upper body pushing muscles with bench press.",
+                                "cooling_down_instructions": "5-10 minutes static stretching"
                             },
                             {
                                 "day_of_week": "Thursday",
+                                "warming_up_instructions": "Light mobility work and gentle stretching",
                                 "is_rest_day": True,
                                 "exercises": [],
+                                "daily_justification": "Thursday is a rest day for active recovery.",
+                                "cooling_down_instructions": "Gentle stretching and relaxation"
                             },
                             {
                                 "day_of_week": "Friday",
+                                "warming_up_instructions": "5-10 minutes dynamic warm-up",
                                 "is_rest_day": False,
                                 "exercises": [
                                     {
-                                        "exercise_id": "3",
+                                        "exercise_id": 3017,
                                         "sets": 3,
                                         "reps": [12, 12, 12],
-                                        "description": "Deadlift exercise",
+                                        "description": "Deadlift exercise for posterior chain strength.",
+                                        "weight_1rm": [65, 60, 55],
+                                        "weight": None
                                     }
                                 ],
+                                "daily_justification": "Friday focuses on the posterior chain with deadlifts for strength development.",
+                                "cooling_down_instructions": "5-10 minutes static stretching"
                             },
                             {
                                 "day_of_week": "Saturday",
+                                "warming_up_instructions": "Light mobility work and gentle stretching",
                                 "is_rest_day": True,
                                 "exercises": [],
+                                "daily_justification": "Saturday is a rest day, allowing muscles to recover before the next week.",
+                                "cooling_down_instructions": "Gentle stretching and relaxation"
                             },
                             {
                                 "day_of_week": "Sunday",
+                                "warming_up_instructions": "Light mobility work and gentle stretching",
                                 "is_rest_day": True,
                                 "exercises": [],
-                            },
+                                "daily_justification": "Sunday is a complete rest day for full recovery.",
+                                "cooling_down_instructions": "Gentle stretching and relaxation"
+                            }
                         ],
+                        "weekly_justification": "This week's plan balances compound movements with sufficient rest for progressive overload."
                     }
                 ],
+                "program_justification": "This program is designed for intermediate strength training, focusing on progressive overload and balanced muscle development over several weeks."
             }
         )
         mock_choice.message = mock_message
@@ -847,34 +824,6 @@ class TestFitnessCoachEdgeCases:
             # Should handle missing environment variables gracefully by using defaults
             assert workout_plan is not None
             assert workout_plan.title == "Test Workout Plan"
-
-    def test_recommend_exercises_invalid_parameters(
-        self, mock_fitness_coach_edge_cases
-    ):
-        """Test exercise recommendation with invalid parameters."""
-        # Mock the exercise selector to return empty list for None parameters
-        mock_fitness_coach_edge_cases.exercise_selector.get_exercise_candidates.return_value = (
-            []
-        )
-
-        # Test with None parameters
-        recommendations = mock_fitness_coach_edge_cases.recommend_exercises(
-            None, None, None
-        )
-
-        # Should handle None parameters gracefully by returning default exercises
-        assert len(recommendations) > 0
-        exercise_names = [ex.get("name", "") for ex in recommendations]
-        # Check for either general exercises or specific exercises
-        assert any(
-            name in exercise_names
-            for name in [
-                "General exercises",
-                "Push-ups",
-                "Dumbbell Press",
-                "Bench Press",
-            ]
-        )
 
     def test_validate_workout_plan_empty_plan(self, mock_fitness_coach_edge_cases):
         """Test workout plan validation with empty plan."""
