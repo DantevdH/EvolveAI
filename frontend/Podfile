@@ -14,7 +14,7 @@ target 'EvolveAI' do
   # Apple Sign-In (built into iOS, no pod needed)
   
   # Supabase Swift
-  pod 'Supabase'
+  # pod 'Supabase'
   
   target 'EvolveAITests' do
     inherit! :search_paths

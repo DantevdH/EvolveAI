@@ -78,6 +78,8 @@ protocol NetworkServiceProtocol {
     func fetchWorkoutPlans(userProfileId: Int) async throws -> [WorkoutPlan]
     func fetchWorkoutPlansByUserIdJoin(userId: UUID) async throws -> [WorkoutPlan]
     func fetchCompleteWorkoutPlan(for workoutPlan: WorkoutPlan) async throws -> CompleteWorkoutPlan
+    func updateWorkoutExerciseDetails(workoutExerciseId: Int, sets: Int, reps: [Int], weight: [Double?], weight1rm: [Int]) async throws
+    func batchUpdateWorkoutExercises(_ updates: [(id: Int, sets: Int, reps: [Int], weight: [Double?], weight1rm: [Int])]) async throws
 }
 
 // MARK: - Unified Network Service
@@ -94,6 +96,19 @@ class NetworkService: NetworkServiceProtocol, ObservableObject {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter
+    }()
+    
+    // Custom URLSession with extended timeouts for workout plan generation
+    // Workout plan generation can take 2-5 minutes due to:
+    // - AI processing complex multi-week programs
+    // - Detailed justifications for each level (program, weekly, daily)
+    // - Exercise selection and validation
+    // - RAG-enhanced knowledge retrieval
+    private lazy var workoutPlanSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 600.0  // 3 minutes for request timeout
+        config.timeoutIntervalForResource = 900.0 // 5 minutes for total resource timeout
+        return URLSession(configuration: config)
     }()
     
     init() {
@@ -209,7 +224,8 @@ class NetworkService: NetworkServiceProtocol, ObservableObject {
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         print("--- [DEBUG] 📤 Request body prepared with \(requestBody.count) parameters ---")
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        print("--- [DEBUG] ⏱️ Starting workout plan generation (this may take 2-5 minutes)... ---")
+        let (data, response) = try await workoutPlanSession.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse else {
             print("--- [DEBUG] ❌ Invalid HTTP response ---")
@@ -217,6 +233,7 @@ class NetworkService: NetworkServiceProtocol, ObservableObject {
         }
         
         print("--- [DEBUG] 📥 Received response with status: \(httpResponse.statusCode) ---")
+        print("--- [DEBUG] ✅ Workout plan generation completed successfully! ---")
         
         guard httpResponse.statusCode == 200 else {
             let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
@@ -275,17 +292,22 @@ class NetworkService: NetworkServiceProtocol, ObservableObject {
                 if !isRestDay, let exercisesData = dailyWorkoutData["exercises"] as? [[String: Any]] {
                     print("--- [DEBUG] 💪 Parsing \(exercisesData.count) exercises for \(dayOfWeek) ---")
                     for exerciseData in exercisesData {
-                        guard let name = exerciseData["name"] as? String,
+                        guard let exerciseId = exerciseData["exercise_id"] as? Int,
                               let sets = exerciseData["sets"] as? Int,
-                              let reps = exerciseData["reps"] as? String else {
+                              let repsArray = exerciseData["reps"] as? [Int] else {
                             print("--- [DEBUG] ⚠️ Failed to parse exercise data ---")
+                            print("--- [DEBUG] exerciseData: \(exerciseData) ---")
                             continue
                         }
                         
+                        // Parse weight_1rm field (array of integers, default to [80] if not provided)
+                        let weight1rm = exerciseData["weight_1rm"] as? [Int] ?? Array(repeating: 80, count: sets)
+                        
                         exercises.append(GeneratedWorkoutExercise(
-                            name: name,
+                            name: String(exerciseId),  // Convert exercise_id to string for storage
                             sets: sets,
-                            reps: reps
+                            reps: repsArray,  // Keep as array of integers
+                            weight1rm: weight1rm
                         ))
                     }
                 }
@@ -559,51 +581,22 @@ class NetworkService: NetworkServiceProtocol, ObservableObject {
     private func saveWorkoutExercise(_ exercise: GeneratedWorkoutExercise, dailyWorkoutId: Int) async throws {
         print("--- [DEBUG] 🏋️ Saving exercise: \(exercise.name) (\(exercise.sets) sets, \(exercise.reps) reps) ---")
         
-        // First, find or create the exercise
-        let exerciseResponse: [Exercise] = try await supabase.database
-            .from("exercises")
-            .select()
-            .eq("name", value: exercise.name)
-            .execute()
-            .value
-        
-        let exerciseId: Int
-        if let existingExercise = exerciseResponse.first {
-            exerciseId = existingExercise.id
-            print("--- [DEBUG] 🔍 Found existing exercise with ID: \(exerciseId) ---")
-        } else {
-            // Create new exercise
-            print("--- [DEBUG] 🆕 Creating new exercise: \(exercise.name) ---")
-            
-            let newExercise = ExerciseInsert(
-                name: exercise.name,
-                description: "Generated exercise",
-                video_url: nil
-            )
-            
-            let createdExerciseResponse: [Exercise] = try await supabase.database
-                .from("exercises")
-                .insert(newExercise)
-                .select()
-                .execute()
-                .value
-            
-            guard let createdExercise = createdExerciseResponse.first else {
-                print("--- [DEBUG] ❌ Failed to create exercise ---")
-                throw NetworkError.workoutPlanGenerationFailed("Failed to create exercise")
-            }
-            
-            exerciseId = createdExercise.id
-            print("--- [DEBUG] ✅ Created new exercise with ID: \(exerciseId) ---")
+        // Extract exercise_id from the name field (which contains the exercise_id from backend)
+        guard let exerciseId = Int(exercise.name) else {
+            print("--- [DEBUG] ❌ Invalid exercise_id: \(exercise.name) ---")
+            throw NetworkError.workoutPlanGenerationFailed("Invalid exercise_id format")
         }
         
-        // Create workout exercise
+        print("--- [DEBUG] 🔍 Using exercise_id: \(exerciseId) ---")
+        
+        // Create workout exercise directly with the provided exercise_id
         let newWorkoutExercise = WorkoutExerciseInsert(
             daily_workout_id: dailyWorkoutId,
             exercise_id: exerciseId,
             sets: exercise.sets,
             reps: exercise.reps,
-            weight: nil
+            weight: Array(repeating: nil, count: exercise.sets),  // Array of NULLs matching sets length
+            weight_1rm: exercise.weight1rm  // Now an array of integers
         )
         
         try await supabase.database
@@ -633,6 +626,53 @@ class NetworkService: NetworkServiceProtocol, ObservableObject {
         let hasToken = UserDefaults.standard.string(forKey: "supabase_access_token") != nil
         print("--- [DEBUG] 🔍 Stored auth token check: \(hasToken ? "Found" : "Not found") ---")
         return hasToken
+    }
+    
+    // MARK: - Workout Progress Updates
+    
+    /// Update workout exercise details (reps and weights) in the database
+    func updateWorkoutExerciseDetails(
+        workoutExerciseId: Int,
+        sets: Int,
+        reps: [Int],
+        weight: [Double?],
+        weight1rm: [Int] = [80]
+    ) async throws {
+        print("--- [DEBUG] 🔄 Updating workout exercise details for ID: \(workoutExerciseId) ---")
+        
+        struct WorkoutExerciseUpdate: Encodable {
+            let sets: Int
+            let reps: [Int]
+            let weight: [Double?]
+            let weight_1rm: [Int]
+        }
+        
+        let updateData = WorkoutExerciseUpdate(sets: sets, reps: reps, weight: weight, weight_1rm: weight1rm)
+        
+        try await supabase.database
+            .from("workout_exercises")
+            .update(updateData)
+            .eq("id", value: workoutExerciseId)
+            .execute()
+        
+        print("--- [DEBUG] ✅ Successfully updated workout exercise details ---")
+    }
+    
+    /// Batch update multiple workout exercises
+    func batchUpdateWorkoutExercises(_ updates: [(id: Int, sets: Int, reps: [Int], weight: [Double?], weight1rm: [Int])]) async throws {
+        print("--- [DEBUG] 🔄 Batch updating \(updates.count) workout exercises ---")
+        
+        for update in updates {
+            try await updateWorkoutExerciseDetails(
+                workoutExerciseId: update.id,
+                sets: update.sets,
+                reps: update.reps,
+                weight: update.weight,
+                weight1rm: update.weight1rm
+            )
+        }
+        
+        print("--- [DEBUG] ✅ Successfully batch updated all workout exercises ---")
     }
 }
 

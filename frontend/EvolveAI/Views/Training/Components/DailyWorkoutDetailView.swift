@@ -51,32 +51,46 @@ struct DailyWorkoutDetailView: View {
                                     workoutExercise: workoutExercise,
                                     isCompleted: viewModel.isExerciseCompleted(exercise.id),
                                     canModify: canModifyWorkout,
-                                    onToggleCompletion: {
-                                        viewModel.toggleExerciseCompletion(
-                                            exerciseId: exercise.id,
-                                            userManager: userManager,
-                                            workoutManager: workoutManager
-                                        )
-                                    },
                                     onShowDetail: {
                                         viewModel.showExerciseDetail(exercise)
+                                    },
+                                    onUpdateSet: { setIndex, reps, weight in
+                                        viewModel.updateSetDetails(
+                                            exerciseId: exercise.id,
+                                            setIndex: setIndex,
+                                            reps: reps,
+                                            weight: weight
+                                        )
+                                    },
+                                    onToggleCompletion: {
+                                        viewModel.toggleExerciseCompletion(exercise.id)
                                     }
                                 )
                             }
                             
-                            // Complete Workout Button - moved below exercise cards
-                            if canModifyWorkout {
-                                Button(action: {
-                                    viewModel.markWorkoutComplete(workout, userManager: userManager, workoutManager: workoutManager)
-                                }) {
-                                    HStack(spacing: 8) {
-                                        
-                                        Text(viewModel.isWorkoutCompleted(workout.id) ? "Mark Incomplete" : "Complete Workout")
-                                            .font(.subheadline)
-                                            .fontWeight(.medium)
+                            // Workout completion status (automatic, no button)
+                            if !viewModel.isRestDay(workout) {
+                                HStack {
+                                    if viewModel.isWorkoutCompleted(workout.id) {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundColor(.green)
+                                            Text("Workout Complete")
+                                                .font(.subheadline)
+                                                .fontWeight(.medium)
+                                                .foregroundColor(.green)
+                                        }
+                                    } else {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "circle")
+                                                .foregroundColor(.evolveMuted)
+                                            Text("Workout Incomplete")
+                                                .font(.subheadline)
+                                                .foregroundColor(.evolveMuted)
+                                        }
                                     }
+                                    Spacer()
                                 }
-                                .buttonStyle(PrimaryButtonStyle())
                                 .padding(.top, 8)
                             }
                         }

@@ -11,7 +11,12 @@ class TrainingViewModel: ObservableObject {
     @Published var selectedExercise: Exercise?
     
     private var workoutPlan: WorkoutPlan?
-    private var completeWorkoutPlan: CompleteWorkoutPlan?
+    private var completeWorkoutPlan: CompleteWorkoutPlan? {
+        didSet {
+            // Notify observers when the complete workout plan changes
+            objectWillChange.send()
+        }
+    }
     
     init(workoutPlan: WorkoutPlan?) {
         self.workoutPlan = workoutPlan
@@ -111,24 +116,8 @@ class TrainingViewModel: ObservableObject {
         userManager: UserManager, 
         workoutManager: WorkoutManager
     ) {
-        // Update local state immediately for UI responsiveness
-        if completedExercises.contains(exerciseId) {
-            completedExercises.remove(exerciseId)
-        } else {
-            completedExercises.insert(exerciseId)
-        }
-        
-        let isCompleted = completedExercises.contains(exerciseId)
-        
-        // Send to WorkoutManager for batch processing
-        workoutManager.updateExerciseCompletion(
-            exerciseId: exerciseId,
-            isCompleted: isCompleted,
-            weekNumber: currentWeekNumber
-        )
-        
-        // Update workout completion status
-        updateWorkoutCompletionStatus()
+        // This method is no longer used - exercises are completed automatically when all weights are filled
+        print("[DEBUG] Manual exercise completion is disabled - exercises complete automatically when all weights are filled")
     }
     
     func showExerciseDetail(_ exercise: Exercise) {
@@ -175,7 +164,21 @@ class TrainingViewModel: ObservableObject {
     }
     
     func isExerciseCompleted(_ exerciseId: Int) -> Bool {
-        completedExercises.contains(exerciseId)
+        // Exercise completion is now manually controlled by user tapping the completion indicator
+        return completedExercises.contains(exerciseId)
+    }
+    
+    func toggleExerciseCompletion(_ exerciseId: Int) {
+        if completedExercises.contains(exerciseId) {
+            completedExercises.remove(exerciseId)
+            print("DEBUG: Exercise \(exerciseId) marked as incomplete")
+        } else {
+            completedExercises.insert(exerciseId)
+            print("DEBUG: Exercise \(exerciseId) marked as complete")
+        }
+        
+        // Update workout completion status
+        updateWorkoutCompletionStatus()
     }
     
     func isWorkoutCompleted(_ workoutId: Int) -> Bool {
@@ -187,9 +190,9 @@ class TrainingViewModel: ObservableObject {
             return true // Rest days are automatically "completed"
         }
         
-        // Check if all exercises in this workout are completed
+        // Check if all exercises in this workout are completed (all weights filled)
         let allExerciseIds = Set(workoutExercises.map { $0.exerciseId })
-        return allExerciseIds.isSubset(of: completedExercises)
+        return allExerciseIds.allSatisfy { isExerciseCompleted($0) }
     }
     
     private func updateWorkoutCompletionStatus() {
@@ -262,5 +265,135 @@ class TrainingViewModel: ObservableObject {
         // TODO: Implement loading completion status from Supabase when you add progress tracking
         completedExercises = []
         completedWorkouts = []
+    }
+    
+    // MARK: - Set Management
+    
+    /// Update the details for a specific set (reps and weight) or manage sets
+    func updateSetDetails(exerciseId: Int, setIndex: Int, reps: Int, weight: Double?) {
+        print("[DEBUG] Updating set details for exercise \(exerciseId): setIndex=\(setIndex), reps=\(reps), weight=\(weight?.description ?? "nil")")
+        
+        // Handle special cases for set management
+        if setIndex == -1 {
+            // Add new set
+            addSetToExercise(exerciseId: exerciseId)
+            return
+        } else if setIndex == -2 {
+            // Remove last set
+            removeSetFromExercise(exerciseId: exerciseId)
+            return
+        }
+        
+        // Update the local completeWorkoutPlan data
+        guard let completePlan = completeWorkoutPlan else {
+            print("[DEBUG] No complete workout plan available")
+            return
+        }
+        
+        // Find the workout exercise for this exercise
+        if let workoutExerciseIndex = completePlan.workoutExercises.firstIndex(where: { $0.exerciseId == exerciseId }) {
+            var updatedWorkoutExercise = completePlan.workoutExercises[workoutExerciseIndex]
+            
+            // Update reps for this set
+            if setIndex < updatedWorkoutExercise.reps.count {
+                updatedWorkoutExercise.reps[setIndex] = reps
+            }
+            
+            // Update weight for this set
+            if setIndex < updatedWorkoutExercise.weight.count {
+                updatedWorkoutExercise.weight[setIndex] = weight
+            }
+            
+            // Update the local data
+            completeWorkoutPlan?.workoutExercises[workoutExerciseIndex] = updatedWorkoutExercise
+            
+            print("[DEBUG] Successfully updated set details locally")
+            
+            // Sync to backend database
+            Task {
+                do {
+                    try await NetworkService().updateWorkoutExerciseDetails(
+                        workoutExerciseId: updatedWorkoutExercise.id,
+                        sets: updatedWorkoutExercise.sets,
+                        reps: updatedWorkoutExercise.reps,
+                        weight: updatedWorkoutExercise.weight
+                    )
+                    print("[DEBUG] Successfully synced set details to backend")
+                } catch {
+                    print("[DEBUG] Failed to sync set details to backend: \(error)")
+                    // TODO: Handle error - could show user notification or retry
+                }
+            }
+        } else {
+            print("[DEBUG] Workout exercise not found for exercise ID: \(exerciseId)")
+        }
+    }
+    
+    /// Add a new set to an exercise
+    private func addSetToExercise(exerciseId: Int) {
+        print("[DEBUG] Adding new set to exercise \(exerciseId)")
+        
+        guard let completePlan = completeWorkoutPlan else { return }
+        
+        if let workoutExerciseIndex = completePlan.workoutExercises.firstIndex(where: { $0.exerciseId == exerciseId }) {
+            var updatedWorkoutExercise = completePlan.workoutExercises[workoutExerciseIndex]
+            
+            // Add new set with values similar to previous set
+            let previousReps = updatedWorkoutExercise.reps.last ?? 10 // Use last set's reps or default to 10
+            let previousWeight = updatedWorkoutExercise.weight.last ?? nil // Use last set's weight or nil
+            
+            updatedWorkoutExercise.reps.append(previousReps)
+            updatedWorkoutExercise.weight.append(previousWeight)
+            updatedWorkoutExercise.sets += 1 // Increment sets count
+            
+            print("[DEBUG] Added new set with reps: \(previousReps), weight: \(previousWeight?.description ?? "nil")")
+            
+            // Update the local data
+            completeWorkoutPlan?.workoutExercises[workoutExerciseIndex] = updatedWorkoutExercise
+            
+            // Sync to backend
+            syncExerciseToBackend(updatedWorkoutExercise)
+        }
+    }
+    
+    /// Remove the last set from an exercise
+    private func removeSetFromExercise(exerciseId: Int) {
+        print("[DEBUG] Removing last set from exercise \(exerciseId)")
+        
+        guard let completePlan = completeWorkoutPlan else { return }
+        
+        if let workoutExerciseIndex = completePlan.workoutExercises.firstIndex(where: { $0.exerciseId == exerciseId }) {
+            var updatedWorkoutExercise = completePlan.workoutExercises[workoutExerciseIndex]
+            
+            // Only remove if we have more than 1 set
+            if updatedWorkoutExercise.sets > 1 {
+                updatedWorkoutExercise.reps.removeLast()
+                updatedWorkoutExercise.weight.removeLast()
+                updatedWorkoutExercise.sets -= 1 // Decrement sets count
+                
+                // Update the local data
+                completeWorkoutPlan?.workoutExercises[workoutExerciseIndex] = updatedWorkoutExercise
+                
+                // Sync to backend
+                syncExerciseToBackend(updatedWorkoutExercise)
+            }
+        }
+    }
+    
+    /// Sync exercise changes to backend
+    private func syncExerciseToBackend(_ workoutExercise: WorkoutExercise) {
+        Task {
+            do {
+                try await NetworkService().updateWorkoutExerciseDetails(
+                    workoutExerciseId: workoutExercise.id,
+                    sets: workoutExercise.sets,
+                    reps: workoutExercise.reps,
+                    weight: workoutExercise.weight
+                )
+                print("[DEBUG] Successfully synced exercise changes to backend")
+            } catch {
+                print("[DEBUG] Failed to sync exercise changes to backend: \(error)")
+            }
+        }
     }
 }

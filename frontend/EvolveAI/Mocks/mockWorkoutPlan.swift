@@ -149,8 +149,9 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 1,
         exerciseId: 1,
         sets: 4,
-        reps: "8-10",
-        weight: nil,
+        reps: [8, 10, 8, 10],
+        weight: Array(repeating: nil, count: 4),
+        weight1rm: [85, 75, 85, 75],
         createdAt: today,
         updatedAt: today
     ),
@@ -159,8 +160,9 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 1,
         exerciseId: 2,
         sets: 3,
-        reps: "10-12",
-        weight: nil,
+        reps: [10, 12, 10],
+        weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     ),
@@ -169,8 +171,9 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 1,
         exerciseId: 3,
         sets: 3,
-        reps: "10-12",
-        weight: nil,
+        reps: [10, 12, 10],
+        weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     ),
@@ -180,8 +183,9 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 3,
         exerciseId: 4,
         sets: 3,
-        reps: "5-8",
-        weight: nil,
+        reps: [5, 8, 5],
+        weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     ),
@@ -190,8 +194,9 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 3,
         exerciseId: 5,
         sets: 4,
-        reps: "8-10",
-        weight: nil,
+        reps: [8, 10, 8, 10],
+        weight: Array(repeating: nil, count: 4),
+        weight1rm: [85, 75, 85, 75],
         createdAt: today,
         updatedAt: today
     ),
@@ -200,8 +205,9 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 3,
         exerciseId: 6,
         sets: 3,
-        reps: "45 seconds",
-        weight: nil,
+        reps: [45, 45, 45], // 45 seconds for each set
+        weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     ),
@@ -211,8 +217,9 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 5,
         exerciseId: 7,
         sets: 4,
-        reps: "As many as possible",
-        weight: nil,
+        reps: [0, 0, 0, 0], // "As many as possible" represented as 0
+        weight: Array(repeating: nil, count: 4),
+        weight1rm: [85, 75, 85, 95],
         createdAt: today,
         updatedAt: today
     ),
@@ -221,8 +228,9 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 5,
         exerciseId: 8,
         sets: 3,
-        reps: "12-15",
-        weight: nil,
+        reps: [12, 15, 12],
+        weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     ),
@@ -231,8 +239,9 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 5,
         exerciseId: 9,
         sets: 3,
-        reps: "12-15",
-        weight: nil,
+        reps: [12, 15, 12],
+        weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     ),
@@ -242,8 +251,9 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 8,
         exerciseId: 1,
         sets: 4,
-        reps: "10-12",
-        weight: nil,
+        reps: [10, 12, 10, 12],
+        weight: Array(repeating: nil, count: 4),
+        weight1rm: [85, 75, 85, 75],
         createdAt: today,
         updatedAt: today
     ),
@@ -252,8 +262,9 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 8,
         exerciseId: 10,
         sets: 3,
-        reps: "10-12",
-        weight: nil,
+        reps: [10, 12, 10],
+        weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     ),
@@ -262,8 +273,9 @@ let mockWorkoutExercises = [
         dailyWorkoutId: 8,
         exerciseId: 11,
         sets: 3,
-        reps: "12-15",
-        weight: nil,
+        reps: [12, 15, 12],
+        weight: Array(repeating: nil, count: 3),
+        weight1rm: [85, 75, 85],
         createdAt: today,
         updatedAt: today
     )
@@ -271,17 +283,149 @@ let mockWorkoutExercises = [
 
 // MARK: - Mock Exercises (referenced by workout exercises)
 let mockExercises = [
-    Exercise(id: 1, name: "Barbell Squats", description: "A compound exercise targeting quadriceps, glutes, and core stability.", video_url: nil),
-    Exercise(id: 2, name: "Dumbbell Bench Press", description: "Upper body exercise targeting chest, shoulders, and triceps.", video_url: nil),
-    Exercise(id: 3, name: "Lat Pulldowns", description: "Back exercise targeting latissimus dorsi and biceps.", video_url: nil),
-    Exercise(id: 4, name: "Deadlifts", description: "Full body compound movement targeting posterior chain.", video_url: nil),
-    Exercise(id: 5, name: "Overhead Press", description: "Shoulder and core strength exercise.", video_url: nil),
-    Exercise(id: 6, name: "Plank", description: "Core stability and endurance exercise.", video_url: nil),
-    Exercise(id: 7, name: "Pull Ups (Assisted)", description: "Upper body pulling exercise for back and biceps.", video_url: nil),
-    Exercise(id: 8, name: "Leg Press", description: "Lower body exercise targeting quadriceps and glutes.", video_url: nil),
-    Exercise(id: 9, name: "Bicep Curls", description: "Isolation exercise for bicep development.", video_url: nil),
-    Exercise(id: 10, name: "Incline Dumbbell Press", description: "Upper chest and shoulder development exercise.", video_url: nil),
-    Exercise(id: 11, name: "Seated Cable Rows", description: "Back exercise for middle trapezius and rhomboids.", video_url: nil)
+    Exercise(
+        id: 1, 
+        name: "Barbell Squats", 
+        description: "A compound exercise targeting quadriceps, glutes, and core stability.", 
+        video_url: nil,
+        target_area: "Thighs",
+        main_muscles: ["Quadriceps", "Glutes"],
+        secondary_muscles: ["Core", "Calves"],
+        equipment: "Barbell",
+        difficulty: "Intermediate",
+        exercise_tier: "foundational",
+        popularity_score: 0.95
+    ),
+    Exercise(
+        id: 2, 
+        name: "Dumbbell Bench Press", 
+        description: "Upper body exercise targeting chest, shoulders, and triceps.", 
+        video_url: nil,
+        target_area: "Chest",
+        main_muscles: ["Pectoralis Major"],
+        secondary_muscles: ["Anterior Deltoid", "Triceps"],
+        equipment: "Dumbbell",
+        difficulty: "Beginner",
+        exercise_tier: "foundational",
+        popularity_score: 0.90
+    ),
+    Exercise(
+        id: 3, 
+        name: "Lat Pulldowns", 
+        description: "Back exercise targeting latissimus dorsi and biceps.", 
+        video_url: nil,
+        target_area: "Back",
+        main_muscles: ["Latissimus Dorsi"],
+        secondary_muscles: ["Biceps", "Rhomboids"],
+        equipment: "Cable Machine",
+        difficulty: "Beginner",
+        exercise_tier: "standard",
+        popularity_score: 0.85
+    ),
+    Exercise(
+        id: 4, 
+        name: "Deadlifts", 
+        description: "Full body compound movement targeting posterior chain.", 
+        video_url: nil,
+        target_area: "Back",
+        main_muscles: ["Erector Spinae", "Glutes"],
+        secondary_muscles: ["Hamstrings", "Traps", "Forearms"],
+        equipment: "Barbell",
+        difficulty: "Advanced",
+        exercise_tier: "foundational",
+        popularity_score: 0.98
+    ),
+    Exercise(
+        id: 5, 
+        name: "Overhead Press", 
+        description: "Shoulder and core strength exercise.", 
+        video_url: nil,
+        target_area: "Shoulder",
+        main_muscles: ["Anterior Deltoid", "Medial Deltoid"],
+        secondary_muscles: ["Triceps", "Core"],
+        equipment: "Barbell",
+        difficulty: "Intermediate",
+        exercise_tier: "foundational",
+        popularity_score: 0.88
+    ),
+    Exercise(
+        id: 6, 
+        name: "Plank", 
+        description: "Core stability and endurance exercise.", 
+        video_url: nil,
+        target_area: "Hips",
+        main_muscles: ["Rectus Abdominis", "Transverse Abdominis"],
+        secondary_muscles: ["Obliques", "Shoulders"],
+        equipment: "Body Weight",
+        difficulty: "Beginner",
+        exercise_tier: "foundational",
+        popularity_score: 0.92
+    ),
+    Exercise(
+        id: 7, 
+        name: "Pull Ups (Assisted)", 
+        description: "Upper body pulling exercise for back and biceps.", 
+        video_url: nil,
+        target_area: "Back",
+        main_muscles: ["Latissimus Dorsi"],
+        secondary_muscles: ["Biceps", "Rhomboids", "Middle Trapezius"],
+        equipment: "Assisted",
+        difficulty: "Intermediate",
+        exercise_tier: "foundational",
+        popularity_score: 0.89
+    ),
+    Exercise(
+        id: 8, 
+        name: "Leg Press", 
+        description: "Lower body exercise targeting quadriceps and glutes.", 
+        video_url: nil,
+        target_area: "Thighs",
+        main_muscles: ["Quadriceps"],
+        secondary_muscles: ["Glutes", "Calves"],
+        equipment: "Machine",
+        difficulty: "Beginner",
+        exercise_tier: "standard",
+        popularity_score: 0.82
+    ),
+    Exercise(
+        id: 9, 
+        name: "Bicep Curls", 
+        description: "Isolation exercise for bicep development.", 
+        video_url: nil,
+        target_area: "Upper Arms",
+        main_muscles: ["Biceps Brachii"],
+        secondary_muscles: ["Brachialis"],
+        equipment: "Dumbbell",
+        difficulty: "Beginner",
+        exercise_tier: "variety",
+        popularity_score: 0.75
+    ),
+    Exercise(
+        id: 10, 
+        name: "Incline Dumbbell Press", 
+        description: "Upper chest and shoulder development exercise.", 
+        video_url: nil,
+        target_area: "Chest",
+        main_muscles: ["Upper Pectoralis Major"],
+        secondary_muscles: ["Anterior Deltoid", "Triceps"],
+        equipment: "Dumbbell",
+        difficulty: "Intermediate",
+        exercise_tier: "variety",
+        popularity_score: 0.80
+    ),
+    Exercise(
+        id: 11, 
+        name: "Seated Cable Rows", 
+        description: "Back exercise for middle trapezius and rhomboids.", 
+        video_url: nil,
+        target_area: "Back",
+        main_muscles: ["Middle Trapezius", "Rhomboids"],
+        secondary_muscles: ["Posterior Deltoid", "Biceps"],
+        equipment: "Cable Machine",
+        difficulty: "Beginner",
+        exercise_tier: "standard",
+        popularity_score: 0.83
+    )
 ]
 
 // MARK: - Complete Mock Workout Plan Structure
@@ -293,9 +437,3 @@ let mockCompleteWorkoutPlan = CompleteWorkoutPlan(
     exercises: mockExercises
 )
 
-// MARK: - Legacy Workout Conversion Helper
-extension Workout {
-    static func fromDailyWorkout(_ dailyWorkout: DailyWorkout, exercises: [Exercise], workoutExercises: [WorkoutExercise]) -> Workout {
-        return Workout(from: dailyWorkout, exercises: exercises, workoutExercises: workoutExercises)
-    }
-}
