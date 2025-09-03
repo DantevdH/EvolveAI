@@ -1,0 +1,496 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  SafeAreaView,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  ImageBackground,
+  TouchableOpacity,
+  ActivityIndicator,
+  TextInput,
+} from 'react-native';
+import { useRouter } from 'expo-router';
+import { useAuth } from '@/src/context/AuthContext';
+import { IconSymbol } from '@/components/ui/IconSymbol';
+import { validateSignupForm } from '@/src/utils/validation';
+import { colors } from '../../constants/colors';
+
+// Custom Text Input Component (matching Swift design)
+const CustomTextField: React.FC<{
+  placeholder: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  secureTextEntry?: boolean;
+  keyboardType?: 'default' | 'email-address';
+}> = ({ placeholder, value, onChangeText, secureTextEntry = false, keyboardType = 'default' }) => {
+  return (
+    <View style={styles.textFieldContainer}>
+      {value === '' && (
+        <Text style={styles.placeholderText}>{placeholder}</Text>
+      )}
+      {secureTextEntry ? (
+        <TextInput
+          style={styles.textInput}
+          value={value}
+          onChangeText={onChangeText}
+          secureTextEntry
+          keyboardType={keyboardType}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      ) : (
+        <TextInput
+          style={styles.textInput}
+          value={value}
+          onChangeText={onChangeText}
+          keyboardType={keyboardType}
+          autoCapitalize={keyboardType === 'email-address' ? 'none' : 'words'}
+          autoCorrect={false}
+        />
+      )}
+    </View>
+  );
+};
+
+// Social Login Button Component (matching Swift design)
+const SocialLoginButton: React.FC<{
+  iconName: string;
+  text: string;
+  onPress: () => void;
+  disabled?: boolean;
+  isSystemIcon?: boolean;
+}> = ({ iconName, text, onPress, disabled = false, isSystemIcon = false }) => {
+  return (
+    <TouchableOpacity
+      style={[styles.socialButton, disabled && styles.socialButtonDisabled]}
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.8}>
+      <View style={styles.socialButtonContent}>
+        <IconSymbol
+          name={iconName as any}
+          size={20}
+          color="#FFFFFF"
+        />
+        <Text style={[styles.socialButtonText, disabled && styles.socialButtonTextDisabled]}>
+          {text}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// Main Title Component
+const MainTitleView: React.FC = () => {
+  return (
+    <View style={styles.titleContainer}>
+      <Text style={styles.mainTitle}>Evolve</Text>
+      <Text style={styles.subtitle}>Create Your Account</Text>
+    </View>
+  );
+};
+
+export const SignupScreen: React.FC = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const router = useRouter();
+
+  const { state, signUpWithEmail, signInWithGoogle, signInWithApple, signInWithFacebook } = useAuth();
+
+  // Clear validation error when user starts typing
+  const handleEmailChange = (text: string) => {
+    setEmail(text);
+    if (validationError) setValidationError(null);
+  };
+
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    if (validationError) setValidationError(null);
+  };
+
+  const handleConfirmPasswordChange = (text: string) => {
+    setConfirmPassword(text);
+    if (validationError) setValidationError(null);
+  };
+
+  const handleEmailSignup = async () => {
+    // Clear previous validation error
+    setValidationError(null);
+    
+    // Validate form with comprehensive checks
+    const validation = validateSignupForm(email, password, confirmPassword);
+    if (!validation.isValid) {
+      setValidationError(validation.errorMessage!);
+      return;
+    }
+
+    const success = await signUpWithEmail(email, password, email.split('@')[0]); // Use email prefix as name
+    if (success) {
+      // Navigate to email verification screen with the email address
+      router.push({
+        pathname: '/email-verification',
+        params: { email: email }
+      });
+    } else if (state.errorMessage) {
+      Alert.alert('Sign Up Failed', state.errorMessage);
+    }
+  };
+
+  const handleGoogleSignup = async () => {
+    const success = await signInWithGoogle();
+    if (!success && state.errorMessage) {
+      Alert.alert('Google Sign Up Failed', state.errorMessage);
+    }
+  };
+
+  const handleAppleSignup = async () => {
+    const success = await signInWithApple();
+    if (!success && state.errorMessage) {
+      Alert.alert('Apple Sign Up Failed', state.errorMessage);
+    }
+  };
+
+  const handleFacebookSignup = async () => {
+    const success = await signInWithFacebook();
+    if (!success && state.errorMessage) {
+      Alert.alert('Facebook Sign Up Failed', state.errorMessage);
+    }
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Background Image */}
+      <ImageBackground
+        source={{ uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80' }}
+        style={styles.backgroundImage}
+        resizeMode="cover">
+        
+        {/* Dimming Overlay */}
+        <View style={styles.dimmingOverlay} />
+        
+        <SafeAreaView style={styles.safeArea}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.keyboardAvoidingView}>
+            
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}>
+              
+              {/* Main Title */}
+              <MainTitleView />
+              
+              <View style={styles.spacer} />
+              
+              {/* Social Signup Buttons */}
+              <View style={styles.socialSection}>
+                <SocialLoginButton
+                  iconName="apple.logo"
+                  text="Sign Up with Apple (Coming Soon)"
+                  onPress={handleAppleSignup}
+                  disabled={true}
+                  isSystemIcon={true}
+                />
+                
+                <SocialLoginButton
+                  iconName="globe"
+                  text="Sign Up with Google"
+                  onPress={handleGoogleSignup}
+                />
+                
+                <SocialLoginButton
+                  iconName="person.2"
+                  text="Sign Up with Facebook"
+                  onPress={handleFacebookSignup}
+                />
+              </View>
+              
+              {/* Separator */}
+              <View style={styles.separator}>
+                <View style={styles.separatorLine} />
+                <Text style={styles.separatorText}>OR</Text>
+                <View style={styles.separatorLine} />
+              </View>
+              
+              {/* Signup Form */}
+              <View style={styles.formSection}>
+                <CustomTextField
+                  placeholder="Email"
+                  value={email}
+                  onChangeText={handleEmailChange}
+                  keyboardType="email-address"
+                />
+                
+                <CustomTextField
+                  placeholder="Password"
+                  value={password}
+                  onChangeText={handlePasswordChange}
+                  secureTextEntry
+                />
+                
+                <CustomTextField
+                  placeholder="Confirm Password"
+                  value={confirmPassword}
+                  onChangeText={handleConfirmPasswordChange}
+                  secureTextEntry
+                />
+                
+                {/* Validation Error Message */}
+                {validationError && (
+                  <Text style={styles.validationErrorText}>{validationError}</Text>
+                )}
+              </View>
+              
+              <View style={styles.spacer} />
+              
+              {/* Signup Button */}
+              <View style={styles.signupSection}>
+                {state.isLoading ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#FFFFFF" />
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.signupButton}
+                    onPress={handleEmailSignup}
+                    activeOpacity={0.8}>
+                    <Text style={styles.signupButtonText}>Create Account</Text>
+                  </TouchableOpacity>
+                )}
+                
+                {/* Error Message */}
+                {state.errorMessage && (
+                  <Text style={styles.errorText}>{state.errorMessage}</Text>
+                )}
+                
+                {/* Terms and Privacy */}
+                <View style={styles.termsSection}>
+                  <Text style={styles.termsText}>
+                    By creating an account, you agree to our{' '}
+                    <Text style={styles.linkText}>Terms of Service</Text>
+                    {' '}and{' '}
+                    <Text style={styles.linkText}>Privacy Policy</Text>
+                  </Text>
+                </View>
+                
+                {/* Sign In Link */}
+                <View style={styles.signInContainer}>
+                  <Text style={styles.signInText}>Already have an account? </Text>
+                  <TouchableOpacity onPress={() => router.push('/login')}>
+                    <Text style={styles.signInLink}>Sign In</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </ImageBackground>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  backgroundImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  dimmingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  safeArea: {
+    flex: 1,
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 30,
+  },
+  
+  // Title Section
+  titleContainer: {
+    alignItems: 'center',
+    paddingTop: 80,
+  },
+  mainTitle: {
+    fontSize: 36,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
+    textAlign: 'center',
+  },
+  
+  // Spacing
+  spacer: {
+    flex: 1,
+  },
+  
+  // Social Login Section
+  socialSection: {
+    gap: 15,
+    marginBottom: 20,
+  },
+  socialButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  socialButtonDisabled: {
+    opacity: 0.5,
+  },
+  socialButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  socialButtonText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginLeft: 12,
+  },
+  socialButtonTextDisabled: {
+    color: 'rgba(255, 255, 255, 0.6)',
+  },
+  
+  // Separator
+  separator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  separatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  separatorText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginHorizontal: 16,
+  },
+  
+  // Form Section
+  formSection: {
+    gap: 15,
+    marginBottom: 20,
+  },
+  textFieldContainer: {
+    position: 'relative',
+    backgroundColor: colors.inputBackground,
+    borderRadius: 12,
+    padding: 16,
+  },
+  placeholderText: {
+    position: 'absolute',
+    left: 16,
+    top: 16,
+    fontSize: 16,
+    color: colors.inputPlaceholder,
+    zIndex: 1,
+  },
+  textInput: {
+    fontSize: 16,
+    color: colors.text,
+    padding: 0,
+    minHeight: 20,
+  },
+  validationErrorText: {
+    fontSize: 14,
+    color: colors.error,
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 16,
+  },
+  
+  // Signup Section
+  signupSection: {
+    gap: 20,
+    paddingBottom: 40,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  signupButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 18,
+    paddingVertical: 18,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.borderLight,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.7,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  signupButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  
+  // Error Text
+  errorText: {
+    fontSize: 14,
+    color: colors.error,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  
+  // Terms Section
+  termsSection: {
+    marginTop: 20,
+    paddingHorizontal: 16,
+  },
+  termsText: {
+    fontSize: 14,
+    color: colors.muted,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  linkText: {
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  
+  // Sign In Section
+  signInContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+  },
+  signInText: {
+    fontSize: 16,
+    color: colors.muted,
+  },
+  signInLink: {
+    fontSize: 16,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+});

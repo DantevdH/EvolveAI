@@ -1,4 +1,4 @@
-import SwiftUI
+tivetivimport SwiftUI
 
 // static means that the variable belongs to the Color type itself, not to a specific instance of a color
 // let means that it can not be changed
