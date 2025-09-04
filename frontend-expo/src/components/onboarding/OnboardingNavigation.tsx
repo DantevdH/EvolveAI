@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { useOnboarding, useOnboardingProgress } from '../../context/OnboardingContext';
-import { colors } from '../../constants/colors';
+import { colors } from '../../constants/designSystem';
 
 interface OnboardingNavigationProps {
   onNext?: () => void;
@@ -274,7 +274,8 @@ export const CompactOnboardingNavigation: React.FC<CompactOnboardingNavigationPr
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 20,
+    paddingBottom: 40,
   },
   progressContainer: {
     marginBottom: 20,
@@ -353,7 +354,8 @@ const styles = StyleSheet.create({
   // Compact styles
   compactContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 20,
+    paddingBottom: 40,
   },
   compactButtonContainer: {
     flexDirection: 'row',

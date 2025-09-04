@@ -217,12 +217,33 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
 
   const completeOnboarding = async (): Promise<boolean> => {
     try {
+      console.log('🚀 Starting completeOnboarding...');
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
 
+      console.log('📊 Current onboarding data:', JSON.stringify(state.data, null, 2));
+      console.log('📋 Total onboarding steps:', onboardingSteps.length);
+
       // Validate all steps
-      const allStepsValid = onboardingSteps.every(step => canCompleteStep(step.id, state.data));
+      console.log('🔍 Validating all steps...');
+      const stepValidationResults = onboardingSteps.map(step => {
+        const isValid = canCompleteStep(step.id, state.data);
+        console.log(`Step ${step.id} (${step.title}): ${isValid ? '✅' : '❌'}`);
+        return { step, isValid };
+      });
+
+      const allStepsValid = stepValidationResults.every(result => result.isValid);
+      console.log('🎯 All steps valid:', allStepsValid);
+
       if (!allStepsValid) {
+        // Debug: Log which steps are failing
+        const failingSteps = stepValidationResults.filter(result => !result.isValid);
+        console.error('❌ Failing onboarding steps:', failingSteps.map(result => ({
+          id: result.step.id,
+          title: result.step.title,
+          validationRules: result.step.validationRules
+        })));
+        console.error('📊 Current onboarding data:', state.data);
         throw new Error('Please complete all required fields');
       }
 
@@ -247,7 +268,9 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
       return true;
 
     } catch (error) {
+      console.error('💥 Error in completeOnboarding:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to complete onboarding';
+      console.error('📝 Error message:', errorMessage);
       dispatch({ type: 'SET_ERROR', payload: errorMessage });
       return false;
     }

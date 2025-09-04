@@ -3,12 +3,12 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ImageBackground, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
 import { useOnboarding } from '../../context/OnboardingContext';
-import { OnboardingCard, OnboardingNavigation } from '../../components/onboarding';
+import { OnboardingCard, OnboardingNavigation, OnboardingBackground } from '../../components/onboarding';
 import { validateAge, validateWeight, validateHeight } from '../../utils/onboardingValidation';
 import { convertWeight, convertHeight } from '../../utils/onboardingUtils';
-import { colors } from '../../constants/colors';
+import { colors } from '../../constants/designSystem';
 
 export const PersonalInfoScreen: React.FC = () => {
   const { state, updateData } = useOnboarding();
@@ -65,20 +65,20 @@ export const PersonalInfoScreen: React.FC = () => {
     }
   };
 
-  const handleWeightUnitChange = (unit: 'kg' | 'lbs') => {
+  const handleWeightUnitChange = (unit: string) => {
     const currentWeight = state.data.weight;
-    const convertedWeight = convertWeight(currentWeight, state.data.weightUnit, unit);
+    const convertedWeight = convertWeight(currentWeight, state.data.weightUnit, unit as 'kg' | 'lbs');
     updateData({ 
-      weightUnit: unit,
+      weightUnit: unit as 'kg' | 'lbs',
       weight: convertedWeight
     });
   };
 
-  const handleHeightUnitChange = (unit: 'cm' | 'in') => {
+  const handleHeightUnitChange = (unit: string) => {
     const currentHeight = state.data.height;
-    const convertedHeight = convertHeight(currentHeight, state.data.heightUnit, unit);
+    const convertedHeight = convertHeight(currentHeight, state.data.heightUnit, unit as 'cm' | 'in');
     updateData({ 
-      heightUnit: unit,
+      heightUnit: unit as 'cm' | 'in',
       height: convertedHeight
     });
   };
@@ -115,12 +115,7 @@ export const PersonalInfoScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={{ uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80' }}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
-        <View style={styles.dimmingOverlay} />
+      <OnboardingBackground />
         
         <OnboardingCard
           title="Personal Information"
@@ -229,7 +224,6 @@ export const PersonalInfoScreen: React.FC = () => {
 
           <OnboardingNavigation />
         </OnboardingCard>
-      </ImageBackground>
     </View>
   );
 };
@@ -237,15 +231,6 @@ export const PersonalInfoScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  backgroundImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  dimmingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlay,
   },
   content: {
     flex: 1,

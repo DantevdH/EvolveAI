@@ -3,14 +3,13 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { useOnboarding } from '../../context/OnboardingContext';
-import { OnboardingCard, OnboardingNavigation } from '../../components/onboarding';
-import { validateHasLimitations, validateLimitationsDescription } from '../../utils/onboardingValidation';
-import { colors } from '../../constants/colors';
+import { OnboardingCard, OnboardingBackground } from '../../components/onboarding';
+import { colors } from '../../constants/designSystem';
 
 export const PhysicalLimitationsScreen: React.FC = () => {
-  const { state, updateData } = useOnboarding();
+  const { state, updateData, nextStep, previousStep } = useOnboarding();
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   const handleLimitationsToggle = (hasLimitations: boolean) => {
@@ -27,33 +26,24 @@ export const PhysicalLimitationsScreen: React.FC = () => {
   };
 
   const handleNext = () => {
-    // Validate limitations
-    const hasLimitationsValidation = validateHasLimitations(state.data.hasLimitations);
-    if (!hasLimitationsValidation.isValid) {
-      setValidationErrors({ hasLimitations: hasLimitationsValidation.error! });
-      return;
-    }
-
-    if (state.data.hasLimitations) {
-      const descriptionValidation = validateLimitationsDescription(state.data.limitationsDescription);
-      if (!descriptionValidation.isValid) {
-        setValidationErrors({ limitationsDescription: descriptionValidation.error! });
-        return;
-      }
-    }
-
     // Clear any existing errors
     setValidationErrors({});
+    nextStep();
+  };
+
+  const handlePrevious = () => {
+    previousStep();
+  };
+
+  // Check if Next button should be disabled (based on Swift logic)
+  const isNextButtonDisabled = () => {
+    // If "Yes" is selected but no description is provided, disable the button
+    return state.data.hasLimitations && state.data.limitationsDescription.trim().length === 0;
   };
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={{ uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80' }}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
-        <View style={styles.dimmingOverlay} />
+      <OnboardingBackground />
         
         <OnboardingCard
           title="Physical Limitations"
@@ -124,9 +114,34 @@ export const PhysicalLimitationsScreen: React.FC = () => {
             )}
           </View>
 
-          <OnboardingNavigation onNext={handleNext} />
+          {/* Custom Navigation */}
+          <View style={styles.navigationContainer}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={handlePrevious}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.backButtonText}>Back</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.nextButton,
+                isNextButtonDisabled() && styles.nextButtonDisabled
+              ]}
+              onPress={handleNext}
+              disabled={isNextButtonDisabled()}
+              activeOpacity={0.8}
+            >
+              <Text style={[
+                styles.nextButtonText,
+                isNextButtonDisabled() && styles.nextButtonTextDisabled
+              ]}>
+                Next
+              </Text>
+            </TouchableOpacity>
+          </View>
         </OnboardingCard>
-      </ImageBackground>
     </View>
   );
 };
@@ -135,15 +150,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  backgroundImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  dimmingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlay,
-  },
+
   content: {
     flex: 1,
     paddingHorizontal: 20,
@@ -208,5 +215,54 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.error,
     marginTop: 4,
+  },
+  // Custom Navigation Styles
+  navigationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    paddingBottom: 40,
+  },
+  backButton: {
+    backgroundColor: colors.buttonSecondary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  nextButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    marginLeft: 12,
+  },
+  nextButtonDisabled: {
+    backgroundColor: colors.buttonDisabled,
+    borderColor: colors.borderLight,
+  },
+  nextButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  nextButtonTextDisabled: {
+    color: colors.muted,
   },
 });

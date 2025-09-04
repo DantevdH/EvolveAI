@@ -15,7 +15,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { IconSymbol } from '@/components/ui/IconSymbol';
-import { colors } from '../../constants/colors';
+import { colors } from '../../constants/designSystem';
 
 
 export const EmailVerificationScreen: React.FC = () => {
@@ -73,7 +73,7 @@ export const EmailVerificationScreen: React.FC = () => {
           });
         }, 1000);
       } else {
-        Alert.alert('Error', state.errorMessage || 'Failed to resend verification email. Please try again.');
+        Alert.alert('Error', state.error || 'Failed to resend verification email. Please try again.');
       }
     } catch {
       Alert.alert('Error', 'Failed to resend verification email. Please try again.');

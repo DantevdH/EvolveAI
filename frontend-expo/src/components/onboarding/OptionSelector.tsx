@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { IconSymbol } from '../../../components/ui/IconSymbol';
-import { colors } from '../../constants/colors';
+import { colors } from '../../constants/designSystem';
 
 export interface Option {
   value: string;

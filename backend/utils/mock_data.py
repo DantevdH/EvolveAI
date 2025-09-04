@@ -30,23 +30,23 @@ MOCK_USER_PROFILE_DATA = {
 # Mock exercise data with proper schema fields
 MOCK_EXERCISES = {
     "barbell_squat": {
-        "exercise_id": 1302,
+        "exercise_id": 2355,
         "description": "Compound lower body exercise targeting quads, glutes, and core"
     },
     "bench_press": {
-        "exercise_id": 1286, 
+        "exercise_id": 2346, 
         "description": "Compound upper body exercise targeting chest, shoulders, and triceps"
     },
     "deadlift": {
-        "exercise_id": 1291,
+        "exercise_id": 2444,
         "description": "Compound posterior chain exercise targeting hamstrings, glutes, and lower back"
     },
     "bent_over_row": {
-        "exercise_id": 1295,
+        "exercise_id": 2747,
         "description": "Compound back exercise targeting lats, rhomboids, and biceps"
     },
     "overhead_press": {
-        "exercise_id": 1275,
+        "exercise_id": 2345,
         "description": "Compound shoulder exercise targeting deltoids and triceps"
     }
 }

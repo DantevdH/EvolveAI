@@ -3,9 +3,9 @@
  */
 
 import React from 'react';
-import { View, StyleSheet, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, ImageBackground } from 'react-native';
 import { useOnboarding } from '../../context/OnboardingContext';
-import { OnboardingCard, OnboardingNavigation, DaysPerWeekSlider, MinutesPerSessionSlider } from '../../components/onboarding';
+import { OnboardingCard, OnboardingNavigation, DaysPerWeekSlider, MinutesPerSessionSlider, OnboardingBackground } from '../../components/onboarding';
 
 export const TimeAvailabilityScreen: React.FC = () => {
   const { state, updateData } = useOnboarding();
@@ -20,12 +20,7 @@ export const TimeAvailabilityScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={{ uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80' }}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
-        <View style={styles.dimmingOverlay} />
+      <OnboardingBackground />
         
         <OnboardingCard
           title="Time Availability"
@@ -48,27 +43,10 @@ export const TimeAvailabilityScreen: React.FC = () => {
                 onValueChange={handleMinutesPerSessionChange}
               />
             </View>
-
-            {/* Summary */}
-            <View style={styles.summaryContainer}>
-              <View style={styles.summaryCard}>
-                <Text style={styles.summaryTitle}>Your Schedule</Text>
-                <Text style={styles.summaryText}>
-                  {state.data.daysPerWeek} {state.data.daysPerWeek === 1 ? 'day' : 'days'} per week
-                </Text>
-                <Text style={styles.summaryText}>
-                  {state.data.minutesPerSession} minutes per session
-                </Text>
-                <Text style={styles.summaryTotal}>
-                  Total: {state.data.daysPerWeek * state.data.minutesPerSession} minutes per week
-                </Text>
-              </View>
-            </View>
           </View>
 
           <OnboardingNavigation />
         </OnboardingCard>
-      </ImageBackground>
     </View>
   );
 };
@@ -77,15 +55,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  backgroundImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  dimmingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
+
   content: {
     flex: 1,
     paddingHorizontal: 20,

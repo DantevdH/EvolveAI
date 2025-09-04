@@ -4,7 +4,7 @@
 
 import React, { ReactNode } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
-import { colors } from '../../constants/colors';
+import { colors } from '../../constants/designSystem';
 
 interface OnboardingCardProps {
   title: string;
@@ -64,10 +64,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 40,
     paddingTop: 20,
   },
   title: {

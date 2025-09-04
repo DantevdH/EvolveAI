@@ -9,6 +9,5 @@ export { FitnessGoalsScreen } from './FitnessGoalsScreen';
 export { EquipmentAccessScreen } from './EquipmentAccessScreen';
 export { TimeAvailabilityScreen } from './TimeAvailabilityScreen';
 export { PhysicalLimitationsScreen } from './PhysicalLimitationsScreen';
-export { MotivationScreen } from './MotivationScreen';
 export { OnboardingCompleteScreen } from './OnboardingCompleteScreen';
-export { OnboardingFlow } from './OnboardingFlow';
+// Note: OnboardingFlow is exported separately to avoid circular dependency

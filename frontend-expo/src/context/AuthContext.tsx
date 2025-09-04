@@ -4,45 +4,38 @@ import { UserService } from '@/src/services/userService';
 import { UserProfile, WorkoutPlan } from '@/src/types';
 import { supabase } from '@/src/config/supabase';
 
-// Enhanced auth state interface
-interface EnhancedAuthState extends AuthState {
+// Simplified auth state interface
+interface SimpleAuthState {
+  user: any | null;
   userProfile: UserProfile | null;
   workoutPlan: WorkoutPlan | null;
-  isOnboardingComplete: boolean;
-  errorMessage: string | null;
+  isLoading: boolean;
+  error: string | null;
   isInitialized: boolean;
-  hasAttemptedLogin: boolean;
 }
 
-// Auth actions
-type AuthAction =
+// Simplified auth actions
+type SimpleAuthAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_USER'; payload: any | null }
-  | { type: 'SET_SESSION'; payload: any | null }
   | { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
   | { type: 'SET_WORKOUT_PLAN'; payload: WorkoutPlan | null }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_INITIALIZED'; payload: boolean }
-  | { type: 'SET_LOGIN_ATTEMPTED'; payload: boolean }
-  | { type: 'SET_ONBOARDING_COMPLETE'; payload: boolean }
   | { type: 'CLEAR_AUTH' };
 
-// Initial state
-const initialState: EnhancedAuthState = {
+// Simplified initial state
+const initialState: SimpleAuthState = {
   user: null,
-  session: null,
   userProfile: null,
   workoutPlan: null,
   isLoading: false,
-  isAuthenticated: false,
-  isOnboardingComplete: false,
-  errorMessage: null,
+  error: null,
   isInitialized: false,
-  hasAttemptedLogin: false,
 };
 
-// Auth reducer
-const authReducer = (state: EnhancedAuthState, action: AuthAction): EnhancedAuthState => {
+// Simplified auth reducer
+const authReducer = (state: SimpleAuthState, action: SimpleAuthAction): SimpleAuthState => {
   switch (action.type) {
     case 'SET_LOADING':
       return {
@@ -53,18 +46,11 @@ const authReducer = (state: EnhancedAuthState, action: AuthAction): EnhancedAuth
       return {
         ...state,
         user: action.payload,
-        isAuthenticated: !!action.payload,
-      };
-    case 'SET_SESSION':
-      return {
-        ...state,
-        session: action.payload,
       };
     case 'SET_USER_PROFILE':
       return {
         ...state,
         userProfile: action.payload,
-        isOnboardingComplete: !!action.payload,
       };
     case 'SET_WORKOUT_PLAN':
       return {
@@ -74,38 +60,18 @@ const authReducer = (state: EnhancedAuthState, action: AuthAction): EnhancedAuth
     case 'SET_ERROR':
       return {
         ...state,
-        errorMessage: action.payload,
+        error: action.payload,
       };
     case 'SET_INITIALIZED':
       return {
         ...state,
         isInitialized: action.payload,
       };
-    case 'SET_LOGIN_ATTEMPTED':
-      return {
-        ...state,
-        hasAttemptedLogin: action.payload,
-      };
-    case 'SET_ONBOARDING_COMPLETE':
-      return {
-        ...state,
-        isOnboardingComplete: action.payload,
-      };
     case 'CLEAR_AUTH':
-      console.log('🔐 CLEAR_AUTH action dispatched');
-      const clearedState = {
+      return {
         ...initialState,
-        isInitialized: state.isInitialized, // Preserve the initialized state
-        hasAttemptedLogin: state.hasAttemptedLogin, // Preserve login attempt state
+        isInitialized: state.isInitialized, // Preserve initialization state
       };
-      console.log('🔐 CLEAR_AUTH new state:', {
-        isAuthenticated: clearedState.isAuthenticated,
-        hasUser: !!clearedState.user,
-        hasSession: !!clearedState.session,
-        isInitialized: clearedState.isInitialized,
-        hasAttemptedLogin: clearedState.hasAttemptedLogin
-      });
-      return clearedState;
     default:
       return state;
   }
@@ -113,7 +79,7 @@ const authReducer = (state: EnhancedAuthState, action: AuthAction): EnhancedAuth
 
 // Auth context type
 interface AuthContextType {
-  state: EnhancedAuthState;
+  state: SimpleAuthState;
   
   // Authentication methods
   signInWithEmail: (email: string, password: string) => Promise<boolean>;
@@ -132,8 +98,9 @@ interface AuthContextType {
   refreshUserProfile: () => Promise<void>;
   
   // Workout plan methods
-  generateWorkoutPlan: () => Promise<boolean>;
+  // generateWorkoutPlan: () => Promise<boolean>; // REMOVED: Use GeneratePlanScreen instead
   refreshWorkoutPlan: () => Promise<void>;
+  setWorkoutPlan: (workoutPlan: WorkoutPlan) => void;
   
   // Utility methods
   clearError: () => void;
@@ -153,110 +120,115 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Load user profile
+  // Simplified user profile loading
   const loadUserProfile = useCallback(async (userId: string) => {
+    // Prevent multiple simultaneous calls
+    if (state.isLoading) {
+      console.log('AuthContext: Profile loading already in progress, skipping duplicate call');
+      return;
+    }
+
     try {
+      console.log('AuthContext: Loading user profile for user:', userId);
+      dispatch({ type: 'SET_LOADING', payload: true });
+      
       const response = await UserService.getUserProfile(userId);
       
-      if (response.success && response.data) {
-        dispatch({ type: 'SET_USER_PROFILE', payload: response.data });
+      if (response.success) {
+        dispatch({ type: 'SET_USER_PROFILE', payload: response.data || null });
         
-        // Also load workout plan if user profile exists
-        try {
-          const { WorkoutService } = await import('../services/workoutService');
-          const workoutResult = await WorkoutService.getWorkoutPlan(response.data.id!);
-          
-          if (workoutResult.success && workoutResult.data) {
-            dispatch({ type: 'SET_WORKOUT_PLAN', payload: workoutResult.data });
-            console.log('AuthContext: Loaded existing workout plan');
-          } else {
+        // Load workout plan if user profile exists
+        if (response.data) {
+          try {
+            const { WorkoutService } = await import('../services/workoutService');
+            const workoutResult = await WorkoutService.getWorkoutPlan(response.data.id!);
+            dispatch({ type: 'SET_WORKOUT_PLAN', payload: workoutResult.success ? workoutResult.data || null : null });
+          } catch (workoutError) {
+            console.error('AuthContext: Error loading workout plan:', workoutError);
             dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
-            console.log('AuthContext: No existing workout plan found');
           }
-        } catch (workoutError) {
-          console.error('AuthContext: Error loading workout plan:', workoutError);
+        } else {
           dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
         }
       } else {
-        dispatch({ type: 'SET_USER_PROFILE', payload: null });
-        dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
+        console.log('AuthContext: Error loading user profile:', response.error);
+        dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to load user profile' });
       }
     } catch (error) {
       console.error('Load user profile error:', error);
-      dispatch({ type: 'SET_USER_PROFILE', payload: null });
-      dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
-    }
-  }, []);
-
-    // Initialize authentication state
-  const initializeAuth = useCallback(async () => {
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      console.log('🔐 Initializing authentication...');
-
-      const session = await AuthService.getCurrentSession();
-      console.log('🔐 Current session:', session ? 'Found' : 'Not found');
-      console.log('🔐 Session details:', session);
-
-      if (session && session.user) {
-        console.log('✅ User authenticated:', session.user.email);
-        dispatch({ type: 'SET_USER', payload: session.user });
-        dispatch({ type: 'SET_SESSION', payload: session });
-        await loadUserProfile(session.user.id);
-      } else {
-        console.log('❌ No session found, user not authenticated');
-        console.log('🔐 Setting unauthenticated state...');
-        // Set unauthenticated state without clearing everything
-        dispatch({ type: 'SET_USER', payload: null });
-        dispatch({ type: 'SET_SESSION', payload: null });
-        dispatch({ type: 'SET_USER_PROFILE', payload: null });
-        console.log('🔐 Unauthenticated state set');
-      }
-    } catch (error) {
-      console.error('💥 Auth initialization error:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to initialize authentication' });
-      // Set unauthenticated state on error
-      dispatch({ type: 'SET_USER', payload: null });
-      dispatch({ type: 'SET_SESSION', payload: null });
-      dispatch({ type: 'SET_USER_PROFILE', payload: null });
+      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Failed to load user profile' });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
-      dispatch({ type: 'SET_INITIALIZED', payload: true });
-      console.log('🔐 Auth initialization complete');
     }
-  }, [loadUserProfile]);
+  }, [state.isLoading]);
 
-  // Initialize auth state on mount
+  // Initialize auth state
   useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        console.log('AuthContext: Initializing auth state...');
+        console.log('AuthContext: Supabase client:', supabase);
+        
+        const { data: { session }, error } = await supabase.auth.getSession();
+        console.log('AuthContext: Session response:', { session, error });
+        
+        if (error) {
+          console.error('AuthContext: Error getting session:', error);
+          dispatch({ type: 'SET_ERROR', payload: error.message });
+        } else if (session) {
+          console.log('AuthContext: Found existing session:', session.user?.email);
+          dispatch({ type: 'SET_USER', payload: session.user });
+          
+          // Load user profile if we have a session
+          if (session.user) {
+            await loadUserProfile(session.user.id);
+          }
+        } else {
+          console.log('AuthContext: No existing session found');
+        }
+      } catch (error) {
+        console.error('AuthContext: Error initializing auth:', error);
+        dispatch({ type: 'SET_ERROR', payload: 'Failed to initialize authentication' });
+      } finally {
+        console.log('AuthContext: Setting initialized to true');
+        dispatch({ type: 'SET_INITIALIZED', payload: true });
+      }
+    };
+
     initializeAuth();
-  }, [initializeAuth]);
+  }, []);
 
-  // Listen to auth state changes
+  // Single auth state listener - handles all auth changes
   useEffect(() => {
-    const { data: { subscription } } = AuthService.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event, session);
       
       if (event === 'SIGNED_IN' && session) {
-        console.log('✅ User signed in via auth listener');
+        console.log('✅ User signed in');
         dispatch({ type: 'SET_USER', payload: session.user });
-        dispatch({ type: 'SET_SESSION', payload: session });
-        await loadUserProfile(session.user.id);
-      } else if (event === 'SIGNED_OUT') {
-        console.log('❌ User signed out via auth listener');
-        // Only clear auth if we're not already in a cleared state AND we're not in the middle of a login attempt
-        if ((state.isAuthenticated || state.user) && !state.isLoading) {
-          console.log('🔐 Clearing auth state due to SIGNED_OUT event');
-          dispatch({ type: 'CLEAR_AUTH' });
-        } else {
-          console.log('🔐 Ignoring SIGNED_OUT event - already cleared or loading');
+        
+        // Check if OAuth user needs email verification (not for email signup)
+        if (session.user && !session.user.email_confirmed_at && session.user.app_metadata?.provider !== 'email') {
+          console.log('AuthContext: OAuth user needs email verification, not loading profile yet');
+          return; // Don't load profile until email is verified
         }
+        
+        // Only load profile if we don't already have one for this user and not currently loading
+        if ((!state.userProfile || state.userProfile.userId !== session.user.id) && !state.isLoading) {
+          await loadUserProfile(session.user.id);
+        } else {
+          console.log('AuthContext: User profile already loaded or loading in progress, skipping duplicate load');
+        }
+      } else if (event === 'SIGNED_OUT') {
+        console.log('❌ User signed out');
+        dispatch({ type: 'CLEAR_AUTH' });
       }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [loadUserProfile, state.isAuthenticated, state.user, state.isLoading]);
+  }, [loadUserProfile, state.userProfile, state.isLoading]);
 
   // Force clear all authentication data
   const forceSignOut = async () => {
@@ -275,30 +247,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
-      dispatch({ type: 'SET_LOGIN_ATTEMPTED', payload: true });
 
-      console.log('🔐 Attempting to sign in with email:', email);
-      
       const response = await AuthService.signInWithEmail({ email, password });
-      console.log('🔐 AuthService response:', response);
 
       if (response.success && response.user) {
-        console.log('✅ Sign in successful, user:', response.user.email);
         dispatch({ type: 'SET_USER', payload: response.user });
-        dispatch({ type: 'SET_SESSION', payload: response.session });
         await loadUserProfile(response.user.id);
         return true;
       } else {
-        console.log('❌ Sign in failed:', response.error);
         dispatch({ type: 'SET_ERROR', payload: response.error || 'Sign in failed' });
-        // Don't clear auth state immediately - let the error be displayed
-        // The auth state listener will handle clearing if needed
         return false;
       }
     } catch (error) {
-      console.error('💥 Sign in error:', error);
+      console.error('Sign in error:', error);
       dispatch({ type: 'SET_ERROR', payload: 'An unexpected error occurred' });
-      // Don't clear auth state immediately - let the error be displayed
       return false;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -314,10 +276,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await AuthService.signUpWithEmail({ email, password, name });
 
       if (response.success) {
-        if (response.user) {
+        if (response.user && response.session) {
+          // User is immediately signed in (rare case)
           dispatch({ type: 'SET_USER', payload: response.user });
-          dispatch({ type: 'SET_SESSION', payload: response.session });
           await loadUserProfile(response.user.id);
+        } else if (response.user && !response.session) {
+          // User needs to verify email - don't set user or load profile
+          console.log('AuthContext: User needs email verification, not setting user state');
         }
         return true;
       } else {
@@ -492,10 +457,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
 
-      const response = await UserService.createUserProfile(profile);
+      // Note: This method is deprecated in favor of the new createUserProfile method
+      // that takes userId and profileData separately
+      console.warn('createUserProfile method is deprecated. Use the new method in UserService.');
+      
+      const response = await UserService.createUserProfile(profile.userId || '', profile);
 
       if (response.success && response.data) {
-        dispatch({ type: 'SET_USER_PROFILE', payload: response.data });
+        // The new method returns { id: number }, so we need to fetch the full profile
+        const fullProfileResponse = await UserService.getUserProfile(profile.userId || '');
+        if (fullProfileResponse.success && fullProfileResponse.data) {
+          dispatch({ type: 'SET_USER_PROFILE', payload: fullProfileResponse.data });
+        }
         return true;
       } else {
         dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to create profile' });
@@ -549,12 +522,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Clear error
   const clearError = () => {
     dispatch({ type: 'SET_ERROR', payload: null });
-    dispatch({ type: 'SET_LOGIN_ATTEMPTED', payload: false });
   };
 
   // Check auth state
   const checkAuthState = async (): Promise<void> => {
-    await initializeAuth();
+    // Auth state is now handled automatically by the listener
+    console.log('Auth state check - current user:', state.user ? 'authenticated' : 'not authenticated');
   };
 
   // Get current user
@@ -564,50 +537,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Mark onboarding as complete
   const markOnboardingComplete = async (): Promise<void> => {
-    try {
-      // Here you would typically update the user profile in your backend
-      // to mark onboarding as complete
-      // For now, we'll just update the local state
-      dispatch({ type: 'SET_ONBOARDING_COMPLETE', payload: true });
-    } catch (error) {
-      console.error('Failed to mark onboarding complete:', error);
-      throw error;
-    }
+    // Onboarding completion is now determined by the presence of userProfile
+    console.log('Onboarding completion is determined by userProfile existence');
   };
 
   // Generate workout plan
-  const generateWorkoutPlan = async (): Promise<boolean> => {
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      dispatch({ type: 'SET_ERROR', payload: null });
-
-      if (!state.userProfile) {
-        throw new Error('No user profile found');
-      }
-
-      console.log('AuthContext: Generating workout plan for user:', state.userProfile.userId);
-
-      // Import WorkoutService dynamically to avoid circular dependencies
-      const { WorkoutService } = await import('../services/workoutService');
-      
-      const result = await WorkoutService.generateWorkoutPlan(state.userProfile);
-      
-      if (result.success && result.data) {
-        dispatch({ type: 'SET_WORKOUT_PLAN', payload: result.data });
-        console.log('AuthContext: Workout plan generated successfully');
-        return true;
-      } else {
-        dispatch({ type: 'SET_ERROR', payload: result.error || 'Failed to generate workout plan' });
-        return false;
-      }
-    } catch (error) {
-      console.error('Failed to generate workout plan:', error);
-      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Failed to generate workout plan' });
-      return false;
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  };
+  // REMOVED: generateWorkoutPlan function
+  // This has been replaced by GeneratePlanScreen.handleGeneratePlan() which uses the backend flow
 
   // Refresh workout plan
   const refreshWorkoutPlan = async (): Promise<void> => {
@@ -637,6 +573,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // Set workout plan directly (for use after generation)
+  const setWorkoutPlan = (workoutPlan: WorkoutPlan): void => {
+    console.log('AuthContext: Setting workout plan directly:', workoutPlan);
+    dispatch({ type: 'SET_WORKOUT_PLAN', payload: workoutPlan });
+  };
+
   const contextValue: AuthContextType = {
     state,
     signInWithEmail,
@@ -651,8 +593,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     createUserProfile,
     updateUserProfile,
     refreshUserProfile,
-    generateWorkoutPlan,
+    // generateWorkoutPlan, // REMOVED: Use GeneratePlanScreen instead
     refreshWorkoutPlan,
+    setWorkoutPlan,
     clearError,
     checkAuthState,
     getCurrentUser,

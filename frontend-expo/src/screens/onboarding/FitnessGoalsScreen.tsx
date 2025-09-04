@@ -2,23 +2,58 @@
  * Fitness Goals screen - Fourth step of onboarding
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, StyleSheet, ImageBackground } from 'react-native';
 import { useOnboarding } from '../../context/OnboardingContext';
-import { OnboardingCard, OnboardingNavigation, OptionSelector } from '../../components/onboarding';
+import { OnboardingCard, OnboardingNavigation, OptionSelector, OnboardingBackground } from '../../components/onboarding';
 import { fitnessGoals } from '../../types/onboarding';
 import { validateGoalDescription } from '../../utils/onboardingValidation';
+import { useCoaches } from '../../hooks/useCoaches';
 
 export const FitnessGoalsScreen: React.FC = () => {
   const { state, updateData } = useOnboarding();
   const [validationError, setValidationError] = useState<string | null>(null);
+  const { allCoaches, availableCoaches, isLoading: isLoadingCoaches, filterCoachesByGoal } = useCoaches();
+  const previousGoalRef = useRef<string | null>(null);
+
+  // Log available frontend goals for debugging
+  useEffect(() => {
+    console.log('🎯 Available frontend goals:');
+    fitnessGoals.forEach((goal, index) => {
+      console.log(`  ${index + 1}. "${goal.value}"`);
+    });
+  }, []);
+
+  // Auto-select first fitness goal if none is selected
+  useEffect(() => {
+    if (!state.data.primaryGoal && fitnessGoals.length > 0) {
+      updateData({ primaryGoal: fitnessGoals[0].value });
+    }
+  }, [state.data.primaryGoal, updateData]);
+
+  // Update available coaches when goal changes (only when we have coaches and a valid goal)
+  useEffect(() => {
+    if (state.data.primaryGoal && allCoaches.length > 0 && !isLoadingCoaches) {
+      // Only filter if the goal has actually changed
+      if (previousGoalRef.current !== state.data.primaryGoal) {
+        filterCoachesByGoal(state.data.primaryGoal);
+        updateData({ availableCoaches });
+        previousGoalRef.current = state.data.primaryGoal;
+        console.log(`✅ Found ${availableCoaches.length} coaches for goal: ${state.data.primaryGoal}`);
+      }
+    }
+  }, [state.data.primaryGoal, allCoaches.length, isLoadingCoaches, availableCoaches]); // Removed updateData from dependencies
 
   const handleGoalChange = (values: string[]) => {
     if (values.length > 0) {
-      updateData({ primaryGoal: values[0] });
+      const selectedGoal = values[0];
+      updateData({ primaryGoal: selectedGoal });
       setValidationError(null);
+      
+      // Coaches will be updated automatically via useEffect
     }
   };
+
 
   const handleDescriptionChange = (description: string) => {
     updateData({ goalDescription: description });
@@ -41,12 +76,7 @@ export const FitnessGoalsScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={{ uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80' }}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
-        <View style={styles.dimmingOverlay} />
+      <OnboardingBackground />
         
         <OnboardingCard
           title="Fitness Goals"
@@ -63,6 +93,13 @@ export const FitnessGoalsScreen: React.FC = () => {
                 multiple={false}
                 columns={2}
               />
+              
+              {/* Loading indicator for coaches */}
+              {isLoadingCoaches && (
+                <View style={styles.loadingContainer}>
+                  <Text style={styles.loadingText}>Loading coaches...</Text>
+                </View>
+              )}
             </View>
 
             {/* Goal Description */}
@@ -96,7 +133,6 @@ export const FitnessGoalsScreen: React.FC = () => {
 
           <OnboardingNavigation />
         </OnboardingCard>
-      </ImageBackground>
     </View>
   );
 };
@@ -105,15 +141,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  backgroundImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  dimmingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
+
   content: {
     flex: 1,
     paddingHorizontal: 20,
@@ -152,5 +180,17 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.6)',
     textAlign: 'right',
     marginTop: 4,
+  },
+  loadingContainer: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontStyle: 'italic',
   },
 });

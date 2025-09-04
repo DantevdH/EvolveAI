@@ -5,7 +5,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { IconSymbol } from '../../../components/ui/IconSymbol';
-import { colors } from '../../constants/colors';
+import { colors } from '../../constants/designSystem';
 
 interface SliderInputProps {
   title: string;

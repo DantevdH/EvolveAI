@@ -18,7 +18,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { supabase } from '@/src/config/supabase';
 import { validateLoginForm } from '@/src/utils/validation';
-import { colors } from '../../constants/colors';
+import { colors } from '../../constants/designSystem';
 
 // Custom Text Input Component (matching Swift design)
 const CustomTextField: React.FC<{
@@ -158,32 +158,32 @@ export const LoginScreen: React.FC = () => {
     clearError();
 
     const success = await signInWithEmail(email, password);
-    if (!success && state.errorMessage) {
-      Alert.alert('Login Failed', state.errorMessage);
+    if (!success && state.error) {
+      Alert.alert('Login Failed', state.error);
     }
   };
 
   const handleGoogleLogin = async () => {
     clearError();
     const success = await signInWithGoogle();
-    if (!success && state.errorMessage) {
-      Alert.alert('Google Sign In Failed', state.errorMessage);
+    if (!success && state.error) {
+      Alert.alert('Google Sign In Failed', state.error);
     }
   };
 
   const handleAppleLogin = async () => {
     clearError();
     const success = await signInWithApple();
-    if (!success && state.errorMessage) {
-      Alert.alert('Apple Sign In Failed', state.errorMessage);
+    if (!success && state.error) {
+      Alert.alert('Apple Sign In Failed', state.error);
     }
   };
 
   const handleFacebookLogin = async () => {
     clearError();
     const success = await signInWithFacebook();
-    if (!success && state.errorMessage) {
-      Alert.alert('Facebook Sign In Failed', state.errorMessage);
+    if (!success && state.error) {
+      Alert.alert('Facebook Sign In Failed', state.error);
     }
   };
 
@@ -296,8 +296,8 @@ export const LoginScreen: React.FC = () => {
                 )}
                 
                 {/* Error Message */}
-                {state.errorMessage && (
-                  <Text style={styles.errorText}>{state.errorMessage}</Text>
+                {state.error && (
+                  <Text style={styles.errorText}>{state.error}</Text>
                 )}
                 
                 {/* Sign Up Link */}

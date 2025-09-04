@@ -35,10 +35,13 @@ export class AuthService {
     // For both web and mobile, use HTTP URLs that Supabase accepts
     // These will work for web directly, and for mobile via deep linking
     if (Platform.OS === 'web') {
-      return `${window.location.origin}${path}`;
+      // Safe check for window object
+      const origin = typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost:3000';
+      return `${origin}${path}`;
     } else {
-      // For mobile development, use localhost (works with Expo)
-      return `http://localhost:8081${path}`;
+      // For mobile development, use the app scheme for deep linking
+      // This will open the app when the email link is clicked
+      return `frontendexpo2://login`;
     }
   }
   /**

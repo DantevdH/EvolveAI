@@ -15,7 +15,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { validateForgotPasswordForm } from '@/src/utils/validation';
-import { colors } from '../../constants/colors';
+import { colors } from '../../constants/designSystem';
 
 // Custom Text Input Component (matching Swift design)
 const CustomTextField: React.FC<{
@@ -73,8 +73,8 @@ export const ForgotPasswordScreen: React.FC = () => {
     const success = await resetPassword(email);
     if (success) {
       setIsEmailSent(true);
-    } else if (state.errorMessage) {
-      Alert.alert('Reset Failed', state.errorMessage);
+    } else if (state.error) {
+      Alert.alert('Reset Failed', state.error);
     }
   };
 
@@ -178,8 +178,8 @@ export const ForgotPasswordScreen: React.FC = () => {
                 )}
                 
                 {/* Error Message */}
-                {state.errorMessage && (
-                  <Text style={styles.errorText}>{state.errorMessage}</Text>
+                {state.error && (
+                  <Text style={styles.errorText}>{state.error}</Text>
                 )}
                 
                 {/* Back to Login */}
