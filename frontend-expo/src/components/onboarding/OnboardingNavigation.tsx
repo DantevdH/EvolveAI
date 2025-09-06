@@ -2,8 +2,8 @@
  * Navigation component for onboarding screens
  */
 
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { memo } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';;
 import { useOnboarding, useOnboardingProgress } from '../../context/OnboardingContext';
 import { colors } from '../../constants/designSystem';
 
@@ -18,7 +18,7 @@ interface OnboardingNavigationProps {
   style?: any;
 }
 
-export const OnboardingNavigation: React.FC<OnboardingNavigationProps> = ({
+export const OnboardingNavigation: React.FC<OnboardingNavigationProps> = memo(({
   onNext,
   onPrevious,
   onComplete,
@@ -148,7 +148,7 @@ export const OnboardingNavigation: React.FC<OnboardingNavigationProps> = ({
       )}
     </View>
   );
-};
+});
 
 // Compact version for smaller screens
 interface CompactOnboardingNavigationProps {
@@ -161,7 +161,7 @@ interface CompactOnboardingNavigationProps {
   style?: any;
 }
 
-export const CompactOnboardingNavigation: React.FC<CompactOnboardingNavigationProps> = ({
+export const CompactOnboardingNavigation: React.FC<CompactOnboardingNavigationProps> = memo(({
   onNext,
   onPrevious,
   onComplete,
@@ -269,7 +269,7 @@ export const CompactOnboardingNavigation: React.FC<CompactOnboardingNavigationPr
       )}
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

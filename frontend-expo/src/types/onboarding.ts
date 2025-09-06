@@ -14,11 +14,8 @@ export interface OnboardingData {
   heightUnit: 'cm' | 'in';
   gender: 'Male' | 'Female' | 'Other';
   
-  // Step 3: Health Information
-  hasHealthConditions: boolean;
-  healthConditions: string[];
-  medications: string;
-  allergies: string;
+  // Step 3: Experience Level
+  experienceLevel: ExperienceLevel;
   
   // Step 4: Fitness Goals
   primaryGoal: string;
@@ -27,33 +24,31 @@ export interface OnboardingData {
   targetWeightUnit: 'kg' | 'lbs';
   timeline: string;
   
-  // Step 5: Experience Level
-  experienceLevel: ExperienceLevel;
-  
-  // Step 6: Equipment Access
+  // Step 5: Equipment Access
   equipment: EquipmentType[];
   homeGym: boolean;
   gymMembership: boolean;
   
-  // Step 7: Time Availability
+  // Step 6: Time Availability
   daysPerWeek: number;
   minutesPerSession: number;
   preferredWorkoutTimes: string[];
   scheduleFlexibility: 'Very Flexible' | 'Somewhat Flexible' | 'Not Flexible';
   
-  // Step 8: Physical Limitations
+  // Step 7: Physical Limitations
   hasLimitations: boolean;
   limitations: string[];
   limitationsDescription: string;
   injuryHistory: string;
   
-  // Step 9: Completion
+  // Step 8: Completion
   finalNotes: string;
   termsAccepted: boolean;
   privacyAccepted: boolean;
   
   // Coaches
   availableCoaches: any[];
+  selectedCoachId?: number;
 }
 
 export type ExperienceLevel = 
@@ -79,7 +74,7 @@ export interface OnboardingStep {
 
 export interface ValidationRule {
   field: keyof OnboardingData;
-  type: 'required' | 'min' | 'max' | 'pattern' | 'custom';
+  type: 'required' | 'min' | 'max' | 'pattern' | 'custom' | 'limitations_description';
   value?: any;
   message: string;
 }
@@ -118,17 +113,13 @@ export interface OnboardingContextType {
 
 // Default onboarding data
 export const defaultOnboardingData: OnboardingData = {
-  username: 'User',
+  username: '',
   age: 25,
   weight: 70,
   weightUnit: 'kg',
   height: 170,
   heightUnit: 'cm',
   gender: 'Male',
-  hasHealthConditions: false,
-  healthConditions: [],
-  medications: '',
-  allergies: '',
   primaryGoal: '',
   goalDescription: '',
   targetWeight: undefined,
@@ -150,6 +141,7 @@ export const defaultOnboardingData: OnboardingData = {
   termsAccepted: false,
   privacyAccepted: false,
   availableCoaches: [],
+  selectedCoachId: undefined,
 };
 
 // Onboarding steps configuration
@@ -215,23 +207,8 @@ export const onboardingSteps: OnboardingStep[] = [
       }
     ]
   },
-  // Health Information step removed - not implemented
   {
     id: 3,
-    title: 'Fitness Goals',
-    description: 'What do you want to achieve?',
-    component: 'FitnessGoalsScreen',
-    isRequired: true,
-    validationRules: [
-      {
-        field: 'primaryGoal',
-        type: 'required',
-        message: 'Primary goal is required'
-      }
-    ]
-  },
-  {
-    id: 4,
     title: 'Experience Level',
     description: 'Your fitness experience',
     component: 'ExperienceLevelScreen',
@@ -241,6 +218,20 @@ export const onboardingSteps: OnboardingStep[] = [
         field: 'experienceLevel',
         type: 'required',
         message: 'Experience level is required'
+      }
+    ]
+  },
+  {
+    id: 4,
+    title: 'Fitness Goals',
+    description: 'What do you want to achieve?',
+    component: 'FitnessGoalsScreen',
+    isRequired: true,
+    validationRules: [
+      {
+        field: 'primaryGoal',
+        type: 'required',
+        message: 'Primary goal is required'
       }
     ]
   },

@@ -1,5 +1,4 @@
-import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Modal } from 'react-native';
+import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';;
 import { colors, spacing, typography, borderRadius, shadows, componentStyles } from '../../constants/designSystem';
 
 interface LoadingOverlayProps {

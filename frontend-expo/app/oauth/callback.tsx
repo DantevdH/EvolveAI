@@ -14,8 +14,7 @@ export default function OAuthCallback() {
 
   const handleOAuthCallback = async () => {
     try {
-      console.log('OAuth callback received with params:', params);
-      
+
       // For OAuth callbacks, tokens are often in URL fragments (after #)
       // We need to parse them from the current URL
       let access_token: string | undefined;
@@ -34,7 +33,7 @@ export default function OAuthCallback() {
         expires_in = hashParams.get('expires_in') || undefined;
         provider_token = hashParams.get('provider_token') || undefined;
         token_type = hashParams.get('token_type') || undefined;
-        console.log('Parsed tokens from URL fragment');
+
       } else {
         // Use params from Expo Router
         access_token = params.access_token as string;
@@ -46,8 +45,7 @@ export default function OAuthCallback() {
       }
       
       if (access_token && refresh_token) {
-        console.log('Setting session from OAuth callback...');
-        
+
         // Set the session using the tokens from the OAuth callback
         const { data, error } = await supabase.auth.setSession({
           access_token: access_token as string,
@@ -62,17 +60,16 @@ export default function OAuthCallback() {
         }
 
         if (data.session) {
-          console.log('OAuth session set successfully');
-          
+
           // Check if user needs email verification
           if (data.user && !data.user.email_confirmed_at) {
-            console.log('User needs email verification, redirecting to verification screen');
+
             router.replace({
               pathname: '/email-verification',
               params: { email: data.user.email }
             });
           } else {
-            console.log('User email is verified, redirecting to main app');
+
             // Redirect to main app - the auth state change will handle the proper routing
             router.replace('/');
           }

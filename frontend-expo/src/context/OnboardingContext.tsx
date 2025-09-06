@@ -55,10 +55,23 @@ const onboardingReducer = (state: OnboardingState, action: OnboardingAction): On
   switch (action.type) {
     case 'UPDATE_DATA':
       const updatedData = { ...state.data, ...action.payload };
+      // Update progress after data change
+      const currentStepValid = canCompleteStep(state.progress.currentStep, updatedData);
+      const completedSteps = onboardingSteps
+        .filter(step => canCompleteStep(step.id, updatedData))
+        .map(step => step.id);
+
       return {
         ...state,
         data: updatedData,
-        error: null
+        error: null,
+        progress: {
+          ...state.progress,
+          completedSteps,
+          isValid: currentStepValid,
+          canProceed: currentStepValid && state.progress.currentStep < state.progress.totalSteps,
+          canGoBack: state.progress.currentStep > 1
+        }
       };
       
     case 'NEXT_STEP':
@@ -138,8 +151,8 @@ const onboardingReducer = (state: OnboardingState, action: OnboardingAction): On
       };
       
     case 'UPDATE_PROGRESS':
-      const currentStepValid = canCompleteStep(state.progress.currentStep, state.data);
-      const completedSteps = onboardingSteps
+      const progressStepValid = canCompleteStep(state.progress.currentStep, state.data);
+      const progressCompletedSteps = onboardingSteps
         .filter(step => canCompleteStep(step.id, state.data))
         .map(step => step.id);
       
@@ -147,9 +160,9 @@ const onboardingReducer = (state: OnboardingState, action: OnboardingAction): On
         ...state,
         progress: {
           ...state.progress,
-          completedSteps,
-          isValid: currentStepValid,
-          canProceed: currentStepValid && state.progress.currentStep < state.progress.totalSteps,
+          completedSteps: progressCompletedSteps,
+          isValid: progressStepValid,
+          canProceed: progressStepValid && state.progress.currentStep < state.progress.totalSteps,
           canGoBack: state.progress.currentStep > 1
         }
       };
@@ -170,10 +183,15 @@ interface OnboardingProviderProps {
 export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(onboardingReducer, initialState);
 
-  // Update progress whenever data changes
+  // Initialize progress on mount
   useEffect(() => {
     dispatch({ type: 'UPDATE_PROGRESS' });
-  }, [state.data]);
+  }, []);
+
+  // Update progress whenever data changes - REMOVED to avoid conflicts with UPDATE_DATA progress updates
+  // useEffect(() => {
+  //   dispatch({ type: 'UPDATE_PROGRESS' });
+  // }, [state.data]);
 
   // Auto-save progress
   useEffect(() => {
@@ -217,15 +235,14 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
 
   const completeOnboarding = async (): Promise<boolean> => {
     try {
-      console.log('🚀 Starting completeOnboarding...');
+
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
 
       console.log('📊 Current onboarding data:', JSON.stringify(state.data, null, 2));
-      console.log('📋 Total onboarding steps:', onboardingSteps.length);
 
       // Validate all steps
-      console.log('🔍 Validating all steps...');
+
       const stepValidationResults = onboardingSteps.map(step => {
         const isValid = canCompleteStep(step.id, state.data);
         console.log(`Step ${step.id} (${step.title}): ${isValid ? '✅' : '❌'}`);
@@ -233,7 +250,6 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
       });
 
       const allStepsValid = stepValidationResults.every(result => result.isValid);
-      console.log('🎯 All steps valid:', allStepsValid);
 
       if (!allStepsValid) {
         // Debug: Log which steps are failing

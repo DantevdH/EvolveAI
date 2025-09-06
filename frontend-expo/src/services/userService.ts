@@ -20,7 +20,6 @@ export class UserService {
     profileData: any
   ): Promise<UserServiceResponse<{ id: number }>> {
     try {
-      console.log('👤 UserService: Creating user profile for user:', userId);
 
       const profileDataToInsert = mapOnboardingToDatabase(userId, profileData);
 
@@ -30,7 +29,6 @@ export class UserService {
         .select();
 
       if (error) {
-        console.error('❌ UserService: Failed to create user profile:', error);
         return {
           success: false,
           error: `Failed to create user profile: ${error.message}`,
@@ -38,20 +36,17 @@ export class UserService {
       }
 
       if (data && data.length > 0) {
-        console.log('✅ UserService: User profile created successfully:', data[0]);
         return {
           success: true,
           data: { id: data[0].id },
         };
       } else {
-        console.error('❌ UserService: No data returned from profile creation');
         return {
           success: false,
           error: 'No data returned from profile creation',
         };
       }
     } catch (error) {
-      console.error('💥 UserService: Unexpected error creating user profile:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'An unexpected error occurred',
@@ -61,23 +56,16 @@ export class UserService {
 
   static async getUserProfile(userId: string): Promise<UserServiceResponse<UserProfile>> {
     try {
-      console.log('UserService: Fetching user profile for user:', userId);
-
       // Use the existing Supabase client with proper query
       const { data: user_profiles, error, status } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('user_id', userId);
 
-      console.log('UserService: Query completed - data:', user_profiles, 'error:', error);
-
       if (error) {
-        console.log('UserService: Error fetching user profile:', error);
-        
         // If it's an "Invalid API key" error, it might be due to RLS policies
         // In this case, treat it as "no profile found" since the user is authenticated
         if (error.message.includes('Invalid API key') || error.message.includes('permission denied')) {
-          console.log('UserService: Treating permission error as "no profile found"');
           return {
             success: true,
             data: undefined,
@@ -93,7 +81,6 @@ export class UserService {
       // Check if we got any profiles
       if (user_profiles && user_profiles.length > 0) {
         const rawProfile = user_profiles[0];
-        console.log('UserService: Raw user profile from database:', rawProfile);
         
         // Map database fields (snake_case) to frontend interface (camelCase)
         const mappedProfile: UserProfile = {
@@ -120,20 +107,17 @@ export class UserService {
           updatedAt: rawProfile.updated_at ? new Date(rawProfile.updated_at) : undefined,
         };
         
-        console.log('UserService: Mapped user profile:', mappedProfile);
         return {
           success: true,
           data: mappedProfile,
         };
       } else {
-        console.log('UserService: No user profile found - user needs onboarding');
         return {
           success: true,
           data: undefined,
         };
       }
     } catch (error) {
-      console.error('UserService: Get user profile error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'An unexpected error occurred',
@@ -212,7 +196,6 @@ export class UserService {
         data: mappedProfile,
       };
     } catch (error) {
-      console.error('Update user profile error:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'An unexpected error occurred',

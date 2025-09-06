@@ -24,15 +24,12 @@ export class CoachService {
    */
   static async getAllCoaches(): Promise<CoachServiceResponse<Coach[]>> {
     try {
-      console.log('👨‍💼 CoachService: Fetching all coaches...');
-
       const { data, error } = await supabase
         .from('coaches')
         .select('*')
         .order('name');
 
       if (error) {
-        console.error('❌ CoachService: Failed to fetch coaches:', error);
         return {
           success: false,
           error: `Failed to fetch coaches: ${error.message}`,
@@ -40,20 +37,17 @@ export class CoachService {
       }
 
       if (data) {
-        console.log(`✅ CoachService: Fetched ${data.length} coaches successfully`);
         return {
           success: true,
           data: data as Coach[],
         };
       } else {
-        console.warn('⚠️ CoachService: No coaches data returned');
         return {
           success: true,
           data: [],
         };
       }
     } catch (error) {
-      console.error('💥 CoachService: Unexpected error fetching coaches:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'An unexpected error occurred',
@@ -67,7 +61,6 @@ export class CoachService {
   static filterCoachesByGoal(coaches: Coach[], goal: string): Coach[] {
     // Validate input
     if (!goal || typeof goal !== 'string') {
-      console.warn('⚠️ CoachService: Invalid goal provided to filterCoachesByGoal:', goal);
       return [];
     }
     
@@ -101,9 +94,6 @@ export class CoachService {
       coach.goal && coach.goal.toLowerCase() === finalGoal.toLowerCase()
     );
     
-    console.log(`🔍 CoachService: Filtering coaches for goal: '${goal}' -> '${finalGoal}'`);
-    console.log(`📊 CoachService: Found ${matchingCoaches.length} matching coaches out of ${coaches.length} total`);
-    
     return matchingCoaches;
   }
 
@@ -128,7 +118,6 @@ export class CoachService {
         data: filteredCoaches,
       };
     } catch (error) {
-      console.error('💥 CoachService: Unexpected error getting coaches for goal:', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'An unexpected error occurred',

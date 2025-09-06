@@ -11,6 +11,9 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { AppProvider } from '@/src/context/AppContext';
 import { AuthProvider, useAuth } from '@/src/context/AuthContext';
 import { OnboardingProvider } from '@/src/context/OnboardingContext';
+import { CoachProvider } from '@/src/context/CoachContext';
+import { ErrorBoundary } from '@/src/components/ErrorBoundary';
+import { NetworkStatus } from '@/src/components/NetworkStatus';
 
 function RootLayoutNav() {
   const { state } = useAuth();
@@ -19,10 +22,8 @@ function RootLayoutNav() {
   // Handle deep links for email verification
   useEffect(() => {
     const handleDeepLink = (url: string) => {
-      console.log('Deep link received:', url);
       // Parse the URL to extract any tokens or parameters
       const parsedUrl = Linking.parse(url);
-      console.log('Parsed deep link:', parsedUrl);
       
       // If it's an email verification link, the auth state change will handle it
       // We just need to make sure the app is ready to receive it
@@ -76,6 +77,7 @@ function RootLayoutNav() {
         <Stack.Screen name="oauth/callback" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
+      <NetworkStatus />
       <StatusBar style="auto" />
     </ThemeProvider>
   );
@@ -92,12 +94,16 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <AppProvider>
-        <OnboardingProvider>
-          <RootLayoutNav />
-        </OnboardingProvider>
-      </AppProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <CoachProvider>
+          <AppProvider>
+            <OnboardingProvider>
+              <RootLayoutNav />
+            </OnboardingProvider>
+          </AppProvider>
+        </CoachProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

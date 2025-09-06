@@ -1,17 +1,5 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ImageBackground,
-  TouchableOpacity,
-  ActivityIndicator,
-  TextInput,
-} from 'react-native';
+import { , ActivityIndicator, Alert, ImageBackground, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';;
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { validateForgotPasswordForm } from '@/src/utils/validation';

@@ -2,9 +2,9 @@
  * Multiple choice selector component for onboarding
  */
 
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
-import { IconSymbol } from '../../../components/ui/IconSymbol';
+import React, { memo } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { IconSymbol } from '@/components/ui/IconSymbol';
 import { colors } from '../../constants/designSystem';
 
 export interface Option {
@@ -23,7 +23,7 @@ interface OptionSelectorProps {
   style?: any;
 }
 
-export const OptionSelector: React.FC<OptionSelectorProps> = ({
+export const OptionSelector: React.FC<OptionSelectorProps> = memo(({
   options,
   selectedValues,
   onSelectionChange,
@@ -105,7 +105,7 @@ export const OptionSelector: React.FC<OptionSelectorProps> = ({
       </View>
     </View>
   );
-};
+});
 
 // Single selection variant
 interface SingleOptionSelectorProps {
@@ -116,7 +116,7 @@ interface SingleOptionSelectorProps {
   style?: any;
 }
 
-export const SingleOptionSelector: React.FC<SingleOptionSelectorProps> = ({
+export const SingleOptionSelector: React.FC<SingleOptionSelectorProps> = memo(({
   options,
   selectedValue,
   onSelectionChange,
@@ -133,7 +133,7 @@ export const SingleOptionSelector: React.FC<SingleOptionSelectorProps> = ({
       style={style}
     />
   );
-};
+});
 
 // List variant for single column
 interface OptionListProps {

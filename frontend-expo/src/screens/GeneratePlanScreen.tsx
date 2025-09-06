@@ -2,14 +2,13 @@
  * Generate Plan Screen - Shows loading animation while AI generates workout plan
  */
 
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';;
 import { useLocalSearchParams } from 'expo-router';
 import { useOnboarding } from '../context/OnboardingContext';
 import { OnboardingBackground } from '../components/onboarding';
 import { AnimatedSpinner, LoadingIndicator } from '../components/generatePlan';
 import { useGeneratePlanFlow } from '../hooks/useGeneratePlanFlow';
-import { ErrorHandler } from '../utils/errorHandling';
+import { showWorkoutPlanError } from '../utils/errorHandler';
 
 export const GeneratePlanScreen: React.FC = () => {
   const { state: onboardingState } = useOnboarding();
@@ -19,14 +18,18 @@ export const GeneratePlanScreen: React.FC = () => {
   // Handle errors with standardized error handling
   React.useEffect(() => {
     if (error) {
-      ErrorHandler.showWorkoutPlanError(error, () => {
+      showWorkoutPlanError(error, () => {
         clearError();
         handleGeneratePlan();
       });
     }
   }, [error, clearError, handleGeneratePlan]);
 
-  const coachName = onboardingState.data?.primaryGoal || 'AI Coach';
+  // Get the actual coach name from the selected coach
+  const selectedCoachId = onboardingState.data?.selectedCoachId;
+  const availableCoaches = onboardingState.data?.availableCoaches || [];
+  const selectedCoach = availableCoaches.find(coach => coach.id === selectedCoachId);
+  const coachName = selectedCoach?.name || 'AI Coach';
 
   return (
     <View style={styles.container}>

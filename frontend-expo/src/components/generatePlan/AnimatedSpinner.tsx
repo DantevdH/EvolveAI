@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import React, { useState, useEffect, memo } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';;
+import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/designSystem';
 
 interface AnimatedSpinnerProps {
   coachName?: string;
 }
 
-export const AnimatedSpinner: React.FC<AnimatedSpinnerProps> = ({ 
+export const AnimatedSpinner: React.FC<AnimatedSpinnerProps> = memo(({ 
   coachName = 'AI Coach' 
 }) => {
   const [rotationValue] = useState(new Animated.Value(0));
@@ -50,7 +51,12 @@ export const AnimatedSpinner: React.FC<AnimatedSpinnerProps> = ({
         
         {/* Central Icon */}
         <View style={styles.iconContainer}>
-          <Text style={styles.iconText}>🧠</Text>
+          <Ionicons 
+            name="hardware-chip" 
+            size={40} 
+            color={colors.text} 
+            style={styles.icon}
+          />
         </View>
       </View>
 
@@ -66,7 +72,7 @@ export const AnimatedSpinner: React.FC<AnimatedSpinnerProps> = ({
       </View>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -113,9 +119,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.primary,
   },
-  iconText: {
-    fontSize: 40,
-    color: colors.text,
+  icon: {
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 10,
+    elevation: 5,
   },
   textContainer: {
     alignItems: 'center',

@@ -2,8 +2,7 @@
  * Time Availability screen - Seventh step of onboarding
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, ImageBackground } from 'react-native';
+import { ImageBackground, StyleSheet, Text, View } from 'react-native';;
 import { useOnboarding } from '../../context/OnboardingContext';
 import { OnboardingCard, OnboardingNavigation, DaysPerWeekSlider, MinutesPerSessionSlider, OnboardingBackground } from '../../components/onboarding';
 

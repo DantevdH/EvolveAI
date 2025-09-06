@@ -3,26 +3,21 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, StyleSheet, ImageBackground } from 'react-native';
+import { ImageBackground, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';;
 import { useOnboarding } from '../../context/OnboardingContext';
 import { OnboardingCard, OnboardingNavigation, OptionSelector, OnboardingBackground } from '../../components/onboarding';
 import { fitnessGoals } from '../../types/onboarding';
 import { validateGoalDescription } from '../../utils/onboardingValidation';
-import { useCoaches } from '../../hooks/useCoaches';
+import { useCoaches } from '../../context/CoachContext';
 
 export const FitnessGoalsScreen: React.FC = () => {
-  const { state, updateData } = useOnboarding();
+  const { state, updateData, nextStep } = useOnboarding();
   const [validationError, setValidationError] = useState<string | null>(null);
-  const { allCoaches, availableCoaches, isLoading: isLoadingCoaches, filterCoachesByGoal } = useCoaches();
+  const { state: coachState, filterCoachesByGoal } = useCoaches();
   const previousGoalRef = useRef<string | null>(null);
+  const [hasShownDescriptionPrompt, setHasShownDescriptionPrompt] = useState(false);
+  const [showDescriptionModal, setShowDescriptionModal] = useState(false);
 
-  // Log available frontend goals for debugging
-  useEffect(() => {
-    console.log('🎯 Available frontend goals:');
-    fitnessGoals.forEach((goal, index) => {
-      console.log(`  ${index + 1}. "${goal.value}"`);
-    });
-  }, []);
 
   // Auto-select first fitness goal if none is selected
   useEffect(() => {
@@ -31,18 +26,22 @@ export const FitnessGoalsScreen: React.FC = () => {
     }
   }, [state.data.primaryGoal, updateData]);
 
-  // Update available coaches when goal changes (only when we have coaches and a valid goal)
+  // Update available coaches when goal changes (static data - no loading needed)
   useEffect(() => {
-    if (state.data.primaryGoal && allCoaches.length > 0 && !isLoadingCoaches) {
+    if (state.data.primaryGoal && coachState.allCoaches.length > 0) {
       // Only filter if the goal has actually changed
       if (previousGoalRef.current !== state.data.primaryGoal) {
-        filterCoachesByGoal(state.data.primaryGoal);
-        updateData({ availableCoaches });
+        const matchingCoaches = filterCoachesByGoal(state.data.primaryGoal);
+        const selectedCoachId = matchingCoaches.length > 0 ? matchingCoaches[0].id : undefined;
+        
+        updateData({ 
+          availableCoaches: matchingCoaches,
+          selectedCoachId: selectedCoachId
+        });
         previousGoalRef.current = state.data.primaryGoal;
-        console.log(`✅ Found ${availableCoaches.length} coaches for goal: ${state.data.primaryGoal}`);
       }
     }
-  }, [state.data.primaryGoal, allCoaches.length, isLoadingCoaches, availableCoaches]); // Removed updateData from dependencies
+  }, [state.data.primaryGoal, coachState.allCoaches.length, filterCoachesByGoal, updateData]);
 
   const handleGoalChange = (values: string[]) => {
     if (values.length > 0) {
@@ -65,6 +64,27 @@ export const FitnessGoalsScreen: React.FC = () => {
     } else {
       setValidationError(null);
     }
+  };
+
+  const handleNext = () => {
+    // Check if goal description is empty and we haven't shown the prompt yet
+    if (!state.data.goalDescription?.trim() && !hasShownDescriptionPrompt) {
+      setHasShownDescriptionPrompt(true);
+      setShowDescriptionModal(true);
+    } else {
+      // If description exists or prompt was already shown, proceed normally
+      nextStep();
+    }
+  };
+
+  const handleSkipDescription = () => {
+    setShowDescriptionModal(false);
+    nextStep();
+  };
+
+  const handleAddDescription = () => {
+    setShowDescriptionModal(false);
+    // User can now fill in the description and proceed when ready
   };
 
   const options = fitnessGoals.map(goal => ({
@@ -94,12 +114,6 @@ export const FitnessGoalsScreen: React.FC = () => {
                 columns={2}
               />
               
-              {/* Loading indicator for coaches */}
-              {isLoadingCoaches && (
-                <View style={styles.loadingContainer}>
-                  <Text style={styles.loadingText}>Loading coaches...</Text>
-                </View>
-              )}
             </View>
 
             {/* Goal Description */}
@@ -118,6 +132,7 @@ export const FitnessGoalsScreen: React.FC = () => {
                   multiline
                   numberOfLines={4}
                   maxLength={500}
+                  testID="goal-description-input"
                 />
                 
                 {validationError && (
@@ -131,8 +146,59 @@ export const FitnessGoalsScreen: React.FC = () => {
             )}
           </View>
 
-          <OnboardingNavigation />
+          <OnboardingNavigation onNext={handleNext} />
         </OnboardingCard>
+
+        {/* Custom Description Modal */}
+        <Modal
+          visible={showDescriptionModal}
+          transparent={true}
+          animationType="fade"
+          statusBarTranslucent={true}
+          onRequestClose={() => setShowDescriptionModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity 
+              style={styles.modalBackdrop} 
+              activeOpacity={1}
+              onPress={() => setShowDescriptionModal(false)}
+            />
+            <View style={styles.modalContainer}>
+              <View style={styles.modalCard}>
+                <Text style={styles.modalTitle}>Missing Goal Description</Text>
+                <Text style={styles.modalSubtitle}>
+                  You haven't described your specific fitness goals yet. Adding details will help our AI create a more personalized training plan for you.
+                </Text>
+                
+                <Text style={styles.modalText}>
+                  Would you like to add details about your fitness goals now?
+                </Text>
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={styles.modalButton}
+                    onPress={handleSkipDescription}
+                    activeOpacity={0.8}
+                    testID="modal-skip-button"
+                  >
+                    <Text style={styles.modalButtonText}>Skip</Text>
+                  </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.modalButtonPrimary]}
+                      onPress={handleAddDescription}
+                      activeOpacity={0.8}
+                      testID="modal-add-info-button"
+                    >
+                      <Text style={[styles.modalButtonText, styles.modalButtonTextPrimary]}>
+                        Add Info
+                      </Text>
+                    </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        </Modal>
     </View>
   );
 };
@@ -181,16 +247,94 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     marginTop: 4,
   },
-  loadingContainer: {
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 8,
+  // Modal styles - following React Native best practices
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1000,
   },
-  loadingText: {
-    fontSize: 14,
+  modalBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+  },
+  modalContainer: {
+    width: '90%',
+    maxWidth: 400,
+    zIndex: 1001,
+  },
+  modalCard: {
+    backgroundColor: 'rgba(20, 20, 20, 0.95)',
+    borderRadius: 20,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  modalSubtitle: {
+    fontSize: 16,
     color: 'rgba(255, 255, 255, 0.8)',
-    fontStyle: 'italic',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  modalText: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    minWidth: 100,
+  },
+  modalButtonPrimary: {
+    backgroundColor: '#932322',
+    borderColor: '#932322',
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  modalButtonTextPrimary: {
+    color: '#FFFFFF',
   },
 });

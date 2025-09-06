@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';;
 import { useOnboarding } from '../../context/OnboardingContext';
 import { OnboardingCard, OnboardingNavigation, OnboardingBackground } from '../../components/onboarding';
 import { validateAge, validateWeight, validateHeight } from '../../utils/onboardingValidation';
@@ -101,6 +101,7 @@ export const PersonalInfoScreen: React.FC = () => {
             value === option && styles.unitButtonSelected
           ]}
           onPress={() => onValueChange(option)}
+          testID={`unit-${option}`}
         >
           <Text style={[
             styles.unitButtonText,
@@ -137,6 +138,7 @@ export const PersonalInfoScreen: React.FC = () => {
                 placeholderTextColor="rgba(255, 255, 255, 0.5)"
                 keyboardType="numeric"
                 maxLength={3}
+                testID="age-input"
               />
               {validationErrors.age && (
                 <Text style={styles.errorText}>{validationErrors.age}</Text>
@@ -158,6 +160,7 @@ export const PersonalInfoScreen: React.FC = () => {
                   placeholder="0"
                   placeholderTextColor="rgba(255, 255, 255, 0.5)"
                   keyboardType="decimal-pad"
+                  testID="weight-input"
                 />
                 <UnitToggle
                   value={state.data.weightUnit}
@@ -185,6 +188,7 @@ export const PersonalInfoScreen: React.FC = () => {
                   placeholder="0"
                   placeholderTextColor="rgba(255, 255, 255, 0.5)"
                   keyboardType="decimal-pad"
+                  testID="height-input"
                 />
                 <UnitToggle
                   value={state.data.heightUnit}
@@ -209,6 +213,7 @@ export const PersonalInfoScreen: React.FC = () => {
                       state.data.gender === gender && styles.genderButtonSelected
                     ]}
                     onPress={() => handleGenderChange(gender)}
+                    testID={`gender-${gender.toLowerCase()}`}
                   >
                     <Text style={[
                       styles.genderButtonText,

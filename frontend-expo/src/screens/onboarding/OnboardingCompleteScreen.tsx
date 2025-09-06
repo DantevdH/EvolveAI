@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { ActivityIndicator, Alert, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';;
 import { useRouter } from 'expo-router';
 import { useOnboarding } from '../../context/OnboardingContext';
 import { useAuth } from '../../context/AuthContext';
@@ -22,17 +22,13 @@ export const OnboardingCompleteScreen: React.FC = () => {
 
 
   const handleComplete = async () => {
-    console.log('🎯 OnboardingCompleteScreen: handleComplete called');
     setIsCompleting(true);
     
     try {
       // Step 1: Complete onboarding validation
-      console.log('🔄 Step 1: Completing onboarding validation...');
       const onboardingSuccess = await completeOnboarding();
-      console.log('✅ completeOnboarding result:', onboardingSuccess);
       
       if (!onboardingSuccess) {
-        console.log('❌ completeOnboarding failed');
         Alert.alert(
           'Error',
           'Failed to complete onboarding. Please try again.',
@@ -42,11 +38,9 @@ export const OnboardingCompleteScreen: React.FC = () => {
       }
 
       // Step 2: Create user profile
-      console.log('📝 Step 2: Creating user profile...');
       const profileResult = await createUserProfile(state.data);
       
       if (!profileResult.success) {
-        console.log('❌ Profile creation failed');
         Alert.alert(
           'Profile Creation Failed',
           profileError || 'Failed to create your profile. Please try again.',
@@ -54,16 +48,8 @@ export const OnboardingCompleteScreen: React.FC = () => {
         );
         return;
       }
-
-      console.log('✅ Profile created successfully with ID:', profileResult.profileId);
       
       // Step 3: Navigate to GeneratePlanScreen with entire profile data
-      console.log('🚀 Step 3: Navigating to generate-plan with profile data...');
-      // GeneratePlanScreen will now only handle:
-      // 1. Generate plan via backend API (using passed profile data)
-      // 2. Store plan in backend database
-      // 3. Push plan to frontend
-      
       const profileDataToPass = {
         id: profileResult.profileId,
         user_id: authState.user.id,
@@ -83,12 +69,8 @@ export const OnboardingCompleteScreen: React.FC = () => {
         has_limitations: state.data.hasLimitations || false,
         limitations_description: state.data.limitationsDescription || '',
         final_chat_notes: state.data.finalNotes || '',
+        coach_id: state.data.selectedCoachId || null,
       };
-      
-      console.log('🚀 Navigating to generate-plan with profile data:');
-      console.log('📋 Profile ID:', profileResult.profileId);
-      console.log('📋 Profile data to pass:', profileDataToPass);
-      console.log('📋 JSON stringified data:', JSON.stringify(profileDataToPass));
       
       router.replace({
         pathname: '/generate-plan',
@@ -98,7 +80,6 @@ export const OnboardingCompleteScreen: React.FC = () => {
       });
       
     } catch (error) {
-      console.error('💥 Onboarding completion error:', error);
       Alert.alert(
         'Error',
         'An unexpected error occurred. Please try again.',
@@ -166,6 +147,7 @@ export const OnboardingCompleteScreen: React.FC = () => {
                 style={[styles.completeButton, (isCompleting || isCreatingProfile) && styles.completeButtonDisabled]}
                 onPress={handleComplete}
                 disabled={isCompleting || isCreatingProfile}
+                testID="create-plan-button"
               >
                 {(isCompleting || isCreatingProfile) ? (
                   <ActivityIndicator size="small" color={colors.text} />
@@ -178,6 +160,7 @@ export const OnboardingCompleteScreen: React.FC = () => {
                 style={styles.editButton}
                 onPress={handleBackToEdit}
                 disabled={isCompleting || isCreatingProfile}
+                testID="edit-profile-button"
               >
                 <Text style={styles.editButtonText}>Edit Profile</Text>
               </TouchableOpacity>

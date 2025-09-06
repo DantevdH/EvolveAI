@@ -3,7 +3,7 @@
  */
 
 import React, { ReactNode } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';;
 import { colors } from '../../constants/designSystem';
 
 interface OnboardingCardProps {

@@ -2,8 +2,7 @@
  * Progress indicator component for onboarding steps
  */
 
-import React from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { Animated, StyleSheet, Text, View } from 'react-native';;
 import { useOnboardingProgress } from '../../context/OnboardingContext';
 import { colors } from '../../constants/designSystem';
 

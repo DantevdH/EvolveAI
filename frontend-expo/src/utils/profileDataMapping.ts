@@ -19,6 +19,7 @@ export interface OnboardingData {
   hasLimitations?: boolean;
   limitationsDescription?: string;
   finalNotes?: string;
+  selectedCoachId?: number;
 }
 
 export interface DatabaseProfileData {
@@ -39,6 +40,7 @@ export interface DatabaseProfileData {
   has_limitations: boolean;
   limitations_description: string;
   final_chat_notes: string;
+  coach_id?: number;
 }
 
 export interface BackendRequestData {
@@ -88,6 +90,7 @@ export const mapOnboardingToDatabase = (
     has_limitations: onboardingData.hasLimitations || false,
     limitations_description: onboardingData.limitationsDescription || '',
     final_chat_notes: onboardingData.finalNotes || '',
+    coach_id: onboardingData.selectedCoachId || null,
   };
 };
 

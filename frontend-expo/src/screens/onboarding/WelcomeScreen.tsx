@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';;
 import { Ionicons } from '@expo/vector-icons';
 import { useOnboarding } from '../../context/OnboardingContext';
 import { OnboardingBackground } from '../../components/onboarding';
@@ -48,7 +48,7 @@ export const WelcomeScreen: React.FC = () => {
                 <Ionicons name="barbell" size={44} color="white" style={styles.dumbbellIcon} />
               </View>
               {/* Tagline */}
-              <Text style={styles.tagline}>Science Based. Improved Results.</Text>
+              <Text style={styles.tagline} testID="welcome-subtitle">Science Based. Improved Results.</Text>
             </View>
 
             {/* Username Input */}
@@ -68,6 +68,7 @@ export const WelcomeScreen: React.FC = () => {
                   autoCapitalize="words"
                   autoCorrect={false}
                   maxLength={20}
+                  testID="username-input"
                 />
               </View>
               
@@ -93,6 +94,7 @@ export const WelcomeScreen: React.FC = () => {
               onPress={handleNext}
               disabled={username.trim().length < 5 || !!validationError}
               activeOpacity={0.8}
+              testID="next-button"
             >
               <Text style={[
                 styles.startButtonText,

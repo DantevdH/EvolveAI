@@ -1,18 +1,5 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  ImageBackground,
-  TouchableOpacity,
-  ActivityIndicator,
-  TextInput,
-} from 'react-native';
+import { , ActivityIndicator, Alert, ImageBackground, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';;
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { IconSymbol } from '@/components/ui/IconSymbol';
@@ -26,7 +13,8 @@ const CustomTextField: React.FC<{
   onChangeText: (text: string) => void;
   secureTextEntry?: boolean;
   keyboardType?: 'default' | 'email-address';
-}> = ({ placeholder, value, onChangeText, secureTextEntry = false, keyboardType = 'default' }) => {
+  testID?: string;
+}> = ({ placeholder, value, onChangeText, secureTextEntry = false, keyboardType = 'default', testID }) => {
   return (
     <View style={styles.textFieldContainer}>
       {value === '' && (
@@ -41,6 +29,7 @@ const CustomTextField: React.FC<{
           keyboardType={keyboardType}
           autoCapitalize="none"
           autoCorrect={false}
+          testID={testID}
         />
       ) : (
         <TextInput
@@ -50,6 +39,7 @@ const CustomTextField: React.FC<{
           keyboardType={keyboardType}
           autoCapitalize={keyboardType === 'email-address' ? 'none' : 'words'}
           autoCorrect={false}
+          testID={testID}
         />
       )}
     </View>
@@ -63,13 +53,15 @@ const SocialLoginButton: React.FC<{
   onPress: () => void;
   disabled?: boolean;
   isSystemIcon?: boolean;
-}> = ({ iconName, text, onPress, disabled = false, isSystemIcon = false }) => {
+  testID?: string;
+}> = ({ iconName, text, onPress, disabled = false, isSystemIcon = false, testID }) => {
   return (
     <TouchableOpacity
       style={[styles.socialButton, disabled && styles.socialButtonDisabled]}
       onPress={onPress}
       disabled={disabled}
-      activeOpacity={0.8}>
+      activeOpacity={0.8}
+      testID={testID}>
       <View style={styles.socialButtonContent}>
         <IconSymbol
           name={iconName as any}
@@ -197,18 +189,21 @@ export const SignupScreen: React.FC = () => {
                   onPress={handleAppleSignup}
                   disabled={true}
                   isSystemIcon={true}
+                  testID="apple-signup-button"
                 />
                 
                 <SocialLoginButton
                   iconName="globe"
                   text="Sign Up with Google"
                   onPress={handleGoogleSignup}
+                  testID="google-signup-button"
                 />
                 
                 <SocialLoginButton
                   iconName="person.2"
                   text="Sign Up with Facebook"
                   onPress={handleFacebookSignup}
+                  testID="facebook-signup-button"
                 />
               </View>
               
@@ -226,6 +221,7 @@ export const SignupScreen: React.FC = () => {
                   value={email}
                   onChangeText={handleEmailChange}
                   keyboardType="email-address"
+                  testID="email-input"
                 />
                 
                 <CustomTextField
@@ -233,6 +229,7 @@ export const SignupScreen: React.FC = () => {
                   value={password}
                   onChangeText={handlePasswordChange}
                   secureTextEntry
+                  testID="password-input"
                 />
                 
                 <CustomTextField
@@ -240,6 +237,7 @@ export const SignupScreen: React.FC = () => {
                   value={confirmPassword}
                   onChangeText={handleConfirmPasswordChange}
                   secureTextEntry
+                  testID="confirm-password-input"
                 />
                 
                 {/* Validation Error Message */}
@@ -253,14 +251,15 @@ export const SignupScreen: React.FC = () => {
               {/* Signup Button */}
               <View style={styles.signupSection}>
                 {state.isLoading ? (
-                  <View style={styles.loadingContainer}>
+                  <View style={styles.loadingContainer} testID="loading-indicator">
                     <ActivityIndicator size="large" color="#FFFFFF" />
                   </View>
                 ) : (
                   <TouchableOpacity
                     style={styles.signupButton}
                     onPress={handleEmailSignup}
-                    activeOpacity={0.8}>
+                    activeOpacity={0.8}
+                    testID="signup-button">
                     <Text style={styles.signupButtonText}>Create Account</Text>
                   </TouchableOpacity>
                 )}
@@ -283,7 +282,7 @@ export const SignupScreen: React.FC = () => {
                 {/* Sign In Link */}
                 <View style={styles.signInContainer}>
                   <Text style={styles.signInText}>Already have an account? </Text>
-                  <TouchableOpacity onPress={() => router.push('/login')}>
+                  <TouchableOpacity onPress={() => router.push('/login')} testID="login-link">
                     <Text style={styles.signInLink}>Sign In</Text>
                   </TouchableOpacity>
                 </View>

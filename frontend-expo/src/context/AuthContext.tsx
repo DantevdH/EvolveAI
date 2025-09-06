@@ -124,12 +124,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const loadUserProfile = useCallback(async (userId: string) => {
     // Prevent multiple simultaneous calls
     if (state.isLoading) {
-      console.log('AuthContext: Profile loading already in progress, skipping duplicate call');
       return;
     }
 
     try {
-      console.log('AuthContext: Loading user profile for user:', userId);
       dispatch({ type: 'SET_LOADING', payload: true });
       
       const response = await UserService.getUserProfile(userId);
@@ -150,8 +148,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         } else {
           dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
         }
+
       } else {
-        console.log('AuthContext: Error loading user profile:', response.error);
         dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to load user profile' });
       }
     } catch (error) {
@@ -166,17 +164,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        console.log('AuthContext: Initializing auth state...');
-        console.log('AuthContext: Supabase client:', supabase);
-        
+
         const { data: { session }, error } = await supabase.auth.getSession();
-        console.log('AuthContext: Session response:', { session, error });
-        
+
         if (error) {
           console.error('AuthContext: Error getting session:', error);
           dispatch({ type: 'SET_ERROR', payload: error.message });
         } else if (session) {
-          console.log('AuthContext: Found existing session:', session.user?.email);
+
           dispatch({ type: 'SET_USER', payload: session.user });
           
           // Load user profile if we have a session
@@ -184,13 +179,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             await loadUserProfile(session.user.id);
           }
         } else {
-          console.log('AuthContext: No existing session found');
+
         }
       } catch (error) {
         console.error('AuthContext: Error initializing auth:', error);
         dispatch({ type: 'SET_ERROR', payload: 'Failed to initialize authentication' });
       } finally {
-        console.log('AuthContext: Setting initialized to true');
+
         dispatch({ type: 'SET_INITIALIZED', payload: true });
       }
     };
@@ -201,15 +196,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Single auth state listener - handles all auth changes
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session);
-      
+
       if (event === 'SIGNED_IN' && session) {
-        console.log('✅ User signed in');
+
         dispatch({ type: 'SET_USER', payload: session.user });
         
         // Check if OAuth user needs email verification (not for email signup)
         if (session.user && !session.user.email_confirmed_at && session.user.app_metadata?.provider !== 'email') {
-          console.log('AuthContext: OAuth user needs email verification, not loading profile yet');
+
           return; // Don't load profile until email is verified
         }
         
@@ -217,10 +211,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if ((!state.userProfile || state.userProfile.userId !== session.user.id) && !state.isLoading) {
           await loadUserProfile(session.user.id);
         } else {
-          console.log('AuthContext: User profile already loaded or loading in progress, skipping duplicate load');
+
         }
       } else if (event === 'SIGNED_OUT') {
-        console.log('❌ User signed out');
+
         dispatch({ type: 'CLEAR_AUTH' });
       }
     });
@@ -232,11 +226,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Force clear all authentication data
   const forceSignOut = async () => {
-    console.log('🔐 Force signing out...');
+
     try {
       await AuthService.signOut();
       dispatch({ type: 'CLEAR_AUTH' });
-      console.log('🔐 Force sign out complete');
+
     } catch (error) {
       console.error('💥 Force sign out error:', error);
     }
@@ -282,7 +276,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           await loadUserProfile(response.user.id);
         } else if (response.user && !response.session) {
           // User needs to verify email - don't set user or load profile
-          console.log('AuthContext: User needs email verification, not setting user state');
+
         }
         return true;
       } else {
@@ -527,7 +521,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Check auth state
   const checkAuthState = async (): Promise<void> => {
     // Auth state is now handled automatically by the listener
-    console.log('Auth state check - current user:', state.user ? 'authenticated' : 'not authenticated');
+
   };
 
   // Get current user
@@ -538,7 +532,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Mark onboarding as complete
   const markOnboardingComplete = async (): Promise<void> => {
     // Onboarding completion is now determined by the presence of userProfile
-    console.log('Onboarding completion is determined by userProfile existence');
+
   };
 
   // Generate workout plan
@@ -552,8 +546,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return;
       }
 
-      console.log('AuthContext: Refreshing workout plan for user:', state.userProfile.userId);
-
       // Import WorkoutService dynamically to avoid circular dependencies
       const { WorkoutService } = await import('../services/workoutService');
       
@@ -561,11 +553,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       if (result.success && result.data) {
         dispatch({ type: 'SET_WORKOUT_PLAN', payload: result.data });
-        console.log('AuthContext: Workout plan refreshed successfully');
+
       } else {
         // No workout plan found, clear it
         dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
-        console.log('AuthContext: No workout plan found, cleared from state');
+
       }
     } catch (error) {
       console.error('Failed to refresh workout plan:', error);
@@ -575,7 +567,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Set workout plan directly (for use after generation)
   const setWorkoutPlan = (workoutPlan: WorkoutPlan): void => {
-    console.log('AuthContext: Setting workout plan directly:', workoutPlan);
+
     dispatch({ type: 'SET_WORKOUT_PLAN', payload: workoutPlan });
   };
 

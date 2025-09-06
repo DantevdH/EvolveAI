@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
+import { ActivityIndicator, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';;
 import { useOnboarding } from '../../context/OnboardingContext';
 import { OnboardingCard, OnboardingBackground } from '../../components/onboarding';
 import { colors } from '../../constants/designSystem';
@@ -28,17 +28,38 @@ export const PhysicalLimitationsScreen: React.FC = () => {
   const handleNext = () => {
     // Clear any existing errors
     setValidationErrors({});
+    
+    // Validate if "Yes" is selected
+    if (state.data.hasLimitations) {
+      const description = state.data.limitationsDescription || '';
+      
+      if (description.trim().length === 0) {
+        setValidationErrors({ limitationsDescription: 'Please describe your limitations' });
+        return;
+      }
+      
+      if (description.trim().length < 100) {
+        setValidationErrors({ 
+          limitationsDescription: `Please provide more details about your limitations (at least 100 characters, currently ${description.trim().length} characters)` 
+        });
+        return;
+      }
+    }
+    
     nextStep();
   };
 
   const handlePrevious = () => {
     previousStep();
   };
-
   // Check if Next button should be disabled (based on Swift logic)
   const isNextButtonDisabled = () => {
-    // If "Yes" is selected but no description is provided, disable the button
-    return state.data.hasLimitations && state.data.limitationsDescription.trim().length === 0;
+    // If "Yes" is selected, check if description meets requirements
+    if (state.data.hasLimitations) {
+      const description = state.data.limitationsDescription || '';
+      return description.trim().length === 0 || description.trim().length < 100;
+    }
+    return false;
   };
 
   return (
@@ -58,6 +79,7 @@ export const PhysicalLimitationsScreen: React.FC = () => {
                   !state.data.hasLimitations && styles.toggleButtonSelected
                 ]}
                 onPress={() => handleLimitationsToggle(false)}
+                testID="limitations-no-button"
               >
                 <Text style={[
                   styles.toggleButtonText,
@@ -73,6 +95,7 @@ export const PhysicalLimitationsScreen: React.FC = () => {
                   state.data.hasLimitations && styles.toggleButtonSelected
                 ]}
                 onPress={() => handleLimitationsToggle(true)}
+                testID="limitations-yes-button"
               >
                 <Text style={[
                   styles.toggleButtonText,
@@ -98,15 +121,30 @@ export const PhysicalLimitationsScreen: React.FC = () => {
                   ]}
                   value={state.data.limitationsDescription}
                   onChangeText={handleDescriptionChange}
-                  placeholder="e.g., 'Bad lower back', 'Recovering from a knee injury'"
+                  placeholder="Describe your physical limitations, injuries, or conditions..."
                   placeholderTextColor={colors.inputPlaceholder}
                   multiline
-                  numberOfLines={4}
+                  numberOfLines={6}
                   textAlignVertical="top"
+                  maxLength={500}
+                  testID="limitations-description-input"
                 />
-                <Text style={styles.characterCount}>
-                  {state.data.limitationsDescription.length}/300
-                </Text>
+                <View style={styles.countContainer}>
+                  <Text style={[
+                    styles.characterCount,
+                    state.data.limitationsDescription.length >= 100 && styles.characterCountComplete,
+                    state.data.limitationsDescription.length >= 80 && state.data.limitationsDescription.length < 100 && styles.characterCountWarning
+                  ]}>
+                    {state.data.limitationsDescription.length}/500 characters
+                  </Text>
+                  <Text style={[
+                    styles.requirementText,
+                    state.data.limitationsDescription.length >= 100 && styles.requirementComplete,
+                    state.data.limitationsDescription.length >= 80 && state.data.limitationsDescription.length < 100 && styles.requirementWarning
+                  ]}>
+                    {state.data.limitationsDescription.length >= 100 ? '✓ Minimum met' : `Need ${100 - state.data.limitationsDescription.length} more characters`}
+                  </Text>
+                </View>
                 {validationErrors.limitationsDescription && (
                   <Text style={styles.errorText}>{validationErrors.limitationsDescription}</Text>
                 )}
@@ -120,6 +158,7 @@ export const PhysicalLimitationsScreen: React.FC = () => {
               style={styles.backButton}
               onPress={handlePrevious}
               activeOpacity={0.8}
+              testID="back-button"
             >
               <Text style={styles.backButtonText}>Back</Text>
             </TouchableOpacity>
@@ -132,6 +171,7 @@ export const PhysicalLimitationsScreen: React.FC = () => {
               onPress={handleNext}
               disabled={isNextButtonDisabled()}
               activeOpacity={0.8}
+              testID="next-button"
             >
               <Text style={[
                 styles.nextButtonText,
@@ -188,7 +228,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
+    marginBottom: 4,
+  },
+  requiredText: {
+    fontSize: 14,
+    color: colors.muted,
     marginBottom: 8,
+    fontStyle: 'italic',
   },
   textArea: {
     backgroundColor: colors.inputBackground,
@@ -198,18 +244,38 @@ const styles = StyleSheet.create({
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.inputBorder,
-    minHeight: 120,
+    minHeight: 150,
     textAlignVertical: 'top',
   },
   textAreaError: {
     borderColor: colors.error,
     backgroundColor: colors.primaryTransparentLight,
   },
+  countContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
   characterCount: {
     fontSize: 12,
     color: colors.muted,
-    textAlign: 'right',
-    marginTop: 4,
+  },
+  characterCountWarning: {
+    color: colors.warning,
+  },
+  characterCountComplete: {
+    color: colors.success,
+  },
+  requirementText: {
+    fontSize: 12,
+    color: colors.muted,
+    fontWeight: '600',
+  },
+  requirementWarning: {
+    color: colors.warning,
+  },
+  requirementComplete: {
+    color: colors.success,
   },
   errorText: {
     fontSize: 14,
@@ -220,6 +286,7 @@ const styles = StyleSheet.create({
   navigationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 20,
     paddingBottom: 40,
@@ -250,8 +317,6 @@ const styles = StyleSheet.create({
     minWidth: 100,
     alignItems: 'center',
     justifyContent: 'center',
-    flex: 1,
-    marginLeft: 12,
   },
   nextButtonDisabled: {
     backgroundColor: colors.buttonDisabled,

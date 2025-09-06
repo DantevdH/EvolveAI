@@ -55,7 +55,6 @@ export class WorkoutService {
       }
 
       const result: GenerateWorkoutPlanResponse = await response.json();
-      console.log('✅ WorkoutService: Plan generated successfully');
 
       if (result.status === 'success' && result.workout_plan) {
         // Create a workout plan object for the frontend
