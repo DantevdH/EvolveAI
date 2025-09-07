@@ -1,3 +1,4 @@
+import React from 'react';
 import { StyleSheet, Text, TextInput, TextInputProps, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 

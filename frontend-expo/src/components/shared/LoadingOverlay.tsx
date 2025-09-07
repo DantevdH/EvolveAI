@@ -1,3 +1,4 @@
+import React from 'react';
 import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
 import { colors, spacing, typography, borderRadius, shadows, componentStyles } from '../../constants/designSystem';
 

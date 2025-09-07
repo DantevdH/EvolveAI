@@ -1,3 +1,4 @@
+import React from 'react';
 import { StyleSheet, Text, TextInput, TextInputProps, View, ViewStyle } from 'react-native';
 import {InputProps} from '@/src/types';
 
