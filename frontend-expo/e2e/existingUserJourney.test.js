@@ -10,7 +10,7 @@ describe('Existing User Journey (Complete Profile)', () => {
   });
 
   beforeEach(async () => {
-    await device.reloadReactNative();
+    await device.launchApp();
   });
 
   afterAll(async () => {

@@ -1,6 +1,6 @@
 import { supabase } from '@/src/config/supabase';
 import { TokenManager } from './tokenManager';
-import { Platform } from 'react-native';;
+import { Platform } from 'react-native';
 
 export interface AuthResponse {
   success: boolean;

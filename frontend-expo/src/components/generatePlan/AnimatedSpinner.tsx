@@ -1,5 +1,5 @@
 import React, { useState, useEffect, memo } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';;
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/designSystem';
 

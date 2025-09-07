@@ -1,4 +1,4 @@
-import { Alert, SafeAreaView, StyleSheet, Text, View } from 'react-native';;
+import { Alert, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import {useAppContext} from '@/src/context/AppContext';
 import {useAuth} from '@/src/context/AuthContext';
 import {Button} from '@/src/components/Button';

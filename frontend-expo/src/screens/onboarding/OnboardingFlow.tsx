@@ -2,7 +2,7 @@
  * Main onboarding flow component that handles step navigation
  */
 
-import { StyleSheet, Text, View } from 'react-native';;
+import { StyleSheet, Text, View } from 'react-native';
 import { useOnboarding } from '../../context/OnboardingContext';
 import { useAuth } from '../../context/AuthContext';
 import { GeneratePlanScreen } from '../GeneratePlanScreen';

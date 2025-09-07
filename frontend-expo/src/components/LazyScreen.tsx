@@ -4,7 +4,7 @@
  */
 
 import React, { Suspense, ComponentType, ReactNode } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';;
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { colors, spacing } from '../constants/designSystem';
 
 interface LazyScreenProps {

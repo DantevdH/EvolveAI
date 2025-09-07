@@ -12,12 +12,12 @@ module.exports = {
   apps: {
     'ios.debug': {
       type: 'ios.app',
-      binaryPath: 'ios/build/Build/Products/Debug-iphonesimulator/EvolveAI.app',
-      build: 'expo run:ios --configuration Debug'
+      binaryPath: '/Users/dheijden003/Library/Developer/Xcode/DerivedData/frontendexpo2-heecubkgdnztfkanytdgmdpphwqj/Build/Products/Debug-iphonesimulator/frontendexpo2.app',
+      build: 'DETOX=true expo run:ios --configuration Debug'
     },
     'ios.release': {
       type: 'ios.app',
-      binaryPath: 'ios/build/Build/Products/Release-iphonesimulator/EvolveAI.app',
+      binaryPath: '/Users/dheijden003/Library/Developer/Xcode/DerivedData/frontendexpo2-heecubkgdnztfkanytdgmdpphwqj/Build/Products/Release-iphonesimulator/frontendexpo2.app',
       build: 'expo run:ios --configuration Release'
     },
     'android.debug': {

@@ -34,7 +34,7 @@ jest.mock('react-native', () => ({
 }));
 
 // Now import the AuthService
-import { AuthService } from '@/services/authService';
+import { AuthService } from '@/src/services/authService';
 
 describe('AuthService - Business Logic', () => {
   const mockCredentials = {

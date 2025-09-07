@@ -2,8 +2,7 @@
  * Multiple choice selector component for onboarding
  */
 
-import React, { memo } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { memo } from 'react';import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { colors } from '../../constants/designSystem';
 

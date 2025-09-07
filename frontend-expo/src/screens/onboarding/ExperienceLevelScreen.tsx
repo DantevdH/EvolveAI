@@ -2,7 +2,7 @@
  * Experience Level screen - Fifth step of onboarding
  */
 
-import { StyleSheet, View } from 'react-native';;
+import { StyleSheet, View } from 'react-native';
 import { useOnboarding } from '../../context/OnboardingContext';
 import { OnboardingCard, OnboardingNavigation, OptionList, OnboardingBackground } from '../../components/onboarding';
 import { experienceLevels } from '../../types/onboarding';

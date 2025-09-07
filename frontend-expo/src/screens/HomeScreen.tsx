@@ -1,4 +1,4 @@
-import { SafeAreaView, StyleSheet, Text, View } from 'react-native';;
+import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import {useAuth} from '@/src/context/AuthContext';
 
 export const HomeScreen: React.FC = () => {

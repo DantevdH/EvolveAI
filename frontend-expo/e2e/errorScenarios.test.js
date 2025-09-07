@@ -9,7 +9,7 @@ describe('Error Scenarios', () => {
   });
 
   beforeEach(async () => {
-    await device.reloadReactNative();
+    await device.launchApp();
   });
 
   afterAll(async () => {

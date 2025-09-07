@@ -2,7 +2,7 @@
  * Generate Plan Screen - Shows loading animation while AI generates workout plan
  */
 
-import { StyleSheet, View } from 'react-native';;
+import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useOnboarding } from '../context/OnboardingContext';
 import { OnboardingBackground } from '../components/onboarding';

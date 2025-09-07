@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ImageBackground, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';;
+import { ImageBackground, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useOnboarding } from '../../context/OnboardingContext';
 import { OnboardingCard, OnboardingNavigation, OptionSelector, OnboardingBackground } from '../../components/onboarding';
 import { fitnessGoals } from '../../types/onboarding';

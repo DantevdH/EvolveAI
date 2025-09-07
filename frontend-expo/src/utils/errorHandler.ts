@@ -3,7 +3,7 @@
  * Provides consistent error handling across the application
  */
 
-import { Alert } from 'react-native';;
+import { Alert } from 'react-native';
 import { logger } from './logger';
 
 export enum ErrorType {

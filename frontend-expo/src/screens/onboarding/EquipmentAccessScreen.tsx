@@ -3,7 +3,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { ImageBackground, StyleSheet, View } from 'react-native';;
+import { ImageBackground, StyleSheet, View } from 'react-native';
 import { useOnboarding } from '../../context/OnboardingContext';
 import { OnboardingCard, OnboardingNavigation, OptionSelector, OnboardingBackground } from '../../components/onboarding';
 import { equipmentOptions, EquipmentType } from '../../types/onboarding';

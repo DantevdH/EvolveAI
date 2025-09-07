@@ -3,8 +3,8 @@
  * Tests how AuthService integrates with the broader authentication system
  */
 
-import { AuthService } from '@/services/authService';
-import { TokenManager } from '@/services/tokenManager';
+import { AuthService } from '@/src/services/authService';
+import { TokenManager } from '@/src/services/tokenManager';
 
 // Mock the dependencies
 jest.mock('../../../config/supabase', () => ({

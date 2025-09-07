@@ -2,8 +2,8 @@
  * Unit tests for validation utilities
  */
 
-import { validateField, validateStep } from '@/utils/onboardingValidation';
-import { OnboardingData } from '@/types/onboarding';
+import { validateField, validateStep } from '@/src/utils/onboardingValidation';
+import { OnboardingData } from '@/src/types/onboarding';
 
 describe('onboardingValidation', () => {
   describe('validateField', () => {

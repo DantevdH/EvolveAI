@@ -3,7 +3,7 @@
  */
 
 import React, { memo } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';;
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useOnboarding, useOnboardingProgress } from '../../context/OnboardingContext';
 import { colors } from '../../constants/designSystem';
 

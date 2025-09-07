@@ -1,4 +1,4 @@
-import { , StyleSheet, Text, TextInput, TextInputProps, TouchableOpacity, View, ViewStyle } from 'react-native';;
+import { StyleSheet, Text, TextInput, TextInputProps, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 
 export interface AuthFormInputProps extends TextInputProps {

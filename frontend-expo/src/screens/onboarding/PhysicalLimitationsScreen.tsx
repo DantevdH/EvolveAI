@@ -3,7 +3,7 @@
  */
 
 import React, { useState } from 'react';
-import { ActivityIndicator, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';;
+import { ActivityIndicator, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useOnboarding } from '../../context/OnboardingContext';
 import { OnboardingCard, OnboardingBackground } from '../../components/onboarding';
 import { colors } from '../../constants/designSystem';
