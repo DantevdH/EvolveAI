@@ -72,11 +72,11 @@ export class TokenManager {
         SecureStore.deleteItemAsync(STORAGE_KEYS.REFRESH_TOKEN).catch(() => {}),
         SecureStore.deleteItemAsync(STORAGE_KEYS.USER_ID).catch(() => {}),
       ]);
-      console.log('🔐 Tokens cleared successfully');
+
     } catch (error) {
       console.error('Error clearing tokens:', error);
       // Don't throw error, just log it - this is not critical for auth flow
-      console.log('🔐 Token clearing failed, but continuing...');
+
     }
   }
 
@@ -137,11 +137,7 @@ export class TokenManager {
   static async getCurrentSession() {
     try {
       const { data: { session }, error } = await supabase.auth.getSession();
-      
-      console.log('🔐 TokenManager: Getting current session');
-      console.log('🔐 TokenManager: Session:', session ? 'Found' : 'Not found');
-      console.log('🔐 TokenManager: Error:', error);
-      
+
       if (error) {
         console.error('❌ TokenManager: Error getting session:', error);
         return null;

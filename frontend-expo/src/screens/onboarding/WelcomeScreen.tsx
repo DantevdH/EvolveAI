@@ -3,14 +3,15 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ImageBackground, Alert } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useOnboarding } from '../../context/OnboardingContext';
-import { OnboardingCard, OnboardingNavigation } from '../../components/onboarding';
+import { OnboardingBackground } from '../../components/onboarding';
 import { validateUsername } from '../../utils/onboardingValidation';
-import { colors } from '../../constants/colors';
+import { colors } from '../../constants/designSystem';
 
 export const WelcomeScreen: React.FC = () => {
-  const { state, updateData } = useOnboarding();
+  const { state, updateData, nextStep } = useOnboarding();
   const [username, setUsername] = useState(state.data.username);
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -23,83 +24,87 @@ export const WelcomeScreen: React.FC = () => {
   };
 
   const handleNext = () => {
-    // Validate username
-    const validation = validateUsername(username);
-    if (!validation.isValid) {
-      setValidationError(validation.error!);
+    // Validate username (5+ characters like Swift version)
+    if (username.trim().length < 5) {
+      setValidationError('Username must be at least 5 characters');
       return;
     }
 
-    // Username is valid, proceed to next step
+    // Username is valid, update data and proceed to next step
     updateData({ username });
+    nextStep();
   };
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={{ uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80' }}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
-        <View style={styles.dimmingOverlay} />
-        
-        <OnboardingCard
-          title="Welcome to Evolve"
-          subtitle="Let's create your personalized fitness journey"
-          scrollable={false}
-        >
-          <View style={styles.content}>
-            {/* Welcome Icon */}
+      <OnboardingBackground />
+      
+      <View style={styles.cardContainer}>
+          {/* Top section with icon and input */}
+          <View style={styles.topSection}>
+            {/* Modern fitness/AI icon and tagline */}
             <View style={styles.iconContainer}>
               <View style={styles.iconBackground}>
-                <Text style={styles.iconText}>💪</Text>
+                <Ionicons name="barbell" size={44} color="white" style={styles.dumbbellIcon} />
               </View>
+              {/* Tagline */}
+              <Text style={styles.tagline} testID="welcome-subtitle">Science Based. Improved Results.</Text>
             </View>
 
             {/* Username Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>What should we call you?</Text>
-              <TextInput
-                style={[
-                  styles.textInput,
-                  validationError && styles.textInputError
-                ]}
-                value={username}
-                onChangeText={handleUsernameChange}
-                placeholder="Enter your username"
-                placeholderTextColor="rgba(255, 255, 255, 0.5)"
-                autoCapitalize="none"
-                autoCorrect={false}
-                maxLength={20}
-              />
+              <View style={styles.inputWrapper}>
+                <Ionicons name="person" size={20} color={colors.primary} style={styles.inputIcon} />
+                <TextInput
+                  style={[
+                    styles.textInput,
+                    validationError && styles.textInputError
+                  ]}
+                  value={username}
+                  onChangeText={handleUsernameChange}
+                  placeholder="Your username"
+                  placeholderTextColor="rgba(255, 255, 255, 0.5)"
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  maxLength={20}
+                  testID="username-input"
+                />
+              </View>
               
               {validationError && (
                 <Text style={styles.errorText}>{validationError}</Text>
               )}
               
-              {username.length > 0 && username.length < 3 && (
+              {username.length > 0 && username.length < 5 && (
                 <Text style={styles.hintText}>
-                  Username must be at least 3 characters
+                  Username must be at least 5 characters
                 </Text>
               )}
             </View>
-
-            {/* Welcome Message */}
-            <View style={styles.messageContainer}>
-              <Text style={styles.messageText}>
-                We're excited to help you achieve your fitness goals! 
-                This quick setup will help us create a personalized plan just for you.
-              </Text>
-            </View>
           </View>
 
-          <OnboardingNavigation
-            onNext={handleNext}
-            nextText="Get Started"
-            showProgress={false}
-          />
-        </OnboardingCard>
-      </ImageBackground>
+          {/* Bottom section with button aligned to navigation */}
+          <View style={styles.bottomSection}>
+            <TouchableOpacity
+              style={[
+                styles.startButton,
+                (username.trim().length < 5 || validationError) && styles.startButtonDisabled
+              ]}
+              onPress={handleNext}
+              disabled={username.trim().length < 5 || !!validationError}
+              activeOpacity={0.8}
+              testID="next-button"
+            >
+              <Text style={[
+                styles.startButtonText,
+                (username.trim().length < 5 || validationError) && styles.startButtonTextDisabled
+              ]}>
+                Start
+              </Text>
+            </TouchableOpacity>
+          </View>
+      </View>
     </View>
   );
 };
@@ -108,57 +113,93 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  backgroundImage: {
+  cardContainer: {
     flex: 1,
-    width: '100%',
-    height: '100%',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 100,
+    paddingBottom: 40,
   },
-  dimmingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlay,
-  },
-  content: {
+  topSection: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    width: '100%',
+  },
+  bottomSection: {
+    width: '100%',
+    paddingVertical: 20,
   },
   iconContainer: {
-    marginBottom: 40,
+    alignItems: 'center',
+    marginBottom: 32,
   },
   iconBackground: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: colors.primaryTransparent,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: colors.primaryTransparentLight,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
+    position: 'relative',
   },
-  iconText: {
-    fontSize: 48,
+  dumbbellIcon: {
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+
+  tagline: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+    textAlign: 'center',
+    marginTop: 18,
   },
   inputContainer: {
     width: '100%',
-    marginBottom: 40,
+    marginBottom: 4,
   },
   inputLabel: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    color: colors.text,
+    color: 'rgba(255, 255, 255, 0.9)',
     marginBottom: 12,
     textAlign: 'center',
   },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  inputIcon: {
+    marginRight: 12,
+  },
   textInput: {
-    backgroundColor: colors.inputBackground,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 18,
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.inputBorder,
-    textAlign: 'center',
+    flex: 1,
+    fontSize: 20,
+    color: 'white',
+    paddingVertical: 10,
+    textAlign: 'left',
   },
   textInputError: {
     borderColor: colors.error,
@@ -176,13 +217,33 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 4,
   },
-  messageContainer: {
-    paddingHorizontal: 20,
+  startButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  messageText: {
-    fontSize: 16,
+  startButtonDisabled: {
+    backgroundColor: colors.buttonDisabled,
+    borderColor: colors.borderLight,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  startButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  startButtonTextDisabled: {
     color: colors.muted,
-    textAlign: 'center',
-    lineHeight: 24,
   },
 });

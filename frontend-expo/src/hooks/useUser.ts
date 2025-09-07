@@ -254,7 +254,7 @@ export const useUser = () => {
     userProfile: state.userProfile,
     isOnboardingComplete: state.isOnboardingComplete,
     isLoading: state.isLoading,
-    error: state.errorMessage,
+    error: state.error,
     
     // Profile methods
     getUserProfile,

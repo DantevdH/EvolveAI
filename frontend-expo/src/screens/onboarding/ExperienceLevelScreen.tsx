@@ -2,12 +2,11 @@
  * Experience Level screen - Fifth step of onboarding
  */
 
-import React from 'react';
-import { View, StyleSheet, ImageBackground } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useOnboarding } from '../../context/OnboardingContext';
-import { OnboardingCard, OnboardingNavigation, OptionList } from '../../components/onboarding';
+import { OnboardingCard, OnboardingNavigation, OptionList, OnboardingBackground } from '../../components/onboarding';
 import { experienceLevels } from '../../types/onboarding';
-import { colors } from '../../constants/colors';
+import { colors } from '../../constants/designSystem';
 
 export const ExperienceLevelScreen: React.FC = () => {
   const { state, updateData } = useOnboarding();
@@ -27,12 +26,7 @@ export const ExperienceLevelScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={{ uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80' }}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
-        <View style={styles.dimmingOverlay} />
+      <OnboardingBackground />
         
         <OnboardingCard
           title="Experience Level"
@@ -50,7 +44,6 @@ export const ExperienceLevelScreen: React.FC = () => {
 
           <OnboardingNavigation />
         </OnboardingCard>
-      </ImageBackground>
     </View>
   );
 };
@@ -58,15 +51,6 @@ export const ExperienceLevelScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  backgroundImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  dimmingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   content: {
     flex: 1,

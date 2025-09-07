@@ -157,12 +157,12 @@ export const getRecommendedWorkoutFrequency = (experience: ExperienceLevel): { d
  */
 export const getRecommendedEquipment = (goal: string): EquipmentType[] => {
   const recommendations: Record<string, EquipmentType[]> = {
-    'Weight Loss': ['Cardio Equipment', 'Dumbbells Only', 'Bodyweight Only'],
+    'Weight Loss': ['Dumbbells Only', 'Bodyweight Only'],
     'Muscle Gain': ['Full Gym', 'Home Gym', 'Dumbbells Only'],
-    'Endurance': ['Cardio Equipment', 'Bodyweight Only'],
-    'Strength': ['Full Gym', 'Home Gym', 'Dumbbells Only', 'Kettlebells'],
-    'General Fitness': ['Home Gym', 'Dumbbells Only', 'Bodyweight Only', 'Resistance Bands'],
-    'Athletic Performance': ['Full Gym', 'Home Gym', 'Kettlebells', 'Resistance Bands']
+    'Endurance': ['Bodyweight Only'],
+    'Strength': ['Full Gym', 'Home Gym', 'Dumbbells Only'],
+    'General Fitness': ['Home Gym', 'Dumbbells Only', 'Bodyweight Only'],
+    'Athletic Performance': ['Full Gym', 'Home Gym']
   };
   
   return recommendations[goal] || ['Bodyweight Only'];
@@ -176,7 +176,7 @@ export const getEstimatedWorkoutDuration = (
   experience: ExperienceLevel, 
   daysPerWeek: number
 ): number => {
-  const baseMinutes = {
+  const baseMinutes: Record<string, number> = {
     'Weight Loss': 45,
     'Muscle Gain': 60,
     'Endurance': 40,
@@ -243,7 +243,7 @@ export const generatePersonalizedRecommendations = (data: OnboardingData): {
 } => {
   const workoutFrequency = getRecommendedWorkoutFrequency(data.experienceLevel);
   const recommendedEquipment = getRecommendedEquipment(data.primaryGoal);
-  const motivationTips = getMotivationTips(data.motivationLevel);
+  const motivationTips = getMotivationTips(5); // Default motivation level
   const estimatedDuration = getEstimatedWorkoutDuration(
     data.primaryGoal,
     data.experienceLevel,
@@ -264,15 +264,13 @@ export const generatePersonalizedRecommendations = (data: OnboardingData): {
 export const sanitizeOnboardingData = (data: OnboardingData): OnboardingData => {
   return {
     ...data,
-    username: data.username.trim(),
-    goalDescription: data.goalDescription.trim(),
-    limitationsDescription: data.limitationsDescription.trim(),
-    injuryHistory: data.injuryHistory.trim(),
-    previousExperience: data.previousExperience.trim(),
-    supportSystem: data.supportSystem.trim(),
-    finalNotes: data.finalNotes.trim(),
-    medications: data.medications.trim(),
-    allergies: data.allergies.trim()
+    username: data.username?.trim() || '',
+    goalDescription: data.goalDescription?.trim() || '',
+    limitationsDescription: data.limitationsDescription?.trim() || '',
+    injuryHistory: data.injuryHistory?.trim() || '',
+    finalNotes: data.finalNotes?.trim() || '',
+    medications: data.medications?.trim() || '',
+    allergies: data.allergies?.trim() || ''
   };
 };
 
@@ -289,7 +287,7 @@ export const generateOnboardingSummary = (data: OnboardingData): {
   
   const fitnessInfo = `${data.experienceLevel} level with ${data.equipment.join(', ')} available. ${data.daysPerWeek} days per week, ${data.minutesPerSession} minutes per session.`;
   
-  const preferences = `Prefers ${data.scheduleFlexibility.toLowerCase()} schedule. Motivation level: ${data.motivationLevel}/10. ${data.hasLimitations ? `Has limitations: ${data.limitationsDescription}` : 'No physical limitations.'}`;
+  const preferences = `Prefers ${data.scheduleFlexibility.toLowerCase()} schedule. ${data.hasLimitations ? `Has limitations: ${data.limitationsDescription}` : 'No physical limitations.'}`;
   
   const goals = `Primary goal: ${data.primaryGoal}. ${data.goalDescription ? `Details: ${data.goalDescription}` : ''} Timeline: ${data.timeline}.`;
   
@@ -309,7 +307,7 @@ export const calculateProgressPercentage = (data: OnboardingData): number => {
     'username', 'age', 'weight', 'height', 'gender',
     'hasHealthConditions', 'primaryGoal', 'experienceLevel',
     'equipment', 'daysPerWeek', 'minutesPerSession',
-    'hasLimitations', 'motivationLevel', 'termsAccepted', 'privacyAccepted'
+    'hasLimitations'
   ];
   
   let completedFields = 0;
@@ -375,10 +373,10 @@ export const formatForAPI = (data: OnboardingData): any => {
       injury_history: sanitized.injuryHistory
     },
     motivation: {
-      motivation_level: sanitized.motivationLevel,
-      motivation_factors: sanitized.motivationFactors,
-      previous_experience: sanitized.previousExperience,
-      support_system: sanitized.supportSystem
+      motivation_level: 5, // Default motivation level
+      motivation_factors: [],
+      previous_experience: '',
+      support_system: ''
     },
     completion: {
       final_notes: sanitized.finalNotes,

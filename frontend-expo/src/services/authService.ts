@@ -35,10 +35,13 @@ export class AuthService {
     // For both web and mobile, use HTTP URLs that Supabase accepts
     // These will work for web directly, and for mobile via deep linking
     if (Platform.OS === 'web') {
-      return `${window.location.origin}${path}`;
+      // Safe check for window object
+      const origin = typeof window !== 'undefined' && window.location ? window.location.origin : 'http://localhost:3000';
+      return `${origin}${path}`;
     } else {
-      // For mobile development, use localhost (works with Expo)
-      return `http://localhost:8081${path}`;
+      // For mobile development, use the app scheme for deep linking
+      // This will open the app when the email link is clicked
+      return `frontendexpo2://login`;
     }
   }
   /**
@@ -46,17 +49,14 @@ export class AuthService {
    */
   static async signInWithEmail(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
-      console.log('🔐 AuthService: Attempting sign in with email:', credentials.email);
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email: credentials.email,
         password: credentials.password,
       });
 
-      console.log('🔐 Supabase response - data:', data);
-      console.log('🔐 Supabase response - error:', error);
-
       if (error) {
-        console.log('❌ Supabase auth error:', error.message);
+
         // Clear any existing session when auth fails
         await supabase.auth.signOut();
         return {
@@ -66,7 +66,7 @@ export class AuthService {
       }
 
       if (data.session && data.user) {
-        console.log('✅ Supabase auth successful, storing tokens');
+
         // Store tokens securely
         await TokenManager.storeTokens(
           data.session.access_token,
@@ -81,7 +81,6 @@ export class AuthService {
         };
       }
 
-      console.log('❌ No session returned from Supabase');
       return {
         success: false,
         error: 'No session returned from authentication',
@@ -169,8 +168,8 @@ export class AuthService {
       // OAuth flow initiated successfully
       return {
         success: true,
-        user: data.user,
-        session: data.session,
+        user: null, // OAuth flow will complete asynchronously
+        session: null,
       };
     } catch (error) {
       console.error('Google sign in error:', error);
@@ -202,8 +201,8 @@ export class AuthService {
 
       return {
         success: true,
-        user: data.user,
-        session: data.session,
+        user: null, // OAuth flow will complete asynchronously
+        session: null,
       };
     } catch (error) {
       console.error('Apple sign in error:', error);
@@ -235,8 +234,8 @@ export class AuthService {
 
       return {
         success: true,
-        user: data.user,
-        session: data.session,
+        user: null, // OAuth flow will complete asynchronously
+        session: null,
       };
     } catch (error) {
       console.error('Facebook sign in error:', error);

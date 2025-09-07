@@ -2,17 +2,29 @@
  * Equipment Access screen - Sixth step of onboarding
  */
 
-import React from 'react';
-import { View, StyleSheet, ImageBackground } from 'react-native';
+import React, { useEffect } from 'react';
+import { ImageBackground, StyleSheet, View } from 'react-native';
 import { useOnboarding } from '../../context/OnboardingContext';
-import { OnboardingCard, OnboardingNavigation, OptionSelector } from '../../components/onboarding';
-import { equipmentOptions } from '../../types/onboarding';
+import { OnboardingCard, OnboardingNavigation, OptionSelector, OnboardingBackground } from '../../components/onboarding';
+import { equipmentOptions, EquipmentType } from '../../types/onboarding';
 
 export const EquipmentAccessScreen: React.FC = () => {
   const { state, updateData } = useOnboarding();
 
+  // Auto-select first equipment option if none is selected
+  useEffect(() => {
+    if (state.data.equipment.length === 0 && equipmentOptions.length > 0) {
+      updateData({ equipment: [equipmentOptions[0].value] });
+    }
+  }, [state.data.equipment, updateData]);
+
   const handleEquipmentChange = (values: string[]) => {
-    updateData({ equipment: values as any });
+    // Only allow single selection - take the first value if multiple are selected
+    if (values.length > 0) {
+      updateData({ equipment: [values[0] as EquipmentType] });
+    } else {
+      updateData({ equipment: [] });
+    }
   };
 
   const options = equipmentOptions.map(equipment => ({
@@ -24,12 +36,7 @@ export const EquipmentAccessScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={{ uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80' }}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
-        <View style={styles.dimmingOverlay} />
+      <OnboardingBackground />
         
         <OnboardingCard
           title="Equipment Access"
@@ -41,14 +48,13 @@ export const EquipmentAccessScreen: React.FC = () => {
               options={options}
               selectedValues={state.data.equipment}
               onSelectionChange={handleEquipmentChange}
-              multiple={true}
+              multiple={false}
               columns={2}
             />
           </View>
 
           <OnboardingNavigation />
         </OnboardingCard>
-      </ImageBackground>
     </View>
   );
 };
@@ -57,15 +63,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  backgroundImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  dimmingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
+
   content: {
     flex: 1,
     paddingHorizontal: 20,

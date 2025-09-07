@@ -3,14 +3,13 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, TextInput } from 'react-native';
+import { ActivityIndicator, ImageBackground, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useOnboarding } from '../../context/OnboardingContext';
-import { OnboardingCard, OnboardingNavigation } from '../../components/onboarding';
-import { validateHasLimitations, validateLimitationsDescription } from '../../utils/onboardingValidation';
-import { colors } from '../../constants/colors';
+import { OnboardingCard, OnboardingBackground } from '../../components/onboarding';
+import { colors } from '../../constants/designSystem';
 
 export const PhysicalLimitationsScreen: React.FC = () => {
-  const { state, updateData } = useOnboarding();
+  const { state, updateData, nextStep, previousStep } = useOnboarding();
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   const handleLimitationsToggle = (hasLimitations: boolean) => {
@@ -27,33 +26,45 @@ export const PhysicalLimitationsScreen: React.FC = () => {
   };
 
   const handleNext = () => {
-    // Validate limitations
-    const hasLimitationsValidation = validateHasLimitations(state.data.hasLimitations);
-    if (!hasLimitationsValidation.isValid) {
-      setValidationErrors({ hasLimitations: hasLimitationsValidation.error! });
-      return;
-    }
-
+    // Clear any existing errors
+    setValidationErrors({});
+    
+    // Validate if "Yes" is selected
     if (state.data.hasLimitations) {
-      const descriptionValidation = validateLimitationsDescription(state.data.limitationsDescription);
-      if (!descriptionValidation.isValid) {
-        setValidationErrors({ limitationsDescription: descriptionValidation.error! });
+      const description = state.data.limitationsDescription || '';
+      
+      if (description.trim().length === 0) {
+        setValidationErrors({ limitationsDescription: 'Please describe your limitations' });
+        return;
+      }
+      
+      if (description.trim().length < 100) {
+        setValidationErrors({ 
+          limitationsDescription: `Please provide more details about your limitations (at least 100 characters, currently ${description.trim().length} characters)` 
+        });
         return;
       }
     }
+    
+    nextStep();
+  };
 
-    // Clear any existing errors
-    setValidationErrors({});
+  const handlePrevious = () => {
+    previousStep();
+  };
+  // Check if Next button should be disabled (based on Swift logic)
+  const isNextButtonDisabled = () => {
+    // If "Yes" is selected, check if description meets requirements
+    if (state.data.hasLimitations) {
+      const description = state.data.limitationsDescription || '';
+      return description.trim().length === 0 || description.trim().length < 100;
+    }
+    return false;
   };
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={{ uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80' }}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
-        <View style={styles.dimmingOverlay} />
+      <OnboardingBackground />
         
         <OnboardingCard
           title="Physical Limitations"
@@ -68,6 +79,7 @@ export const PhysicalLimitationsScreen: React.FC = () => {
                   !state.data.hasLimitations && styles.toggleButtonSelected
                 ]}
                 onPress={() => handleLimitationsToggle(false)}
+                testID="limitations-no-button"
               >
                 <Text style={[
                   styles.toggleButtonText,
@@ -83,6 +95,7 @@ export const PhysicalLimitationsScreen: React.FC = () => {
                   state.data.hasLimitations && styles.toggleButtonSelected
                 ]}
                 onPress={() => handleLimitationsToggle(true)}
+                testID="limitations-yes-button"
               >
                 <Text style={[
                   styles.toggleButtonText,
@@ -108,15 +121,30 @@ export const PhysicalLimitationsScreen: React.FC = () => {
                   ]}
                   value={state.data.limitationsDescription}
                   onChangeText={handleDescriptionChange}
-                  placeholder="e.g., 'Bad lower back', 'Recovering from a knee injury'"
+                  placeholder="Describe your physical limitations, injuries, or conditions..."
                   placeholderTextColor={colors.inputPlaceholder}
                   multiline
-                  numberOfLines={4}
+                  numberOfLines={6}
                   textAlignVertical="top"
+                  maxLength={500}
+                  testID="limitations-description-input"
                 />
-                <Text style={styles.characterCount}>
-                  {state.data.limitationsDescription.length}/300
-                </Text>
+                <View style={styles.countContainer}>
+                  <Text style={[
+                    styles.characterCount,
+                    state.data.limitationsDescription.length >= 100 && styles.characterCountComplete,
+                    state.data.limitationsDescription.length >= 80 && state.data.limitationsDescription.length < 100 && styles.characterCountWarning
+                  ]}>
+                    {state.data.limitationsDescription.length}/500 characters
+                  </Text>
+                  <Text style={[
+                    styles.requirementText,
+                    state.data.limitationsDescription.length >= 100 && styles.requirementComplete,
+                    state.data.limitationsDescription.length >= 80 && state.data.limitationsDescription.length < 100 && styles.requirementWarning
+                  ]}>
+                    {state.data.limitationsDescription.length >= 100 ? '✓ Minimum met' : `Need ${100 - state.data.limitationsDescription.length} more characters`}
+                  </Text>
+                </View>
                 {validationErrors.limitationsDescription && (
                   <Text style={styles.errorText}>{validationErrors.limitationsDescription}</Text>
                 )}
@@ -124,9 +152,36 @@ export const PhysicalLimitationsScreen: React.FC = () => {
             )}
           </View>
 
-          <OnboardingNavigation onNext={handleNext} />
+          {/* Custom Navigation */}
+          <View style={styles.navigationContainer}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={handlePrevious}
+              activeOpacity={0.8}
+              testID="back-button"
+            >
+              <Text style={styles.backButtonText}>Back</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.nextButton,
+                isNextButtonDisabled() && styles.nextButtonDisabled
+              ]}
+              onPress={handleNext}
+              disabled={isNextButtonDisabled()}
+              activeOpacity={0.8}
+              testID="next-button"
+            >
+              <Text style={[
+                styles.nextButtonText,
+                isNextButtonDisabled() && styles.nextButtonTextDisabled
+              ]}>
+                Next
+              </Text>
+            </TouchableOpacity>
+          </View>
         </OnboardingCard>
-      </ImageBackground>
     </View>
   );
 };
@@ -135,15 +190,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  backgroundImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  dimmingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlay,
-  },
+
   content: {
     flex: 1,
     paddingHorizontal: 20,
@@ -181,7 +228,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
+    marginBottom: 4,
+  },
+  requiredText: {
+    fontSize: 14,
+    color: colors.muted,
     marginBottom: 8,
+    fontStyle: 'italic',
   },
   textArea: {
     backgroundColor: colors.inputBackground,
@@ -191,22 +244,90 @@ const styles = StyleSheet.create({
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.inputBorder,
-    minHeight: 120,
+    minHeight: 150,
     textAlignVertical: 'top',
   },
   textAreaError: {
     borderColor: colors.error,
     backgroundColor: colors.primaryTransparentLight,
   },
+  countContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 4,
+  },
   characterCount: {
     fontSize: 12,
     color: colors.muted,
-    textAlign: 'right',
-    marginTop: 4,
+  },
+  characterCountWarning: {
+    color: colors.warning,
+  },
+  characterCountComplete: {
+    color: colors.success,
+  },
+  requirementText: {
+    fontSize: 12,
+    color: colors.muted,
+    fontWeight: '600',
+  },
+  requirementWarning: {
+    color: colors.warning,
+  },
+  requirementComplete: {
+    color: colors.success,
   },
   errorText: {
     fontSize: 14,
     color: colors.error,
     marginTop: 4,
+  },
+  // Custom Navigation Styles
+  navigationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    paddingBottom: 40,
+  },
+  backButton: {
+    backgroundColor: colors.buttonSecondary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  nextButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  nextButtonDisabled: {
+    backgroundColor: colors.buttonDisabled,
+    borderColor: colors.borderLight,
+  },
+  nextButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  nextButtonTextDisabled: {
+    color: colors.muted,
   },
 });

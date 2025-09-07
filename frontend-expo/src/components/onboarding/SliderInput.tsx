@@ -2,10 +2,10 @@
  * Slider input component for numeric values in onboarding
  */
 
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { IconSymbol } from '../../../components/ui/IconSymbol';
-import { colors } from '../../constants/colors';
+import React, { useState, memo } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { IconSymbol } from '@/components/ui/IconSymbol';
+import { colors } from '../../constants/designSystem';
 
 interface SliderInputProps {
   title: string;
@@ -19,7 +19,7 @@ interface SliderInputProps {
   style?: any;
 }
 
-export const SliderInput: React.FC<SliderInputProps> = ({
+export const SliderInput: React.FC<SliderInputProps> = memo(({
   title,
   value,
   onValueChange,
@@ -66,6 +66,7 @@ export const SliderInput: React.FC<SliderInputProps> = ({
           onPress={handleDecrease}
           disabled={!canDecrease}
           activeOpacity={0.8}
+          testID="slider-decrease-button"
         >
           <IconSymbol
             name="minus"
@@ -90,6 +91,7 @@ export const SliderInput: React.FC<SliderInputProps> = ({
           onPress={handleIncrease}
           disabled={!canIncrease}
           activeOpacity={0.8}
+          testID="slider-increase-button"
         >
           <IconSymbol
             name="plus"
@@ -110,7 +112,7 @@ export const SliderInput: React.FC<SliderInputProps> = ({
       </View>
     </View>
   );
-};
+});
 
 // Specialized components for common use cases
 interface DaysPerWeekSliderProps {
@@ -119,7 +121,7 @@ interface DaysPerWeekSliderProps {
   style?: any;
 }
 
-export const DaysPerWeekSlider: React.FC<DaysPerWeekSliderProps> = ({
+export const DaysPerWeekSlider: React.FC<DaysPerWeekSliderProps> = memo(({
   value,
   onValueChange,
   style
@@ -136,7 +138,7 @@ export const DaysPerWeekSlider: React.FC<DaysPerWeekSliderProps> = ({
       style={style}
     />
   );
-};
+});
 
 interface MinutesPerSessionSliderProps {
   value: number;
@@ -144,7 +146,7 @@ interface MinutesPerSessionSliderProps {
   style?: any;
 }
 
-export const MinutesPerSessionSlider: React.FC<MinutesPerSessionSliderProps> = ({
+export const MinutesPerSessionSlider: React.FC<MinutesPerSessionSliderProps> = memo(({
   value,
   onValueChange,
   style
@@ -161,7 +163,7 @@ export const MinutesPerSessionSlider: React.FC<MinutesPerSessionSliderProps> = (
       style={style}
     />
   );
-};
+});
 
 interface MotivationLevelSliderProps {
   value: number;
@@ -169,7 +171,7 @@ interface MotivationLevelSliderProps {
   style?: any;
 }
 
-export const MotivationLevelSlider: React.FC<MotivationLevelSliderProps> = ({
+export const MotivationLevelSlider: React.FC<MotivationLevelSliderProps> = memo(({
   value,
   onValueChange,
   style
@@ -203,7 +205,7 @@ export const MotivationLevelSlider: React.FC<MotivationLevelSliderProps> = ({
       style={style}
     />
   );
-};
+});
 
 interface AgeSliderProps {
   value: number;
@@ -211,7 +213,7 @@ interface AgeSliderProps {
   style?: any;
 }
 
-export const AgeSlider: React.FC<AgeSliderProps> = ({
+export const AgeSlider: React.FC<AgeSliderProps> = memo(({
   value,
   onValueChange,
   style
@@ -228,7 +230,7 @@ export const AgeSlider: React.FC<AgeSliderProps> = ({
       style={style}
     />
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {

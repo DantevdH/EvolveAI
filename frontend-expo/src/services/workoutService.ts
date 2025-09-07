@@ -1,8 +1,12 @@
 import { supabase } from '../config/supabase';
 import { UserProfile, WorkoutPlan } from '../types';
-
-// Backend API configuration
-const BACKEND_API_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+import { API_CONFIG, ERROR_MESSAGES, DEFAULT_VALUES } from '../constants/api';
+import { mapProfileToBackendRequest } from '../utils/profileDataMapping';
+import { 
+  GenerateWorkoutPlanRequest, 
+  GenerateWorkoutPlanResponse,
+  ApiResponse 
+} from '../types/api';
 
 export interface WorkoutServiceResponse<T> {
   success: boolean;
@@ -10,65 +14,75 @@ export interface WorkoutServiceResponse<T> {
   error?: string;
 }
 
-
-
 export class WorkoutService {
   /**
-   * Generate a workout plan for a user based on their profile
+   * Generate a workout plan using the backend API
    */
-  static async generateWorkoutPlan(userProfile: UserProfile): Promise<WorkoutServiceResponse<WorkoutPlan>> {
+  static async generateWorkoutPlan(
+    profileData: any,
+    userProfileId: number,
+    userId: string
+  ): Promise<WorkoutServiceResponse<WorkoutPlan>> {
     try {
-      console.log('WorkoutService: Generating workout plan for user:', userProfile.userId);
+      const requestBody: GenerateWorkoutPlanRequest = mapProfileToBackendRequest(profileData, userId, userProfileId);
 
-      // Call the backend API to generate the workout plan
-      const backendResponse = await this.callBackendAPI(userProfile);
-      
-      if (!backendResponse.success || !backendResponse.data) {
-        return {
-          success: false,
-          error: backendResponse.error || 'Failed to generate workout plan from backend',
-        };
-      }
+      // Get JWT token from Supabase session
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token;
 
-      // Create the workout plan record in Supabase
-      const { data: workoutPlanData, error: planError } = await supabase
-        .from('workout_plans')
-        .insert({
-          user_profile_id: userProfile.id!,
-          title: backendResponse.data.title,
-          summary: backendResponse.data.summary,
-        })
-        .select()
-        .single();
-
-      if (planError) {
-        console.error('WorkoutService: Error creating workout plan in database:', planError);
-        return {
-          success: false,
-          error: `Failed to save workout plan: ${planError.message}`,
-        };
-      }
-
-      console.log('WorkoutService: Created workout plan in database:', workoutPlanData);
-
-      // Store the detailed workout plan data (you might want to create additional tables for this)
-      // For now, we'll just return the basic workout plan record
-      return {
-        success: true,
-        data: {
-          id: workoutPlanData.id,
-          userProfileId: workoutPlanData.user_profile_id,
-          title: workoutPlanData.title,
-          summary: workoutPlanData.summary,
-          createdAt: new Date(workoutPlanData.created_at),
-          updatedAt: new Date(workoutPlanData.updated_at),
-        },
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
       };
+
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+
+      const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.GENERATE_WORKOUT_PLAN}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ WorkoutService: API error:', response.status, response.statusText);
+        console.error('❌ WorkoutService: Error response:', errorText);
+        return {
+          success: false,
+          error: `API Error: ${response.status} ${response.statusText}`,
+        };
+      }
+
+      const result: GenerateWorkoutPlanResponse = await response.json();
+
+      if (result.status === 'success' && result.workout_plan) {
+        // Create a workout plan object for the frontend
+        const workoutPlan: WorkoutPlan = {
+          id: Date.now(),
+          userProfileId: userProfileId,
+          title: result.workout_plan.title || DEFAULT_VALUES.WORKOUT_PLAN.TITLE,
+          summary: result.workout_plan.summary || DEFAULT_VALUES.WORKOUT_PLAN.SUMMARY,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          planData: result.workout_plan,
+        };
+
+        return {
+          success: true,
+          data: workoutPlan,
+        };
+      } else {
+        return {
+          success: false,
+          error: result.message || 'Failed to generate workout plan',
+        };
+      }
     } catch (error) {
-      console.error('WorkoutService: Unexpected error generating workout plan:', error);
+      console.error('💥 WorkoutService: Unexpected error:', error);
       return {
         success: false,
-        error: 'An unexpected error occurred while generating your workout plan',
+        error: error instanceof Error ? error.message : 'An unexpected error occurred',
       };
     }
   }
@@ -86,32 +100,33 @@ export class WorkoutService {
 
       if (error) {
         if (error.code === 'PGRST116') {
-          // No workout plan found
           return {
             success: false,
             error: 'No workout plan found',
           };
         }
-        console.error('WorkoutService: Error fetching workout plan:', error);
+        console.error('❌ WorkoutService: Error fetching workout plan:', error);
         return {
           success: false,
           error: `Failed to fetch workout plan: ${error.message}`,
         };
       }
 
+      const workoutPlan: WorkoutPlan = {
+        id: data.id,
+        userProfileId: data.user_profile_id,
+        title: data.title,
+        summary: data.summary,
+        createdAt: new Date(data.created_at),
+        updatedAt: new Date(data.updated_at),
+      };
+
       return {
         success: true,
-        data: {
-          id: data.id,
-          userProfileId: data.user_profile_id,
-          title: data.title,
-          summary: data.summary,
-          createdAt: new Date(data.created_at),
-          updatedAt: new Date(data.updated_at),
-        },
+        data: workoutPlan,
       };
     } catch (error) {
-      console.error('WorkoutService: Unexpected error fetching workout plan:', error);
+      console.error('💥 WorkoutService: Unexpected error fetching workout plan:', error);
       return {
         success: false,
         error: 'An unexpected error occurred while fetching your workout plan',
@@ -130,7 +145,7 @@ export class WorkoutService {
         .eq('id', workoutPlanId);
 
       if (error) {
-        console.error('WorkoutService: Error deleting workout plan:', error);
+        console.error('❌ WorkoutService: Error deleting workout plan:', error);
         return {
           success: false,
           error: `Failed to delete workout plan: ${error.message}`,
@@ -141,103 +156,11 @@ export class WorkoutService {
         success: true,
       };
     } catch (error) {
-      console.error('WorkoutService: Unexpected error deleting workout plan:', error);
+      console.error('💥 WorkoutService: Unexpected error deleting workout plan:', error);
       return {
         success: false,
         error: 'An unexpected error occurred while deleting your workout plan',
       };
     }
   }
-
-  /**
-   * Call the backend API to generate a workout plan
-   */
-  private static async callBackendAPI(userProfile: UserProfile): Promise<WorkoutServiceResponse<{ title: string; summary: string; workout_plan: any }>> {
-    try {
-      console.log('WorkoutService: Calling backend API for workout plan generation');
-      
-      const requestBody = {
-        primaryGoal: userProfile.primaryGoal,
-        primaryGoalDescription: userProfile.primaryGoalDescription,
-        experienceLevel: userProfile.experienceLevel,
-        daysPerWeek: userProfile.daysPerWeek,
-        minutesPerSession: userProfile.minutesPerSession,
-        equipment: userProfile.equipment,
-        age: userProfile.age,
-        weight: userProfile.weight,
-        weightUnit: userProfile.weightUnit,
-        height: userProfile.height,
-        heightUnit: userProfile.heightUnit,
-        gender: userProfile.gender,
-        hasLimitations: userProfile.hasLimitations,
-        limitationsDescription: userProfile.limitationsDescription,
-        finalChatNotes: userProfile.finalChatNotes,
-      };
-
-      const response = await fetch(`${BACKEND_API_URL}/api/workoutplan/generate/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.detail || `HTTP ${response.status}: ${response.statusText}`;
-        console.error('WorkoutService: Backend API error:', errorMessage);
-        return {
-          success: false,
-          error: errorMessage,
-        };
-      }
-
-      const data = await response.json();
-      console.log('WorkoutService: Backend API response received');
-
-      return {
-        success: true,
-        data: {
-          title: data.workout_plan.title || this.generatePlanTitle(userProfile),
-          summary: data.workout_plan.summary || this.generatePlanSummary(userProfile),
-          workout_plan: data.workout_plan,
-        },
-      };
-    } catch (error) {
-      console.error('WorkoutService: Error calling backend API:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Failed to connect to workout generation service',
-      };
-    }
-  }
-
-  /**
-   * Generate a personalized plan title based on user profile
-   */
-  private static generatePlanTitle(userProfile: UserProfile): string {
-    const goal = userProfile.primaryGoal.toLowerCase();
-    const level = userProfile.experienceLevel.toLowerCase();
-    
-    if (goal.includes('strength')) {
-      return `${userProfile.experienceLevel} Strength Training Program`;
-    } else if (goal.includes('weight')) {
-      return `${userProfile.experienceLevel} Weight Loss Program`;
-    } else if (goal.includes('muscle')) {
-      return `${userProfile.experienceLevel} Muscle Building Program`;
-    } else if (goal.includes('endurance')) {
-      return `${userProfile.experienceLevel} Endurance Training Program`;
-    } else {
-      return `${userProfile.experienceLevel} Fitness Program`;
-    }
-  }
-
-  /**
-   * Generate a personalized plan summary based on user profile
-   */
-  private static generatePlanSummary(userProfile: UserProfile): string {
-    return `A ${userProfile.experienceLevel.toLowerCase()} ${userProfile.daysPerWeek}-day program designed to help you ${userProfile.primaryGoal.toLowerCase()}. Each workout is approximately ${userProfile.minutesPerSession} minutes and uses ${userProfile.equipment.toLowerCase()} equipment.`;
-  }
-
-
 }

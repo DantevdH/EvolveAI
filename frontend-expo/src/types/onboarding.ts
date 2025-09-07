@@ -14,11 +14,8 @@ export interface OnboardingData {
   heightUnit: 'cm' | 'in';
   gender: 'Male' | 'Female' | 'Other';
   
-  // Step 3: Health Information
-  hasHealthConditions: boolean;
-  healthConditions: string[];
-  medications: string;
-  allergies: string;
+  // Step 3: Experience Level
+  experienceLevel: ExperienceLevel;
   
   // Step 4: Fitness Goals
   primaryGoal: string;
@@ -27,53 +24,44 @@ export interface OnboardingData {
   targetWeightUnit: 'kg' | 'lbs';
   timeline: string;
   
-  // Step 5: Experience Level
-  experienceLevel: ExperienceLevel;
-  
-  // Step 6: Equipment Access
+  // Step 5: Equipment Access
   equipment: EquipmentType[];
   homeGym: boolean;
   gymMembership: boolean;
   
-  // Step 7: Time Availability
+  // Step 6: Time Availability
   daysPerWeek: number;
   minutesPerSession: number;
   preferredWorkoutTimes: string[];
   scheduleFlexibility: 'Very Flexible' | 'Somewhat Flexible' | 'Not Flexible';
   
-  // Step 8: Physical Limitations
+  // Step 7: Physical Limitations
   hasLimitations: boolean;
   limitations: string[];
   limitationsDescription: string;
   injuryHistory: string;
   
-  // Step 9: Motivation
-  motivationLevel: number; // 1-10 scale
-  motivationFactors: string[];
-  previousExperience: string;
-  supportSystem: string;
-  
-  // Step 10: Completion
+  // Step 8: Completion
   finalNotes: string;
   termsAccepted: boolean;
   privacyAccepted: boolean;
+  
+  // Coaches
+  availableCoaches: any[];
+  selectedCoachId?: number;
 }
 
 export type ExperienceLevel = 
   | 'Beginner'
   | 'Intermediate'
   | 'Advanced'
-  | 'Expert';
 
 export type EquipmentType = 
   | 'Full Gym'
   | 'Home Gym'
   | 'Dumbbells Only'
   | 'Bodyweight Only'
-  | 'Cardio Equipment'
-  | 'Resistance Bands'
-  | 'Kettlebells'
-  | 'Yoga Mat';
+
 
 export interface OnboardingStep {
   id: number;
@@ -86,7 +74,7 @@ export interface OnboardingStep {
 
 export interface ValidationRule {
   field: keyof OnboardingData;
-  type: 'required' | 'min' | 'max' | 'pattern' | 'custom';
+  type: 'required' | 'min' | 'max' | 'pattern' | 'custom' | 'limitations_description';
   value?: any;
   message: string;
 }
@@ -132,10 +120,6 @@ export const defaultOnboardingData: OnboardingData = {
   height: 170,
   heightUnit: 'cm',
   gender: 'Male',
-  hasHealthConditions: false,
-  healthConditions: [],
-  medications: '',
-  allergies: '',
   primaryGoal: '',
   goalDescription: '',
   targetWeight: undefined,
@@ -153,13 +137,11 @@ export const defaultOnboardingData: OnboardingData = {
   limitations: [],
   limitationsDescription: '',
   injuryHistory: '',
-  motivationLevel: 5,
-  motivationFactors: [],
-  previousExperience: '',
-  supportSystem: '',
   finalNotes: '',
   termsAccepted: false,
   privacyAccepted: false,
+  availableCoaches: [],
+  selectedCoachId: undefined,
 };
 
 // Onboarding steps configuration
@@ -227,15 +209,15 @@ export const onboardingSteps: OnboardingStep[] = [
   },
   {
     id: 3,
-    title: 'Health Information',
-    description: 'Your health background',
-    component: 'HealthInfoScreen',
+    title: 'Experience Level',
+    description: 'Your fitness experience',
+    component: 'ExperienceLevelScreen',
     isRequired: true,
     validationRules: [
       {
-        field: 'hasHealthConditions',
+        field: 'experienceLevel',
         type: 'required',
-        message: 'Please indicate if you have health conditions'
+        message: 'Experience level is required'
       }
     ]
   },
@@ -255,20 +237,6 @@ export const onboardingSteps: OnboardingStep[] = [
   },
   {
     id: 5,
-    title: 'Experience Level',
-    description: 'Your fitness experience',
-    component: 'ExperienceLevelScreen',
-    isRequired: true,
-    validationRules: [
-      {
-        field: 'experienceLevel',
-        type: 'required',
-        message: 'Experience level is required'
-      }
-    ]
-  },
-  {
-    id: 6,
     title: 'Equipment Access',
     description: 'What equipment do you have?',
     component: 'EquipmentAccessScreen',
@@ -282,7 +250,7 @@ export const onboardingSteps: OnboardingStep[] = [
     ]
   },
   {
-    id: 7,
+    id: 6,
     title: 'Time Availability',
     description: 'When can you work out?',
     component: 'TimeAvailabilityScreen',
@@ -301,7 +269,7 @@ export const onboardingSteps: OnboardingStep[] = [
     ]
   },
   {
-    id: 8,
+    id: 7,
     title: 'Physical Limitations',
     description: 'Any limitations we should know about?',
     component: 'PhysicalLimitationsScreen',
@@ -315,36 +283,13 @@ export const onboardingSteps: OnboardingStep[] = [
     ]
   },
   {
-    id: 9,
-    title: 'Motivation',
-    description: 'What drives you?',
-    component: 'MotivationScreen',
-    isRequired: true,
-    validationRules: [
-      {
-        field: 'motivationLevel',
-        type: 'required',
-        message: 'Motivation level is required'
-      }
-    ]
-  },
-  {
-    id: 10,
+    id: 8,
     title: 'Complete',
     description: 'Final review and completion',
     component: 'OnboardingCompleteScreen',
     isRequired: true,
     validationRules: [
-      {
-        field: 'termsAccepted',
-        type: 'required',
-        message: 'You must accept the terms of service'
-      },
-      {
-        field: 'privacyAccepted',
-        type: 'required',
-        message: 'You must accept the privacy policy'
-      }
+      // No validation rules for completion screen - user just needs to click "Create My Plan"
     ]
   }
 ];
@@ -369,12 +314,6 @@ export const experienceLevels = [
     description: 'Experienced with various training methods',
     infoText: 'You\'re comfortable with complex movements and can handle high-intensity training sessions.'
   },
-  {
-    value: 'Expert' as ExperienceLevel,
-    title: 'Expert',
-    description: 'Highly experienced with advanced training',
-    infoText: 'You have extensive experience and can handle the most challenging workout programs.'
-  }
 ];
 
 // Fitness goals options
@@ -386,20 +325,20 @@ export const fitnessGoals = [
     description: 'Burn fat and improve body composition'
   },
   {
-    value: 'Muscle Gain',
-    title: 'Muscle Gain',
+    value: 'Bodybuilding',
+    title: 'Bodybuilding',
     icon: 'dumbbell.fill',
     description: 'Build muscle mass and strength'
   },
   {
-    value: 'Endurance',
-    title: 'Endurance',
+    value: 'Improve Endurance',
+    title: 'Improve Endurance',
     icon: 'figure.run',
     description: 'Improve cardiovascular fitness and stamina'
   },
   {
-    value: 'Strength',
-    title: 'Strength',
+    value: 'Increase Strength',
+    title: 'Increase Strength',
     icon: 'flame.fill',
     description: 'Increase raw power and lifting capacity'
   },
@@ -410,8 +349,8 @@ export const fitnessGoals = [
     description: 'Maintain overall health and well-being'
   },
   {
-    value: 'Athletic Performance',
-    title: 'Athletic Performance',
+    value: 'Power & Speed',
+    title: 'Power & Speed',
     icon: 'trophy.fill',
     description: 'Enhance sport-specific skills and performance'
   }
@@ -443,30 +382,6 @@ export const equipmentOptions = [
     icon: 'figure.run',
     description: 'No equipment, bodyweight exercises only'
   },
-  {
-    value: 'Cardio Equipment' as EquipmentType,
-    title: 'Cardio Equipment',
-    icon: 'figure.walk',
-    description: 'Treadmill, bike, or other cardio machines'
-  },
-  {
-    value: 'Resistance Bands' as EquipmentType,
-    title: 'Resistance Bands',
-    icon: 'bandage.fill',
-    description: 'Resistance bands for strength training'
-  },
-  {
-    value: 'Kettlebells' as EquipmentType,
-    title: 'Kettlebells',
-    icon: 'circle.fill',
-    description: 'Kettlebells for functional training'
-  },
-  {
-    value: 'Yoga Mat' as EquipmentType,
-    title: 'Yoga Mat',
-    icon: 'rectangle.fill',
-    description: 'Yoga mat for floor exercises'
-  }
 ];
 
 // Workout time options
