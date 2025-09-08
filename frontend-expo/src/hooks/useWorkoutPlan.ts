@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
-import { WorkoutService } from '../services/workoutService';
-import { WorkoutPlan } from '../types';
+import { TrainingService } from '../services/trainingService';
+import { WorkoutPlan } from '../types/training';
 import { useAuth } from '../context/AuthContext';
 
 export interface UseWorkoutPlanReturn {
@@ -24,7 +24,7 @@ export const useWorkoutPlan = (): UseWorkoutPlanReturn => {
     setError(null);
 
     try {
-      const result = await WorkoutService.generateWorkoutPlan(profileData, userProfileId, userId);
+      const result = await TrainingService.generateWorkoutPlan(profileData, userProfileId, userId);
       
       if (result.success && result.data) {
         // Store the workout plan in the auth context

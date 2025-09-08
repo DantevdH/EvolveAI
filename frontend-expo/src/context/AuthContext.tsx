@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
 import { AuthService, AuthState } from '@/src/services/authService';
 import { UserService } from '@/src/services/userService';
-import { UserProfile, WorkoutPlan } from '@/src/types';
+import { UserProfile } from '@/src/types';
+import { WorkoutPlan } from '@/src/types/training';
 import { supabase } from '@/src/config/supabase';
 
 // Simplified auth state interface
@@ -138,8 +139,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Load workout plan if user profile exists
         if (response.data) {
           try {
-            const { WorkoutService } = await import('../services/workoutService');
-            const workoutResult = await WorkoutService.getWorkoutPlan(response.data.id!);
+            const { TrainingService } = await import('../services/trainingService');
+            const workoutResult = await TrainingService.getWorkoutPlan(response.data.id!);
             dispatch({ type: 'SET_WORKOUT_PLAN', payload: workoutResult.success ? workoutResult.data || null : null });
           } catch (workoutError) {
             console.error('AuthContext: Error loading workout plan:', workoutError);
@@ -547,9 +548,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       // Import WorkoutService dynamically to avoid circular dependencies
-      const { WorkoutService } = await import('../services/workoutService');
+      const { TrainingService } = await import('../services/trainingService');
       
-      const result = await WorkoutService.getWorkoutPlan(state.userProfile.id!);
+      const result = await TrainingService.getWorkoutPlan(state.userProfile.id!);
       
       if (result.success && result.data) {
         dispatch({ type: 'SET_WORKOUT_PLAN', payload: result.data });
@@ -567,7 +568,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Set workout plan directly (for use after generation)
   const setWorkoutPlan = (workoutPlan: WorkoutPlan): void => {
-
     dispatch({ type: 'SET_WORKOUT_PLAN', payload: workoutPlan });
   };
 

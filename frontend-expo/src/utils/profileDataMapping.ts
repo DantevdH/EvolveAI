@@ -90,7 +90,7 @@ export const mapOnboardingToDatabase = (
     has_limitations: onboardingData.hasLimitations || false,
     limitations_description: onboardingData.limitationsDescription || '',
     final_chat_notes: onboardingData.finalNotes || '',
-    coach_id: onboardingData.selectedCoachId || null,
+    coach_id: onboardingData.selectedCoachId || undefined,
   };
 };
 

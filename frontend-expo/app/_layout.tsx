@@ -14,6 +14,7 @@ import { OnboardingProvider } from '@/src/context/OnboardingContext';
 import { CoachProvider } from '@/src/context/CoachContext';
 import { ErrorBoundary } from '@/src/components/ErrorBoundary';
 import { NetworkStatus } from '@/src/components/NetworkStatus';
+import { NavigationProvider } from '@/src/navigation/NavigationProvider';
 
 function RootLayoutNav() {
   const { state } = useAuth();
@@ -99,7 +100,9 @@ export default function RootLayout() {
         <CoachProvider>
           <AppProvider>
             <OnboardingProvider>
-              <RootLayoutNav />
+              <NavigationProvider>
+                <RootLayoutNav />
+              </NavigationProvider>
             </OnboardingProvider>
           </AppProvider>
         </CoachProvider>
