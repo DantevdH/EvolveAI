@@ -239,13 +239,10 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
 
-      console.log('📊 Current onboarding data:', JSON.stringify(state.data, null, 2));
-
       // Validate all steps
 
       const stepValidationResults = onboardingSteps.map(step => {
         const isValid = canCompleteStep(step.id, state.data);
-        console.log(`Step ${step.id} (${step.title}): ${isValid ? '✅' : '❌'}`);
         return { step, isValid };
       });
 
@@ -259,7 +256,6 @@ export const OnboardingProvider: React.FC<OnboardingProviderProps> = ({ children
           title: result.step.title,
           validationRules: result.step.validationRules
         })));
-        console.error('📊 Current onboarding data:', state.data);
         throw new Error('Please complete all required fields');
       }
 

@@ -7,18 +7,18 @@ import { ActivityIndicator, Alert, ImageBackground, StyleSheet, Text, TouchableO
 import { useRouter } from 'expo-router';
 import { useOnboarding } from '../../context/OnboardingContext';
 import { useAuth } from '../../context/AuthContext';
+import { UserService } from '../../services/userService';
 import { OnboardingCard, OnboardingBackground } from '../../components/onboarding';
 import { colors } from '../../constants/designSystem';
-import { useUserProfile } from '../../hooks/useUserProfile';
+// Removed useUserProfile - using AuthContext instead
 import { OnboardingStyles } from '../../components/shared/OnboardingStyles';
 import { LoadingOverlay } from '../../components/shared/LoadingOverlay';
 
 export const OnboardingCompleteScreen: React.FC = () => {
   const { state, completeOnboarding, setGeneratingPlan, goToStep } = useOnboarding();
-  const { state: authState } = useAuth();
+  const { state: authState, setComingFromOnboarding, dispatch } = useAuth();
   const [isCompleting, setIsCompleting] = useState(false);
   const router = useRouter();
-  const { createUserProfile, isLoading: isCreatingProfile, error: profileError } = useUserProfile(authState.user?.id || '');
 
 
   const handleComplete = async () => {
@@ -37,47 +37,54 @@ export const OnboardingCompleteScreen: React.FC = () => {
         return;
       }
 
-      // Step 2: Create user profile
-      const profileResult = await createUserProfile(state.data);
+      // Step 2: Create user profile using AuthContext
+      const profileData = {
+        userId: authState.user.id,
+        username: state.data.username || '',
+        primaryGoal: state.data.primaryGoal || '',
+        primaryGoalDescription: state.data.goalDescription || '',
+        experienceLevel: state.data.experienceLevel || '',
+        daysPerWeek: state.data.daysPerWeek || 3,
+        minutesPerSession: state.data.minutesPerSession || 45,
+        equipment: Array.isArray(state.data.equipment) ? state.data.equipment[0] || '' : state.data.equipment || '',
+        age: state.data.age || 25,
+        weight: state.data.weight || 70,
+        weightUnit: state.data.weightUnit || 'kg',
+        height: state.data.height || 170,
+        heightUnit: state.data.heightUnit || 'cm',
+        gender: state.data.gender || '',
+        hasLimitations: state.data.hasLimitations || false,
+        limitationsDescription: state.data.limitationsDescription || '',
+        finalChatNotes: state.data.finalNotes || '',
+        coachId: state.data.selectedCoachId || null,
+      };
       
-      if (!profileResult.success) {
+      // Use the new UserService method directly
+      const response = await UserService.createUserProfile(authState.user?.id || '', profileData);
+      
+      if (!response.success) {
         Alert.alert(
           'Profile Creation Failed',
-          profileError || 'Failed to create your profile. Please try again.',
+          response.error || 'Failed to create your profile. Please try again.',
           [{ text: 'OK' }]
         );
         return;
       }
       
-      // Step 3: Navigate to GeneratePlanScreen with entire profile data
-      const profileDataToPass = {
-        id: profileResult.profileId,
-        user_id: authState.user.id,
-        username: state.data.username || '',
-        primary_goal: state.data.primaryGoal || '',
-        primary_goal_description: state.data.goalDescription || '',
-        experience_level: state.data.experienceLevel || '',
-        days_per_week: state.data.daysPerWeek || 3,
-        minutes_per_session: state.data.minutesPerSession || 45,
-        equipment: Array.isArray(state.data.equipment) ? state.data.equipment[0] || '' : state.data.equipment || '',
-        age: state.data.age || 25,
-        weight: state.data.weight || 70,
-        weight_unit: state.data.weightUnit || 'kg',
-        height: state.data.height || 170,
-        height_unit: state.data.heightUnit || 'cm',
-        gender: state.data.gender || '',
-        has_limitations: state.data.hasLimitations || false,
-        limitations_description: state.data.limitationsDescription || '',
-        final_chat_notes: state.data.finalNotes || '',
-        coach_id: state.data.selectedCoachId || null,
-      };
-      
-      router.replace({
-        pathname: '/generate-plan',
-        params: { 
-          profileData: JSON.stringify(profileDataToPass)
+      // Load the created profile into AuthContext (without workout plan since we'll generate one)
+      if (authState.user?.id) {
+        // Only load the profile, not the workout plan since we're about to generate one
+        const profileResponse = await UserService.getUserProfile(authState.user.id);
+        if (profileResponse.success && profileResponse.data) {
+          // Update AuthContext directly with the profile data
+          dispatch({ type: 'SET_USER_PROFILE', payload: profileResponse.data });
         }
-      });
+      }
+      
+      // Step 3: Set flag and navigate immediately for smooth transition
+      setComingFromOnboarding(true);
+      console.log('✅ Profile created → GeneratePlanScreen');
+      router.replace('/generate-plan');
       
     } catch (error) {
       Alert.alert(
@@ -144,12 +151,12 @@ export const OnboardingCompleteScreen: React.FC = () => {
             {/* Action Buttons */}
             <View style={styles.actionsContainer}>
               <TouchableOpacity
-                style={[styles.completeButton, (isCompleting || isCreatingProfile) && styles.completeButtonDisabled]}
+                style={[styles.completeButton, isCompleting && styles.completeButtonDisabled]}
                 onPress={handleComplete}
-                disabled={isCompleting || isCreatingProfile}
+                disabled={isCompleting}
                 testID="create-plan-button"
               >
-                {(isCompleting || isCreatingProfile) ? (
+                {isCompleting ? (
                   <ActivityIndicator size="small" color={colors.text} />
                 ) : (
                   <Text style={styles.completeButtonText}>Create My Plan</Text>
@@ -159,7 +166,7 @@ export const OnboardingCompleteScreen: React.FC = () => {
               <TouchableOpacity
                 style={styles.editButton}
                 onPress={handleBackToEdit}
-                disabled={isCompleting || isCreatingProfile}
+                disabled={isCompleting}
                 testID="edit-profile-button"
               >
                 <Text style={styles.editButtonText}>Edit Profile</Text>
@@ -170,8 +177,8 @@ export const OnboardingCompleteScreen: React.FC = () => {
         
         {/* Loading Overlay */}
         <LoadingOverlay 
-          visible={isCompleting || isCreatingProfile} 
-          message={isCreatingProfile ? "Creating your profile..." : "Completing onboarding..."}
+          visible={isCompleting} 
+          message="Creating your profile..."
         />
     </View>
   );

@@ -28,9 +28,19 @@ export const useWorkoutPlan = (): UseWorkoutPlanReturn => {
       
       if (result.success && result.data) {
         // Store the workout plan in the auth context
+        console.log('💪 Setting workout plan');
         setWorkoutPlan(result.data);
         return true;
       } else {
+        // Check if this is a duplicate error - if so, don't treat it as an error
+        const isDuplicateError = result.error?.includes('already exists') || result.error?.includes('duplicate');
+        
+        if (isDuplicateError) {
+          console.log('ℹ️ Duplicate workout plan detected');
+          // Don't set error for duplicate - just return false
+          return false;
+        }
+        
         setError(result.error || 'Failed to generate workout plan');
         return false;
       }

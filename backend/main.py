@@ -86,14 +86,22 @@ async def generate_workout_plan(
     Returns:
         A personalized workout plan with RAG-enhanced recommendations.
     """
+    print(f"🚀 API: Starting workout plan generation request...")
+    print(f"📋 API: Request details - User ID: {request.user_id}, Profile ID: {request.user_profile_id}")
+    print(f"📋 API: Request details - Primary Goal: {request.primaryGoal}, Experience: {request.experienceLevel}")
+    
     try:
 
         # Extract JWT token from Authorization header
         jwt_token = None
         if authorization and authorization.startswith('Bearer '):
             jwt_token = authorization.split('Bearer ')[1]
+            print(f"🔐 API: JWT token extracted, length: {len(jwt_token)}")
+        else:
+            print(f"⚠️ API: No JWT token found in authorization header")
         
         # Validate required fields are not empty
+        print(f"🔍 API: Starting validation...")
         validation_errors = []
         if not request.primaryGoal or request.primaryGoal.strip() == "":
             validation_errors.append("primaryGoal cannot be empty")
@@ -107,21 +115,30 @@ async def generate_workout_plan(
         
         if validation_errors:
             error_message = f"Validation failed: {', '.join(validation_errors)}"
+            print(f"❌ API: Validation failed: {error_message}")
             raise HTTPException(status_code=422, detail=error_message)
+        
+        print(f"✅ API: Validation passed")
         
         # Get user_id from the request body (required for database operations)
         user_id = request.user_id
         if not user_id:
+            print(f"❌ API: User ID is missing from request")
             raise HTTPException(
                 status_code=400, 
                 detail="User ID is required to generate and save workout plans. Please ensure you are properly authenticated."
             )
         
+        print(f"✅ API: User ID validated: {user_id}")
+        
         # Generate workout plan (mock or real based on DEBUG setting)
+        print(f"🤖 API: Starting workout plan generation (DEBUG={settings.DEBUG})...")
         if settings.DEBUG:
+            print(f"🎭 API: Using mock workout plan generation")
             workout_plan_data = create_mock_workout_plan(request)
             workout_plan_dict = workout_plan_data.model_dump()
             message = "Mock workout plan generated successfully"
+            print(f"✅ API: Mock workout plan generated successfully")
         else:
             # Convert request to UserProfileSchema format
             user_profile_data = {
@@ -154,25 +171,34 @@ async def generate_workout_plan(
             message = "Enhanced workout plan generated successfully using AI Fitness Coach"
 
         # Get user_profile_id (common logic for both debug and production)
+        print(f"🔍 API: Getting user profile ID...")
         user_profile_id = await _get_user_profile_id(request, user_id)
         if user_profile_id is None:
+            print(f"❌ API: User profile not found for user_id: {user_id}")
             raise HTTPException(
                 status_code=404,
                 detail="User profile not found. Please complete your profile setup before generating a workout plan."
             )
         
+        print(f"✅ API: User profile ID found: {user_profile_id}")
+        
         # Save workout plan to database (common logic for both debug and production)
+        print(f"💾 API: Starting database save operation...")
         save_result = await db_service.save_workout_plan(user_profile_id, workout_plan_data, jwt_token)
         
+        print(f"📊 API: Database save result: {save_result}")
+        
         if not save_result["success"]:
+            print(f"❌ API: Database save failed: {save_result['error']}")
             raise HTTPException(
                 status_code=500,
                 detail=f"Failed to save workout plan to database: {save_result['error']}"
             )
         
         plan_type = "Mock" if settings.DEBUG else "Workout"
-        print(f"✅ {plan_type} plan saved to database with ID: {save_result['data']['workout_plan_id']}")
+        print(f"✅ API: {plan_type} plan saved to database with ID: {save_result['data']['workout_plan_id']}")
         
+        print(f"🎉 API: Workout plan generation completed successfully")
         return GenerateWorkoutResponse(
             status="success",
             message=message,

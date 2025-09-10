@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useState, useCallback } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { useWorkoutPlan } from './useWorkoutPlan';
 import { mapProfileToBackendRequest } from '../utils/profileDataMapping';
@@ -13,26 +13,13 @@ export interface UseGeneratePlanFlowReturn {
 
 export const useGeneratePlanFlow = (): UseGeneratePlanFlowReturn => {
   const { state, setWorkoutPlan } = useAuth();
-  const router = useRouter();
   const { profileData: passedProfileData } = useLocalSearchParams<{ profileData?: string }>();
   const { generateWorkoutPlan, isLoading, error, clearError } = useWorkoutPlan();
   
   const [isGenerating, setIsGenerating] = useState(false);
-  const hasStartedGeneration = useRef(false);
 
-  // Auto-start generation when screen loads (only once)
-  useEffect(() => {
-    if (state.user && !state.workoutPlan && !hasStartedGeneration.current) {
-      handleGeneratePlan();
-    }
-  }, [state.user, state.workoutPlan]);
-
-  // Navigate to main app when workout plan is generated
-  useEffect(() => {
-    if (state.workoutPlan) {
-      router.replace('/(tabs)');
-    }
-  }, [state.workoutPlan, router]);
+  // Navigation removed - handled by main navigation in app/index.tsx
+  // This prevents the hook from interfering with the main navigation system
 
   const getProfileData = useCallback((): { success: boolean; profileData?: any; profileId?: number } => {
     // Scenario 1: Profile data passed from onboarding (new user)
@@ -62,42 +49,57 @@ export const useGeneratePlanFlow = (): UseGeneratePlanFlowReturn => {
   }, [passedProfileData, state.userProfile]);
 
   const handleGeneratePlan = useCallback(async (): Promise<void> => {
-    if (isLoading || hasStartedGeneration.current) {
+    const timestamp = new Date().toISOString();
+    console.log('🚀 Starting workout plan generation');
+
+    if (isLoading) {
+      console.log('⏸️ Generation already in progress');
       return;
     }
 
-    hasStartedGeneration.current = true;
     setIsGenerating(true);
+    console.log('🔄 Calling API...');
     
     try {
       const profileResult = getProfileData();
       
       if (!profileResult.success) {
-        hasStartedGeneration.current = false;
+        console.error('❌ Profile data not found');
         throw new Error('Profile data not found');
       }
 
       if (!profileResult.profileId) {
-        hasStartedGeneration.current = false;
+        console.error('❌ Profile ID is missing');
         throw new Error('Profile ID is missing');
       }
 
+      const apiStartTime = new Date().toISOString();
+      console.log('🚀 Calling generateWorkoutPlan API');
+      
       const success = await generateWorkoutPlan(
         profileResult.profileData,
         profileResult.profileId,
         state.user?.id || ''
       );
       
+      const apiEndTime = new Date().toISOString();
+      console.log('🚀 API call completed');
+      
       if (!success) {
+        console.error('❌ Generation failed');
         throw new Error(error || 'Failed to generate workout plan');
       }
+
+      console.log('✅ Workout plan generated');
     } catch (error) {
-      hasStartedGeneration.current = false;
+      console.error('💥 Generation error:', error instanceof Error ? error.message : String(error));
       throw error;
     } finally {
       setIsGenerating(false);
     }
   }, [isLoading, getProfileData, generateWorkoutPlan, state.user?.id, error]);
+
+  // Auto-generation removed - now handled by GeneratePlanScreen component
 
   return {
     isLoading: isLoading || isGenerating,

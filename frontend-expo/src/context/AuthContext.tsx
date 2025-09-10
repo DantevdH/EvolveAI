@@ -11,18 +11,22 @@ interface SimpleAuthState {
   userProfile: UserProfile | null;
   workoutPlan: WorkoutPlan | null;
   isLoading: boolean;
+  workoutPlanLoading: boolean;
   error: string | null;
   isInitialized: boolean;
+  isComingFromOnboarding: boolean;
 }
 
 // Simplified auth actions
 type SimpleAuthAction =
   | { type: 'SET_LOADING'; payload: boolean }
+  | { type: 'SET_WORKOUT_PLAN_LOADING'; payload: boolean }
   | { type: 'SET_USER'; payload: any | null }
   | { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
   | { type: 'SET_WORKOUT_PLAN'; payload: WorkoutPlan | null }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_INITIALIZED'; payload: boolean }
+  | { type: 'SET_COMING_FROM_ONBOARDING'; payload: boolean }
   | { type: 'CLEAR_AUTH' };
 
 // Simplified initial state
@@ -31,8 +35,10 @@ const initialState: SimpleAuthState = {
   userProfile: null,
   workoutPlan: null,
   isLoading: false,
+  workoutPlanLoading: false,
   error: null,
   isInitialized: false,
+  isComingFromOnboarding: false,
 };
 
 // Simplified auth reducer
@@ -42,6 +48,11 @@ const authReducer = (state: SimpleAuthState, action: SimpleAuthAction): SimpleAu
       return {
         ...state,
         isLoading: action.payload,
+      };
+    case 'SET_WORKOUT_PLAN_LOADING':
+      return {
+        ...state,
+        workoutPlanLoading: action.payload,
       };
     case 'SET_USER':
       return {
@@ -67,6 +78,11 @@ const authReducer = (state: SimpleAuthState, action: SimpleAuthAction): SimpleAu
       return {
         ...state,
         isInitialized: action.payload,
+      };
+    case 'SET_COMING_FROM_ONBOARDING':
+      return {
+        ...state,
+        isComingFromOnboarding: action.payload,
       };
     case 'CLEAR_AUTH':
       return {
@@ -94,9 +110,10 @@ interface AuthContextType {
   updatePassword: (newPassword: string) => Promise<boolean>;
   
   // User profile methods
-  createUserProfile: (profile: Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt'>) => Promise<boolean>;
+  loadUserProfile: (userId: string) => Promise<void>;
   updateUserProfile: (updates: Partial<Omit<UserProfile, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>) => Promise<boolean>;
   refreshUserProfile: () => Promise<void>;
+  dispatch: (action: SimpleAuthAction) => void;
   
   // Workout plan methods
   // generateWorkoutPlan: () => Promise<boolean>; // REMOVED: Use GeneratePlanScreen instead
@@ -108,6 +125,7 @@ interface AuthContextType {
   checkAuthState: () => Promise<void>;
   getCurrentUser: () => Promise<any>;
   markOnboardingComplete: () => Promise<void>;
+  setComingFromOnboarding: (isComing: boolean) => void;
 }
 
 // Create context
@@ -129,32 +147,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     try {
+      console.log('👤 Loading user profile...');
       dispatch({ type: 'SET_LOADING', payload: true });
       
       const response = await UserService.getUserProfile(userId);
       
       if (response.success) {
+        console.log('✅ User profile loaded');
         dispatch({ type: 'SET_USER_PROFILE', payload: response.data || null });
         
         // Load workout plan if user profile exists
         if (response.data) {
           try {
+            console.log('💪 Loading workout plan...');
+            dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: true });
+            
             const { TrainingService } = await import('../services/trainingService');
             const workoutResult = await TrainingService.getWorkoutPlan(response.data.id!);
+            
+            if (workoutResult.success) {
+              console.log('✅ Workout plan loaded');
+            } else {
+              console.log('ℹ️ No workout plan found');
+            }
+            
             dispatch({ type: 'SET_WORKOUT_PLAN', payload: workoutResult.success ? workoutResult.data || null : null });
           } catch (workoutError) {
-            console.error('AuthContext: Error loading workout plan:', workoutError);
+            console.error('❌ Error loading workout plan:', workoutError instanceof Error ? workoutError.message : String(workoutError));
             dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
+          } finally {
+            dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: false });
           }
         } else {
+          console.log('ℹ️ No user profile data');
           dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
         }
 
       } else {
+        console.log('❌ User profile not found');
         dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to load user profile' });
       }
     } catch (error) {
-      console.error('Load user profile error:', error);
+      console.error('❌ Error loading user profile:', error instanceof Error ? error.message : 'Failed to load user profile');
       dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Failed to load user profile' });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -165,14 +199,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-
+        console.log('🔐 Checking user session...');
         const { data: { session }, error } = await supabase.auth.getSession();
 
         if (error) {
-          console.error('AuthContext: Error getting session:', error);
+          console.error('❌ Session error:', error.message);
           dispatch({ type: 'SET_ERROR', payload: error.message });
         } else if (session) {
-
+          console.log('✅ User session found');
           dispatch({ type: 'SET_USER', payload: session.user });
           
           // Load user profile if we have a session
@@ -180,13 +214,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             await loadUserProfile(session.user.id);
           }
         } else {
-
+          console.log('ℹ️ No user session');
         }
       } catch (error) {
-        console.error('AuthContext: Error initializing auth:', error);
+        console.error('❌ Auth initialization error:', error);
         dispatch({ type: 'SET_ERROR', payload: 'Failed to initialize authentication' });
       } finally {
-
         dispatch({ type: 'SET_INITIALIZED', payload: true });
       }
     };
@@ -197,25 +230,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Single auth state listener - handles all auth changes
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-
       if (event === 'SIGNED_IN' && session) {
-
+        console.log('✅ User signed in');
         dispatch({ type: 'SET_USER', payload: session.user });
         
         // Check if OAuth user needs email verification (not for email signup)
         if (session.user && !session.user.email_confirmed_at && session.user.app_metadata?.provider !== 'email') {
-
+          console.log('📧 Email verification required');
           return; // Don't load profile until email is verified
         }
         
         // Only load profile if we don't already have one for this user and not currently loading
         if ((!state.userProfile || state.userProfile.userId !== session.user.id) && !state.isLoading) {
           await loadUserProfile(session.user.id);
-        } else {
-
         }
       } else if (event === 'SIGNED_OUT') {
-
+        console.log('👋 User signed out');
         dispatch({ type: 'CLEAR_AUTH' });
       }
     });
@@ -446,37 +476,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  // Create user profile
-  const createUserProfile = async (profile: Omit<UserProfile, 'id' | 'createdAt' | 'updatedAt'>): Promise<boolean> => {
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      dispatch({ type: 'SET_ERROR', payload: null });
-
-      // Note: This method is deprecated in favor of the new createUserProfile method
-      // that takes userId and profileData separately
-      console.warn('createUserProfile method is deprecated. Use the new method in UserService.');
-      
-      const response = await UserService.createUserProfile(profile.userId || '', profile);
-
-      if (response.success && response.data) {
-        // The new method returns { id: number }, so we need to fetch the full profile
-        const fullProfileResponse = await UserService.getUserProfile(profile.userId || '');
-        if (fullProfileResponse.success && fullProfileResponse.data) {
-          dispatch({ type: 'SET_USER_PROFILE', payload: fullProfileResponse.data });
-        }
-        return true;
-      } else {
-        dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to create profile' });
-        return false;
-      }
-    } catch (error) {
-      console.error('Create user profile error:', error);
-      dispatch({ type: 'SET_ERROR', payload: 'An unexpected error occurred' });
-      return false;
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  };
 
   // Update user profile
   const updateUserProfile = async (updates: Partial<Omit<UserProfile, 'id' | 'userId' | 'createdAt' | 'updatedAt'>>): Promise<boolean> => {
@@ -568,7 +567,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Set workout plan directly (for use after generation)
   const setWorkoutPlan = (workoutPlan: WorkoutPlan): void => {
+    console.log('💪 Workout plan set');
     dispatch({ type: 'SET_WORKOUT_PLAN', payload: workoutPlan });
+  };
+
+  // Set coming from onboarding flag
+  const setComingFromOnboarding = (isComing: boolean) => {
+    dispatch({ type: 'SET_COMING_FROM_ONBOARDING', payload: isComing });
   };
 
   const contextValue: AuthContextType = {
@@ -582,9 +587,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     resetPassword,
     resendVerificationEmail,
     updatePassword,
-    createUserProfile,
+    loadUserProfile,
     updateUserProfile,
     refreshUserProfile,
+    dispatch,
     // generateWorkoutPlan, // REMOVED: Use GeneratePlanScreen instead
     refreshWorkoutPlan,
     setWorkoutPlan,
@@ -592,6 +598,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkAuthState,
     getCurrentUser,
     markOnboardingComplete,
+    setComingFromOnboarding,
   };
 
   return (
