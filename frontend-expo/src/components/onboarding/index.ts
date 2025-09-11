@@ -20,3 +20,4 @@ export {
   OnboardingNavigation, 
   CompactOnboardingNavigation 
 } from './OnboardingNavigation';
+export { OnboardingBackground } from './OnboardingBackground';

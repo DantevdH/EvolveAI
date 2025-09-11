@@ -1,6 +1,54 @@
 import React, {createContext, useContext, useReducer, ReactNode} from 'react';
 import {UserProfile, WorkoutPlan, Theme, AppState as AppStateEnum, Coach} from '@/src/types';
-import {theme, darkTheme} from '@/src/constants';
+import { colors } from '../constants/designSystem';
+
+// Create theme object from design system
+const theme: Theme = {
+  colors: {
+    primary: colors.primary,
+    secondary: colors.secondary,
+    background: colors.background,
+    surface: colors.card,
+    text: colors.text,
+    textSecondary: colors.muted,
+    border: colors.border,
+    error: colors.error,
+    success: colors.success,
+    warning: colors.warning,
+  },
+  spacing: {
+    xs: 4,
+    sm: 8,
+    md: 16,
+    lg: 24,
+    xl: 32,
+  },
+  typography: {
+    fontSizes: {
+      xs: 12,
+      sm: 14,
+      md: 16,
+      lg: 18,
+      xl: 24,
+      xxl: 32,
+    },
+    fontWeights: {
+      regular: '400',
+      medium: '500',
+      semibold: '600',
+      bold: '700',
+    },
+  },
+  borderRadius: {
+    sm: 4,
+    md: 8,
+    lg: 12,
+    xl: 16,
+  },
+};
+
+// Dark theme is the same as light theme since we're using a dark design system
+const darkTheme: Theme = theme;
 
 // Define the state shape matching Swift AppViewModel
 interface AppState {

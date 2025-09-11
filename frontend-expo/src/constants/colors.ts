@@ -12,6 +12,7 @@ export const colors = {
   primary: '#932322', // evolvePrimary: Color(hex:"#932322")
   secondary: '#236193', // evolveSecondary: Color(hex: "#236193")
   tertiary: '#16B89F', // evolveTertiary: Color(hex: "#16B89F")
+  purple: '#A78BFA', // Purple color for rest days and special elements
   
   // Text colors
   text: '#FFFFFF', // evolveText: Color.white
@@ -117,6 +118,7 @@ export const {
   primary,
   secondary,
   tertiary,
+  purple,
   text,
   muted,
   success,

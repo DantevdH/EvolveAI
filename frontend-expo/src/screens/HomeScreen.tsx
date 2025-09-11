@@ -1,24 +1,88 @@
+/**
+ * Enhanced Home Screen - Main dashboard with Swift HomeView structure
+ */
+
 import React from 'react';
-import {View, Text, StyleSheet, SafeAreaView} from 'react-native';
-import {useAuth} from '@/src/context/AuthContext';
+import { SafeAreaView, StyleSheet, ScrollView, View, Text, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useAuth } from '@/src/context/AuthContext';
+import { colors } from '@/src/constants/colors';
+import { ExpoNavigation } from '@/src/utils/expoNavigationHelpers';
+import { useHomeData } from '@/src/hooks/useHomeData';
+
+// Home Components
+import { WelcomeHeader } from '@/src/components/home/WelcomeHeader';
+import { ProgressSummary } from '@/src/components/home/ProgressSummary';
+import { TodaysWorkout } from '@/src/components/home/TodaysWorkout';
+import { AIInsightsCard } from '@/src/components/home/AIInsightsCard';
+import { RecentActivity } from '@/src/components/home/RecentActivity';
 
 export const HomeScreen: React.FC = () => {
-  const {state: authState} = useAuth();
+  const { state: authState } = useAuth();
+  const homeData = useHomeData();
+  const router = useRouter();
 
+
+  const handleStartWorkout = () => {
+    console.log('Starting workout...');
+    ExpoNavigation.goToWorkouts();
+  };
+
+  const handleViewInsights = () => {
+    console.log('Navigating to insights...');
+    router.push('/(tabs)/insights');
+  };
+
+
+  // Loading state - matches Swift implementation
+  if (homeData.isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading your data...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // No workout plan state - matches Swift implementation
+  if (!authState.workoutPlan) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.emptyContainer}>
+          <Ionicons name="home" size={60} color={colors.primary} />
+          <Text style={styles.emptyTitle}>Welcome to EvolveAI!</Text>
+          <Text style={styles.emptySubtitle}>
+            Let's get started by creating your first workout plan.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Main content - matches Swift HomeContentView
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Welcome to EvolveAI</Text>
-        <Text style={styles.subtitle}>
-          Your personal fitness journey starts here
-        </Text>
-        {authState.userProfile && (
-          <Text style={styles.welcomeText}>Hello, {authState.userProfile.username}!</Text>
-        )}
-        {authState.user && !authState.userProfile && (
-          <Text style={styles.welcomeText}>Welcome, {authState.user.email}!</Text>
-        )}
-      </View>
+      <ScrollView 
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <WelcomeHeader username={authState.userProfile?.username} />
+        <ProgressSummary 
+          streak={homeData.streak}
+          weeklyWorkouts={homeData.weeklyWorkouts}
+          goalProgress={homeData.goalProgress}
+        />
+        <TodaysWorkout 
+          workout={homeData.todaysWorkout}
+          onStartWorkout={handleStartWorkout}
+        />
+        <AIInsightsCard onViewInsights={handleViewInsights} />
+        <RecentActivity activities={homeData.recentActivity} />
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -26,31 +90,42 @@ export const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background,
   },
-  content: {
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100, // Extra padding for tab bar
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    gap: 20,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#000000',
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: colors.text,
     textAlign: 'center',
-    marginBottom: 10,
   },
-  subtitle: {
+  emptySubtitle: {
     fontSize: 16,
-    color: '#8E8E93',
+    color: colors.muted,
     textAlign: 'center',
-    marginBottom: 20,
-  },
-  welcomeText: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: '#007AFF',
-    marginTop: 20,
+    lineHeight: 22,
   },
 });

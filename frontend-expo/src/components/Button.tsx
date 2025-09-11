@@ -1,19 +1,12 @@
-import React from 'react';
-import {
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  ViewStyle,
-  TextStyle,
-} from 'react-native';
+import React, { memo } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TextStyle, TouchableOpacity, ViewStyle } from 'react-native';
 import {ButtonProps} from '@/src/types';
 
 interface ExtendedButtonProps extends ButtonProps {
   style?: ViewStyle;
 }
 
-export const Button: React.FC<ExtendedButtonProps> = ({
+export const Button: React.FC<ExtendedButtonProps> = memo(({
   title,
   onPress,
   variant = 'primary',
@@ -53,7 +46,7 @@ export const Button: React.FC<ExtendedButtonProps> = ({
       )}
     </TouchableOpacity>
   );
-};
+});
 
 const styles = StyleSheet.create({
   button: {

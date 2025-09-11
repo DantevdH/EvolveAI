@@ -81,6 +81,15 @@ const validateRule = (value: any, rule: ValidationRule): FieldValidationResult =
         return { isValid: false, error: rule.message };
       }
       break;
+      
+    case 'limitations_description':
+      // Special validation for limitations description
+      const hasLimitations = rule.value; // This will be passed as the hasLimitations boolean
+      const result = validateLimitationsDescription(value, hasLimitations);
+      if (!result.isValid) {
+        return { isValid: false, error: result.error || rule.message };
+      }
+      break;
   }
   
   return { isValid: true };
@@ -257,7 +266,18 @@ export const validateLimitationsDescription = (description: string, hasLimitatio
     return { isValid: false, error: 'Limitations description must be less than 500 characters' };
   }
   
+  // If hasLimitations is true, require at least 100 characters
+  if (hasLimitations && description) {
+    if (description.trim().length < 100) {
+      return { isValid: false, error: `Please provide more details about your limitations (at least 100 characters, currently ${description.trim().length} characters)` };
+    }
+  }
+  
   return { isValid: true };
+};
+
+export const getWordCount = (text: string): number => {
+  return text.trim().split(/\s+/).filter(word => word.length > 0).length;
 };
 
 export const validateHealthConditions = (hasConditions: boolean, conditions: string[]): FieldValidationResult => {

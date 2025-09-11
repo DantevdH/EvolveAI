@@ -52,8 +52,7 @@ export default function ResetPasswordScreen() {
 
   // Check if we have the necessary tokens from the URL
   useEffect(() => {
-    console.log('Reset password params:', params);
-    
+
     // If we have access_token and refresh_token in the URL, set the session
     if (params.access_token && params.refresh_token) {
       handlePasswordResetFromEmail();
@@ -62,8 +61,7 @@ export default function ResetPasswordScreen() {
 
   const handlePasswordResetFromEmail = async () => {
     try {
-      console.log('Setting session from password reset URL...');
-      
+
       const { data, error } = await supabase.auth.setSession({
         access_token: params.access_token as string,
         refresh_token: params.refresh_token as string,
@@ -77,7 +75,7 @@ export default function ResetPasswordScreen() {
       }
 
       if (data.session) {
-        console.log('Session set successfully, user can now reset password');
+
         // The user is now authenticated and can reset their password
       }
     } catch (error) {

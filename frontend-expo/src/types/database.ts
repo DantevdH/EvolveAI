@@ -131,6 +131,140 @@ export interface Database {
           updated_at?: string;
         };
       };
+      weekly_schedules: {
+        Row: {
+          id: number;
+          workout_plan_id: number;
+          week_number: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: number;
+          workout_plan_id: number;
+          week_number: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: number;
+          workout_plan_id?: number;
+          week_number?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      daily_workouts: {
+        Row: {
+          id: number;
+          weekly_schedule_id: number;
+          day_of_week: string;
+          is_rest_day: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: number;
+          weekly_schedule_id: number;
+          day_of_week: string;
+          is_rest_day?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: number;
+          weekly_schedule_id?: number;
+          day_of_week?: string;
+          is_rest_day?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      workout_exercises: {
+        Row: {
+          id: number;
+          daily_workout_id: number;
+          exercise_id: number;
+          sets: number;
+          reps: number[];
+          weight: (number | null)[];
+          completed: boolean;
+          created_at: string;
+          updated_at: string;
+          weight_1rm: number[];
+        };
+        Insert: {
+          id?: number;
+          daily_workout_id: number;
+          exercise_id: number;
+          sets: number;
+          reps: number[];
+          weight?: (number | null)[];
+          completed?: boolean;
+          created_at?: string;
+          updated_at?: string;
+          weight_1rm?: number[];
+        };
+        Update: {
+          id?: number;
+          daily_workout_id?: number;
+          exercise_id?: number;
+          sets?: number;
+          reps?: number[];
+          weight?: (number | null)[];
+          completed?: boolean;
+          created_at?: string;
+          updated_at?: string;
+          weight_1rm?: number[];
+        };
+      };
+      exercises: {
+        Row: {
+          id: number;
+          name: string;
+          description: string;
+          video_url: string | null;
+          target_area: string | null;
+          main_muscles: string[] | null;
+          secondary_muscles: string[] | null;
+          equipment: string | null;
+          difficulty: string | null;
+          exercise_tier: string | null;
+          popularity_score: number | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: number;
+          name: string;
+          description: string;
+          video_url?: string | null;
+          target_area?: string | null;
+          main_muscles?: string[] | null;
+          secondary_muscles?: string[] | null;
+          equipment?: string | null;
+          difficulty?: string | null;
+          exercise_tier?: string | null;
+          popularity_score?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: number;
+          name?: string;
+          description?: string;
+          video_url?: string | null;
+          target_area?: string | null;
+          main_muscles?: string[] | null;
+          secondary_muscles?: string[] | null;
+          equipment?: string | null;
+          difficulty?: string | null;
+          exercise_tier?: string | null;
+          popularity_score?: number | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
     };
     Views: {
       [_ in never]: never;

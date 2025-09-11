@@ -18,6 +18,13 @@ expo-env.d.ts
 *.key
 *.mobileprovision
 
+# iOS Build Files
+ios/Podfile.lock
+ios/frontendexpo2.xcodeproj/
+ios/frontendexpo2/Images.xcassets/
+ios/build/
+ios/DerivedData/
+
 # Metro
 .metro-health-check*
 

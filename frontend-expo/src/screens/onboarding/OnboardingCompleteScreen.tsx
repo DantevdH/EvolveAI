@@ -3,79 +3,90 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ImageBackground, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { ActivityIndicator, Alert, ImageBackground, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useOnboarding } from '../../context/OnboardingContext';
 import { useAuth } from '../../context/AuthContext';
-import { OnboardingCard } from '../../components/onboarding';
-import { colors } from '../../constants/colors';
+import { UserService } from '../../services/userService';
+import { OnboardingCard, OnboardingBackground } from '../../components/onboarding';
+import { colors } from '../../constants/designSystem';
+// Removed useUserProfile - using AuthContext instead
+import { OnboardingStyles } from '../../components/shared/OnboardingStyles';
+import { LoadingOverlay } from '../../components/shared/LoadingOverlay';
 
 export const OnboardingCompleteScreen: React.FC = () => {
-  const { state, completeOnboarding, setGeneratingPlan } = useOnboarding();
-  const { createUserProfile, generateWorkoutPlan } = useAuth();
+  const { state, completeOnboarding, setGeneratingPlan, goToStep } = useOnboarding();
+  const { state: authState, setComingFromOnboarding, dispatch } = useAuth();
   const [isCompleting, setIsCompleting] = useState(false);
   const router = useRouter();
+
 
   const handleComplete = async () => {
     setIsCompleting(true);
     
     try {
-      // Complete onboarding in the onboarding context
-      const success = await completeOnboarding();
+      // Step 1: Complete onboarding validation
+      const onboardingSuccess = await completeOnboarding();
       
-      if (success) {
-        // Create user profile in Supabase with all onboarding data
-        const profileCreated = await createUserProfile({
-          username: state.data.username,
-          primaryGoal: state.data.primaryGoal,
-          primaryGoalDescription: state.data.goalDescription || '',
-          experienceLevel: state.data.experienceLevel,
-          daysPerWeek: state.data.daysPerWeek,
-          minutesPerSession: state.data.minutesPerSession,
-          equipment: state.data.equipment.join(', '),
-          age: state.data.age,
-          weight: state.data.weight,
-          weightUnit: state.data.weightUnit,
-          height: state.data.height,
-          heightUnit: state.data.heightUnit,
-          gender: state.data.gender,
-          hasLimitations: state.data.hasLimitations,
-          limitationsDescription: state.data.limitationsDescription || '',
-          finalChatNotes: state.data.finalNotes || '',
-        });
-        
-        if (profileCreated) {
-          // Start generating workout plan
-          setGeneratingPlan(true);
-          
-          // Generate the workout plan
-          const planGenerated = await generateWorkoutPlan();
-          
-          if (planGenerated) {
-            // Navigate to main app after successful plan generation
-            router.replace('/(tabs)');
-          } else {
-            // If plan generation fails, still navigate to main app
-            // The user can regenerate the plan later
-            console.error('Failed to generate workout plan, but continuing to main app');
-            router.replace('/(tabs)');
-          }
-        } else {
-          Alert.alert(
-            'Error',
-            'Failed to create user profile. Please try again.',
-            [{ text: 'OK' }]
-          );
-        }
-      } else {
+      if (!onboardingSuccess) {
         Alert.alert(
           'Error',
           'Failed to complete onboarding. Please try again.',
           [{ text: 'OK' }]
         );
+        return;
       }
+
+      // Step 2: Create user profile using AuthContext
+      const profileData = {
+        userId: authState.user.id,
+        username: state.data.username || '',
+        primaryGoal: state.data.primaryGoal || '',
+        primaryGoalDescription: state.data.goalDescription || '',
+        experienceLevel: state.data.experienceLevel || '',
+        daysPerWeek: state.data.daysPerWeek || 3,
+        minutesPerSession: state.data.minutesPerSession || 45,
+        equipment: Array.isArray(state.data.equipment) ? state.data.equipment[0] || '' : state.data.equipment || '',
+        age: state.data.age || 25,
+        weight: state.data.weight || 70,
+        weightUnit: state.data.weightUnit || 'kg',
+        height: state.data.height || 170,
+        heightUnit: state.data.heightUnit || 'cm',
+        gender: state.data.gender || '',
+        hasLimitations: state.data.hasLimitations || false,
+        limitationsDescription: state.data.limitationsDescription || '',
+        finalChatNotes: state.data.finalNotes || '',
+        coachId: state.data.selectedCoachId || null,
+      };
+      
+      // Use the new UserService method directly
+      const response = await UserService.createUserProfile(authState.user?.id || '', profileData);
+      
+      if (!response.success) {
+        Alert.alert(
+          'Profile Creation Failed',
+          response.error || 'Failed to create your profile. Please try again.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
+      // Load the created profile into AuthContext (without workout plan since we'll generate one)
+      if (authState.user?.id) {
+        // Only load the profile, not the workout plan since we're about to generate one
+        const profileResponse = await UserService.getUserProfile(authState.user.id);
+        if (profileResponse.success && profileResponse.data) {
+          // Update AuthContext directly with the profile data
+          dispatch({ type: 'SET_USER_PROFILE', payload: profileResponse.data });
+        }
+      }
+      
+      // Step 3: Set flag and navigate immediately for smooth transition
+      setComingFromOnboarding(true);
+      console.log('✅ Profile created → GeneratePlanScreen');
+      router.replace('/generate-plan');
+      
     } catch (error) {
-      console.error('Onboarding completion error:', error);
       Alert.alert(
         'Error',
         'An unexpected error occurred. Please try again.',
@@ -87,18 +98,13 @@ export const OnboardingCompleteScreen: React.FC = () => {
   };
 
   const handleBackToEdit = () => {
-    // Navigate back to first step to allow editing
-    // This would be handled by the onboarding navigation
+    // Navigate back to Physical Limitations screen (step 7) to allow editing
+    goToStep(7);
   };
 
   return (
     <View style={styles.container}>
-      <ImageBackground
-        source={{ uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80' }}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
-        <View style={styles.dimmingOverlay} />
+      <OnboardingBackground />
         
         <OnboardingCard
           title="You're All Set!"
@@ -148,6 +154,7 @@ export const OnboardingCompleteScreen: React.FC = () => {
                 style={[styles.completeButton, isCompleting && styles.completeButtonDisabled]}
                 onPress={handleComplete}
                 disabled={isCompleting}
+                testID="create-plan-button"
               >
                 {isCompleting ? (
                   <ActivityIndicator size="small" color={colors.text} />
@@ -160,21 +167,19 @@ export const OnboardingCompleteScreen: React.FC = () => {
                 style={styles.editButton}
                 onPress={handleBackToEdit}
                 disabled={isCompleting}
+                testID="edit-profile-button"
               >
                 <Text style={styles.editButtonText}>Edit Profile</Text>
               </TouchableOpacity>
             </View>
-
-            {/* Progress Indicator */}
-            <View style={styles.progressContainer}>
-              <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: '100%' }]} />
-              </View>
-              <Text style={styles.progressText}>Onboarding Complete</Text>
-            </View>
           </View>
         </OnboardingCard>
-      </ImageBackground>
+        
+        {/* Loading Overlay */}
+        <LoadingOverlay 
+          visible={isCompleting} 
+          message="Creating your profile..."
+        />
     </View>
   );
 };
@@ -183,15 +188,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  backgroundImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  dimmingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.overlay,
-  },
+
   content: {
     flex: 1,
     paddingHorizontal: 20,

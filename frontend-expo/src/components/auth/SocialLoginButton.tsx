@@ -1,11 +1,5 @@
 import React from 'react';
-import {
-  TouchableOpacity,
-  Text,
-  StyleSheet,
-  ViewStyle,
-  ActivityIndicator,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, ViewStyle } from 'react-native';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 
 export interface SocialLoginButtonProps {

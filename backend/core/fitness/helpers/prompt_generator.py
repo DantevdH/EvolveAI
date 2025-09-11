@@ -1,6 +1,5 @@
 from typing import List, Dict, Any
 
-
 class WorkoutPromptGenerator:
     """Service for generating structured prompts for the LLM."""
 

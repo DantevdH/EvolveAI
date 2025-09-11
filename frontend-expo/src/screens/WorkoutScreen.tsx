@@ -1,5 +1,5 @@
 import React from 'react';
-import {View, Text, StyleSheet, SafeAreaView} from 'react-native';
+import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 export const WorkoutScreen: React.FC = () => {
   return (

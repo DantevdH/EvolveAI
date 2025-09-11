@@ -3,47 +3,39 @@
  */
 
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useOnboarding } from '../../context/OnboardingContext';
-import { GeneratePlanScreen } from '../GeneratePlanScreen';
-import {
-  WelcomeScreen,
-  PersonalInfoScreen,
-  ExperienceLevelScreen,
-  FitnessGoalsScreen,
-  EquipmentAccessScreen,
-  TimeAvailabilityScreen,
-  PhysicalLimitationsScreen,
-  MotivationScreen,
-  OnboardingCompleteScreen,
-} from './index';
+import { WelcomeScreen } from './WelcomeScreen';
+import { PersonalInfoScreen } from './PersonalInfoScreen';
+import { ExperienceLevelScreen } from './ExperienceLevelScreen';
+import { FitnessGoalsScreen } from './FitnessGoalsScreen';
+import { EquipmentAccessScreen } from './EquipmentAccessScreen';
+import { TimeAvailabilityScreen } from './TimeAvailabilityScreen';
+import { PhysicalLimitationsScreen } from './PhysicalLimitationsScreen';
+import { OnboardingCompleteScreen } from './OnboardingCompleteScreen';
 
 export const OnboardingFlow: React.FC = () => {
   const { state } = useOnboarding();
 
-  // Show GeneratePlanScreen if we're generating a plan
-  if (state.isGeneratingPlan) {
-    return <GeneratePlanScreen />;
-  }
+  // GeneratePlanScreen is now handled by main navigation (/generate-plan route)
+  // Removed conditional rendering to prevent duplicate components
 
   const renderCurrentStep = () => {
     switch (state.progress.currentStep) {
-      case 0:
-        return <WelcomeScreen />;
       case 1:
-        return <PersonalInfoScreen />;
+        return <WelcomeScreen />;
       case 2:
-        return <ExperienceLevelScreen />;
+        return <PersonalInfoScreen />;
       case 3:
-        return <FitnessGoalsScreen />;
+        return <ExperienceLevelScreen />;
       case 4:
-        return <EquipmentAccessScreen />;
+        return <FitnessGoalsScreen />;
       case 5:
-        return <TimeAvailabilityScreen />;
+        return <EquipmentAccessScreen />;
       case 6:
-        return <PhysicalLimitationsScreen />;
+        return <TimeAvailabilityScreen />;
       case 7:
-        return <MotivationScreen />;
+        return <PhysicalLimitationsScreen />;
       case 8:
         return <OnboardingCompleteScreen />;
       default:

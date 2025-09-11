@@ -82,6 +82,7 @@ export interface WorkoutPlan {
   summary: string;
   createdAt: Date;
   updatedAt: Date;
+  planData?: any; // Full plan data from backend
 }
 
 export interface WeeklySchedule {

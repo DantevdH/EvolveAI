@@ -26,6 +26,8 @@ class GenerateWorkoutRequest(BaseModel):
     hasLimitations: bool = Field(..., description="Whether user has physical limitations")
     limitationsDescription: Optional[str] = Field(None, description="Description of limitations")
     finalChatNotes: Optional[str] = Field(None, description="Additional notes from chat")
+    user_id: Optional[str] = Field(None, description="User ID for database storage")
+    user_profile_id: Optional[int] = Field(None, description="User profile ID for direct database storage")
 
 class GenerateWorkoutResponse(BaseModel):
     """Response model for workout plan generation."""
