@@ -83,7 +83,10 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
 
           <TouchableOpacity
             style={styles.detailButton}
-            onPress={onShowDetail}
+            onPress={() => {
+              console.log('🔍 ExerciseRow: Info button pressed for exercise:', exercise.exercise?.name);
+              onShowDetail();
+            }}
           >
             <Ionicons name="information-circle" size={20} color={colors.primary} />
           </TouchableOpacity>

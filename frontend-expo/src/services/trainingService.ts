@@ -258,6 +258,7 @@ export class TrainingService {
                     secondary_muscles: we.exercises.secondary_muscles,
                     main_muscles: we.exercises.main_muscles,
                     difficulty: we.exercises.difficulty,
+                    exercise_tier: we.exercises.exercise_tier,
                     imageUrl: we.exercises.image_url,
                     videoUrl: we.exercises.video_url
                   } : null,
@@ -937,3 +938,160 @@ export class TrainingService {
     return Math.round((completedWorkouts / dailyWorkouts.length) * 100);
   }
 }
+
+// Get historical workout data for a specific exercise
+export const getExerciseHistory = async (exerciseId: number, userProfileId: number): Promise<{
+  success: boolean;
+  data?: {
+    volumeData: Array<{ date: string; volume: number }>;
+    recentWorkouts: Array<{ 
+      date: string; 
+      volume: number; 
+      maxWeight: number;
+      sets: number;
+      reps: number[];
+      weights: number[];
+    }>;
+    maxWeight: number;
+    maxVolume: number;
+  };
+  error?: string;
+}> => {
+  try {
+    console.log(`📊 Fetching exercise history for exercise ${exerciseId}, user ${userProfileId}`);
+    
+    // Get all COMPLETED workout exercises for this specific exercise and user
+    const { data, error } = await supabase
+      .from('workout_exercises')
+      .select(`
+        *,
+        daily_workouts!inner(
+          *,
+          weekly_schedules!inner(
+            workout_plans!inner(
+              user_profile_id
+            )
+          )
+        )
+      `)
+      .eq('exercise_id', exerciseId)
+      .eq('completed', true)
+      .eq('daily_workouts.weekly_schedules.workout_plans.user_profile_id', userProfileId)
+      .order('updated_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching exercise history:', error);
+      return { success: false, error: error.message };
+    }
+
+    if (!data || data.length === 0) {
+      console.log('No completed workout data found for this exercise');
+      return { 
+        success: true, 
+        data: {
+          volumeData: [],
+          recentWorkouts: [],
+          maxWeight: 0,
+          maxVolume: 0
+        }
+      };
+    }
+
+    console.log(`📊 Found ${data.length} completed workout records`);
+    console.log(`📊 Sample data:`, data.slice(0, 2).map(d => ({
+      exercise_id: d.exercise_id,
+      completed: d.completed,
+      weight: d.weight,
+      reps: d.reps,
+      sets: d.sets,
+      updated_at: d.updated_at
+    })));
+
+    // Process the data
+    const volumeData: Array<{ date: string; volume: number }> = [];
+    const recentWorkouts: Array<{ 
+      date: string; 
+      volume: number; 
+      maxWeight: number;
+      sets: number;
+      reps: number[];
+      weights: number[];
+    }> = [];
+    let maxWeight = 0;
+    let maxVolume = 0;
+
+    data.forEach((workoutExercise) => {
+      const date = new Date(workoutExercise.updated_at).toISOString().split('T')[0];
+      const weights = Array.isArray(workoutExercise.weight) ? workoutExercise.weight : [];
+      const reps = Array.isArray(workoutExercise.reps) ? workoutExercise.reps : [];
+      const sets = workoutExercise.sets || 0;
+      
+      console.log(`📊 Processing workout:`, {
+        date,
+        weights,
+        reps,
+        sets,
+        weightArray: workoutExercise.weight
+      });
+      
+      // Calculate volume (total reps × total weight)
+      let volume = 0;
+      let workoutMaxWeight = 0;
+      
+      for (let i = 0; i < Math.min(weights.length, reps.length); i++) {
+        const weight = weights[i] || 0;
+        const rep = reps[i] || 0;
+        volume += weight * rep;
+        workoutMaxWeight = Math.max(workoutMaxWeight, weight);
+      }
+      
+      console.log(`📊 Calculated: volume=${volume}, maxWeight=${workoutMaxWeight}`);
+      
+      maxWeight = Math.max(maxWeight, workoutMaxWeight);
+      maxVolume = Math.max(maxVolume, volume);
+      
+      // Only add to volume data if there's actual volume (not zero)
+      if (volume > 0) {
+        // Add to volume data (group by date)
+        const existingVolumeIndex = volumeData.findIndex(item => item.date === date);
+        if (existingVolumeIndex >= 0) {
+          volumeData[existingVolumeIndex].volume += volume;
+        } else {
+          volumeData.push({ date, volume });
+        }
+      }
+      
+      // Add to recent workouts (last 3 as requested)
+      if (recentWorkouts.length < 3) {
+        recentWorkouts.push({ 
+          date, 
+          volume, 
+          maxWeight: workoutMaxWeight,
+          sets,
+          reps,
+          weights
+        });
+      }
+    });
+
+    // Sort volume data by date
+    volumeData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    console.log(`📊 Found ${data.length} workout records, ${volumeData.length} unique dates`);
+    
+    return {
+      success: true,
+      data: {
+        volumeData,
+        recentWorkouts,
+        maxWeight,
+        maxVolume
+      }
+    };
+
+  } catch (error) {
+    console.error('Error fetching exercise history:', error);
+    return { success: false, error: 'Failed to fetch exercise history' };
+  }
+};
+

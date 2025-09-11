@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { TrainingService } from '../services/trainingService';
+import { NotificationService } from '../services/NotificationService';
 import {
   TrainingState,
   WorkoutPlan,
@@ -522,6 +523,9 @@ export const useTraining = (): UseTrainingReturn => {
           completedWorkouts: new Set([...prev.completedWorkouts, selectedDayWorkout.id]),
           isLoading: false
         }));
+
+        // Cancel today's workout reminder since workout is completed
+        await NotificationService.cancelWorkoutReminder();
       } else {
         setTrainingState(prev => ({
           ...prev,

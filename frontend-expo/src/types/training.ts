@@ -22,6 +22,7 @@ export interface Exercise {
   secondary_muscles?: string[];
   main_muscles?: string[];
   difficulty?: 'Beginner' | 'Intermediate' | 'Advanced';
+  exercise_tier?: string;
   imageUrl?: string;
   videoUrl?: string;
 }

@@ -4,6 +4,7 @@ import { UserService } from '@/src/services/userService';
 import { UserProfile } from '@/src/types';
 import { WorkoutPlan } from '@/src/types/training';
 import { supabase } from '@/src/config/supabase';
+import { NotificationService } from '@/src/services/NotificationService';
 
 // Simplified auth state interface
 interface SimpleAuthState {
@@ -171,7 +172,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               console.log('ℹ️ No workout plan found');
             }
             
-            dispatch({ type: 'SET_WORKOUT_PLAN', payload: workoutResult.success ? workoutResult.data || null : null });
+            const workoutPlan = workoutResult.success ? workoutResult.data || null : null;
+            dispatch({ type: 'SET_WORKOUT_PLAN', payload: workoutPlan });
+            
+            // Schedule workout reminder if workout plan exists
+            if (workoutPlan) {
+              try {
+                await NotificationService.scheduleWorkoutReminder(workoutPlan);
+                console.log('🔔 Workout reminder scheduled');
+              } catch (notificationError) {
+                console.log('⚠️ Failed to schedule workout reminder:', notificationError);
+              }
+            }
           } catch (workoutError) {
             console.error('❌ Error loading workout plan:', workoutError instanceof Error ? workoutError.message : String(workoutError));
             dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
@@ -553,11 +565,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       if (result.success && result.data) {
         dispatch({ type: 'SET_WORKOUT_PLAN', payload: result.data });
+        
+        // Schedule workout reminder for the new workout plan
+        try {
+          await NotificationService.scheduleWorkoutReminder(result.data);
+          console.log('🔔 Workout reminder scheduled for new plan');
+        } catch (notificationError) {
+          console.log('⚠️ Failed to schedule workout reminder:', notificationError);
+        }
 
       } else {
         // No workout plan found, clear it
         dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
-
+        
+        // Cancel any existing workout reminders
+        try {
+          await NotificationService.cancelWorkoutReminder();
+          console.log('🔔 Workout reminder cancelled (no plan)');
+        } catch (notificationError) {
+          console.log('⚠️ Failed to cancel workout reminder:', notificationError);
+        }
       }
     } catch (error) {
       console.error('Failed to refresh workout plan:', error);

@@ -31,7 +31,6 @@ export type ProfileStackParamList = {
 export type MainTabParamList = {
   HomeTab: undefined;
   TrainingTab: undefined;
-  ProfileTab: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -105,8 +104,6 @@ export const MainTabNavigator: React.FC = () => {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'TrainingTab') {
             iconName = focused ? 'barbell' : 'barbell-outline';
-          } else if (route.name === 'ProfileTab') {
-            iconName = focused ? 'person' : 'person-outline';
           } else {
             iconName = 'help-outline';
           }
@@ -124,11 +121,6 @@ export const MainTabNavigator: React.FC = () => {
         name="TrainingTab" 
         component={TrainingStackNavigator}
         options={{ title: 'Workouts' }}
-      />
-      <Tab.Screen 
-        name="ProfileTab" 
-        component={ProfileStackNavigator}
-        options={{ title: 'Profile' }}
       />
     </Tab.Navigator>
   );

@@ -84,7 +84,10 @@ const DailyWorkoutDetail: React.FC<DailyWorkoutDetailProps> = ({
                 onSetUpdate={(setIndex, reps, weight) => 
                   onSetUpdate(exercise.id, setIndex, reps, weight)
                 }
-                onShowDetail={() => onExerciseDetail(exercise.exercise)}
+                onShowDetail={() => {
+                  console.log('🔍 DailyWorkoutDetail: Calling onExerciseDetail with exercise:', exercise.exercise);
+                  onExerciseDetail(exercise.exercise);
+                }}
                 onOneRMCalculator={onOneRMCalculator}
                 isLocked={dailyWorkout.completed}
               />
