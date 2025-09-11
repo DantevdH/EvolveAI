@@ -177,11 +177,13 @@ const TrainingScreen: React.FC = () => {
       </ScrollView>
 
       {/* Exercise Detail Modal */}
-      <ExerciseDetailView
-        exercise={trainingState.selectedExercise}
-        isVisible={trainingState.isShowingExerciseDetail}
-        onClose={hideExerciseDetail}
-      />
+      {trainingState.selectedExercise && (
+        <ExerciseDetailView
+          exercise={trainingState.selectedExercise}
+          isVisible={trainingState.isShowingExerciseDetail}
+          onClose={hideExerciseDetail}
+        />
+      )}
 
       {/* OneRM Calculator Modal */}
       <OneRMCalculatorView

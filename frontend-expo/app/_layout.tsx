@@ -75,6 +75,8 @@ function RootLayoutNav() {
         <Stack.Screen name="email-verification" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="generate-plan" options={{ headerShown: false }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
+        <Stack.Screen name="full-profile" options={{ headerShown: false }} />
         <Stack.Screen name="oauth/callback" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
