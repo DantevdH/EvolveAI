@@ -187,6 +187,15 @@ export interface UseTrainingReturn {
   cancelReopenWorkout: () => void;
   refreshWorkoutPlan: () => Promise<void>;
   
+  // Exercise swap actions
+  showExerciseSwapModal: (exercise: Exercise) => void;
+  hideExerciseSwapModal: () => void;
+  swapExercise: (exerciseId: string, newExercise: Exercise) => Promise<void>;
+  
+  // Exercise swap state
+  isExerciseSwapModalVisible: boolean;
+  exerciseToSwap: Exercise | null;
+  
   // Computed
   isPlanComplete: boolean;
   currentWeekProgress: number;
@@ -227,6 +236,7 @@ export interface DailyWorkoutDetailProps {
   onSetUpdate: (exerciseId: string, setIndex: number, reps: number, weight: number) => Promise<void>;
   onExerciseDetail: (exercise: Exercise) => void;
   onOneRMCalculator: (exerciseName: string) => void;
+  onSwapExercise?: (exercise: Exercise) => void;
   onReopenWorkout?: () => void;
 }
 
@@ -236,6 +246,7 @@ export interface ExerciseRowProps {
   onSetUpdate: (setIndex: number, reps: number, weight: number) => Promise<void>;
   onShowDetail: () => void;
   onOneRMCalculator: (exerciseName: string) => void;
+  onSwapExercise?: () => void;
   isLocked?: boolean;
 }
 

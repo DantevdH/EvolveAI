@@ -10,6 +10,7 @@ import DailyWorkoutDetail from '../components/training/DailyWorkoutDetail';
 import ConfirmationDialog from '../components/shared/ConfirmationDialog';
 import ExerciseDetailView from '../components/training/ExerciseDetailView';
 import OneRMCalculatorView from '../components/training/OneRMCalculatorView';
+import ExerciseSwapModal from '../components/training/ExerciseSwapModal';
 
 const TrainingScreen: React.FC = () => {
   const { state: authState } = useAuth();
@@ -34,6 +35,11 @@ const TrainingScreen: React.FC = () => {
     reopenWorkout,
     confirmReopenWorkout,
     cancelReopenWorkout,
+    showExerciseSwapModal,
+    hideExerciseSwapModal,
+    swapExercise,
+    isExerciseSwapModalVisible,
+    exerciseToSwap,
     isPlanComplete,
     currentWeekProgress
   } = useTraining();
@@ -66,6 +72,23 @@ const TrainingScreen: React.FC = () => {
             updateSetDetails(exercise.id, index, exercise.sets[index].reps, weight);
           }
         });
+      }
+    }
+  };
+
+  const handleExerciseSwap = (exercise: any) => {
+    showExerciseSwapModal(exercise);
+  };
+
+  const handleConfirmExerciseSwap = (newExercise: any) => {
+    if (exerciseToSwap && selectedDayWorkout) {
+      // Find the exercise to swap in the current workout
+      const exerciseToReplace = selectedDayWorkout.exercises.find(
+        ex => ex.exercise?.name === exerciseToSwap.name
+      );
+      
+      if (exerciseToReplace) {
+        swapExercise(exerciseToReplace.id, newExercise);
       }
     }
   };
@@ -169,6 +192,7 @@ const TrainingScreen: React.FC = () => {
           onSetUpdate={updateSetDetails}
           onExerciseDetail={showExerciseDetail}
           onOneRMCalculator={handleOneRMCalculator}
+          onSwapExercise={handleExerciseSwap}
           onReopenWorkout={reopenWorkout}
         />
 
@@ -192,6 +216,18 @@ const TrainingScreen: React.FC = () => {
         onClose={() => setOneRMCalculatorVisible(false)}
         onCalculate={handleOneRMCalculate}
       />
+
+      {/* Exercise Swap Modal */}
+      {exerciseToSwap && (
+        <ExerciseSwapModal
+          visible={isExerciseSwapModalVisible}
+          currentExercise={exerciseToSwap}
+          onClose={hideExerciseSwapModal}
+          onSwapExercise={handleConfirmExerciseSwap}
+          scheduledExerciseIds={selectedDayWorkout?.exercises.map(ex => ex.exercise?.id).filter(Boolean) || []}
+          scheduledExerciseNames={selectedDayWorkout?.exercises.map(ex => ex.exercise?.name).filter(Boolean) || []}
+        />
+      )}
 
       {/* Reopen Workout Confirmation Dialog */}
       <ConfirmationDialog

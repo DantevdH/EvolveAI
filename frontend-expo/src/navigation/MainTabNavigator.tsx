@@ -11,6 +11,7 @@ import { Platform } from 'react-native';
 import { HomeScreen } from '../screens/HomeScreen';
 import TrainingScreen from '../screens/TrainingScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
+import { NutritionScreen } from '../screens/NutritionScreen';
 import { colors } from '../constants/colors';
 
 // Tab Stack Types
@@ -22,6 +23,10 @@ export type TrainingStackParamList = {
   Training: undefined;
 };
 
+export type NutritionStackParamList = {
+  Nutrition: undefined;
+};
+
 export type ProfileStackParamList = {
   Profile: undefined;
   Settings: undefined;
@@ -31,11 +36,13 @@ export type ProfileStackParamList = {
 export type MainTabParamList = {
   HomeTab: undefined;
   TrainingTab: undefined;
+  NutritionTab: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 const HomeStack = createStackNavigator<HomeStackParamList>();
 const TrainingStack = createStackNavigator<TrainingStackParamList>();
+const NutritionStack = createStackNavigator<NutritionStackParamList>();
 const ProfileStack = createStackNavigator<ProfileStackParamList>();
 
 // Home Stack Navigator
@@ -61,6 +68,19 @@ const TrainingStackNavigator: React.FC = () => {
     >
       <TrainingStack.Screen name="Training" component={TrainingScreen} />
     </TrainingStack.Navigator>
+  );
+};
+
+// Nutrition Stack Navigator
+const NutritionStackNavigator: React.FC = () => {
+  return (
+    <NutritionStack.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <NutritionStack.Screen name="Nutrition" component={NutritionScreen} />
+    </NutritionStack.Navigator>
   );
 };
 
@@ -104,6 +124,8 @@ export const MainTabNavigator: React.FC = () => {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'TrainingTab') {
             iconName = focused ? 'barbell' : 'barbell-outline';
+          } else if (route.name === 'NutritionTab') {
+            iconName = focused ? 'nutrition' : 'nutrition-outline';
           } else {
             iconName = 'help-outline';
           }
@@ -121,6 +143,11 @@ export const MainTabNavigator: React.FC = () => {
         name="TrainingTab" 
         component={TrainingStackNavigator}
         options={{ title: 'Workouts' }}
+      />
+      <Tab.Screen 
+        name="NutritionTab" 
+        component={NutritionStackNavigator}
+        options={{ title: 'Nutrition' }}
       />
     </Tab.Navigator>
   );

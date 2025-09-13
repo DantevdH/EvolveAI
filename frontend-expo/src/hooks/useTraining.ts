@@ -3,6 +3,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { TrainingService } from '../services/trainingService';
 import { NotificationService } from '../services/NotificationService';
+import { ExerciseSwapService } from '../services/exerciseSwapService';
+import { supabase } from '../config/supabase';
 import {
   TrainingState,
   WorkoutPlan,
@@ -43,10 +45,13 @@ export const useTraining = (): UseTrainingReturn => {
     exerciseName: ''
   });
 
+  // Exercise swap state
+  const [showExerciseSwapModalState, setShowExerciseSwapModalState] = useState(false);
+  const [exerciseToSwap, setExerciseToSwap] = useState<Exercise | null>(null);
+
   // Helper function to update both local and auth context workout plans
   // Only use this when we actually modify the workout plan, not during initialization
   const updateWorkoutPlan = useCallback((updatedPlan: WorkoutPlan) => {
-    console.log('🔄 useTraining: Updating both local and auth context workout plans');
     setWorkoutPlan(updatedPlan);
     setAuthWorkoutPlan(updatedPlan);
   }, [setAuthWorkoutPlan]);
@@ -360,7 +365,6 @@ export const useTraining = (): UseTrainingReturn => {
             });
           } else if (!allExercisesCompleted && updatedCurrentDailyWorkout.completed) {
             // Some exercises were unchecked - mark workout as incomplete
-            console.log('🔄 Some exercises unchecked! Marking daily workout as incomplete...');
             
             // Update the daily workout completion status
             updatedPlan.weeklySchedules = updatedPlan.weeklySchedules.map(week => ({
@@ -603,6 +607,85 @@ export const useTraining = (): UseTrainingReturn => {
     }));
   }, []);
 
+  // Exercise swap functions
+  const showExerciseSwapModal = useCallback((exercise: Exercise) => {
+    setExerciseToSwap(exercise);
+    setShowExerciseSwapModalState(true);
+  }, []);
+
+  const hideExerciseSwapModal = useCallback(() => {
+    setShowExerciseSwapModalState(false);
+    setExerciseToSwap(null);
+  }, []);
+
+  const swapExercise = useCallback(async (exerciseId: string, newExercise: Exercise) => {
+    if (!workoutPlan) return;
+
+    try {
+      
+      // Update both local and auth context state immediately
+      const updatedPlan = {
+        ...workoutPlan,
+        weeklySchedules: workoutPlan.weeklySchedules.map(week => ({
+          ...week,
+          dailyWorkouts: week.dailyWorkouts.map(daily => ({
+            ...daily,
+            exercises: daily.exercises.map(exercise => 
+              exercise.id === exerciseId 
+                ? { 
+                    ...exercise, 
+                    exercise: newExercise,
+                    // Reset completion status when swapping exercises
+                    completed: false,
+                    // Reset sets to default values based on new exercise
+                    sets: exercise.sets.map((set, index) => ({
+                      ...set,
+                      reps: newExercise.main_muscles?.includes('Chest') ? 12 : 10, // Default reps
+                      weight: 0,
+                      completed: false
+                    }))
+                  }
+                : exercise
+            )
+          }))
+        }))
+      };
+
+      // Update database
+      const { error } = await supabase
+        .from('workout_exercises')
+        .update({
+          exercise_id: parseInt(newExercise.id),
+          completed: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', exerciseId);
+
+      if (error) {
+        console.error('❌ Error updating exercise in database:', error);
+        setTrainingState(prev => ({
+          ...prev,
+          error: 'Failed to swap exercise'
+        }));
+        return;
+      }
+
+      // Update both local and auth context workout plans
+      updateWorkoutPlan(updatedPlan);
+      
+      
+      // Hide the modal
+      hideExerciseSwapModal();
+      
+    } catch (error) {
+      console.error('💥 Error swapping exercise:', error);
+      setTrainingState(prev => ({
+        ...prev,
+        error: 'Failed to swap exercise'
+      }));
+    }
+  }, [workoutPlan, updateWorkoutPlan, hideExerciseSwapModal]);
+
   const refreshWorkoutPlan = useCallback(async () => {
     if (!authState.userProfile) return;
 
@@ -698,6 +781,13 @@ export const useTraining = (): UseTrainingReturn => {
     confirmReopenWorkout,
     cancelReopenWorkout,
     refreshWorkoutPlan,
+    showExerciseSwapModal,
+    hideExerciseSwapModal,
+    swapExercise,
+    
+    // Exercise swap state
+    isExerciseSwapModalVisible: showExerciseSwapModalState,
+    exerciseToSwap,
     
     // Computed
     isPlanComplete,
