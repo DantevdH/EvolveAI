@@ -90,6 +90,7 @@ const ExerciseDetailView: React.FC<ExerciseDetailViewProps> = ({
     }
   };
 
+
   const difficultyColor = (difficulty: string): string => {
     switch (difficulty.toLowerCase()) {
       case 'beginner': return colors.success;

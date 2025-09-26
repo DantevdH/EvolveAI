@@ -11,6 +11,7 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
   onSetUpdate,
   onShowDetail,
   onOneRMCalculator,
+  onSwapExercise,
   isLocked = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -72,6 +73,17 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
         </View>
 
         <View style={styles.actionButtons}>
+          {/* Swap Exercise Button */}
+          {onSwapExercise && (
+            <TouchableOpacity
+              style={[styles.swapButton, isLocked && styles.swapButtonLocked]}
+              onPress={isLocked ? undefined : onSwapExercise}
+              disabled={isLocked}
+            >
+              <Ionicons name="swap-horizontal-outline" size={20} color={isLocked ? colors.muted : colors.primary} />
+            </TouchableOpacity>
+          )}
+
           {/* 1RM Calculator Button */}
           <TouchableOpacity
             style={[styles.calculatorButton, isLocked && styles.calculatorButtonLocked]}
@@ -269,6 +281,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8
+  },
+  swapButton: {
+    // No additional styling needed
+  },
+  swapButtonLocked: {
+    opacity: 0.5
   },
   calculatorButton: {
     // No additional styling needed

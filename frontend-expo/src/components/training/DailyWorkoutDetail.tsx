@@ -14,6 +14,7 @@ const DailyWorkoutDetail: React.FC<DailyWorkoutDetailProps> = ({
   onSetUpdate,
   onExerciseDetail,
   onOneRMCalculator,
+  onSwapExercise,
   onReopenWorkout
 }) => {
   if (!dailyWorkout) {
@@ -89,6 +90,7 @@ const DailyWorkoutDetail: React.FC<DailyWorkoutDetailProps> = ({
                   onExerciseDetail(exercise.exercise);
                 }}
                 onOneRMCalculator={onOneRMCalculator}
+                onSwapExercise={onSwapExercise ? () => onSwapExercise(exercise.exercise) : undefined}
                 isLocked={dailyWorkout.completed}
               />
             ))}
