@@ -107,9 +107,11 @@ class ExerciseSelector:
             print(f"📊 Target distribution: {foundational_count} foundational + {standard_count} standard + {variety_count} variety")
             
             # 1. Get foundational exercises (core, essential movements)
+            #TODO: always provide ALL foundational exercises
             foundational_exercises = self._get_tier_exercises(
                 muscle_groups, difficulty, equipment, 'foundational', foundational_count
             )
+            
             
             print(f"✅ Found {len(foundational_exercises)} foundational exercises (target: {foundational_count})")
             
