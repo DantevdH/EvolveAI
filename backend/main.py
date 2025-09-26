@@ -11,6 +11,7 @@ from core.fitness.helpers.schemas import WorkoutPlanSchema, UserProfileSchema
 from core.fitness.helpers.models import GenerateWorkoutRequest, GenerateWorkoutResponse
 from core.fitness.fitness_coach import FitnessCoach
 from core.fitness.helpers.database_service import db_service
+from core.fitness.onboarding_api import router as onboarding_router
 from utils.mock_data import create_mock_workout_plan
 from settings import settings
 
@@ -36,6 +37,9 @@ app.add_middleware(
 
 # Initialize the fitness coach
 fitness_coach = FitnessCoach()
+
+# Include onboarding router
+app.include_router(onboarding_router)
 
 # Dependency to get OpenAI client
 def get_openai_client():
