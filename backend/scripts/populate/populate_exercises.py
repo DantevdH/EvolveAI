@@ -33,6 +33,7 @@ class ExercisePopulator:
         """Initialize the exercise populator."""
         self._validate_environment()
         self._initialize_clients()
+        self._ensure_exercises_table_exists()
         logger.info("✅ Connected to Supabase")
 
     def _validate_environment(self):
@@ -53,6 +54,141 @@ class ExercisePopulator:
         
         # Initialize Supabase client
         self.supabase: Client = create_client(self.supabase_url, self.supabase_key)
+
+    def _ensure_exercises_table_exists(self):
+        """Create the exercises table if it doesn't exist."""
+        try:
+            # Check if table exists by trying to select from it
+            self.supabase.table('exercises').select('id').limit(1).execute()
+            logger.info("✅ Exercises table already exists")
+            # Check if we need to add missing columns
+            self._ensure_all_columns_exist()
+        except Exception as e:
+            if "does not exist" in str(e) or "PGRST205" in str(e):
+                logger.info("🔧 Creating exercises table...")
+                self._create_exercises_table()
+            else:
+                logger.warning(f"⚠️  Could not check table existence: {e}")
+
+    def _ensure_all_columns_exist(self):
+        """Ensure all required columns exist in the exercises table."""
+        try:
+            # Try to select from the new columns to see if they exist
+            test_columns = ['preparation', 'execution', 'tips']
+            missing_columns = []
+            
+            for col in test_columns:
+                try:
+                    self.supabase.table('exercises').select(col).limit(1).execute()
+                except Exception as e:
+                    if "PGRST204" in str(e) and "column" in str(e):
+                        missing_columns.append(col)
+            
+            if missing_columns:
+                logger.info(f"🔧 Adding missing columns: {missing_columns}")
+                self._add_missing_columns(missing_columns)
+            else:
+                logger.info("✅ All required columns exist")
+                
+        except Exception as e:
+            logger.warning(f"⚠️  Could not check column existence: {e}")
+
+    def _add_missing_columns(self, missing_columns):
+        """Add missing columns to the exercises table."""
+        try:
+            for col in missing_columns:
+                if col == 'preparation':
+                    sql = "ALTER TABLE public.exercises ADD COLUMN IF NOT EXISTS preparation text;"
+                elif col == 'execution':
+                    sql = "ALTER TABLE public.exercises ADD COLUMN IF NOT EXISTS execution text;"
+                elif col == 'tips':
+                    sql = "ALTER TABLE public.exercises ADD COLUMN IF NOT EXISTS tips text;"
+                else:
+                    continue
+                
+                try:
+                    self.supabase.rpc('exec_sql', {'sql': sql}).execute()
+                    logger.info(f"✅ Added column: {col}")
+                except Exception as e:
+                    logger.warning(f"⚠️  Could not add column {col}: {e}")
+                    
+        except Exception as e:
+            logger.error(f"❌ Error adding missing columns: {e}")
+
+    def _create_exercises_table(self):
+        """Create the exercises table with proper schema."""
+        try:
+            logger.info("🔧 Creating exercises table...")
+            
+            # SQL to create the exercises table
+            create_table_sql = """
+            CREATE TABLE public.exercises (
+                id serial PRIMARY KEY,
+                name text NOT NULL,
+                equipment text NOT NULL,
+                target_area text NOT NULL,
+                force text NOT NULL,
+                difficulty text NOT NULL,
+                tier text NOT NULL,
+                popularity_score integer NOT NULL,
+                main_muscles text[] NOT NULL,
+                secondary_muscles text[] NOT NULL,
+                preparation text,
+                execution text,
+                tips text,
+                created_at timestamp with time zone DEFAULT now(),
+                updated_at timestamp with time zone DEFAULT now()
+            );
+            """
+            
+            # Execute the table creation
+            response = self.supabase.rpc('exec_sql', {'sql': create_table_sql}).execute()
+            logger.info("✅ Exercises table created successfully")
+            
+            # Enable RLS
+            rls_sql = "ALTER TABLE public.exercises ENABLE ROW LEVEL SECURITY;"
+            try:
+                self.supabase.rpc('exec_sql', {'sql': rls_sql}).execute()
+                logger.info("✅ RLS enabled on exercises table")
+            except Exception as e:
+                logger.warning(f"⚠️  Could not enable RLS: {e}")
+            
+            # Create a permissive policy for now (you may want to restrict this)
+            policy_sql = """
+            CREATE POLICY "Allow all operations" ON public.exercises
+            FOR ALL USING (true);
+            """
+            try:
+                self.supabase.rpc('exec_sql', {'sql': policy_sql}).execute()
+                logger.info("✅ RLS policy created")
+            except Exception as e:
+                logger.warning(f"⚠️  Could not create RLS policy: {e}")
+            
+            # Create indexes for better performance
+            indexes_sql = [
+                "CREATE INDEX idx_exercises_target_area ON public.exercises(target_area);",
+                "CREATE INDEX idx_exercises_difficulty ON public.exercises(difficulty);",
+                "CREATE INDEX idx_exercises_equipment ON public.exercises(equipment);",
+                "CREATE INDEX idx_exercises_tier ON public.exercises(tier);"
+            ]
+            
+            for index_sql in indexes_sql:
+                try:
+                    self.supabase.rpc('exec_sql', {'sql': index_sql}).execute()
+                except Exception as e:
+                    logger.warning(f"⚠️  Could not create index: {e}")
+            
+            logger.info("✅ Indexes created")
+            
+        except Exception as e:
+            logger.error(f"❌ Error creating table: {e}")
+            # Fallback: try using direct SQL execution
+            try:
+                logger.info("🔄 Trying alternative table creation method...")
+                # This is a fallback - some Supabase instances might not support exec_sql
+                logger.warning("⚠️  Table creation failed. Please create the table manually using the SQL in create_exercises_table.sql")
+            except Exception as fallback_error:
+                logger.error(f"❌ Fallback also failed: {fallback_error}")
 
     def load_excel_data(self, file_path: str) -> Optional[pd.DataFrame]:
         """Load exercise data from Excel file."""
@@ -82,8 +218,8 @@ class ExercisePopulator:
         """Validate and clean exercise data."""
         logger.info("🔍 Validating exercise data...")
         
-        # Check required columns
-        required_columns = ["Exercise Name", "Force", "Instructions", "Equipment", "Main Muscle", "Target_Muscles", "Secondary Muscles", "Difficulty", "Tier", "Popularity Score"]
+        # Check required columns for the new format
+        required_columns = ["name", "equipment", "tier", "difficulty", "popularity_score", "target_area", "primary_muscles", "secondary_muscles", "force", "preparation", "execution", "tips"]
         missing_columns = [col for col in required_columns if col not in df.columns]
         
         if missing_columns:
@@ -93,39 +229,45 @@ class ExercisePopulator:
         # Clean and standardize data
         df_clean = df.copy()
         
-        # Clean Exercise Name
-        df_clean["Exercise Name"] = df_clean["Exercise Name"].astype(str).str.strip()
+        # Clean name
+        df_clean["name"] = df_clean["name"].astype(str).str.strip()
         
-        # Clean Force
-        df_clean["Force"] = df_clean["Force"].astype(str).str.strip()
+        # Clean equipment
+        df_clean["equipment"] = df_clean["equipment"].astype(str).str.strip()
         
-        # Clean Instructions
-        df_clean["Instructions"] = df_clean["Instructions"].astype(str).str.strip()
+        # Clean target_area
+        df_clean["target_area"] = df_clean["target_area"].astype(str).str.strip()
         
-        # Clean Equipment
-        df_clean["Equipment"] = df_clean["Equipment"].astype(str).str.strip()
+        # Clean primary_muscles (convert to list)
+        df_clean["primary_muscles"] = df_clean["primary_muscles"].apply(self._parse_muscle_list)
         
-        # Clean Main Muscle (this will become target_area)
-        df_clean["Main Muscle"] = df_clean["Main Muscle"].astype(str).str.strip()
+        # Clean secondary_muscles (convert to list)
+        df_clean["secondary_muscles"] = df_clean["secondary_muscles"].apply(self._parse_muscle_list)
         
-        # Clean Target_Muscles (convert to list for main_muscles)
-        df_clean["Target_Muscles"] = df_clean["Target_Muscles"].apply(self._parse_muscle_list)
+        # Clean force
+        df_clean["force"] = df_clean["force"].astype(str).str.strip()
         
-        # Clean Secondary Muscles (convert to list)
-        df_clean["Secondary Muscles"] = df_clean["Secondary Muscles"].apply(self._parse_muscle_list)
+        # Clean preparation
+        df_clean["preparation"] = df_clean["preparation"].astype(str).str.strip()
         
-        # Clean Difficulty
-        df_clean["Difficulty"] = df_clean["Difficulty"].apply(self._standardize_difficulty)
+        # Clean execution
+        df_clean["execution"] = df_clean["execution"].astype(str).str.strip()
         
-        # Clean Tier
-        df_clean["Tier"] = df_clean["Tier"].apply(self._clean_tier)
+        # Clean tips
+        df_clean["tips"] = df_clean["tips"].fillna("").astype(str).str.strip()
         
-        # Clean Popularity Score
-        df_clean["Popularity Score"] = df_clean["Popularity Score"].apply(self._parse_popularity_score)
+        # Clean difficulty
+        df_clean["difficulty"] = df_clean["difficulty"].apply(self._standardize_difficulty)
+        
+        # Clean tier
+        df_clean["tier"] = df_clean["tier"].apply(self._clean_tier)
+        
+        # Clean popularity score
+        df_clean["popularity_score"] = df_clean["popularity_score"].apply(self._parse_popularity_score)
         
         # Remove rows with missing critical data
         initial_count = len(df_clean)
-        df_clean = df_clean.dropna(subset=["Exercise Name", "Main Muscle"])
+        df_clean = df_clean.dropna(subset=["name", "target_area"])
         final_count = len(df_clean)
         
         if initial_count != final_count:
@@ -133,13 +275,13 @@ class ExercisePopulator:
         
         # Check for duplicates based on composite key (name + equipment + target_area)
         logger.info("🔍 Checking for duplicate exercise combinations...")
-        duplicates = df_clean[df_clean.duplicated(subset=["Exercise Name", "Equipment", "Main Muscle"], keep=False)]
+        duplicates = df_clean[df_clean.duplicated(subset=["name", "equipment", "target_area"], keep=False)]
         if not duplicates.empty:
             logger.warning(f"Found {len(duplicates)} rows with duplicate exercise combinations")
             logger.info("Keeping first occurrence of each duplicate, removing others...")
             
             # Remove duplicates, keeping the first occurrence
-            df_clean = df_clean.drop_duplicates(subset=["Exercise Name", "Equipment", "Main Muscle"], keep='first')
+            df_clean = df_clean.drop_duplicates(subset=["name", "equipment", "target_area"], keep='first')
             logger.info(f"After removing duplicates: {len(df_clean)} exercises remaining")
         
         logger.info(f"✅ Data validation complete. {len(df_clean)} valid exercises remaining")
@@ -150,8 +292,20 @@ class ExercisePopulator:
         if pd.isna(muscles_str) or muscles_str == '':
             return []
         
-        # Split by comma and clean each muscle name
-        muscles = [muscle.strip() for muscle in str(muscles_str).split(',')]
+        muscles_str = str(muscles_str).strip()
+        
+        # Check if it's a JSON array string (starts with [ and ends with ])
+        if muscles_str.startswith('[') and muscles_str.endswith(']'):
+            try:
+                import json
+                muscles = json.loads(muscles_str)
+                if isinstance(muscles, list):
+                    return [muscle.strip() for muscle in muscles if muscle.strip()]
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
+        # Fallback: Split by comma and clean each muscle name
+        muscles = [muscle.strip().strip('"\'') for muscle in muscles_str.split(',')]
         # Remove empty strings
         muscles = [muscle for muscle in muscles if muscle]
         return muscles
@@ -190,44 +344,53 @@ class ExercisePopulator:
         
         return tier_str
 
-    def _parse_popularity_score(self, score: Any) -> float:
+    def _parse_popularity_score(self, score: Any) -> int:
         """Parse and validate popularity score."""
         if pd.isna(score) or score == '':
-            return 0.5
+            return 5  # Default to 5 on a 1-10 scale
         
         try:
-            # Convert to float
-            score_float = float(score)
+            # Convert to int
+            score_int = int(float(score))
             
-            # Clamp between 0 and 1
-            if score_float < 0:
-                return 0.0
-            elif score_float > 1:
-                return 1.0
+            # Clamp between 1 and 10
+            if score_int < 1:
+                return 1
+            elif score_int > 10:
+                return 10
             else:
-                return score_float
+                return score_int
                 
         except (ValueError, TypeError):
-            logger.warning(f"Invalid popularity score '{score}', using default 0.5")
-            return 0.5
+            logger.warning(f"Invalid popularity score '{score}', using default 5")
+            return 5
 
     def transform_to_database_format(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
         """Transform DataFrame to database insert format."""
         exercises = []
         
         for _, row in df.iterrows():
+            # Clean and prepare individual fields
+            preparation = str(row["preparation"]).strip() if pd.notna(row["preparation"]) and str(row["preparation"]).strip() != "nan" else ""
+            execution = str(row["execution"]).strip() if pd.notna(row["execution"]) and str(row["execution"]).strip() != "nan" else ""
+            tips = str(row["tips"]).strip() if pd.notna(row["tips"]) and str(row["tips"]).strip() != "nan" else ""
+            
+            # Create exercise with all fields
             exercise = {
-                "name": row["Exercise Name"],
-                "force": row["Force"],
-                "instructions": row["Instructions"],
-                "equipment": row["Equipment"],
-                "target_area": row["Main Muscle"],  # Main Muscle maps to target_area
-                "main_muscles": row["Target_Muscles"],  # Target_Muscles maps to main_muscles array
-                "secondary_muscles": row["Secondary Muscles"],
-                "difficulty": row["Difficulty"],
-                "exercise_tier": row["Tier"],
-                "popularity_score": row["Popularity Score"]
+                "name": row["name"],
+                "equipment": row["equipment"],
+                "target_area": row["target_area"],
+                "force": row["force"],
+                "difficulty": row["difficulty"],
+                "tier": row["tier"],
+                "popularity_score": row["popularity_score"],
+                "main_muscles": row["primary_muscles"],  # primary_muscles maps to main_muscles array
+                "secondary_muscles": row["secondary_muscles"],
+                "preparation": preparation,
+                "execution": execution,
+                "tips": tips
             }
+            
             exercises.append(exercise)
         
         return exercises
@@ -328,8 +491,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python populate_exercises.py --file-path=./data/excel/gym_exercises_filtered.xlsx
-  python populate_exercises.py --file-path=./data/excel/combined_exercises.xlsx
+  python populate_exercises.py --file-path=./data/excel/gym_exercises.xlsx
+  python populate_exercises.py --file-path=./data/excel/gym_exercise_dataset_cleaned.xlsx
         """
     )
     

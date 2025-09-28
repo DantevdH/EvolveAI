@@ -1,11 +1,11 @@
 // Onboarding Types for AI-Driven Flow
 
 export enum QuestionType {
-  SINGLE_CHOICE = "single_choice",
   MULTIPLE_CHOICE = "multiple_choice",
+  DROPDOWN = "dropdown",
   FREE_TEXT = "free_text",
   SLIDER = "slider",
-  BOOLEAN = "boolean",
+  CONDITIONAL_BOOLEAN = "conditional_boolean",
   RATING = "rating",
 }
 
@@ -36,6 +36,7 @@ export interface AIQuestion {
   min_value?: number;
   max_value?: number;
   step?: number;
+  unit?: string;
   max_length?: number;
   placeholder?: string;
   help_text?: string;
@@ -55,9 +56,39 @@ export interface PersonalInfo {
   height: number;
   weight_unit: string;
   height_unit: string;
+  measurement_system: 'metric' | 'imperial';
   gender: string;
   goal_description: string;
 }
+
+export interface ExperienceLevel {
+  value: string;
+  title: string;
+  description: string;
+}
+
+export const experienceLevels: ExperienceLevel[] = [
+  {
+    value: 'novice',
+    title: 'Novice',
+    description: 'New to working toward your goals or haven\'t pursued them in over a year'
+  },
+  {
+    value: 'beginner',
+    title: 'Beginner',
+    description: 'Some experience working toward similar goals, less than 6 months'
+  },
+  {
+    value: 'intermediate',
+    title: 'Intermediate',
+    description: 'Regularly working toward your goals for 6 months to 2 years'
+  },
+  {
+    value: 'advanced',
+    title: 'Advanced',
+    description: 'Consistently pursuing your goals for 2+ years with advanced knowledge'
+  }
+];
 
 export interface OnboardingState {
   // Step 1: Username
@@ -72,19 +103,23 @@ export interface OnboardingState {
   goalDescription: string;
   goalDescriptionValid: boolean;
   
-  // Step 4: Initial Questions
+  // Step 4: Experience Level
+  experienceLevel: string;
+  experienceLevelValid: boolean;
+  
+  // Step 5: Initial Questions
   initialQuestions: AIQuestion[];
   initialResponses: Map<string, any>;
   initialQuestionsLoading: boolean;
   currentInitialQuestionIndex: number;
   
-  // Step 5: Follow-up Questions
+  // Step 6: Follow-up Questions
   followUpQuestions: AIQuestion[];
   followUpResponses: Map<string, any>;
   followUpQuestionsLoading: boolean;
   currentFollowUpQuestionIndex: number;
   
-  // Step 6: Plan Generation
+  // Step 7: Plan Generation
   planGenerationLoading: boolean;
   workoutPlan: any | null; // WorkoutPlan type
   error: string | null;
@@ -107,12 +142,17 @@ export interface InitialQuestionsRequest {
 export interface FollowUpQuestionsRequest {
   personal_info: PersonalInfo;
   initial_responses: Record<string, any>;
+  initial_questions?: AIQuestion[];
 }
 
 export interface PlanGenerationRequest {
   personal_info: PersonalInfo;
   initial_responses: Record<string, any>;
   follow_up_responses: Record<string, any>;
+  initial_questions?: AIQuestion[];
+  follow_up_questions?: AIQuestion[];
+  user_profile_id?: number;
+  jwt_token?: string;
 }
 
 export interface OnboardingApiResponse<T> {
@@ -149,6 +189,12 @@ export interface PersonalInfoStepProps extends OnboardingStepProps {
 export interface GoalDescriptionStepProps extends OnboardingStepProps {
   goalDescription: string;
   onGoalDescriptionChange: (goalDescription: string) => void;
+  isValid: boolean;
+}
+
+export interface ExperienceLevelStepProps extends OnboardingStepProps {
+  experienceLevel: string;
+  onExperienceLevelChange: (experienceLevel: string) => void;
   isValid: boolean;
 }
 

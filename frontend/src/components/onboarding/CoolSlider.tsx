@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, PanResponder, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, PanResponder, Animated, Dimensions, TouchableOpacity } from 'react-native';
 import { colors } from '../../constants/designSystem';
 
 interface CoolSliderProps {
@@ -11,12 +11,14 @@ interface CoolSliderProps {
   unit: string;
   title: string;
   style?: any;
+  size?: 'small' | 'large';
 }
 
 const { width: screenWidth } = Dimensions.get('window');
-const SLIDER_WIDTH = screenWidth - 100; // Account for padding
-const THUMB_SIZE = 20;
-const TRACK_HEIGHT = 4;
+const SLIDER_WIDTH = screenWidth - 160; // Account for padding and buttons
+const THUMB_SIZE = 24;
+const TRACK_HEIGHT = 8;
+const BUTTON_SIZE = 28;
 
 export const CoolSlider: React.FC<CoolSliderProps> = ({
   value,
@@ -27,6 +29,7 @@ export const CoolSlider: React.FC<CoolSliderProps> = ({
   unit,
   title,
   style,
+  size = 'small',
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const scale = useRef(new Animated.Value(1)).current;
@@ -65,7 +68,10 @@ export const CoolSlider: React.FC<CoolSliderProps> = ({
       const currentPosition = getPositionFromValue(value);
       const newPosition = Math.max(0, Math.min(SLIDER_WIDTH - THUMB_SIZE, currentPosition + gestureState.dx));
       const newValue = getValueFromPosition(newPosition);
-      onValueChange(newValue);
+      
+      // Ensure value stays within bounds
+      const clampedValue = Math.max(min, Math.min(max, newValue));
+      onValueChange(clampedValue);
       
       thumbPosition.setValue(newPosition);
     },
@@ -81,6 +87,24 @@ export const CoolSlider: React.FC<CoolSliderProps> = ({
   const handleTrackPress = (event: any) => {
     const { locationX } = event.nativeEvent;
     const newValue = getValueFromPosition(locationX);
+    
+    // Ensure value stays within bounds
+    const clampedValue = Math.max(min, Math.min(max, newValue));
+    onValueChange(clampedValue);
+    
+    // Animate thumb to new position
+    const newPosition = getPositionFromValue(clampedValue);
+    Animated.spring(thumbPosition, {
+      toValue: newPosition,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  const handleDecrease = () => {
+    // Double-check bounds before proceeding
+    if (value <= min) return;
+    
+    const newValue = Math.max(min, value - step);
     onValueChange(newValue);
     
     // Animate thumb to new position
@@ -91,44 +115,83 @@ export const CoolSlider: React.FC<CoolSliderProps> = ({
     }).start();
   };
 
-  const animatedStyle = {
-    transform: [
-      { translateX: thumbPosition },
-      { scale: scale },
-    ],
+  const handleIncrease = () => {
+    // Double-check bounds before proceeding
+    if (value >= max) return;
+    
+    const newValue = Math.min(max, value + step);
+    onValueChange(newValue);
+    
+    // Animate thumb to new position
+    const newPosition = getPositionFromValue(newValue);
+    Animated.spring(thumbPosition, {
+      toValue: newPosition,
+      useNativeDriver: false,
+    }).start();
+  };
+
+  const translateStyle = {
+    transform: [{ translateX: thumbPosition }],
+  };
+
+  const scaleStyle = {
+    transform: [{ scale: scale }],
   };
 
   const progressPercentage = ((value - min) / (max - min)) * 100;
 
   return (
     <View style={[styles.container, style]}>
-      <Text style={styles.title}>{title}</Text>
+      {title && <Text style={styles.title}>{title}</Text>}
       
       <View style={styles.sliderContainer}>
         {/* Value Display */}
         <View style={styles.valueDisplay}>
-          <Text style={styles.valueText}>{value}</Text>
-          <Text style={styles.unitText}>{unit}</Text>
+          <Text style={[styles.valueText, size === 'large' && styles.valueTextLarge]}>{value}</Text>
+          {unit && <Text style={[styles.unitText, size === 'large' && styles.unitTextLarge]}>{unit}</Text>}
         </View>
 
-        {/* Slider Track */}
-        <View style={styles.trackContainer}>
-          <View style={styles.track}>
-            <View 
-              style={[
-                styles.progress, 
-                { width: `${progressPercentage}%` }
-              ]} 
-            />
-          </View>
-          
-          {/* Draggable Thumb */}
-          <Animated.View 
-            style={[styles.thumb, animatedStyle]}
-            {...panResponder.panHandlers}
+        {/* Slider Track with Buttons */}
+        <View style={styles.sliderWithButtons}>
+          {/* Decrease Button */}
+          <TouchableOpacity 
+            style={[styles.button, value <= min && styles.buttonDisabled]} 
+            onPress={handleDecrease}
+            disabled={value <= min}
           >
-            <View style={styles.thumbInner} />
-          </Animated.View>
+            <Text style={[styles.buttonText, value <= min && styles.buttonTextDisabled]}>-</Text>
+          </TouchableOpacity>
+
+          {/* Slider Track */}
+          <View style={styles.trackContainer}>
+            <View style={styles.track}>
+              <View 
+                style={[
+                  styles.progress, 
+                  { width: `${progressPercentage}%` }
+                ]} 
+              />
+            </View>
+            
+            {/* Draggable Thumb */}
+            <Animated.View 
+              style={[styles.thumb, translateStyle]}
+              {...panResponder.panHandlers}
+            >
+              <Animated.View style={scaleStyle}>
+                <View style={styles.thumbInner} />
+              </Animated.View>
+            </Animated.View>
+          </View>
+
+          {/* Increase Button */}
+          <TouchableOpacity 
+            style={[styles.button, value >= max && styles.buttonDisabled]} 
+            onPress={handleIncrease}
+            disabled={value >= max}
+          >
+            <Text style={[styles.buttonText, value >= max && styles.buttonTextDisabled]}>+</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Min/Max Labels */}
@@ -144,11 +207,12 @@ export const CoolSlider: React.FC<CoolSliderProps> = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: colors.inputBackground,
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: 8,
+    padding: 8,
     borderWidth: 1,
     borderColor: colors.inputBorder,
-    flex: 1,
+    flex: 0, // Don't expand
+    minHeight: 60, // Ultra compact height
   },
   title: {
     fontSize: 16,
@@ -159,29 +223,54 @@ const styles = StyleSheet.create({
   },
   sliderContainer: {
     alignItems: 'center',
-    flex: 1,
+    flex: 0, // Don't expand
   },
   valueDisplay: {
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 4,
+    paddingVertical: 2,
+    paddingHorizontal: 0,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    minHeight: 18,
+    justifyContent: 'center',
+    borderWidth: 0,
+    borderColor: 'transparent',
   },
   valueText: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
     color: colors.text,
-    lineHeight: 32,
+    lineHeight: 16,
   },
   unitText: {
-    fontSize: 14,
+    fontSize: 12,
     color: colors.muted,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  valueTextLarge: {
+    fontSize: 20,
+    fontWeight: '700',
+    lineHeight: 28,
+  },
+  unitTextLarge: {
+    fontSize: 12,
     marginTop: 4,
+    fontWeight: '600',
+  },
+  sliderWithButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    paddingHorizontal: 1,
   },
   trackContainer: {
     width: SLIDER_WIDTH,
     height: THUMB_SIZE,
     justifyContent: 'center',
     position: 'relative',
-    marginBottom: 12,
+    marginHorizontal: 12,
   },
   track: {
     height: TRACK_HEIGHT,
@@ -229,5 +318,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.muted,
     fontWeight: '500',
+  },
+  button: {
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
+    borderRadius: BUTTON_SIZE / 2,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  buttonDisabled: {
+    backgroundColor: colors.inputBorder,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  buttonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: 'white',
+  },
+  buttonTextDisabled: {
+    color: colors.muted,
   },
 });

@@ -10,6 +10,7 @@ interface MultipleChoiceQuestionProps {
   onChange: (value: string[]) => void;
   error?: string;
   disabled?: boolean;
+  noBackground?: boolean;
 }
 
 export const MultipleChoiceQuestion: React.FC<MultipleChoiceQuestionProps> = ({
@@ -18,6 +19,7 @@ export const MultipleChoiceQuestion: React.FC<MultipleChoiceQuestionProps> = ({
   onChange,
   error,
   disabled = false,
+  noBackground = false,
 }) => {
   if (!question.options) {
     return (
@@ -36,18 +38,13 @@ export const MultipleChoiceQuestion: React.FC<MultipleChoiceQuestionProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.questionText}>{question.text}</Text>
-      {question.help_text && (
-        <Text style={styles.helpText}>{question.help_text}</Text>
-      )}
-      
       <OptionSelector
         options={options}
         selectedValues={value}
         onSelectionChange={onChange}
         multiple={true}
         columns={1}
-        style={styles.selector}
+        style={[styles.selector, noBackground && styles.selectorNoBackground]}
       />
       
       {error && (
@@ -59,7 +56,7 @@ export const MultipleChoiceQuestion: React.FC<MultipleChoiceQuestionProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    // No flex to prevent expansion
   },
   questionText: {
     fontSize: 18,
@@ -71,11 +68,14 @@ const styles = StyleSheet.create({
   helpText: {
     fontSize: 14,
     color: colors.muted,
-    marginBottom: 20,
+    marginBottom: 8,
     lineHeight: 20,
   },
   selector: {
     flex: 1,
+  },
+  selectorNoBackground: {
+    backgroundColor: 'transparent',
   },
   errorText: {
     fontSize: 14,

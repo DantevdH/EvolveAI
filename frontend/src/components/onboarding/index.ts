@@ -22,12 +22,8 @@ export { OnboardingBackground } from './OnboardingBackground';
 
 // New AI-driven onboarding components
 export { ConversationalOnboarding } from './ConversationalOnboarding';
-export { WelcomeStep } from './WelcomeStep';
-export { PersonalInfoStep } from './PersonalInfoStep';
-export { QuestionsStep } from './QuestionsStep';
-export { PlanGenerationStep } from './PlanGenerationStep';
 export { QuestionRenderer } from './QuestionRenderer';
-export { SingleChoiceQuestion } from './SingleChoiceQuestion';
+export { DropdownQuestion } from './DropdownQuestion';
 export { MultipleChoiceQuestion } from './MultipleChoiceQuestion';
 export { TextInputQuestion } from './TextInputQuestion';
 export { SliderQuestion } from './SliderQuestion';

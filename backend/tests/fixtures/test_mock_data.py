@@ -10,7 +10,7 @@ backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
 import pytest
-from utils.mock_data import (
+from core.fitness.helpers.mock_data import (
     create_mock_user_profile,
     create_mock_workout_plan,
     get_mock_data_summary,
@@ -66,7 +66,7 @@ class TestMockData:
         
         # Check exercise details
         squat = MOCK_EXERCISES["barbell_squat"]
-        assert squat["exercise_id"] == 1302
+        assert squat["exercise_id"] == 2355
         assert "quads" in squat["description"].lower()
 
     def test_mock_data_summary(self):

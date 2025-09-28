@@ -38,16 +38,28 @@ export const OnboardingNavigation: React.FC<OnboardingNavigationProps> = ({
     );
   }
 
+  // If no back button should be shown, use single container aligned to right
+  if (!showBack || !onBack) {
+    return (
+      <View style={styles.singleContainerRight}>
+        <OnboardingButton
+          title={nextTitle}
+          onPress={onNext}
+          disabled={nextDisabled}
+          icon={nextIcon}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.dualContainer}>
-      {showBack && onBack && (
-        <OnboardingButton
-          title={backTitle}
-          onPress={onBack}
-          disabled={backDisabled}
-          variant="back"
-        />
-      )}
+      <OnboardingButton
+        title={backTitle}
+        onPress={onBack}
+        disabled={backDisabled}
+        variant="back"
+      />
       <OnboardingButton
         title={nextTitle}
         onPress={onNext}
@@ -61,6 +73,11 @@ export const OnboardingNavigation: React.FC<OnboardingNavigationProps> = ({
 const styles = StyleSheet.create({
   singleContainer: {
     alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 40,
+  },
+  singleContainerRight: {
+    alignItems: 'flex-end',
     marginTop: 20,
     marginBottom: 40,
   },

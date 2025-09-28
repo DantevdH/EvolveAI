@@ -5,11 +5,11 @@ from enum import Enum
 
 class QuestionType(str, Enum):
     """Types of questions that can be asked."""
-    SINGLE_CHOICE = "single_choice"
     MULTIPLE_CHOICE = "multiple_choice"
+    DROPDOWN = "dropdown"
     FREE_TEXT = "free_text"
     SLIDER = "slider"
-    BOOLEAN = "boolean"
+    CONDITIONAL_BOOLEAN = "conditional_boolean"
     RATING = "rating"
 
 
@@ -43,6 +43,7 @@ class AIQuestion(BaseModel):
     min_value: Optional[float] = Field(default=None, description="Minimum value for slider questions")
     max_value: Optional[float] = Field(default=None, description="Maximum value for slider questions")
     step: Optional[float] = Field(default=1.0, description="Step size for slider questions")
+    unit: Optional[str] = Field(default=None, description="Unit of measurement for slider questions (e.g., kg, lbs, minutes)")
     max_length: Optional[int] = Field(default=None, description="Maximum length for text questions")
     placeholder: Optional[str] = Field(default=None, description="Placeholder text for input fields")
     help_text: Optional[str] = Field(default=None, description="Additional help text for the question")
@@ -56,6 +57,15 @@ class AIQuestionResponse(BaseModel):
     categories: List[QuestionCategory] = Field(..., description="Categories covered in this question set")
 
 
+class AIQuestionResponseWithFormatted(BaseModel):
+    """Response from AI containing generated questions and formatted responses."""
+    questions: List[AIQuestion] = Field(..., description="List of generated questions")
+    total_questions: int = Field(..., description="Total number of questions")
+    estimated_time_minutes: int = Field(..., description="Estimated time to complete in minutes")
+    categories: List[QuestionCategory] = Field(..., description="Categories covered in this question set")
+    formatted_responses: str = Field(..., description="Formatted responses for database storage")
+
+
 class PersonalInfo(BaseModel):
     """Basic personal information."""
     username: str = Field(..., min_length=3, max_length=20, description="User's chosen username")
@@ -64,18 +74,26 @@ class PersonalInfo(BaseModel):
     height: float = Field(..., gt=0, description="User's height")
     weight_unit: str = Field(default="kg", description="Unit for weight (kg or lbs)")
     height_unit: str = Field(default="cm", description="Unit for height (cm or inches)")
+    measurement_system: str = Field(default="metric", description="Measurement system preference (metric or imperial)")
+    gender: str = Field(..., description="User's gender")
     goal_description: str = Field(..., description="User's goal description in their own words")
+    experience_level: str = Field(default="novice", description="User's fitness experience level")
 
 
 class InitialQuestionsRequest(BaseModel):
     """Request for initial questions generation."""
     personal_info: PersonalInfo = Field(..., description="Basic personal information")
+    user_profile_id: Optional[str] = Field(default=None, description="User profile ID for database storage")
+    jwt_token: Optional[str] = Field(default=None, description="JWT token for authentication")
 
 
 class FollowUpQuestionsRequest(BaseModel):
     """Request for follow-up questions generation."""
     personal_info: PersonalInfo = Field(..., description="Basic personal information")
     initial_responses: dict = Field(..., description="Responses to initial questions")
+    initial_questions: Optional[List[AIQuestion]] = Field(default=None, description="Initial questions for context")
+    user_profile_id: Optional[str] = Field(default=None, description="User profile ID for database storage")
+    jwt_token: Optional[str] = Field(default=None, description="JWT token for authentication")
 
 
 class PlanGenerationRequest(BaseModel):
@@ -83,6 +101,9 @@ class PlanGenerationRequest(BaseModel):
     personal_info: PersonalInfo = Field(..., description="Basic personal information")
     initial_responses: dict = Field(..., description="Responses to initial questions")
     follow_up_responses: dict = Field(..., description="Responses to follow-up questions")
+    initial_questions: Optional[List[AIQuestion]] = Field(default=None, description="Initial questions for context")
+    follow_up_questions: Optional[List[AIQuestion]] = Field(default=None, description="Follow-up questions for context")
+    jwt_token: str = Field(..., description="JWT token for authentication")
 
 
 class PlanGenerationResponse(BaseModel):

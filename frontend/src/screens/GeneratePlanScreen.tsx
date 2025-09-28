@@ -9,14 +9,14 @@ import { useAuth } from '../context/AuthContext';
 import { ConversationalOnboarding } from '../components/onboarding/ConversationalOnboarding';
 
 export const GeneratePlanScreen: React.FC = () => {
-  const { setWorkoutPlan, setComingFromOnboarding } = useAuth();
+  const { setComingFromOnboarding } = useAuth();
   const router = useRouter();
 
   const handleComplete = (workoutPlan: any) => {
-    console.log('✅ Workout plan generated successfully');
+    console.log('✅ Workout plan generated and saved to database');
     
-    // Set the workout plan in auth context
-    setWorkoutPlan(workoutPlan);
+    // No need to set workout plan in context - it will be loaded from database
+    // by AuthContext when the user navigates to the main app
     
     // Reset onboarding flag
     setComingFromOnboarding(false);

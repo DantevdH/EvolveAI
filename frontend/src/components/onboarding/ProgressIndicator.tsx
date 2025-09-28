@@ -11,6 +11,7 @@ interface ProgressIndicatorProps {
   totalSteps: number;
   showStepNumbers?: boolean;
   showPercentage?: boolean;
+  thick?: boolean;
   style?: any;
 }
 
@@ -19,6 +20,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
   totalSteps,
   showStepNumbers = true,
   showPercentage = false,
+  thick = false,
   style
 }) => {
   const progressPercentage = (currentStep / totalSteps) * 100;
@@ -29,10 +31,11 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
     <View style={[styles.container, style]}>
       {/* Progress Bar */}
       <View style={styles.progressBarContainer}>
-        <View style={styles.progressBarBackground}>
+        <View style={[styles.progressBarBackground, thick && styles.progressBarBackgroundThick]}>
           <Animated.View
             style={[
               styles.progressBarFill,
+              thick && styles.progressBarFillThick,
               { width: `${progressWidth}%` }
             ]}
           />
@@ -74,7 +77,7 @@ export const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
       {/* Progress Text */}
       <View style={styles.progressTextContainer}>
         <Text style={styles.progressText}>
-          Step {currentStep} of {totalSteps}
+          Question {currentStep} of {totalSteps}
         </Text>
         {showPercentage && (
           <Text style={styles.percentageText}>
@@ -100,10 +103,17 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     overflow: 'hidden',
   },
+  progressBarBackgroundThick: {
+    height: 8,
+    borderRadius: 4,
+  },
   progressBarFill: {
     height: '100%',
     backgroundColor: colors.primary,
     borderRadius: 2,
+  },
+  progressBarFillThick: {
+    borderRadius: 4,
   },
   stepNumbersContainer: {
     flexDirection: 'row',

@@ -7,10 +7,15 @@ API keys, and system configuration.
 
 import os
 from typing import Optional
+from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file in the root directory
+
+# Get the path to the root .env file (one level up from backend/)
+root_dir = Path(__file__).parent.parent
+env_path = root_dir / ".env"
+load_dotenv(dotenv_path=env_path)
 
 class Settings:
     """Application settings."""
@@ -23,6 +28,7 @@ class Settings:
     # Supabase Configuration
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
     SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "")
+    SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     
     # Service Configuration
     PREMIUM_TIER_ENABLED: bool = os.getenv("PREMIUM_TIER_ENABLED", "true").lower() == "true"

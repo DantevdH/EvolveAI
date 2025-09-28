@@ -1,18 +1,22 @@
 import React, { useState, useCallback } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import { OnboardingBackground } from './OnboardingBackground';
-import { WelcomeStep } from './WelcomeStep';
-import { PersonalInfoStep } from './PersonalInfoStep';
-import { GoalDescriptionStep } from './GoalDescriptionStep';
-import { QuestionsStep } from './QuestionsStep';
-import { PlanGenerationStep } from './PlanGenerationStep';
-import { OnboardingService } from '../../services/onboardingService';
+import { WelcomeStep } from '../../screens/onboarding/WelcomeStep';
+import { PersonalInfoStep } from '../../screens/onboarding/PersonalInfoStep';
+import { GoalDescriptionStep } from '../../screens/onboarding/GoalDescriptionStep';
+import { ExperienceLevelStep } from '../../screens/onboarding/ExperienceLevelStep';
+import { QuestionsStep } from '../../screens/onboarding/QuestionsStep';
+import { PlanGenerationStep } from '../../screens/onboarding/PlanGenerationStep';
+import { FitnessService } from '../../services/onboardingService';
 import { 
   OnboardingState, 
   PersonalInfo, 
   AIQuestion, 
   QuestionCategory 
 } from '../../types/onboarding';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../config/supabase';
+import { UserService } from '../../services/userService';
 
 interface ConversationalOnboardingProps {
   onComplete: (workoutPlan: any) => void;
@@ -23,6 +27,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   onComplete,
   onError,
 }) => {
+  const { state: authState } = useAuth();
   const [state, setState] = useState<OnboardingState>({
     username: '',
     usernameValid: false,
@@ -30,6 +35,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     personalInfoValid: false,
     goalDescription: '',
     goalDescriptionValid: false,
+    experienceLevel: 'novice',
+    experienceLevelValid: true,
     initialQuestions: [],
     initialResponses: new Map(),
     initialQuestionsLoading: false,
@@ -45,7 +52,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     aiAnalysisPhase: null,
   });
 
-  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'initial' | 'followup' | 'generation'>('welcome');
+  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial' | 'followup' | 'generation'>('welcome');
 
   // Step 1: Username
   const handleUsernameChange = useCallback((username: string) => {
@@ -100,31 +107,40 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     }));
   }, []);
 
-  const handleGoalDescriptionNext = useCallback(async () => {
-    console.log('🎯 Goal description next button pressed');
-    console.log('📋 Current goal description:', state.goalDescription);
-    console.log('✅ Goal description valid:', state.goalDescriptionValid);
-    
+  const handleGoalDescriptionNext = useCallback(() => {
     if (!state.goalDescriptionValid) {
-      console.log('❌ Goal description validation failed');
       Alert.alert('Error', 'Please describe your fitness goal (at least 10 characters)');
       return;
     }
+    setCurrentStep('experience');
+  }, [state.goalDescriptionValid]);
 
+  // Step 4: Experience Level
+  const handleExperienceLevelChange = useCallback((experienceLevel: string) => {
+    const isValid = experienceLevel.trim().length > 0;
+    
+    setState(prev => ({
+      ...prev,
+      experienceLevel,
+      experienceLevelValid: isValid,
+    }));
+  }, []);
+
+  const handleExperienceLevelNext = useCallback(async () => {
+    // Skip validation checks - proceed directly
     if (!state.personalInfo) {
-      console.log('❌ Personal info missing');
       Alert.alert('Error', 'Personal information is missing');
       return;
     }
 
-    // Combine all info with goal description
+    // Combine all info with goal description and experience level
     const fullPersonalInfo = {
       ...state.personalInfo,
       username: state.username,
       goal_description: state.goalDescription,
+      experience_level: state.experienceLevel,
     };
 
-    console.log('🚀 Starting AI analysis...');
     setState(prev => ({ 
       ...prev, 
       planGenerationLoading: true,
@@ -134,8 +150,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
     try {
       // Test backend connection first
-      console.log('🔍 Testing backend connection...');
-      const backendAvailable = await OnboardingService.testBackendConnection();
+      const backendAvailable = await FitnessService.testBackendConnection();
       if (!backendAvailable) {
         throw new Error('Backend server is not accessible. Please make sure the backend is running on http://127.0.0.1:8000');
       }
@@ -143,13 +158,15 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       // Simulate AI thinking time, then get initial questions
       setTimeout(async () => {
         try {
-          console.log('📞 Calling OnboardingService.getInitialQuestions...');
-          const response = await OnboardingService.getInitialQuestions(fullPersonalInfo);
+          // Get JWT token from Supabase session
+          const { data: { session } } = await supabase.auth.getSession();
+          const jwtToken = session?.access_token;
           
-          console.log('✅ Initial questions received:', {
-            questionCount: response.questions?.length || 0,
-            estimatedTime: response.estimated_time_minutes
-          });
+          const response = await FitnessService.getInitialQuestions(
+            fullPersonalInfo,
+            authState.userProfile?.id,
+            jwtToken
+          );
           
           setState(prev => ({
             ...prev,
@@ -159,7 +176,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             aiHasQuestions: true, // New state to show continue button
           }));
         } catch (error) {
-          console.error('❌ Error getting initial questions in component:', error);
           setState(prev => ({
             ...prev,
             planGenerationLoading: false,
@@ -170,7 +186,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }, 2000); // 2 second delay to show AI thinking
       
     } catch (error) {
-      console.error('❌ Error in goal description next:', error);
       setState(prev => ({
         ...prev,
         planGenerationLoading: false,
@@ -210,7 +225,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   const handleInitialQuestionsNext = useCallback(async () => {
     if (!state.personalInfo) return;
 
-    console.log('🚀 Starting AI analysis for follow-up questions...');
     setState(prev => ({ 
       ...prev, 
       planGenerationLoading: true,
@@ -223,15 +237,18 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       setTimeout(async () => {
         try {
           const responsesObject = Object.fromEntries(state.initialResponses);
-          console.log('📤 Sending follow-up request with responses:', responsesObject);
-          const response = await OnboardingService.getFollowUpQuestions(state.personalInfo!, responsesObject);
           
-          console.log('📥 Follow-up questions response:', {
-            questions: response.questions,
-            questionCount: response.questions?.length || 0,
-            totalQuestions: response.total_questions,
-            estimatedTime: response.estimated_time_minutes
-          });
+          // Get JWT token from Supabase session
+          const { data: { session } } = await supabase.auth.getSession();
+          const jwtToken = session?.access_token;
+          
+          const response = await FitnessService.getFollowUpQuestions(
+            state.personalInfo!, 
+            responsesObject,
+            state.initialQuestions,
+            authState.userProfile?.id,
+            jwtToken
+          );
           
           setState(prev => ({
             ...prev,
@@ -275,7 +292,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   const handleFollowUpQuestionsNext = useCallback(async () => {
     if (!state.personalInfo) return;
 
-    console.log('🚀 Starting AI analysis for final plan generation...');
     setState(prev => ({ 
       ...prev, 
       planGenerationLoading: true,
@@ -290,19 +306,52 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           const initialResponsesObject = Object.fromEntries(state.initialResponses);
           const followUpResponsesObject = Object.fromEntries(state.followUpResponses);
           
-          const workoutPlan = await OnboardingService.generateWorkoutPlan(
+          // Get JWT token from Supabase session
+          const { data: { session } } = await supabase.auth.getSession();
+          const jwtToken = session?.access_token;
+          
+          console.log('🔍 DEBUG: Onboarding data being sent:', {
+            hasPersonalInfo: !!state.personalInfo,
+            personalInfoKeys: state.personalInfo ? Object.keys(state.personalInfo) : [],
+            initialResponsesCount: Object.keys(initialResponsesObject).length,
+            followUpResponsesCount: Object.keys(followUpResponsesObject).length,
+            initialQuestionsCount: state.initialQuestions?.length || 0,
+            followUpQuestionsCount: state.followUpQuestions?.length || 0,
+            userProfileId: authState.userProfile?.id,
+            hasJwtToken: !!jwtToken,
+            jwtTokenLength: jwtToken?.length || 0
+          });
+          
+          console.log('🔍 DEBUG: JWT token status:', {
+            jwtToken: jwtToken ? 'present' : 'missing'
+          });
+          
+          if (!jwtToken) {
+            throw new Error('JWT token is missing - cannot generate workout plan');
+          }
+          
+          const response = await FitnessService.generateWorkoutPlan(
             state.personalInfo!,
             initialResponsesObject,
-            followUpResponsesObject
+            followUpResponsesObject,
+            state.initialQuestions,
+            state.followUpQuestions,
+            jwtToken
           );
           
-          setState(prev => ({
-            ...prev,
-            planGenerationLoading: false,
-            workoutPlan,
-          }));
-          
-          onComplete(workoutPlan);
+          if (response.success) {
+            console.log(`✅ FRONTEND: Onboarding completed successfully! Workout plan ID: ${response.data?.workout_plan_id}`);
+            setState(prev => ({
+              ...prev,
+              planGenerationLoading: false,
+            }));
+            
+            // No need to pass workout plan - it will be loaded from database by AuthContext
+            onComplete(null);
+          } else {
+            console.error('❌ FRONTEND: Workout plan generation failed:', response.message);
+            throw new Error(response.message || 'Failed to generate workout plan');
+          }
         } catch (error) {
           setState(prev => ({
             ...prev,
@@ -335,8 +384,11 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       case 'goal':
         setCurrentStep('personal');
         break;
-      case 'initial':
+      case 'experience':
         setCurrentStep('goal');
+        break;
+      case 'initial':
+        setCurrentStep('experience');
         break;
       case 'followup':
         setCurrentStep('initial');
@@ -360,8 +412,11 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       case 'goal':
         handlePersonalInfoNext();
         break;
-      case 'initial':
+      case 'experience':
         handleGoalDescriptionNext();
+        break;
+      case 'initial':
+        handleExperienceLevelNext();
         break;
       case 'followup':
         handleInitialQuestionsNext();
@@ -370,7 +425,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         handleFollowUpQuestionsNext();
         break;
     }
-  }, [currentStep, handleWelcomeNext, handlePersonalInfoNext, handleGoalDescriptionNext, handleInitialQuestionsNext, handleFollowUpQuestionsNext]);
+  }, [currentStep, handleWelcomeNext, handlePersonalInfoNext, handleGoalDescriptionNext, handleExperienceLevelNext, handleInitialQuestionsNext, handleFollowUpQuestionsNext]);
 
   const renderCurrentStep = () => {
     switch (currentStep) {
@@ -407,6 +462,21 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             onGoalDescriptionChange={handleGoalDescriptionChange}
             isValid={state.goalDescriptionValid}
             onNext={handleGoalDescriptionNext}
+            onPrevious={handlePrevious}
+            onBack={handlePrevious}
+            onComplete={() => {}}
+            isLoading={false}
+            error={state.error || undefined}
+          />
+        );
+      
+      case 'experience':
+        return (
+          <ExperienceLevelStep
+            experienceLevel={state.experienceLevel}
+            onExperienceLevelChange={handleExperienceLevelChange}
+            isValid={state.experienceLevelValid}
+            onNext={handleExperienceLevelNext}
             onPrevious={handlePrevious}
             onBack={handlePrevious}
             onComplete={() => {}}

@@ -20,7 +20,6 @@ export class UserService {
     profileData: any
   ): Promise<UserServiceResponse<{ id: number }>> {
     try {
-
       const profileDataToInsert = mapOnboardingToDatabase(userId, profileData);
 
       const { data, error } = await supabase
@@ -29,6 +28,7 @@ export class UserService {
         .select();
 
       if (error) {
+        console.error('❌ FRONTEND: Failed to create user profile:', error.message);
         return {
           success: false,
           error: `Failed to create user profile: ${error.message}`,
@@ -36,17 +36,89 @@ export class UserService {
       }
 
       if (data && data.length > 0) {
+        console.log(`✅ FRONTEND: User profile created successfully (ID: ${data[0].id})`);
         return {
           success: true,
           data: { id: data[0].id },
         };
       } else {
+        console.error('❌ FRONTEND: No data returned from profile creation');
         return {
           success: false,
           error: 'No data returned from profile creation',
         };
       }
     } catch (error) {
+      console.error('❌ FRONTEND: Error creating user profile:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'An unexpected error occurred',
+      };
+    }
+  }
+
+  /**
+   * Update user profile at different onboarding stages
+   */
+  static async updateUserProfileStage(
+    userId: string,
+    stage: 'personal_info' | 'initial_questions' | 'follow_up_questions',
+    data: any
+  ): Promise<UserServiceResponse<UserProfile>> {
+    try {
+      let updateData: any = {};
+
+      if (stage === 'personal_info') {
+        updateData = {
+          username: data.username,
+          age: data.age,
+          weight: data.weight,
+          height: data.height,
+          weight_unit: data.weight_unit,
+          height_unit: data.height_unit,
+          measurement_system: data.measurement_system,
+          gender: data.gender,
+          goal_description: data.goal_description,
+        };
+      } else if (stage === 'initial_questions') {
+        updateData = {
+          initial_questions: data.initial_questions,
+        };
+      } else if (stage === 'follow_up_questions') {
+        updateData = {
+          follow_up_questions: data.follow_up_questions,
+        };
+      }
+
+      const { data: updatedProfile, error } = await supabase
+        .from('user_profiles')
+        .update(updateData)
+        .eq('user_id', userId)
+        .select();
+
+      if (error) {
+        console.error(`❌ FRONTEND: Failed to update user profile for ${stage} stage:`, error.message);
+        return {
+          success: false,
+          error: `Failed to update user profile for ${stage} stage: ${error.message}`,
+        };
+      }
+
+      if (updatedProfile && updatedProfile.length > 0) {
+        console.log(`✅ FRONTEND: User profile updated successfully for ${stage} stage (ID: ${updatedProfile[0].id})`);
+        return {
+          success: true,
+          data: updatedProfile[0],
+        };
+      } else {
+        console.error(`❌ FRONTEND: No data returned from profile update for ${stage} stage`);
+        return {
+          success: false,
+          error: `No data returned from profile update for ${stage} stage`,
+        };
+      }
+    } catch (error) {
+      console.error(`❌ FRONTEND: Error updating user profile for ${stage} stage:`, error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'An unexpected error occurred',

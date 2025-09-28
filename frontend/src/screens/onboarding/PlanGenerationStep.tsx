@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { OnboardingCard } from './OnboardingCard';
-import { OnboardingNavigation } from './OnboardingNavigation';
+import { OnboardingCard } from '../../components/onboarding/OnboardingCard';
+import { OnboardingNavigation } from '../../components/onboarding/OnboardingNavigation';
 import { PlanGenerationStepProps } from '../../types/onboarding';
 import { colors } from '../../constants/designSystem';
 import { IconSymbol } from '../../../components/ui/IconSymbol';
-import { AnimatedSpinner, LoadingIndicator, AIChatMessage } from '../generatePlan';
+import { AnimatedSpinner, LoadingIndicator, AIChatMessage } from '../../components/generatePlan';
 
 export const PlanGenerationStep: React.FC<PlanGenerationStepProps> = ({
   isLoading,
@@ -24,6 +24,11 @@ export const PlanGenerationStep: React.FC<PlanGenerationStepProps> = ({
       setShowButton(false);
     }
   }, [aiHasQuestions]);
+
+  // Memoize the onTypingComplete callback to prevent unnecessary re-renders
+  const handleTypingComplete = useCallback(() => {
+    setShowButton(true);
+  }, []);
 
   if (error) {
     return (
@@ -77,7 +82,7 @@ export const PlanGenerationStep: React.FC<PlanGenerationStepProps> = ({
               key={`${analysisPhase}-${username}`}
               username={username}
               analysisPhase={analysisPhase}
-              onTypingComplete={() => setShowButton(true)}
+              onTypingComplete={handleTypingComplete}
             />
           </View>
           

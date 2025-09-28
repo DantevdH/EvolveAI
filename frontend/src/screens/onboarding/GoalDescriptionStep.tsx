@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Alert, TouchableOpacity } from 'react-native';
-import { OnboardingCard } from './OnboardingCard';
-import { OnboardingNavigation } from './OnboardingNavigation';
+import { OnboardingCard } from '../../components/onboarding/OnboardingCard';
+import { OnboardingNavigation } from '../../components/onboarding/OnboardingNavigation';
 import { GoalDescriptionStepProps } from '../../types/onboarding';
 import { colors } from '../../constants/designSystem';
 import { IconSymbol } from '../../../components/ui/IconSymbol';

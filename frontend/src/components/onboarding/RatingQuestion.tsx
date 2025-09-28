@@ -9,6 +9,7 @@ interface RatingQuestionProps {
   onChange: (value: number) => void;
   error?: string;
   disabled?: boolean;
+  noBackground?: boolean;
 }
 
 export const RatingQuestion: React.FC<RatingQuestionProps> = ({
@@ -17,6 +18,7 @@ export const RatingQuestion: React.FC<RatingQuestionProps> = ({
   onChange,
   error,
   disabled = false,
+  noBackground = false,
 }) => {
   const minValue = question.min_value || 1;
   const maxValue = question.max_value || 10;
@@ -98,11 +100,6 @@ export const RatingQuestion: React.FC<RatingQuestionProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.questionText}>{question.text}</Text>
-      {question.help_text && (
-        <Text style={styles.helpText}>{question.help_text}</Text>
-      )}
-      
       <View style={styles.ratingContainer}>
         {Array.from({ length: maxValue - minValue + 1 }, (_, i) => i + minValue).map(renderRatingButton)}
       </View>
@@ -125,7 +122,7 @@ export const RatingQuestion: React.FC<RatingQuestionProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    // No flex to prevent expansion
   },
   questionText: {
     fontSize: 18,
@@ -137,7 +134,7 @@ const styles = StyleSheet.create({
   helpText: {
     fontSize: 14,
     color: colors.muted,
-    marginBottom: 20,
+    marginBottom: 8,
     lineHeight: 20,
   },
   ratingContainer: {
@@ -151,38 +148,42 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 8,
     marginHorizontal: 2,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.inputBorder,
     backgroundColor: colors.inputBackground,
+    minHeight: 60,
   },
   ratingButtonSelected: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
+    borderWidth: 2,
   },
   ratingButtonDisabled: {
     opacity: 0.5,
   },
   ratingNumber: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: 4,
   },
   ratingNumberSelected: {
     color: colors.text,
+    fontSize: 22,
   },
   ratingNumberDisabled: {
     color: colors.muted,
   },
   ratingDescription: {
-    fontSize: 10,
+    fontSize: 11,
     color: colors.muted,
     textAlign: 'center',
-    lineHeight: 12,
+    lineHeight: 13,
   },
   ratingDescriptionSelected: {
     color: colors.text,
+    fontWeight: '600',
   },
   ratingDescriptionDisabled: {
     color: colors.muted,
