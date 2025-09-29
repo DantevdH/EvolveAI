@@ -5,19 +5,12 @@ import { useAuth } from '@/src/context/AuthContext';
 import { ConversationalOnboarding } from '@/src/components/onboarding/ConversationalOnboarding';
 
 export default function Onboarding() {
-  const { setWorkoutPlan, setComingFromOnboarding } = useAuth();
   const router = useRouter();
 
-  const handleComplete = (workoutPlan: any) => {
+  const handleComplete = async (workoutPlan: any) => {
     console.log('✅ Workout plan generated successfully');
     
-    // Set the workout plan in auth context
-    setWorkoutPlan(workoutPlan);
-    
-    // Reset onboarding flag
-    setComingFromOnboarding(false);
-    
-    // Navigate to main app
+    // Navigate to main app - let index.tsx handle the routing logic
     router.replace('/(tabs)');
   };
 

@@ -6,6 +6,7 @@ import { PersonalInfoStep } from '../../screens/onboarding/PersonalInfoStep';
 import { GoalDescriptionStep } from '../../screens/onboarding/GoalDescriptionStep';
 import { ExperienceLevelStep } from '../../screens/onboarding/ExperienceLevelStep';
 import { QuestionsStep } from '../../screens/onboarding/QuestionsStep';
+import { TrainingPlanOutlineStep } from '../../screens/onboarding';
 import { PlanGenerationStep } from '../../screens/onboarding/PlanGenerationStep';
 import { FitnessService } from '../../services/onboardingService';
 import { 
@@ -19,7 +20,7 @@ import { supabase } from '../../config/supabase';
 import { UserService } from '../../services/userService';
 
 interface ConversationalOnboardingProps {
-  onComplete: (workoutPlan: any) => void;
+  onComplete: (workoutPlan: any) => Promise<void>;
   onError: (error: string) => void;
 }
 
@@ -27,7 +28,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   onComplete,
   onError,
 }) => {
-  const { state: authState } = useAuth();
+  const { state: authState, refreshUserProfile } = useAuth();
   const [state, setState] = useState<OnboardingState>({
     username: '',
     usernameValid: false,
@@ -45,6 +46,9 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     followUpResponses: new Map(),
     followUpQuestionsLoading: false,
     currentFollowUpQuestionIndex: 0,
+    trainingPlanOutline: null,
+    outlineFeedback: '',
+    outlineLoading: false,
     planGenerationLoading: false,
     workoutPlan: null,
     error: null,
@@ -52,7 +56,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     aiAnalysisPhase: null,
   });
 
-  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial' | 'followup' | 'generation'>('welcome');
+  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial' | 'followup' | 'outline' | 'generation'>('welcome');
 
   // Step 1: Username
   const handleUsernameChange = useCallback((username: string) => {
@@ -201,6 +205,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       setCurrentStep('initial');
     } else if (state.aiAnalysisPhase === 'followup') {
       setCurrentStep('followup');
+    } else if (state.aiAnalysisPhase === 'outline') {
+      setCurrentStep('outline');
     }
     // Reset the analysis phase and questions flag
     setState(prev => ({
@@ -295,6 +301,80 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     setState(prev => ({ 
       ...prev, 
       planGenerationLoading: true,
+      aiAnalysisPhase: 'outline'
+    }));
+    setCurrentStep('generation');
+
+    try {
+      // Simulate AI thinking time, then generate training plan outline
+      setTimeout(async () => {
+        try {
+          const initialResponsesObject = Object.fromEntries(state.initialResponses);
+          const followUpResponsesObject = Object.fromEntries(state.followUpResponses);
+          
+          // Get JWT token from Supabase session
+          const { data: { session } } = await supabase.auth.getSession();
+          const jwtToken = session?.access_token;
+          
+          if (!jwtToken) {
+            throw new Error('JWT token is missing - cannot generate workout plan');
+          }
+          
+          const response = await FitnessService.generateTrainingPlanOutline(
+            state.personalInfo!,
+            initialResponsesObject,
+            followUpResponsesObject,
+            state.initialQuestions,
+            state.followUpQuestions,
+            jwtToken
+          );
+          
+          if (response.success) {
+            console.log(`✅ FRONTEND: Training plan outline generated successfully!`);
+            setState(prev => ({
+              ...prev,
+              planGenerationLoading: false,
+              trainingPlanOutline: response.data?.outline || null,
+              aiHasQuestions: true, // Show continue button to go to outline
+            }));
+          } else {
+            console.error('❌ FRONTEND: Training plan outline generation failed:', response.message);
+            throw new Error(response.message || 'Failed to generate training plan outline');
+          }
+        } catch (error) {
+          setState(prev => ({
+            ...prev,
+            planGenerationLoading: false,
+            error: error instanceof Error ? error.message : 'Failed to generate training plan outline',
+          }));
+          onError(error instanceof Error ? error.message : 'Failed to generate training plan outline');
+        }
+      }, 3000); // 3 second delay for outline generation
+      
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        planGenerationLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to generate training plan outline',
+      }));
+      onError(error instanceof Error ? error.message : 'Failed to generate training plan outline');
+    }
+  }, [state.personalInfo, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, onError, authState.userProfile?.id]);
+
+  // Step 4: Training Plan Outline
+  const handleOutlineFeedbackChange = useCallback((feedback: string) => {
+    setState(prev => ({
+      ...prev,
+      outlineFeedback: feedback,
+    }));
+  }, []);
+
+  const handleOutlineNext = useCallback(async () => {
+    if (!state.personalInfo) return;
+
+    setState(prev => ({ 
+      ...prev, 
+      planGenerationLoading: true,
       aiAnalysisPhase: 'generation'
     }));
     setCurrentStep('generation');
@@ -310,22 +390,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           const { data: { session } } = await supabase.auth.getSession();
           const jwtToken = session?.access_token;
           
-          console.log('🔍 DEBUG: Onboarding data being sent:', {
-            hasPersonalInfo: !!state.personalInfo,
-            personalInfoKeys: state.personalInfo ? Object.keys(state.personalInfo) : [],
-            initialResponsesCount: Object.keys(initialResponsesObject).length,
-            followUpResponsesCount: Object.keys(followUpResponsesObject).length,
-            initialQuestionsCount: state.initialQuestions?.length || 0,
-            followUpQuestionsCount: state.followUpQuestions?.length || 0,
-            userProfileId: authState.userProfile?.id,
-            hasJwtToken: !!jwtToken,
-            jwtTokenLength: jwtToken?.length || 0
-          });
-          
-          console.log('🔍 DEBUG: JWT token status:', {
-            jwtToken: jwtToken ? 'present' : 'missing'
-          });
-          
           if (!jwtToken) {
             throw new Error('JWT token is missing - cannot generate workout plan');
           }
@@ -336,7 +400,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             followUpResponsesObject,
             state.initialQuestions,
             state.followUpQuestions,
-            jwtToken
+            jwtToken,
+            state.outlineFeedback
           );
           
           if (response.success) {
@@ -346,8 +411,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
               planGenerationLoading: false,
             }));
             
-            // No need to pass workout plan - it will be loaded from database by AuthContext
-            onComplete(null);
+            // Refresh user profile to fetch the newly created profile and workout plan
+            console.log('🔄 Refreshing user profile and workout plan...');
+            await refreshUserProfile();
+            
+            // Complete onboarding
+            await onComplete(null);
           } else {
             console.error('❌ FRONTEND: Workout plan generation failed:', response.message);
             throw new Error(response.message || 'Failed to generate workout plan');
@@ -366,11 +435,11 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       setState(prev => ({
         ...prev,
         planGenerationLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to start AI analysis',
+        error: error instanceof Error ? error.message : 'Failed to generate workout plan',
       }));
-      onError(error instanceof Error ? error.message : 'Failed to start AI analysis');
+      onError(error instanceof Error ? error.message : 'Failed to generate workout plan');
     }
-  }, [state.personalInfo, state.initialResponses, state.followUpResponses, onComplete, onError]);
+  }, [state.personalInfo, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, state.outlineFeedback, onComplete, onError, refreshUserProfile]);
 
   // Navigation handlers
   const handlePrevious = useCallback(() => {
@@ -393,8 +462,11 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       case 'followup':
         setCurrentStep('initial');
         break;
-      case 'generation':
+      case 'outline':
         setCurrentStep('followup');
+        break;
+      case 'generation':
+        setCurrentStep('outline');
         break;
     }
   }, [currentStep]);
@@ -421,11 +493,14 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       case 'followup':
         handleInitialQuestionsNext();
         break;
-      case 'generation':
+      case 'outline':
         handleFollowUpQuestionsNext();
         break;
+      case 'generation':
+        handleOutlineNext();
+        break;
     }
-  }, [currentStep, handleWelcomeNext, handlePersonalInfoNext, handleGoalDescriptionNext, handleExperienceLevelNext, handleInitialQuestionsNext, handleFollowUpQuestionsNext]);
+  }, [currentStep, handleWelcomeNext, handlePersonalInfoNext, handleGoalDescriptionNext, handleExperienceLevelNext, handleInitialQuestionsNext, handleFollowUpQuestionsNext, handleOutlineNext]);
 
   const renderCurrentStep = () => {
     switch (currentStep) {
@@ -516,6 +591,19 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             onComplete={() => {}}
             error={state.error || undefined}
             stepTitle="Follow-up Questions"
+          />
+        );
+      
+      case 'outline':
+        return (
+          <TrainingPlanOutlineStep
+            outline={state.trainingPlanOutline}
+            feedback={state.outlineFeedback}
+            onFeedbackChange={handleOutlineFeedbackChange}
+            onNext={handleOutlineNext}
+            onPrevious={handlePrevious}
+            isLoading={state.outlineLoading}
+            error={state.error || undefined}
           />
         );
       

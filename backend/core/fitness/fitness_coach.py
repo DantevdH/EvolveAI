@@ -22,9 +22,11 @@ from core.fitness.helpers.ai_question_schemas import (
     QuestionType,
     QuestionCategory,
     AIQuestion,
-    QuestionOption
+    QuestionOption,
+    TrainingPlanOutline
 )
 from core.fitness.helpers.response_formatter import ResponseFormatter
+from core.fitness.helpers.mock_data import create_mock_training_plan_outline
 
 class FitnessCoach(BaseAgent):
     """
@@ -239,6 +241,57 @@ class FitnessCoach(BaseAgent):
                 formatted_responses=formatted_responses
             )
     
+    def generate_training_plan_outline(self, personal_info: PersonalInfo, user_responses: Dict[str, Any], initial_questions: List[AIQuestion] = None, follow_up_questions: List[AIQuestion] = None) -> Dict[str, Any]:
+        """Generate a training plan outline before creating the final detailed plan."""
+        try:
+            # Check if debug mode is enabled - skip validation for mock data
+            if os.getenv("DEBUG", "false").lower() == "true":
+                print("🐛 DEBUG MODE: Using mock training plan outline")
+                outline = create_mock_training_plan_outline()
+                return {
+                    'success': True,
+                    'outline': outline.model_dump(),
+                    'metadata': {
+                        'generation_method': 'Mock Data (Debug Mode)',
+                        'user_goals': user_responses.get('goal_description', 'General fitness')
+                    }
+                }
+            
+            # Create a comprehensive prompt for outline generation
+            prompt = self._create_outline_prompt(personal_info, user_responses, initial_questions, follow_up_questions)
+            
+            # Generate the outline using OpenAI with structured output
+            response = self.client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are an expert fitness coach creating training plan outlines. Provide structured, detailed outlines that give users a clear preview of their upcoming workout plan."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=2000,
+                response_format=TrainingPlanOutline
+            )
+            
+            # Parse the structured response
+            outline = response.choices[0].message.parsed
+            
+            return {
+                'success': True,
+                'outline': outline.model_dump(),
+                'metadata': {
+                    'generation_method': 'AI Generated',
+                    'user_goals': user_responses.get('goal_description', 'General fitness'),
+                    'experience_level': user_responses.get('experience_level', 'beginner')
+                }
+            }
+            
+        except Exception as e:
+            print(f"❌ Error generating training plan outline: {str(e)}")
+            return {
+                'success': False,
+                'error': f"Failed to generate training plan outline: {str(e)}"
+            }
+    
     def generate_training_plan(self, personal_info: PersonalInfo, user_responses: Dict[str, Any], initial_questions: List[AIQuestion] = None, follow_up_questions: List[AIQuestion] = None) -> Dict[str, Any]:
         """Generate a comprehensive training plan using the new flow: get_exercise_candidates -> prompt -> workout plan -> validate_workout_plan."""
         try:
@@ -445,3 +498,75 @@ Please try rephrasing your request or contact support if the issue persists."""
             - max_value: maximum rating (usually 5 or 10)
             - help_text: Explanation of what the scale means (e.g., "1 = Very Low, 5 = Very High")
         """
+    
+    def _get_outline_generation_intro(self) -> str:
+        """Get standardized introduction for training plan outline generation."""
+        return "You are an expert sports coach creating a detailed training plan outline for a new athlete. Your goal is to provide a comprehensive preview of their upcoming personalized training program across any sport or athletic discipline."
+    
+    def _get_outline_generation_instructions(self) -> str:
+        """Get standardized instructions for training plan outline generation."""
+        return """
+Create a structured training plan outline with three levels:
+
+1. **Training Plan Level** (Top Level):
+   - Title: A compelling, personalized name for the program
+   - Duration: Total program length in weeks (typically 8-16 weeks)
+   - Explanation: High-level overview of the training plan, goals, and approach
+
+2. **Weekly Level** (Middle Level):
+   - Week number and focus area for each week
+   - Daily workouts for each week (7 days)
+
+3. **Daily Level** (Bottom Level):
+   - Day name and workout type
+   - Comprehensive description including duration, intensity, muscle groups, heart rate zones, distance, and equipment
+   - Optional tags for categorization (e.g., 'strength', 'cardio', 'recovery', 'high-intensity')
+
+For each daily workout, include all relevant details in the description:
+- Duration and intensity level
+- Target muscle groups (for strength training)
+- Heart rate zones (for cardio)
+- Distance (for running/cycling)
+- Required equipment
+- Any special instructions or focus areas
+
+Use tags to categorize workouts (e.g., 'strength', 'cardio', 'recovery', 'high-intensity', 'upper-body', 'lower-body', 'endurance', 'power', 'mobility').
+
+Make the outline specific to the user's goals, experience level, and chosen sports. Focus on creating excitement and clarity about what the program will deliver.
+        """
+    
+    def _get_outline_generation_requirements(self) -> str:
+        """Get standardized requirements for training plan outline generation."""
+        return """
+**Requirements:**
+- Use the athlete's measurement system consistently throughout
+- Tailor the program to their experience level and chosen sport
+- Make the title engaging and personalized to their sport and goals
+- Ensure the progression strategy is appropriate for their sport and goals
+- Include a variety of training methods appropriate for their discipline (strength, endurance, technique, recovery, etc.)
+- Keep weekly structure realistic and sustainable for their sport
+- Address any specific goals, events, or limitations mentioned in their responses
+- Consider sport-specific training principles (e.g., periodization for endurance sports, skill development for technical sports)
+- Include appropriate recovery and adaptation strategies for their chosen discipline
+        """
+    
+    def _create_outline_prompt(self, personal_info: PersonalInfo, user_responses: Dict[str, Any], initial_questions: List[AIQuestion] = None, follow_up_questions: List[AIQuestion] = None) -> str:
+        """Create a comprehensive prompt for generating training plan outlines."""
+        
+        # Format user responses for context
+        formatted_responses = ResponseFormatter.format_responses(user_responses, initial_questions + (follow_up_questions or []))
+        
+        prompt = f"""
+{self._get_outline_generation_intro()}
+
+{self._format_client_information(personal_info)}
+
+**User Responses:**
+{formatted_responses}
+
+{self._get_outline_generation_instructions()}
+
+{self._get_outline_generation_requirements()}
+        """
+        
+        return prompt.strip()

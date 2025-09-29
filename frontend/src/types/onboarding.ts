@@ -119,12 +119,17 @@ export interface OnboardingState {
   followUpQuestionsLoading: boolean;
   currentFollowUpQuestionIndex: number;
   
-  // Step 7: Plan Generation
+  // Step 7: Training Plan Outline
+  trainingPlanOutline: TrainingPlanOutline | null;
+  outlineFeedback: string;
+  outlineLoading: boolean;
+  
+  // Step 8: Plan Generation
   planGenerationLoading: boolean;
   workoutPlan: any | null; // WorkoutPlan type
   error: string | null;
   aiHasQuestions: boolean;
-  aiAnalysisPhase: 'initial' | 'followup' | 'generation' | null;
+  aiAnalysisPhase: 'initial' | 'followup' | 'outline' | 'generation' | null;
 }
 
 export interface QuestionResponse {
@@ -137,12 +142,25 @@ export interface QuestionResponse {
 // API Request/Response Types
 export interface InitialQuestionsRequest {
   personal_info: PersonalInfo;
+  user_profile_id?: string;
+  jwt_token?: string;
 }
 
 export interface FollowUpQuestionsRequest {
   personal_info: PersonalInfo;
   initial_responses: Record<string, any>;
   initial_questions?: AIQuestion[];
+  user_profile_id?: string;
+  jwt_token?: string;
+}
+
+export interface TrainingPlanOutlineRequest {
+  personal_info: PersonalInfo;
+  initial_responses: Record<string, any>;
+  follow_up_responses: Record<string, any>;
+  initial_questions?: AIQuestion[];
+  follow_up_questions?: AIQuestion[];
+  jwt_token: string;
 }
 
 export interface PlanGenerationRequest {
@@ -151,6 +169,7 @@ export interface PlanGenerationRequest {
   follow_up_responses: Record<string, any>;
   initial_questions?: AIQuestion[];
   follow_up_questions?: AIQuestion[];
+  outline_feedback?: string;
   user_profile_id?: number;
   jwt_token?: string;
 }
@@ -160,6 +179,27 @@ export interface OnboardingApiResponse<T> {
   data?: T;
   message?: string;
   error?: string;
+}
+
+export interface DailyWorkout {
+  day: number;
+  workout_name: string; // Name of the workout (e.g., 'Upper Body Strength', 'Easy Cardio')
+  description: string;
+  tags: string[];
+}
+
+export interface TrainingPeriod {
+  period_name: string;
+  duration_weeks: number;
+  explanation: string;
+  daily_workouts: DailyWorkout[];
+}
+
+export interface TrainingPlanOutline {
+  title: string;
+  duration_weeks: number;
+  explanation: string;
+  training_periods: TrainingPeriod[];
 }
 
 // Component Props
@@ -214,6 +254,6 @@ export interface PlanGenerationStepProps {
   onRetry: () => void;
   aiHasQuestions?: boolean;
   onContinueToQuestions?: () => void;
-  analysisPhase?: 'initial' | 'followup' | 'generation' | null;
+  analysisPhase?: 'initial' | 'followup' | 'outline' | 'generation' | null;
   username?: string;
 }

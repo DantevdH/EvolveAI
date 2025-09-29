@@ -4,8 +4,10 @@ import {
   AIQuestionResponse,
   InitialQuestionsRequest,
   FollowUpQuestionsRequest,
+  TrainingPlanOutlineRequest,
   PlanGenerationRequest,
   OnboardingApiResponse,
+  AIQuestion,
 } from '../types/onboarding';
 
 export class FitnessService {
@@ -85,12 +87,14 @@ export class FitnessService {
         throw new Error('Invalid response format: data field is missing');
       }
 
+      const responseData = (response.data as any) as AIQuestionResponse;
+      
       console.log('✅ Initial questions retrieved successfully:', {
-        questionCount: response.data.questions?.length || 0,
-        estimatedTime: response.data.estimated_time_minutes
+        questionCount: responseData.questions?.length || 0,
+        estimatedTime: responseData.estimated_time_minutes
       });
 
-      return response.data;
+      return responseData;
     } catch (error) {
       console.error('❌ Error getting initial questions:', {
         error: error,
@@ -158,14 +162,16 @@ export class FitnessService {
         throw new Error('Invalid response format: data field is missing');
       }
 
+      const responseData = (response.data as any) as AIQuestionResponse;
+      
       console.log('✅ Follow-up questions retrieved successfully:', {
-        questionCount: response.data.questions?.length || 0,
-        estimatedTime: response.data.estimated_time_minutes,
-        questions: response.data.questions,
-        totalQuestions: response.data.total_questions
+        questionCount: responseData.questions?.length || 0,
+        estimatedTime: responseData.estimated_time_minutes,
+        questions: responseData.questions,
+        totalQuestions: responseData.total_questions
       });
 
-      return response.data;
+      return responseData;
     } catch (error) {
       console.error('❌ Error getting follow-up questions:', {
         error: error,
@@ -179,6 +185,82 @@ export class FitnessService {
   }
 
   /**
+   * Generate training plan outline
+   */
+  static async generateTrainingPlanOutline(
+    personalInfo: PersonalInfo,
+    initialResponses: Record<string, any>,
+    followUpResponses: Record<string, any>,
+    initialQuestions: AIQuestion[],
+    followUpQuestions: AIQuestion[],
+    jwtToken?: string
+  ): Promise<{ success: boolean; data?: any; message?: string }> {
+    try {
+      console.log('📋 Generating training plan outline...');
+
+      const request: TrainingPlanOutlineRequest = {
+        personal_info: personalInfo,
+        initial_responses: initialResponses,
+        follow_up_responses: followUpResponses,
+        initial_questions: initialQuestions,
+        follow_up_questions: followUpQuestions,
+        jwt_token: jwtToken || '',
+      };
+
+      console.log('📤 Outline request payload:', JSON.stringify(request, null, 2));
+      console.log('🌐 Making API call to:', `${this.BASE_URL}/training-plan-outline`);
+
+      const response = await apiClient.post<OnboardingApiResponse<any>>(
+        `${this.BASE_URL}/training-plan-outline`,
+        request
+      );
+
+      console.log('📥 Outline API response received:', JSON.stringify(response, null, 2));
+
+      // Validate response format
+      if (typeof response !== 'object' || response === null) {
+        throw new Error('Invalid response format: response is not an object');
+      }
+
+      if (typeof response.success !== 'boolean') {
+        throw new Error('Invalid response format: success field is missing or not boolean');
+      }
+
+      if (!response.success) {
+        console.error('❌ API response indicates failure:', {
+          success: response.success,
+          data: response.data,
+          message: response.message
+        });
+        throw new Error(response.message || 'Failed to generate training plan outline');
+      }
+
+      if (!response.data) {
+        throw new Error('Invalid response format: data field is missing');
+      }
+
+      const responseData = (response.data as any);
+      
+      console.log('✅ Training plan outline generated successfully:', {
+        hasOutline: !!responseData.outline,
+        outlineKeys: responseData.outline ? Object.keys(responseData.outline) : []
+      });
+
+      return {
+        success: true,
+        data: responseData,
+        message: response.message
+      };
+    } catch (error) {
+      console.error('❌ Error generating training plan outline:', {
+        error: error,
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Generate workout plan using all collected data
    */
   static async generateWorkoutPlan(
@@ -187,7 +269,8 @@ export class FitnessService {
     followUpResponses: Record<string, any>,
     initialQuestions?: AIQuestion[],
     followUpQuestions?: AIQuestion[],
-    jwtToken: string
+    jwtToken?: string,
+    outlineFeedback?: string
   ): Promise<any> {
     try {
       const request: PlanGenerationRequest = {
@@ -196,6 +279,7 @@ export class FitnessService {
         follow_up_responses: followUpResponses,
         initial_questions: initialQuestions,
         follow_up_questions: followUpQuestions,
+        outline_feedback: outlineFeedback,
         jwt_token: jwtToken,
       };
 
@@ -235,7 +319,7 @@ export class FitnessService {
       }
 
       // Return the response data (now contains workout_plan_id and metadata, not the full workout plan)
-      console.log(`✅ FRONTEND: Workout plan generated and saved successfully (ID: ${response.data?.workout_plan_id})`);
+      console.log(`✅ FRONTEND: Workout plan generated and saved successfully (ID: ${(response.data as any)?.workout_plan_id})`);
       
       return response;
     } catch (error) {

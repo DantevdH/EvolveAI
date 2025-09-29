@@ -15,7 +15,6 @@ interface SimpleAuthState {
   workoutPlanLoading: boolean;
   error: string | null;
   isInitialized: boolean;
-  isComingFromOnboarding: boolean;
 }
 
 // Simplified auth actions
@@ -27,7 +26,6 @@ type SimpleAuthAction =
   | { type: 'SET_WORKOUT_PLAN'; payload: WorkoutPlan | null }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_INITIALIZED'; payload: boolean }
-  | { type: 'SET_COMING_FROM_ONBOARDING'; payload: boolean }
   | { type: 'CLEAR_AUTH' };
 
 // Simplified initial state
@@ -39,7 +37,6 @@ const initialState: SimpleAuthState = {
   workoutPlanLoading: false,
   error: null,
   isInitialized: false,
-  isComingFromOnboarding: false,
 };
 
 // Simplified auth reducer
@@ -79,11 +76,6 @@ const authReducer = (state: SimpleAuthState, action: SimpleAuthAction): SimpleAu
       return {
         ...state,
         isInitialized: action.payload,
-      };
-    case 'SET_COMING_FROM_ONBOARDING':
-      return {
-        ...state,
-        isComingFromOnboarding: action.payload,
       };
     case 'CLEAR_AUTH':
       return {
@@ -126,7 +118,6 @@ interface AuthContextType {
   checkAuthState: () => Promise<void>;
   getCurrentUser: () => Promise<any>;
   markOnboardingComplete: () => Promise<void>;
-  setComingFromOnboarding: (isComing: boolean) => void;
 }
 
 // Create context
@@ -558,6 +549,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return;
       }
 
+      dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: true });
+
       // Import WorkoutService dynamically to avoid circular dependencies
       const { TrainingService } = await import('../services/trainingService');
       
@@ -586,8 +579,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           console.log('⚠️ Failed to cancel workout reminder:', notificationError);
         }
       }
+      
+      dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: false });
     } catch (error) {
       console.error('Failed to refresh workout plan:', error);
+      dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: false });
       throw error;
     }
   };
@@ -598,10 +594,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     dispatch({ type: 'SET_WORKOUT_PLAN', payload: workoutPlan });
   };
 
-  // Set coming from onboarding flag
-  const setComingFromOnboarding = (isComing: boolean) => {
-    dispatch({ type: 'SET_COMING_FROM_ONBOARDING', payload: isComing });
-  };
 
   const contextValue: AuthContextType = {
     state,
@@ -625,7 +617,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkAuthState,
     getCurrentUser,
     markOnboardingComplete,
-    setComingFromOnboarding,
   };
 
   return (

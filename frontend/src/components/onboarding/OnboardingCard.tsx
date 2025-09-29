@@ -7,7 +7,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors } from '../../constants/designSystem';
 
 interface OnboardingCardProps {
-  title: string;
+  title?: string;
   subtitle?: string;
   children: ReactNode;
   style?: any;
@@ -34,7 +34,7 @@ export const OnboardingCard: React.FC<OnboardingCardProps> = ({
             {/* Back button will be handled by individual components */}
           </View>
         )}
-        <Text style={styles.title}>{title}</Text>
+        {title && <Text style={styles.title}>{title}</Text>}
         {subtitle && (
           <Text style={styles.subtitle}>{subtitle}</Text>
         )}

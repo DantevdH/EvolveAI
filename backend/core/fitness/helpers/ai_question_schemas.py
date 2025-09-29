@@ -96,6 +96,16 @@ class FollowUpQuestionsRequest(BaseModel):
     jwt_token: Optional[str] = Field(default=None, description="JWT token for authentication")
 
 
+class TrainingPlanOutlineRequest(BaseModel):
+    """Request for training plan outline generation."""
+    personal_info: PersonalInfo = Field(..., description="Basic personal information")
+    initial_responses: dict = Field(..., description="Responses to initial questions")
+    follow_up_responses: dict = Field(..., description="Responses to follow-up questions")
+    initial_questions: Optional[List[AIQuestion]] = Field(default=None, description="Initial questions for context")
+    follow_up_questions: Optional[List[AIQuestion]] = Field(default=None, description="Follow-up questions for context")
+    jwt_token: str = Field(..., description="JWT token for authentication")
+
+
 class PlanGenerationRequest(BaseModel):
     """Request for workout plan generation."""
     personal_info: PersonalInfo = Field(..., description="Basic personal information")
@@ -103,7 +113,39 @@ class PlanGenerationRequest(BaseModel):
     follow_up_responses: dict = Field(..., description="Responses to follow-up questions")
     initial_questions: Optional[List[AIQuestion]] = Field(default=None, description="Initial questions for context")
     follow_up_questions: Optional[List[AIQuestion]] = Field(default=None, description="Follow-up questions for context")
+    outline_feedback: Optional[str] = Field(default=None, description="User feedback on the training plan outline")
     jwt_token: str = Field(..., description="JWT token for authentication")
+
+
+class TrainingPlanOutlineResponse(BaseModel):
+    """Response from training plan outline generation."""
+    success: bool = Field(..., description="Whether outline generation was successful")
+    outline: Optional[dict] = Field(default=None, description="Generated training plan outline")
+    error: Optional[str] = Field(default=None, description="Error message if unsuccessful")
+
+
+class DailyWorkout(BaseModel):
+    """Daily workout structure for training plan outline."""
+    day: int = Field(..., description="Day number (1-7)")
+    workout_name: str = Field(..., description="Name of the workout (e.g., 'Upper Body Strength', 'Easy Cardio')")
+    description: str = Field(..., description="Explanation in max. 20 words of the day's workout which can include items as duration, intensity, muscle groups, heart rate zones, distance, and equipment needed dependent on the workout type")
+    tags: List[str] = Field(..., description="Tags for categorization (e.g., 'strength', 'cardio', 'recovery', 'high-intensity')")
+
+
+class TrainingPeriod(BaseModel):
+    """Training period structure for training plan outline."""
+    period_name: str = Field(..., description="Name of the training period (e.g., 'Foundation Phase', 'Build Phase', 'Peak Phase')")
+    duration_weeks: int = Field(..., description="Duration of this period in weeks")
+    explanation: str = Field(..., description="Detailed explanation of what this period involves")
+    daily_workouts: List[DailyWorkout] = Field(..., description="Sample daily workouts for this period")
+
+
+class TrainingPlanOutline(BaseModel):
+    """Structured training plan outline for any sport or athletic discipline."""
+    title: str = Field(..., description="Program title in 3 words or less")
+    duration_weeks: int = Field(..., description="Total program duration in weeks")
+    explanation: str = Field(..., description="High-level overview and explanation of the training plan")
+    training_periods: List[TrainingPeriod] = Field(..., description="Training periods breakdown of the program")
 
 
 class PlanGenerationResponse(BaseModel):

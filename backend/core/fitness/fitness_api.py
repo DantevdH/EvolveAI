@@ -15,6 +15,7 @@ import os
 from core.fitness.helpers.ai_question_schemas import (
     InitialQuestionsRequest,
     FollowUpQuestionsRequest,
+    TrainingPlanOutlineRequest,
     PlanGenerationRequest,
     PlanGenerationResponse,
     PersonalInfo
@@ -161,6 +162,75 @@ async def get_follow_up_questions(
             "success": False,
             "data": None,
             "message": f"Failed to generate follow-up questions: {str(e)}"
+        }
+
+
+@router.post("/training-plan-outline")
+async def generate_training_plan_outline(
+    request: TrainingPlanOutlineRequest,
+    coach: FitnessCoach = Depends(get_fitness_coach)
+):
+    """Generate a training plan outline before creating the final plan."""
+    
+    try:
+        # Validate input
+        if not request.initial_responses:
+            return {
+                "success": False,
+                "data": None,
+                "message": "Initial responses cannot be empty"
+            }
+        
+        if not request.follow_up_responses:
+            return {
+                "success": False,
+                "data": None,
+                "message": "Follow-up responses cannot be empty"
+            }
+        
+        logger.info(f"Generating training plan outline for user: {request.personal_info.username}")
+        
+        # Combine all responses for comprehensive user profile
+        all_responses = {
+            **request.initial_responses,
+            **request.follow_up_responses
+        }
+        
+        # Generate training plan outline using the coach
+        result = coach.generate_training_plan_outline(
+            personal_info=request.personal_info,
+            user_responses=all_responses,
+            initial_questions=request.initial_questions,
+            follow_up_questions=request.follow_up_questions
+        )
+        
+        logger.info(f"Training plan outline result: {result}")
+        
+        if result.get('success'):
+            logger.info("Training plan outline generated successfully")
+            
+            return {
+                "success": True,
+                "data": {
+                    "outline": result.get('outline'),
+                    "metadata": result.get('metadata', {})
+                },
+                "message": "Training plan outline generated successfully"
+            }
+        else:
+            logger.error(f"Failed to generate training plan outline: {result.get('error')}")
+            return {
+                "success": False,
+                "data": None,
+                "message": result.get('error', 'Failed to generate training plan outline')
+            }
+            
+    except Exception as e:
+        logger.error(f"Error generating training plan outline: {str(e)}")
+        return {
+            "success": False,
+            "data": None,
+            "message": f"Failed to generate training plan outline: {str(e)}"
         }
 
 

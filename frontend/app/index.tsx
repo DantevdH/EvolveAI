@@ -43,32 +43,22 @@ export default function Index() {
     
     // Step 1: Check authentication
     if (!state.user) {
-      console.log('🔐 No user → Login');
       targetRoute = '/login';
     }
     // Step 2: Check email verification (only for OAuth users, not email signup)
     else if (state.user && !state.user.email_confirmed_at && state.user.app_metadata?.provider !== 'email') {
-      console.log('📧 Email verification required');
       targetRoute = '/email-verification';
     }
     // Step 3: Check user profile
     else if (!state.userProfile) {
-      console.log('👤 No profile → Onboarding');
       targetRoute = '/onboarding';
     }
     // Step 4: Check workout plan
     else if (!state.workoutPlan) {
-      // Skip navigation if coming from onboarding (it handles its own navigation)
-      if (state.isComingFromOnboarding) {
-        return;
-      }
-      
-      console.log('💪 No workout plan → Generate plan');
       targetRoute = '/generate-plan';
     }
     // Step 5: Everything exists
     else {
-      console.log('✅ All set → Main app');
       targetRoute = '/(tabs)';
     }
 
@@ -84,7 +74,6 @@ export default function Index() {
         return;
       }
       
-      console.log(`🔄 Navigating to ${targetRoute}`);
       lastNavigationRef.current = targetRoute;
       isNavigatingRef.current = true;
       
@@ -99,16 +88,20 @@ export default function Index() {
           router.push(targetRoute as any);
         } catch (error) {
           console.error('❌ Navigation error:', error);
-          router.replace(targetRoute as any);
+          try {
+            router.replace(targetRoute as any);
+          } catch (replaceError) {
+            console.error('❌ Replace navigation also failed:', replaceError);
+          }
         } finally {
-          // Reset navigation state after a longer delay to prevent rapid re-navigation
+          // Reset navigation state after a delay to prevent rapid re-navigation
           setTimeout(() => {
             isNavigatingRef.current = false;
-          }, 1000);
+          }, 500); // Reduced delay for better responsiveness
         }
-      }, 300); // Increased delay to 300ms for better stability
+      }, 100); // Reduced delay for better responsiveness
     }
-  }, [state.isLoading, state.workoutPlanLoading, state.user, state.userProfile, state.workoutPlan, state.error, state.isComingFromOnboarding, router]);
+  }, [state.isLoading, state.workoutPlanLoading, state.user, state.userProfile, state.workoutPlan, state.error, router]);
 
   // Cleanup timeout on unmount
   useEffect(() => {

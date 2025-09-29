@@ -12,7 +12,10 @@ from core.fitness.helpers.ai_question_schemas import (
     AIQuestion,
     QuestionOption,
     QuestionType,
-    QuestionCategory
+    QuestionCategory,
+    TrainingPlanOutline,
+    TrainingPeriod,
+    DailyWorkout
 )
 
 # Mock user profile data
@@ -364,11 +367,149 @@ def create_mock_follow_up_questions() -> AIQuestionResponse:
         categories=list(set([q.category for q in questions]))
     )
 
+def create_mock_training_plan_outline() -> TrainingPlanOutline:
+    """Create a mock training plan outline for debug mode."""
+    
+    # Foundation Phase - Daily workouts
+    foundation_daily_workouts = [
+        DailyWorkout(
+            day=1,
+            workout_name="Upper Body Strength",
+            description="Focus on chest, shoulders, and triceps with compound movements. 60 minutes at moderate intensity. Target muscles: Chest, Shoulders, Triceps. Equipment: Barbell, Dumbbells, Bench. Start with moderate weights to establish proper form and movement patterns.",
+            tags=["strength", "upper-body", "moderate-intensity"],
+        ),
+        DailyWorkout(
+            day=2,
+            workout_name="Easy Cardio",
+            description="Gentle 5K easy run to build aerobic base and promote recovery. 30 minutes at easy pace. Heart rate zones: Zone 1-2 (60-70% max HR). Focus on maintaining conversational pace.",
+            tags=["cardio", "easy", "recovery"],
+        ),
+        DailyWorkout(
+            day=3,
+            workout_name="Lower Body Strength",
+            description="Squat-focused session targeting quads, glutes, and hamstrings. 60 minutes at moderate intensity. Equipment: Barbell, Squat Rack. Include accessory work for posterior chain development.",
+            tags=["strength", "lower-body", "moderate-intensity"],
+        ),
+        DailyWorkout(
+            day=5,
+            workout_name="Full Body Strength",
+            description="Deadlift-focused session with upper body assistance work. 60 minutes at moderate intensity. Target muscles: Posterior Chain, Back, Biceps. Equipment: Barbell, Dumbbells. Focus on hip hinge pattern and posterior chain strength.",
+            tags=["strength", "full-body", "moderate-intensity"],
+        ),
+        DailyWorkout(
+            day=6,
+            workout_name="Tempo Run",
+            description="10K tempo run at comfortably hard pace. 45 minutes at hard intensity. Heart rate zones: Zone 3-4 (80-90% max HR). Build aerobic capacity and mental toughness.",
+            tags=["cardio", "tempo", "high-intensity"],
+        ),
+    ]
+    
+    # Build Phase - Daily workouts
+    build_daily_workouts = [
+        DailyWorkout(
+            day=1,
+            workout_name="Heavy Upper Body",
+            description="Increased intensity with heavier weights. 70 minutes at hard intensity. Target muscles: Chest, Shoulders, Triceps. Equipment: Barbell, Dumbbells, Bench. Focus on progressive overload while maintaining form.",
+            tags=["strength", "upper-body", "high-intensity"],
+        ),
+        DailyWorkout(
+            day=2,
+            workout_name="Interval Training",
+            description="High-intensity interval training to improve cardiovascular fitness and fat burning. 30 minutes at very hard intensity. Heart rate zones: Zone 4-5 (90-100% max HR).",
+            tags=["cardio", "intervals", "very-high-intensity"],
+        ),
+        DailyWorkout(
+            day=3,
+            workout_name="Heavy Lower Body",
+            description="Increased squat volume and intensity. 70 minutes at hard intensity. Target muscles: Quadriceps, Glutes, Hamstrings, Calves. Equipment: Barbell, Squat Rack, Dumbbells. Add accessory movements for complete lower body development.",
+            tags=["strength", "lower-body", "high-intensity"],
+        ),
+        DailyWorkout(
+            day=5,
+            workout_name="Power Development",
+            description="Explosive movements and plyometrics. 50 minutes at hard intensity. Target muscles: Full Body. Equipment: Medicine Ball, Kettlebell, Bodyweight. Focus on speed and power development.",
+            tags=["power", "plyometrics", "high-intensity"],
+        ),
+        DailyWorkout(
+            day=6,
+            workout_name="Long Run",
+            description="12K long run to build endurance and mental toughness. 60 minutes at moderate intensity. Heart rate zones: Zone 2-3 (70-80% max HR). Focus on maintaining steady pace.",
+            tags=["cardio", "endurance", "moderate-intensity"],
+        ),
+    ]
+    
+    # Peak Phase - Daily workouts
+    peak_daily_workouts = [
+        DailyWorkout(
+            day=1,
+            workout_name="Peak Strength",
+            description="Maximum intensity upper body session. 75 minutes at maximum intensity. Target muscles: Chest, Shoulders, Triceps, Core. Equipment: Barbell, Dumbbells, Bench, Cables. Test strength gains and push limits safely.",
+            tags=["strength", "upper-body", "maximum-intensity"],
+        ),
+        DailyWorkout(
+            day=2,
+            workout_name="Hill Sprints",
+            description="High-intensity hill sprints to build power and anaerobic capacity. 25 minutes at maximum intensity. Heart rate zones: Zone 5 (95-100% max HR).",
+            tags=["cardio", "sprints", "maximum-intensity"],
+        ),
+        DailyWorkout(
+            day=3,
+            workout_name="Peak Lower Body",
+            description="Maximum intensity lower body session. 75 minutes at maximum intensity. Target muscles: Quadriceps, Glutes, Hamstrings, Calves. Equipment: Barbell, Squat Rack, Leg Press. Focus on heavy squats and deadlifts.",
+            tags=["strength", "lower-body", "maximum-intensity"],
+        ),
+        DailyWorkout(
+            day=5,
+            workout_name="Power & Speed",
+            description="Explosive power movements and speed work. 45 minutes at very hard intensity. Target muscles: Full Body. Equipment: Olympic Bar, Plyo Box, Medicine Ball. Focus on rate of force development.",
+            tags=["power", "speed", "very-high-intensity"],
+        ),
+        DailyWorkout(
+            day=6,
+            workout_name="Race Pace Run",
+            description="15K run at goal race pace. 75 minutes at hard intensity. Heart rate zones: Zone 3-4 (80-90% max HR). Practice pacing strategy and mental toughness.",
+            tags=["cardio", "race-pace", "high-intensity"],
+        ),
+    ]
+    
+    # Create training periods
+    training_periods = [
+        TrainingPeriod(
+            period_name="Foundation Phase",
+            duration_weeks=4,
+            explanation="Establish proper movement patterns, build foundational strength, and develop aerobic base. Focus on form and technique while gradually increasing training load.",
+            daily_workouts=foundation_daily_workouts
+        ),
+        TrainingPeriod(
+            period_name="Build Phase",
+            duration_weeks=4,
+            explanation="Increase training intensity and volume. Focus on strength gains, power development, and building mental toughness. Introduce more complex movements and higher intensity cardio.",
+            daily_workouts=build_daily_workouts
+        ),
+        TrainingPeriod(
+            period_name="Peak Phase",
+            duration_weeks=4,
+            explanation="Peak training intensity with maximum strength and power output. Focus on sport-specific performance, race pace training, and mental preparation for competition.",
+            daily_workouts=peak_daily_workouts
+        )
+    ]
+    
+    # Create the training plan outline
+    outline = TrainingPlanOutline(
+        title="Strength & Running Program",
+        duration_weeks=12,
+        explanation="A comprehensive 12-week program combining strength training and running to build power, endurance, and overall fitness. The program follows a progressive overload approach with three distinct phases: foundation building, strength development, and power & speed. Each week includes 4-5 training sessions with strategic rest days for optimal recovery and adaptation.",
+        training_periods=training_periods
+    )
+    
+    return outline
+
 def get_mock_data_summary() -> Dict[str, Any]:
     """Get a summary of available mock data."""
     return {
         "user_profile": "Mock user profile for testing",
         "workout_plan": "Complete 3-day strength training program",
+        "training_plan_outline": "3-week mock training plan outline with strength & running focus",
         "initial_questions": "6 mock questions covering all question types",
         "follow_up_questions": "2 mock follow-up questions",
         "exercises": [

@@ -9,19 +9,12 @@ import { useAuth } from '../context/AuthContext';
 import { ConversationalOnboarding } from '../components/onboarding/ConversationalOnboarding';
 
 export const GeneratePlanScreen: React.FC = () => {
-  const { setComingFromOnboarding } = useAuth();
   const router = useRouter();
 
-  const handleComplete = (workoutPlan: any) => {
+  const handleComplete = async (workoutPlan: any) => {
     console.log('✅ Workout plan generated and saved to database');
     
-    // No need to set workout plan in context - it will be loaded from database
-    // by AuthContext when the user navigates to the main app
-    
-    // Reset onboarding flag
-    setComingFromOnboarding(false);
-    
-    // Navigate to main app
+    // Navigate to main app - let index.tsx handle the routing logic
     router.replace('/(tabs)');
   };
 
