@@ -1,5 +1,6 @@
 import { supabase } from '@/src/config/supabase';
 import { UserProfile } from '@/src/types';
+import { AIQuestion } from '@/src/types/onboarding';
 import { DEFAULT_VALUES } from '../constants/api';
 import { mapOnboardingToDatabase } from '../utils/profileDataMapping';
 
@@ -8,6 +9,32 @@ export interface UserServiceResponse<T> {
   data?: T;
   error?: string;
 }
+
+/**
+ * Converts dictionary objects to AIQuestion objects
+ */
+const convertToAIQuestions = (questions: any[] | null): AIQuestion[] | null => {
+  if (!questions || !Array.isArray(questions)) {
+    return null;
+  }
+  
+  return questions.map(question => ({
+    id: question.id || '',
+    text: question.text || '',
+    response_type: question.response_type || 'free_text',
+    options: question.options || null,
+    category: question.category || '',
+    required: question.required || false,
+    help_text: question.help_text || '',
+    placeholder: question.placeholder || null,
+    min_value: question.min_value || null,
+    max_value: question.max_value || null,
+    min_length: question.min_length || null,
+    max_length: question.max_length || null,
+    step: question.step || 1,
+    unit: question.unit || null,
+  }));
+};
 
 
 
@@ -175,6 +202,14 @@ export class UserService {
           hasLimitations: rawProfile.has_limitations || false,
           limitationsDescription: rawProfile.limitations_description || '',
           finalChatNotes: rawProfile.final_chat_notes || '',
+          // Raw questions and responses (for consistency)
+          initial_questions: convertToAIQuestions(rawProfile.initial_questions),
+          follow_up_questions: convertToAIQuestions(rawProfile.follow_up_questions),
+          initial_responses: rawProfile.initial_responses || null,
+          follow_up_responses: rawProfile.follow_up_responses || null,
+          // Plan outline and feedback (separated)
+          plan_outline: rawProfile.plan_outline || null,
+          plan_outline_feedback: rawProfile.plan_outline_feedback || null,
           createdAt: rawProfile.created_at ? new Date(rawProfile.created_at) : undefined,
           updatedAt: rawProfile.updated_at ? new Date(rawProfile.updated_at) : undefined,
         };

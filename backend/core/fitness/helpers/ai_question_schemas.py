@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from enum import Enum
 
 
@@ -90,8 +90,8 @@ class InitialQuestionsRequest(BaseModel):
 class FollowUpQuestionsRequest(BaseModel):
     """Request for follow-up questions generation."""
     personal_info: PersonalInfo = Field(..., description="Basic personal information")
-    initial_responses: dict = Field(..., description="Responses to initial questions")
-    initial_questions: Optional[List[AIQuestion]] = Field(default=None, description="Initial questions for context")
+    initial_responses: Dict[str, Any] = Field(..., description="Raw responses to initial questions")
+    initial_questions: List[AIQuestion] = Field(..., description="Initial questions from frontend")
     user_profile_id: Optional[str] = Field(default=None, description="User profile ID for database storage")
     jwt_token: Optional[str] = Field(default=None, description="JWT token for authentication")
 
@@ -99,21 +99,22 @@ class FollowUpQuestionsRequest(BaseModel):
 class TrainingPlanOutlineRequest(BaseModel):
     """Request for training plan outline generation."""
     personal_info: PersonalInfo = Field(..., description="Basic personal information")
-    initial_responses: dict = Field(..., description="Responses to initial questions")
-    follow_up_responses: dict = Field(..., description="Responses to follow-up questions")
-    initial_questions: Optional[List[AIQuestion]] = Field(default=None, description="Initial questions for context")
-    follow_up_questions: Optional[List[AIQuestion]] = Field(default=None, description="Follow-up questions for context")
+    initial_responses: Dict[str, Any] = Field(..., description="Raw responses to initial questions")
+    follow_up_responses: Dict[str, Any] = Field(..., description="Raw responses to follow-up questions")
+    initial_questions: List[AIQuestion] = Field(..., description="Initial questions from frontend")
+    follow_up_questions: List[AIQuestion] = Field(..., description="Follow-up questions from frontend")
     jwt_token: str = Field(..., description="JWT token for authentication")
 
 
 class PlanGenerationRequest(BaseModel):
     """Request for workout plan generation."""
     personal_info: PersonalInfo = Field(..., description="Basic personal information")
-    initial_responses: dict = Field(..., description="Responses to initial questions")
-    follow_up_responses: dict = Field(..., description="Responses to follow-up questions")
-    initial_questions: Optional[List[AIQuestion]] = Field(default=None, description="Initial questions for context")
-    follow_up_questions: Optional[List[AIQuestion]] = Field(default=None, description="Follow-up questions for context")
-    outline_feedback: Optional[str] = Field(default=None, description="User feedback on the training plan outline")
+    initial_responses: Dict[str, Any] = Field(..., description="Raw responses to initial questions")
+    follow_up_responses: Dict[str, Any] = Field(..., description="Raw responses to follow-up questions")
+    plan_outline: Optional[dict] = Field(default=None, description="Training plan outline from frontend")
+    plan_outline_feedback: Optional[str] = Field(default=None, description="User feedback on plan outline")
+    initial_questions: List[AIQuestion] = Field(..., description="Initial questions from frontend")
+    follow_up_questions: List[AIQuestion] = Field(..., description="Follow-up questions from frontend")
     jwt_token: str = Field(..., description="JWT token for authentication")
 
 

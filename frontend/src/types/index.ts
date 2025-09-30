@@ -1,3 +1,5 @@
+import { AIQuestion } from './onboarding';
+
 // Navigation types
 export type RootStackParamList = {
   Home: undefined;
@@ -24,6 +26,14 @@ export interface ExperienceLevelInfo {
 }
 
 // User types matching Swift UserProfile model
+export interface PlanOutline {
+  weekly_schedule?: any[];
+  focus_areas?: string[];
+  progression?: any;
+  user_feedback?: string;
+  [key: string]: any; // Allow additional properties
+}
+
 export interface UserProfile {
   // User input fields (mutable for onboarding)
   username: string;
@@ -42,6 +52,16 @@ export interface UserProfile {
   hasLimitations: boolean;
   limitationsDescription: string;
   finalChatNotes: string;
+  
+  // Raw questions and responses (for consistency)
+  initial_questions?: AIQuestion[] | null;
+  follow_up_questions?: AIQuestion[] | null;
+  initial_responses?: Record<string, any> | null;
+  follow_up_responses?: Record<string, any> | null;
+  
+  // Plan outline and feedback (separated)
+  plan_outline?: PlanOutline | null;
+  plan_outline_feedback?: string | null;
   
   // Database fields (read-only)
   id?: number;

@@ -131,10 +131,11 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Simplified user profile loading
+  // Simplified user profile loading with debouncing
   const loadUserProfile = useCallback(async (userId: string) => {
     // Prevent multiple simultaneous calls
     if (state.isLoading) {
+      console.log('🚫 Profile loading already in progress, skipping...');
       return;
     }
 
@@ -245,7 +246,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         // Only load profile if we don't already have one for this user and not currently loading
         if ((!state.userProfile || state.userProfile.userId !== session.user.id) && !state.isLoading) {
+          console.log('🔄 Loading profile for signed in user...');
           await loadUserProfile(session.user.id);
+        } else {
+          console.log('🚫 Skipping profile load - already have profile or loading in progress');
         }
       } else if (event === 'SIGNED_OUT') {
         console.log('👋 User signed out');
@@ -280,6 +284,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (response.success && response.user) {
         dispatch({ type: 'SET_USER', payload: response.user });
+        // Use consolidated profile loading
         await loadUserProfile(response.user.id);
         return true;
       } else {

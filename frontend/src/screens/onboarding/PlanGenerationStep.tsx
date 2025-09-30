@@ -1,34 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { OnboardingCard } from '../../components/onboarding/OnboardingCard';
-import { OnboardingNavigation } from '../../components/onboarding/OnboardingNavigation';
 import { PlanGenerationStepProps } from '../../types/onboarding';
-import { colors } from '../../constants/designSystem';
-import { IconSymbol } from '../../../components/ui/IconSymbol';
-import { AnimatedSpinner, LoadingIndicator, AIChatMessage } from '../../components/generatePlan';
+import { AnimatedSpinner } from '../../components/generatePlan/AnimatedSpinner';
+import { LoadingIndicator } from '../../components/generatePlan/LoadingIndicator';
+import { ErrorDisplay } from '../../components/ui/ErrorDisplay';
 
 export const PlanGenerationStep: React.FC<PlanGenerationStepProps> = ({
   isLoading,
   error,
   onRetry,
-  aiHasQuestions = false,
-  onContinueToQuestions,
-  analysisPhase = null,
+  onStartGeneration,
   username = 'there',
 }) => {
-  const [showButton, setShowButton] = useState(false);
+  // Auto-start moved back to ConversationalOnboarding to avoid timing issues
 
-  // Reset button visibility when aiHasQuestions changes
-  useEffect(() => {
-    if (aiHasQuestions) {
-      setShowButton(false);
-    }
-  }, [aiHasQuestions]);
-
-  // Memoize the onTypingComplete callback to prevent unnecessary re-renders
-  const handleTypingComplete = useCallback(() => {
-    setShowButton(true);
-  }, []);
+  console.log('📊 PlanGenerationStep render:', { isLoading, hasError: !!error, error });
 
   if (error) {
     return (
@@ -38,106 +25,26 @@ export const PlanGenerationStep: React.FC<PlanGenerationStepProps> = ({
         scrollable={true}
       >
         <View style={styles.container}>
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorIcon}>⚠️</Text>
-            <Text style={styles.errorTitle}>Something went wrong</Text>
-            <Text style={styles.errorMessage}>{error}</Text>
-          </View>
-          
-          <OnboardingNavigation
-            onNext={onRetry}
-            nextTitle="Try Again"
-            showBack={false}
-            variant="single"
+          <ErrorDisplay
+            error={error}
+            onRetry={onStartGeneration || onRetry}
+            variant="server"
+            showRetry={true}
           />
         </View>
       </OnboardingCard>
     );
   }
 
-  // Show continue button when AI has questions ready
-  if (aiHasQuestions) {
-    const getButtonText = () => {
-      switch (analysisPhase) {
-        case 'initial':
-          return "Let's Get Started";
-        case 'followup':
-          return "Continue";
-        case 'generation':
-          return "Generate My Plan";
-        default:
-          return "Continue";
-      }
-    };
-
-    return (
-      <OnboardingCard
-        title=""
-        subtitle=""
-        scrollable={false}
-      >
-        <View style={styles.container}>
-          <View style={styles.chatContainer}>
-            <AIChatMessage 
-              key={`${analysisPhase}-${username}`}
-              username={username}
-              analysisPhase={analysisPhase}
-              onTypingComplete={handleTypingComplete}
-            />
-          </View>
-          
-          <View style={styles.buttonContainer}>
-            {showButton && (
-              <OnboardingNavigation
-                onNext={onContinueToQuestions || (() => {})}
-                nextTitle={getButtonText()}
-                showBack={false}
-                variant="single"
-              />
-            )}
-          </View>
-        </View>
-      </OnboardingCard>
-    );
-  }
-
-  const getLoadingContent = () => {
-    switch (analysisPhase) {
-      case 'initial':
-        return {
-          description: "Our AI coach is reviewing your fitness goals and personal information..."
-        };
-      case 'followup':
-        return {
-          description: "Our AI coach is reviewing your previous answers to identify key areas that need further exploration for your personalized plan."
-        };
-      case 'generation':
-        return {
-          description: "Our AI coach is combining all your information and preferences to create a completely personalized workout plan just for you."
-        };
-      default:
-        return {
-          description: "Please wait while our AI coach processes your information."
-        };
-    }
-  };
-
-  const loadingContent = getLoadingContent();
-
+  // Always show loading spinner while generating
   return (
-    <OnboardingCard
-      title=""
-      subtitle=""
-      scrollable={true}
-    >
-      <View style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <AnimatedSpinner coachName="AI Coach" />
-          <LoadingIndicator 
-            isLoading={true} 
-            message={loadingContent.description}
-          />
-        </View>
+    <OnboardingCard scrollable={true}>
+      <View style={styles.loadingContainer}>
+        <AnimatedSpinner coachName="AI Coach" />
+        <LoadingIndicator 
+          isLoading={true} 
+          message="Creating your personalized workout plan..." 
+        />
       </View>
     </OnboardingCard>
   );
@@ -147,46 +54,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  chatContainer: {
-    position: 'absolute',
-    top: 60, // Fixed vertical position from top
-    left: 0,
-    right: 0,
-    bottom: 120, // Leave space for button at bottom
-  },
-  buttonContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-  },
   loadingContainer: {
     flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  errorContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-  },
-  errorIcon: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.error,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  errorMessage: {
-    fontSize: 16,
-    color: colors.muted,
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
+    paddingVertical: 60,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import { OnboardingBackground } from './OnboardingBackground';
 import { WelcomeStep } from '../../screens/onboarding/WelcomeStep';
@@ -8,6 +8,7 @@ import { ExperienceLevelStep } from '../../screens/onboarding/ExperienceLevelSte
 import { QuestionsStep } from '../../screens/onboarding/QuestionsStep';
 import { TrainingPlanOutlineStep } from '../../screens/onboarding';
 import { PlanGenerationStep } from '../../screens/onboarding/PlanGenerationStep';
+import { ErrorDisplay } from '../ui/ErrorDisplay';
 import { FitnessService } from '../../services/onboardingService';
 import { 
   OnboardingState, 
@@ -18,15 +19,18 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../config/supabase';
 import { UserService } from '../../services/userService';
+import { cleanUserProfileForResume, isValidFormattedResponse, isValidPlanOutline } from '../../utils/validation';
 
 interface ConversationalOnboardingProps {
   onComplete: (workoutPlan: any) => Promise<void>;
   onError: (error: string) => void;
+  startFromStep?: 'welcome' | 'initial' | 'followup' | 'outline' | 'generation';
 }
 
 export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> = ({
   onComplete,
   onError,
+  startFromStep = 'welcome',
 }) => {
   const { state: authState, refreshUserProfile } = useAuth();
   const [state, setState] = useState<OnboardingState>({
@@ -56,7 +60,257 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     aiAnalysisPhase: null,
   });
 
-  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial' | 'followup' | 'outline' | 'generation'>('welcome');
+  // Add retry state for error recovery
+  const [retryCount, setRetryCount] = useState(0);
+  const [retryStep, setRetryStep] = useState<string | null>(null);
+  const MAX_RETRIES = 3;
+
+  // Configurable AI thinking delays (can be made environment-specific)
+  const AI_DELAYS = {
+    initialQuestions: 2000,    // 2 seconds for initial questions
+    followUpQuestions: 2000,   // 2 seconds for follow-up questions
+    planOutline: 3000,         // 3 seconds for plan outline
+    planGeneration: 3000,      // 3 seconds for final plan generation
+  };
+
+  // Determine starting step - either from prop or default to welcome
+  const initialStep = startFromStep || 'welcome';
+  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial' | 'followup' | 'outline' | 'generation'>(initialStep);
+
+  // Initialize state based on existing user profile when starting from specific steps
+  useEffect(() => {
+    if (authState.userProfile && startFromStep !== 'welcome') {
+      // Clean and validate user profile data
+      const cleanedProfile = cleanUserProfileForResume(authState.userProfile);
+      
+      if (!cleanedProfile) {
+        console.error('Invalid user profile data, cannot resume onboarding');
+        onError('Invalid user profile data. Please restart onboarding.');
+        return;
+      }
+      
+      // Set the correct current step based on startFromStep
+      if (startFromStep === 'initial') {
+        setCurrentStep('initial');
+      } else if (startFromStep === 'followup') {
+        setCurrentStep('followup');
+      } else if (startFromStep === 'outline') {
+        setCurrentStep('outline');
+      } else if (startFromStep === 'generation') {
+        setCurrentStep('generation');
+      }
+      
+      // Initialize with cleaned and validated profile data
+      setState(prev => ({
+        ...prev,
+        username: cleanedProfile.username,
+        usernameValid: true,
+        personalInfo: {
+          username: cleanedProfile.username,
+          age: cleanedProfile.age,
+          weight: cleanedProfile.weight,
+          height: cleanedProfile.height,
+          weight_unit: cleanedProfile.weight_unit,
+          height_unit: cleanedProfile.height_unit,
+          measurement_system: cleanedProfile.measurement_system as 'imperial' | 'metric',
+          gender: cleanedProfile.gender,
+          goal_description: cleanedProfile.goal_description,
+        },
+        personalInfoValid: true,
+        goalDescription: cleanedProfile.goal_description,
+        goalDescriptionValid: true,
+        experienceLevel: cleanedProfile.experience_level,
+        experienceLevelValid: true,
+        trainingPlanOutline: cleanedProfile.plan_outline,
+        // Load questions and responses from profile
+        initialQuestions: cleanedProfile.initial_questions || [],
+        followUpQuestions: cleanedProfile.follow_up_questions || [],
+        initialResponses: cleanedProfile.initial_responses ? new Map(Object.entries(cleanedProfile.initial_responses)) : new Map(),
+        followUpResponses: cleanedProfile.follow_up_responses ? new Map(Object.entries(cleanedProfile.follow_up_responses)) : new Map(),
+      }));
+      
+      console.log(`✅ Resume flow initialized for step: ${startFromStep}`, {
+        hasInitialQuestions: !!cleanedProfile.initial_questions,
+        hasFollowUpQuestions: !!cleanedProfile.follow_up_questions,
+        hasPlanOutline: !!cleanedProfile.plan_outline,
+        hasPersonalInfo: !!cleanedProfile.username,
+        personalInfo: {
+          username: cleanedProfile.username,
+          age: cleanedProfile.age,
+          weight: cleanedProfile.weight,
+          height: cleanedProfile.height,
+        },
+        initialQuestionsCount: cleanedProfile.initial_questions?.length || 0,
+        initialQuestionsSample: cleanedProfile.initial_questions?.[0] || null,
+        hasInitialResponses: !!cleanedProfile.initial_responses,
+        initialResponsesCount: Object.keys(cleanedProfile.initial_responses || {}).length,
+        initialResponsesSample: cleanedProfile.initial_responses,
+      });
+    }
+  }, [authState.userProfile, startFromStep, onError]);
+
+  // Track if we've already triggered loading for each step
+  const hasTriggeredInitialQuestionsRef = useRef(false);
+  const hasTriggeredFollowUpQuestionsRef = useRef(false);
+  const hasTriggeredPlanOutlineRef = useRef(false);
+  const previousStepRef = useRef<string | null>(null);
+
+  // Reset trigger flags ONLY when step changes (not on every render)
+  useEffect(() => {
+    if (previousStepRef.current !== currentStep) {
+      if (currentStep === 'initial') {
+        hasTriggeredInitialQuestionsRef.current = false;
+      } else if (currentStep === 'followup') {
+        hasTriggeredFollowUpQuestionsRef.current = false;
+      } else if (currentStep === 'outline') {
+        hasTriggeredPlanOutlineRef.current = false;
+      }
+      previousStepRef.current = currentStep;
+    }
+  }, [currentStep]);
+
+  // Load questions when step changes to 'initial'
+  useEffect(() => {
+    if (currentStep === 'initial' && 
+        state.initialQuestions.length === 0 && 
+        !state.initialQuestionsLoading && 
+        !hasTriggeredInitialQuestionsRef.current) {
+      hasTriggeredInitialQuestionsRef.current = true;
+      loadInitialQuestions();
+    }
+  }, [currentStep, state.initialQuestions.length, state.initialQuestionsLoading]);
+
+  // Load follow-up questions when step changes to 'followup'
+  useEffect(() => {
+    if (currentStep === 'followup' && 
+        state.followUpQuestions.length === 0 && 
+        !state.followUpQuestionsLoading && 
+        !hasTriggeredFollowUpQuestionsRef.current) {
+      hasTriggeredFollowUpQuestionsRef.current = true;
+      loadFollowUpQuestions();
+    }
+  }, [currentStep, state.followUpQuestions.length, state.followUpQuestionsLoading]);
+
+  // Generate plan outline when step changes to 'outline'
+  useEffect(() => {
+    if (currentStep === 'outline' && 
+        !state.trainingPlanOutline && 
+        !state.outlineLoading && 
+        !hasTriggeredPlanOutlineRef.current) {
+      hasTriggeredPlanOutlineRef.current = true;
+      generatePlanOutline();
+    }
+  }, [currentStep, state.trainingPlanOutline, state.outlineLoading]);
+
+  // Auto-trigger plan generation when we have all required data
+  useEffect(() => {
+    if (currentStep === 'generation' && 
+        state.personalInfo && 
+        !state.planGenerationLoading && 
+        !state.workoutPlan && 
+        !state.error) {
+      console.log('🚀 Auto-triggering plan generation with complete state');
+      handlePlanGeneration();
+    }
+  }, [currentStep, state.personalInfo, state.planGenerationLoading, state.workoutPlan, state.error, handlePlanGeneration]);
+
+  // Handle plan generation (extracted from handleOutlineNext)
+  const handlePlanGeneration = useCallback(async () => {
+    console.log('🔥 handlePlanGeneration called', { 
+      hasPersonalInfo: !!state.personalInfo,
+      personalInfo: state.personalInfo 
+    });
+    
+    if (!state.personalInfo) {
+      console.log('❌ No personalInfo, returning early');
+      return;
+    }
+
+    console.log('✅ Setting loading state...');
+    setState(prev => ({ 
+      ...prev, 
+      planGenerationLoading: true,
+      aiAnalysisPhase: 'generation'
+    }));
+
+    try {
+      // Simulate AI thinking time, then generate final plan
+      setTimeout(async () => {
+        try {
+          // Get JWT token from Supabase session
+          const { data: { session } } = await supabase.auth.getSession();
+          const jwtToken = session?.access_token;
+          
+          if (!jwtToken) {
+            throw new Error('JWT token is missing - cannot generate workout plan');
+          }
+          
+          // Get raw responses - backend will handle formatting
+          const initialResponses = Object.fromEntries(state.initialResponses);
+          const followUpResponses = Object.fromEntries(state.followUpResponses);
+          
+          // Use stored plan outline if available, otherwise use current state
+          const planOutline = authState.userProfile?.plan_outline || state.trainingPlanOutline;
+          
+          const response = await FitnessService.generateWorkoutPlan(
+            state.personalInfo!,
+            initialResponses,
+            followUpResponses,
+            planOutline,
+            state.outlineFeedback || '',
+            state.initialQuestions,
+            state.followUpQuestions,
+            authState.userProfile?.id,
+            jwtToken
+          );
+          
+          console.log('📋 Plan generation response:', { success: response.success, hasData: !!response.data, message: response.message });
+          
+          if (response.success && response.data) {
+            console.log('✅ Workout plan generated successfully');
+            
+            // Update auth context with the new workout plan
+            if (authState.setWorkoutPlan) {
+              authState.setWorkoutPlan(response.data);
+            }
+            
+            setState(prev => ({
+              ...prev,
+              workoutPlan: response.data,
+              planGenerationLoading: false,
+            }));
+            
+            // Immediately navigate to main app
+            console.log('🚀 Navigating to main app...');
+            onComplete(response.data);
+          } else {
+            console.error('❌ Plan generation failed:', response.message);
+            throw new Error(response.message || 'Failed to generate workout plan');
+          }
+        } catch (error) {
+          console.error('❌ Error generating workout plan:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Failed to generate workout plan';
+          setState(prev => ({
+            ...prev,
+            planGenerationLoading: false,
+            aiAnalysisPhase: null,
+            error: errorMessage,
+          }));
+          onError(errorMessage);
+        }
+      }, AI_DELAYS.planGeneration);
+    } catch (error) {
+      console.error('❌ Error in plan generation setup:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate workout plan';
+      setState(prev => ({
+        ...prev,
+        planGenerationLoading: false,
+        aiAnalysisPhase: null,
+        error: errorMessage,
+      }));
+      onError(errorMessage);
+    }
+  }, [state.personalInfo, state.initialResponses, state.followUpResponses, state.trainingPlanOutline, state.outlineFeedback, state.initialQuestions, state.followUpQuestions, authState.userProfile, onComplete, onError]);
 
   // Step 1: Username
   const handleUsernameChange = useCallback((username: string) => {
@@ -130,74 +384,157 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     }));
   }, []);
 
-  const handleExperienceLevelNext = useCallback(async () => {
-    // Skip validation checks - proceed directly
-    if (!state.personalInfo) {
-      Alert.alert('Error', 'Personal information is missing');
-      return;
-    }
+  const handleExperienceLevelNext = useCallback(() => {
+    // Simply move to initial questions step
+    setCurrentStep('initial');
+  }, []);
 
-    // Combine all info with goal description and experience level
-    const fullPersonalInfo = {
-      ...state.personalInfo,
-      username: state.username,
-      goal_description: state.goalDescription,
-      experience_level: state.experienceLevel,
-    };
+  // Simple function to load initial questions
+  const loadInitialQuestions = useCallback(async () => {
+    if (!state.personalInfo) return;
 
     setState(prev => ({ 
       ...prev, 
-      planGenerationLoading: true,
+      initialQuestionsLoading: true,
       aiAnalysisPhase: 'initial'
     }));
-    setCurrentStep('generation');
 
     try {
-      // Test backend connection first
-      const backendAvailable = await FitnessService.testBackendConnection();
-      if (!backendAvailable) {
-        throw new Error('Backend server is not accessible. Please make sure the backend is running on http://127.0.0.1:8000');
-      }
+      const fullPersonalInfo = {
+        ...state.personalInfo,
+        username: state.username,
+        goal_description: state.goalDescription,
+        experience_level: state.experienceLevel,
+      };
+
+      const { data: { session } } = await supabase.auth.getSession();
+      const jwtToken = session?.access_token;
       
-      // Simulate AI thinking time, then get initial questions
-      setTimeout(async () => {
-        try {
-          // Get JWT token from Supabase session
-          const { data: { session } } = await supabase.auth.getSession();
-          const jwtToken = session?.access_token;
-          
-          const response = await FitnessService.getInitialQuestions(
-            fullPersonalInfo,
-            authState.userProfile?.id,
-            jwtToken
-          );
-          
-          setState(prev => ({
-            ...prev,
-            initialQuestions: response.questions,
-            planGenerationLoading: false,
-            currentInitialQuestionIndex: 0,
-            aiHasQuestions: true, // New state to show continue button
-          }));
-        } catch (error) {
-          setState(prev => ({
-            ...prev,
-            planGenerationLoading: false,
-            error: error instanceof Error ? error.message : 'Failed to load questions',
-          }));
-          onError(error instanceof Error ? error.message : 'Failed to load questions');
-        }
-      }, 2000); // 2 second delay to show AI thinking
+      const response = await FitnessService.getInitialQuestions(
+        fullPersonalInfo,
+        authState.userProfile?.id,
+        jwtToken
+      );
       
-    } catch (error) {
       setState(prev => ({
         ...prev,
-        planGenerationLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to start AI analysis',
+        initialQuestions: response.questions,
+        initialQuestionsLoading: false,
+        currentInitialQuestionIndex: 0,
+        aiHasQuestions: true,
       }));
-      onError(error instanceof Error ? error.message : 'Failed to start AI analysis');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load questions';
+      setState(prev => ({
+        ...prev,
+        initialQuestionsLoading: false,
+        error: errorMessage,
+      }));
+      onError(errorMessage);
     }
-  }, [state.goalDescription, state.goalDescriptionValid, state.personalInfo, state.username, onError]);
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, authState.userProfile?.id, onError]);
+
+  // Simple function to load follow-up questions
+  const loadFollowUpQuestions = useCallback(async () => {
+    if (!state.personalInfo) return;
+
+    setState(prev => ({ 
+      ...prev, 
+      followUpQuestionsLoading: true,
+      aiAnalysisPhase: 'followup'
+    }));
+
+    try {
+      const responsesObject = Object.fromEntries(state.initialResponses);
+      const { data: { session } } = await supabase.auth.getSession();
+      const jwtToken = session?.access_token;
+      
+      const response = await FitnessService.getFollowUpQuestions(
+        state.personalInfo, 
+        responsesObject,
+        state.initialQuestions,
+        authState.userProfile?.id,
+        jwtToken
+      );
+
+      setState(prev => ({
+        ...prev,
+        followUpQuestions: response.questions || [],
+        followUpQuestionsLoading: false,
+        currentFollowUpQuestionIndex: 0,
+        aiHasQuestions: true,
+      }));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load follow-up questions';
+      setState(prev => ({
+        ...prev,
+        followUpQuestionsLoading: false,
+        error: errorMessage,
+      }));
+      onError(errorMessage);
+    }
+  }, [state.personalInfo, state.initialResponses, state.initialQuestions, authState.userProfile?.id, onError]);
+
+  // Simple function to generate plan outline
+  const generatePlanOutline = useCallback(async () => {
+    if (!state.personalInfo) return;
+
+    setState(prev => ({ 
+      ...prev, 
+      outlineLoading: true,
+      aiAnalysisPhase: 'outline'
+    }));
+
+    try {
+      const initialResponses = Object.fromEntries(state.initialResponses);
+      const followUpResponses = Object.fromEntries(state.followUpResponses);
+      const { data: { session } } = await supabase.auth.getSession();
+      const jwtToken = session?.access_token;
+      
+      const response = await FitnessService.generateTrainingPlanOutline(
+        state.personalInfo,
+        initialResponses,
+        followUpResponses,
+        state.initialQuestions,
+        state.followUpQuestions,
+        jwtToken
+      );
+
+      console.log('📋 Plan outline response:', {
+        hasData: !!response.data,
+        hasOutline: !!response.data?.outline,
+        outlineKeys: response.data?.outline ? Object.keys(response.data.outline) : []
+      });
+
+      setState(prev => ({
+        ...prev,
+        trainingPlanOutline: response.data?.outline || null,
+        outlineLoading: false,
+        aiHasQuestions: true,
+      }));
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate plan outline';
+      setState(prev => ({
+        ...prev,
+        outlineLoading: false,
+        error: errorMessage,
+      }));
+      onError(errorMessage);
+    }
+  }, [state.personalInfo, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, onError]);
+
+  // Simple step progression functions
+  const handleInitialQuestionsComplete = useCallback(() => {
+    setCurrentStep('followup');
+  }, []);
+
+  const handleFollowUpQuestionsComplete = useCallback(() => {
+    setCurrentStep('outline');
+  }, []);
+
+  const handleOutlineNext = useCallback(() => {
+    setCurrentStep('generation');
+  }, []);
 
   // Handle continue to questions after AI analysis
   const handleContinueToQuestions = useCallback(() => {
@@ -234,9 +571,9 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     setState(prev => ({ 
       ...prev, 
       planGenerationLoading: true,
-      aiAnalysisPhase: 'followup'
+      aiAnalysisPhase: 'initial'
     }));
-    setCurrentStep('generation');
+    setCurrentStep('initial');
 
     try {
       // Simulate AI thinking time, then get follow-up questions
@@ -244,14 +581,20 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         try {
           const responsesObject = Object.fromEntries(state.initialResponses);
           
+          console.log('🔍 Sending follow-up questions request:', {
+            initialResponsesCount: state.initialResponses.size,
+            responsesObject,
+            initialQuestionsCount: state.initialQuestions.length,
+          });
+          
           // Get JWT token from Supabase session
           const { data: { session } } = await supabase.auth.getSession();
           const jwtToken = session?.access_token;
           
           const response = await FitnessService.getFollowUpQuestions(
             state.personalInfo!, 
-            responsesObject,
-            state.initialQuestions,
+            responsesObject, // Send raw responses - backend will format them
+            state.initialQuestions, // Send initial questions
             authState.userProfile?.id,
             jwtToken
           );
@@ -259,19 +602,24 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           setState(prev => ({
             ...prev,
             followUpQuestions: response.questions,
+            initialQuestions: response.initial_questions || prev.initialQuestions, // Use returned questions
             planGenerationLoading: false,
             currentFollowUpQuestionIndex: 0,
             aiHasQuestions: true,
           }));
         } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to load follow-up questions';
           setState(prev => ({
             ...prev,
             planGenerationLoading: false,
-            error: error instanceof Error ? error.message : 'Failed to load follow-up questions',
+            error: errorMessage,
           }));
-          onError(error instanceof Error ? error.message : 'Failed to load follow-up questions');
+          
+          // Set retry step for error recovery
+          setRetryStep('followup');
+          onError(errorMessage);
         }
-      }, 2000); // 2 second delay to show AI thinking
+      }, AI_DELAYS.followUpQuestions); // Configurable delay to show AI thinking
       
     } catch (error) {
       setState(prev => ({
@@ -281,7 +629,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }));
       onError(error instanceof Error ? error.message : 'Failed to start AI analysis');
     }
-  }, [state.personalInfo, state.initialResponses, onError]);
+  }, [state.personalInfo, state.initialResponses, state.initialQuestions, onError]);
 
   // Step 3: Follow-up Questions
   const handleFollowUpResponseChange = useCallback((questionId: string, value: any) => {
@@ -303,15 +651,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       planGenerationLoading: true,
       aiAnalysisPhase: 'outline'
     }));
-    setCurrentStep('generation');
+    setCurrentStep('outline');
 
     try {
       // Simulate AI thinking time, then generate training plan outline
       setTimeout(async () => {
         try {
-          const initialResponsesObject = Object.fromEntries(state.initialResponses);
-          const followUpResponsesObject = Object.fromEntries(state.followUpResponses);
-          
           // Get JWT token from Supabase session
           const { data: { session } } = await supabase.auth.getSession();
           const jwtToken = session?.access_token;
@@ -320,12 +665,16 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             throw new Error('JWT token is missing - cannot generate workout plan');
           }
           
+          // Get raw responses - backend will handle formatting
+          const initialResponses = Object.fromEntries(state.initialResponses);
+          const followUpResponses = Object.fromEntries(state.followUpResponses);
+          
           const response = await FitnessService.generateTrainingPlanOutline(
             state.personalInfo!,
-            initialResponsesObject,
-            followUpResponsesObject,
-            state.initialQuestions,
-            state.followUpQuestions,
+            initialResponses,  // Send raw responses
+            followUpResponses,  // Send raw responses
+            state.initialQuestions,  // Send initial questions
+            state.followUpQuestions,  // Send follow-up questions
             jwtToken
           );
           
@@ -335,6 +684,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
               ...prev,
               planGenerationLoading: false,
               trainingPlanOutline: response.data?.outline || null,
+              initialQuestions: response.data?.initial_questions || prev.initialQuestions, // Use returned questions
+              followUpQuestions: response.data?.follow_up_questions || prev.followUpQuestions, // Use returned questions
               aiHasQuestions: true, // Show continue button to go to outline
             }));
           } else {
@@ -342,14 +693,18 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             throw new Error(response.message || 'Failed to generate training plan outline');
           }
         } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to generate training plan outline';
           setState(prev => ({
             ...prev,
             planGenerationLoading: false,
-            error: error instanceof Error ? error.message : 'Failed to generate training plan outline',
+            error: errorMessage,
           }));
-          onError(error instanceof Error ? error.message : 'Failed to generate training plan outline');
+          
+          // Set retry step for error recovery
+          setRetryStep('outline');
+          onError(errorMessage);
         }
-      }, 3000); // 3 second delay for outline generation
+      }, AI_DELAYS.planOutline); // Configurable delay for outline generation
       
     } catch (error) {
       setState(prev => ({
@@ -359,7 +714,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }));
       onError(error instanceof Error ? error.message : 'Failed to generate training plan outline');
     }
-  }, [state.personalInfo, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, onError, authState.userProfile?.id]);
+  }, [state.personalInfo, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, onError, authState.userProfile?.id, startFromStep]);
 
   // Step 4: Training Plan Outline
   const handleOutlineFeedbackChange = useCallback((feedback: string) => {
@@ -369,77 +724,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     }));
   }, []);
 
-  const handleOutlineNext = useCallback(async () => {
-    if (!state.personalInfo) return;
-
-    setState(prev => ({ 
-      ...prev, 
-      planGenerationLoading: true,
-      aiAnalysisPhase: 'generation'
-    }));
-    setCurrentStep('generation');
-
-    try {
-      // Simulate AI thinking time, then generate final plan
-      setTimeout(async () => {
-        try {
-          const initialResponsesObject = Object.fromEntries(state.initialResponses);
-          const followUpResponsesObject = Object.fromEntries(state.followUpResponses);
-          
-          // Get JWT token from Supabase session
-          const { data: { session } } = await supabase.auth.getSession();
-          const jwtToken = session?.access_token;
-          
-          if (!jwtToken) {
-            throw new Error('JWT token is missing - cannot generate workout plan');
-          }
-          
-          const response = await FitnessService.generateWorkoutPlan(
-            state.personalInfo!,
-            initialResponsesObject,
-            followUpResponsesObject,
-            state.initialQuestions,
-            state.followUpQuestions,
-            jwtToken,
-            state.outlineFeedback
-          );
-          
-          if (response.success) {
-            console.log(`✅ FRONTEND: Onboarding completed successfully! Workout plan ID: ${response.data?.workout_plan_id}`);
-            setState(prev => ({
-              ...prev,
-              planGenerationLoading: false,
-            }));
-            
-            // Refresh user profile to fetch the newly created profile and workout plan
-            console.log('🔄 Refreshing user profile and workout plan...');
-            await refreshUserProfile();
-            
-            // Complete onboarding
-            await onComplete(null);
-          } else {
-            console.error('❌ FRONTEND: Workout plan generation failed:', response.message);
-            throw new Error(response.message || 'Failed to generate workout plan');
-          }
-        } catch (error) {
-          setState(prev => ({
-            ...prev,
-            planGenerationLoading: false,
-            error: error instanceof Error ? error.message : 'Failed to generate workout plan',
-          }));
-          onError(error instanceof Error ? error.message : 'Failed to generate workout plan');
-        }
-      }, 3000); // 3 second delay for final plan generation
-      
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        planGenerationLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to generate workout plan',
-      }));
-      onError(error instanceof Error ? error.message : 'Failed to generate workout plan');
-    }
-  }, [state.personalInfo, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, state.outlineFeedback, onComplete, onError, refreshUserProfile]);
 
   // Navigation handlers
   const handlePrevious = useCallback(() => {
@@ -472,9 +756,33 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   }, [currentStep]);
 
   const handleRetry = useCallback(() => {
+    // Check if we've exceeded max retries
+    if (retryCount >= MAX_RETRIES) {
+      const stepName = retryStep || currentStep;
+      const stepDescriptions = {
+        'initial': 'initial questions',
+        'followup': 'follow-up questions', 
+        'outline': 'plan outline',
+        'generation': 'workout plan generation'
+      };
+      
+      // Set error state instead of showing alert
+      setState(prev => ({
+        ...prev,
+        error: `We've tried ${MAX_RETRIES} times to load your ${stepDescriptions[stepName as keyof typeof stepDescriptions] || 'onboarding step'} but encountered an error. Please try again later or contact support.`
+      }));
+      return;
+    }
+
+    // Increment retry count
+    setRetryCount(prev => prev + 1);
     setState(prev => ({ ...prev, error: null }));
     
-    switch (currentStep) {
+    // Retry based on the step that failed
+    const stepToRetry = retryStep || currentStep;
+    console.log(`🔄 Retrying ${stepToRetry} (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+    
+    switch (stepToRetry) {
       case 'welcome':
         // No retry needed for welcome step
         break;
@@ -488,21 +796,46 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         handleGoalDescriptionNext();
         break;
       case 'initial':
-        handleExperienceLevelNext();
-        break;
-      case 'followup':
         handleInitialQuestionsNext();
         break;
+      case 'followup':
+        handleInitialQuestionsComplete();
+        break;
       case 'outline':
-        handleFollowUpQuestionsNext();
+        handleFollowUpQuestionsComplete();
         break;
       case 'generation':
         handleOutlineNext();
         break;
     }
-  }, [currentStep, handleWelcomeNext, handlePersonalInfoNext, handleGoalDescriptionNext, handleExperienceLevelNext, handleInitialQuestionsNext, handleFollowUpQuestionsNext, handleOutlineNext]);
+  }, [currentStep, retryCount, retryStep, handleWelcomeNext, handlePersonalInfoNext, handleGoalDescriptionNext, handleExperienceLevelNext, handleInitialQuestionsNext, handleInitialQuestionsComplete, handleFollowUpQuestionsComplete, handleOutlineNext]);
+
+  // Handle start over action
+  const handleStartOver = useCallback(() => {
+    setRetryCount(0);
+    setRetryStep(null);
+    setState(prev => ({ ...prev, error: null }));
+    setCurrentStep('welcome');
+  }, []);
+
 
   const renderCurrentStep = () => {
+    console.log('🔍 renderCurrentStep called with currentStep:', currentStep);
+    
+    // Show custom error display for max retries or other global errors
+    if (state.error && retryCount >= MAX_RETRIES) {
+      return (
+        <View style={styles.errorContainer}>
+          <ErrorDisplay
+            error={state.error}
+            onRetry={handleStartOver}
+            variant="server"
+            showRetry={true}
+          />
+        </View>
+      );
+    }
+    
     switch (currentStep) {
       case 'welcome':
         return (
@@ -569,11 +902,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             currentQuestionIndex={state.currentInitialQuestionIndex}
             totalQuestions={state.initialQuestions.length}
             isLoading={state.initialQuestionsLoading}
-            onNext={handleInitialQuestionsNext}
+            onNext={handleInitialQuestionsComplete}
             onPrevious={handlePrevious}
             onComplete={() => {}}
             error={state.error || undefined}
             stepTitle="Initial Questions"
+            username={state.username}
           />
         );
       
@@ -586,11 +920,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             currentQuestionIndex={state.currentFollowUpQuestionIndex}
             totalQuestions={state.followUpQuestions.length}
             isLoading={state.followUpQuestionsLoading}
-            onNext={handleFollowUpQuestionsNext}
+            onNext={handleFollowUpQuestionsComplete}
             onPrevious={handlePrevious}
             onComplete={() => {}}
             error={state.error || undefined}
             stepTitle="Follow-up Questions"
+            username={state.username}
           />
         );
       
@@ -604,6 +939,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             onPrevious={handlePrevious}
             isLoading={state.outlineLoading}
             error={state.error || undefined}
+            username={state.username}
           />
         );
       
@@ -613,9 +949,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             isLoading={state.planGenerationLoading}
             error={state.error || undefined}
             onRetry={handleRetry}
-            aiHasQuestions={state.aiHasQuestions}
-            onContinueToQuestions={handleContinueToQuestions}
-            analysisPhase={state.aiAnalysisPhase}
+            onStartGeneration={handlePlanGeneration}
             username={state.username}
           />
         );
@@ -636,5 +970,11 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
   },
 });

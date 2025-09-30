@@ -47,6 +47,7 @@ export interface AIQuestionResponse {
   total_questions: number;
   estimated_time_minutes: number;
   categories: QuestionCategory[];
+  initial_questions?: AIQuestion[]; // For follow-up questions response
 }
 
 export interface PersonalInfo {
@@ -148,7 +149,7 @@ export interface InitialQuestionsRequest {
 
 export interface FollowUpQuestionsRequest {
   personal_info: PersonalInfo;
-  initial_responses: Record<string, any>;
+  initial_responses: Record<string, any>;  // Raw responses from frontend
   initial_questions?: AIQuestion[];
   user_profile_id?: string;
   jwt_token?: string;
@@ -156,8 +157,8 @@ export interface FollowUpQuestionsRequest {
 
 export interface TrainingPlanOutlineRequest {
   personal_info: PersonalInfo;
-  initial_responses: Record<string, any>;
-  follow_up_responses: Record<string, any>;
+  initial_responses: Record<string, any>;  // Raw responses from frontend
+  follow_up_responses: Record<string, any>;  // Raw responses from frontend
   initial_questions?: AIQuestion[];
   follow_up_questions?: AIQuestion[];
   jwt_token: string;
@@ -165,11 +166,12 @@ export interface TrainingPlanOutlineRequest {
 
 export interface PlanGenerationRequest {
   personal_info: PersonalInfo;
-  initial_responses: Record<string, any>;
-  follow_up_responses: Record<string, any>;
+  initial_responses: Record<string, any>;  // Raw responses from frontend
+  follow_up_responses: Record<string, any>;  // Raw responses from frontend
+  plan_outline?: any;
+  plan_outline_feedback?: string;  // User feedback on plan outline
   initial_questions?: AIQuestion[];
   follow_up_questions?: AIQuestion[];
-  outline_feedback?: string;
   user_profile_id?: number;
   jwt_token?: string;
 }
@@ -246,14 +248,13 @@ export interface QuestionsStepProps extends OnboardingStepProps {
   totalQuestions: number;
   isLoading: boolean;
   stepTitle: string;
+  username?: string;
 }
 
 export interface PlanGenerationStepProps {
   isLoading: boolean;
   error?: string;
   onRetry: () => void;
-  aiHasQuestions?: boolean;
-  onContinueToQuestions?: () => void;
-  analysisPhase?: 'initial' | 'followup' | 'outline' | 'generation' | null;
+  onStartGeneration?: () => void;
   username?: string;
 }

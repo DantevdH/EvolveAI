@@ -1,17 +1,13 @@
-/**
- * Generate Plan Screen - AI-Driven Conversational Onboarding Flow
- */
-
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../context/AuthContext';
-import { ConversationalOnboarding } from '../components/onboarding/ConversationalOnboarding';
-import { LoadingScreen } from '../components/shared/LoadingScreen';
+import { useAuth } from '@/src/context/AuthContext';
+import { ConversationalOnboarding } from '@/src/components/onboarding/ConversationalOnboarding';
+import { LoadingScreen } from '@/src/components/shared/LoadingScreen';
 
-export const GeneratePlanScreen: React.FC = () => {
+export default function PlanOutlineStep() {
   const router = useRouter();
-  const { refreshUserProfile } = useAuth();
+  const { state, refreshUserProfile } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -24,21 +20,21 @@ export const GeneratePlanScreen: React.FC = () => {
   }, []);
 
   const handleComplete = async (workoutPlan: any) => {
-    console.log('✅ Workout plan generated and saved to database');
+    console.log('✅ Plan outline completed successfully');
     
     // Refresh user profile to get updated data
     await refreshUserProfile();
     
-    // Navigate to main app - let index.tsx handle the routing logic
-    router.replace('/(tabs)');
+    // Navigate to next step - let index.tsx handle the routing logic
+    router.replace('/');
   };
 
   const handleError = (error: string) => {
-    console.error('❌ Plan generation error:', error);
+    console.error('❌ Plan outline error:', error);
     
     Alert.alert(
-      'Plan Generation Error',
-      `Failed to generate workout plan: ${error}\n\nThis step creates your final personalized workout plan.`,
+      'Plan Outline Error',
+      `Failed to generate plan outline: ${error}\n\nThis step creates a personalized training plan based on your responses.`,
       [
         {
           text: 'Try Again',
@@ -62,7 +58,7 @@ export const GeneratePlanScreen: React.FC = () => {
 
   if (isLoading) {
     return (
-      <LoadingScreen message="Preparing your personalized workout plan..." />
+      <LoadingScreen message="Preparing your training plan outline..." />
     );
   }
 
@@ -71,11 +67,11 @@ export const GeneratePlanScreen: React.FC = () => {
       <ConversationalOnboarding
         onComplete={handleComplete}
         onError={handleError}
-        startFromStep="generation"
+        startFromStep="outline"
       />
     </View>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {

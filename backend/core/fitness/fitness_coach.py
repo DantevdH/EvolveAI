@@ -161,15 +161,13 @@ class FitnessCoach(BaseAgent):
                 categories=[QuestionCategory.GOALS_PREFERENCES]
             )
     
-    def generate_follow_up_questions(self, personal_info: PersonalInfo, responses: Dict[str, Any], initial_questions: List[AIQuestion] = None) -> AIQuestionResponseWithFormatted:
+    def generate_follow_up_questions(self, personal_info: PersonalInfo, formatted_responses: str, initial_questions: List[AIQuestion] = None) -> AIQuestionResponseWithFormatted:
         """Generate follow-up questions based on initial responses."""
         try:
             # Check if debug mode is enabled
             if os.getenv("DEBUG", "false").lower() == "true":
                 from core.fitness.helpers.mock_data import create_mock_follow_up_questions
                 follow_up_questions = create_mock_follow_up_questions()
-                formatted_responses = ResponseFormatter.format_responses(responses, initial_questions)
-                print(responses)
                 print(f"🐛 DEBUG MODE: User responses for follow-up questions: {formatted_responses}")
                 return AIQuestionResponseWithFormatted(
                     questions=follow_up_questions.questions,
@@ -186,7 +184,7 @@ class FitnessCoach(BaseAgent):
             {self._format_client_information(personal_info)}
             
             Initial questions and answers that you have already asked:
-            {ResponseFormatter.format_responses(responses, initial_questions)}
+            {formatted_responses}
             
             Generate a few follow-up questions to this initial questions that help you better understand the client 
             and will in the end help you create a personalized training plan.
@@ -241,7 +239,7 @@ class FitnessCoach(BaseAgent):
                 formatted_responses=formatted_responses
             )
     
-    def generate_training_plan_outline(self, personal_info: PersonalInfo, user_responses: Dict[str, Any], initial_questions: List[AIQuestion] = None, follow_up_questions: List[AIQuestion] = None) -> Dict[str, Any]:
+    def generate_training_plan_outline(self, personal_info: PersonalInfo, formatted_initial_responses: str, formatted_follow_up_responses: str, initial_questions: List[AIQuestion] = None, follow_up_questions: List[AIQuestion] = None) -> Dict[str, Any]:
         """Generate a training plan outline before creating the final detailed plan."""
         try:
             # Check if debug mode is enabled - skip validation for mock data
@@ -253,12 +251,12 @@ class FitnessCoach(BaseAgent):
                     'outline': outline.model_dump(),
                     'metadata': {
                         'generation_method': 'Mock Data (Debug Mode)',
-                        'user_goals': user_responses.get('goal_description', 'General fitness')
+                        'user_goals': personal_info.goal_description
                     }
                 }
             
             # Create a comprehensive prompt for outline generation
-            prompt = self._create_outline_prompt(personal_info, user_responses, initial_questions, follow_up_questions)
+            prompt = self._create_outline_prompt(personal_info, formatted_initial_responses, formatted_follow_up_responses, initial_questions, follow_up_questions)
             
             # Generate the outline using OpenAI with structured output
             response = self.client.chat.completions.create(
@@ -280,8 +278,8 @@ class FitnessCoach(BaseAgent):
                 'outline': outline.model_dump(),
                 'metadata': {
                     'generation_method': 'AI Generated',
-                    'user_goals': user_responses.get('goal_description', 'General fitness'),
-                    'experience_level': user_responses.get('experience_level', 'beginner')
+                    'user_goals': personal_info.goal_description,
+                    'experience_level': personal_info.experience_level
                 }
             }
             
@@ -292,7 +290,7 @@ class FitnessCoach(BaseAgent):
                 'error': f"Failed to generate training plan outline: {str(e)}"
             }
     
-    def generate_training_plan(self, personal_info: PersonalInfo, user_responses: Dict[str, Any], initial_questions: List[AIQuestion] = None, follow_up_questions: List[AIQuestion] = None) -> Dict[str, Any]:
+    def generate_training_plan(self, personal_info: PersonalInfo, formatted_initial_responses: str, formatted_follow_up_responses: str, plan_outline: dict = None, initial_questions: List[AIQuestion] = None, follow_up_questions: List[AIQuestion] = None) -> Dict[str, Any]:
         """Generate a comprehensive training plan using the new flow: get_exercise_candidates -> prompt -> workout plan -> validate_workout_plan."""
         try:
             # Check if debug mode is enabled - skip validation for mock data
@@ -314,7 +312,7 @@ class FitnessCoach(BaseAgent):
             
             # Step 1: Retrieve ALL exercises using get_exercise_candidates
             print(f"🎯 Retrieving exercise candidates...")
-            difficulty = user_responses.get("experience_level", "beginner")
+            difficulty = personal_info.experience_level or "beginner"
             
             all_exercises = self.exercise_selector.get_exercise_candidates(
                 max_exercises=100,  # Get a large pool of exercises
@@ -343,6 +341,31 @@ class FitnessCoach(BaseAgent):
                     'error': 'Failed to format exercises for AI. Please try again.'
                 }
             
+            # Combine formatted responses for context
+            combined_responses = f"{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
+            
+            # Add plan outline context if available
+            outline_context = ""
+            if plan_outline:
+                # Extract user feedback if available
+                user_feedback = plan_outline.get('user_feedback', '')
+                feedback_context = ""
+                if user_feedback:
+                    feedback_context = f"""
+            
+            IMPORTANT: The user has provided specific feedback on the training plan outline:
+            "{user_feedback}"
+            
+            Please incorporate this feedback into the final training plan.
+            """
+                
+                outline_context = f"""
+            
+            Training Plan Outline (follow this structure):
+            {plan_outline}
+            {feedback_context}
+            """
+            
             prompt = f"""
             You are an ELITE PERFORMANCE COACH. Create a personalized training plan based on the following information:
             
@@ -353,7 +376,8 @@ class FitnessCoach(BaseAgent):
             - Goal: {personal_info.goal_description}
             
             To get some better understand you have asked the following initial and follow-up questions:
-            {ResponseFormatter.format_responses(user_responses, initial_questions + follow_up_questions if initial_questions and follow_up_questions else None)}
+            {combined_responses}
+            {outline_context}
             
             Available Exercises (use ONLY these exercise IDs):
             {exercise_info}
@@ -364,6 +388,8 @@ class FitnessCoach(BaseAgent):
             3. Includes proper progression and structure
             4. Is realistic and achievable
             5. Covers the full training week with appropriate rest days
+            6. Follows the training plan outline structure if provided
+            7. Incorporates any user feedback provided on the training plan outline
             
             Return the plan in the WorkoutPlanSchema format.
             """
@@ -550,11 +576,11 @@ Make the outline specific to the user's goals, experience level, and chosen spor
 - Include appropriate recovery and adaptation strategies for their chosen discipline
         """
     
-    def _create_outline_prompt(self, personal_info: PersonalInfo, user_responses: Dict[str, Any], initial_questions: List[AIQuestion] = None, follow_up_questions: List[AIQuestion] = None) -> str:
+    def _create_outline_prompt(self, personal_info: PersonalInfo, formatted_initial_responses: str, formatted_follow_up_responses: str, initial_questions: List[AIQuestion] = None, follow_up_questions: List[AIQuestion] = None) -> str:
         """Create a comprehensive prompt for generating training plan outlines."""
         
-        # Format user responses for context
-        formatted_responses = ResponseFormatter.format_responses(user_responses, initial_questions + (follow_up_questions or []))
+        # Combine formatted responses for context
+        combined_responses = f"{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
         
         prompt = f"""
 {self._get_outline_generation_intro()}

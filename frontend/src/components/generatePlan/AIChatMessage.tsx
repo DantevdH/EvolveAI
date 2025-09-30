@@ -5,7 +5,7 @@ import { IconSymbol } from '../../../components/ui/IconSymbol';
 
 interface AIChatMessageProps {
   username?: string;
-  analysisPhase?: 'initial' | 'followup' | 'generation' | null;
+  analysisPhase?: 'initial' | 'followup' | 'outline' | 'generation' | null;
   customMessage?: string;
   onTypingComplete?: () => void;
   skipAnimation?: boolean;
@@ -38,6 +38,12 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
           greeting: `Hi ${username}! 💪`,
           analysis: "Great answers! I'm getting a clearer picture of your fitness journey, including your preferences, lifestyle patterns, and the specific challenges and motivations that drive you.",
           conclusion: "Just a few more questions to fine-tune your personalized plan. We're almost there! ✨"
+        };
+      case 'outline':
+        return {
+          greeting: `Hi ${username}! 📋`,
+          analysis: "Excellent! I've analyzed all your responses and I'm now crafting a comprehensive training plan outline tailored specifically to your goals, experience level, and lifestyle.",
+          conclusion: "Your personalized training plan outline is being created. This will be the foundation of your fitness journey! 💪"
         };
       case 'generation':
         return {

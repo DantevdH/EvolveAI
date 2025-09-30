@@ -8,6 +8,7 @@ import { IconSymbol } from '../../../components/ui/IconSymbol';
 import { QuestionsStepProps, QuestionType } from '../../types/onboarding';
 import { colors } from '../../constants/designSystem';
 import { AIChatMessage } from '../../components/generatePlan/AIChatMessage';
+import { AILoadingScreen } from '../../components/shared/AILoadingScreen';
 
 export const QuestionsStep: React.FC<QuestionsStepProps> = ({
   questions,
@@ -20,10 +21,21 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
   onPrevious,
   error,
   stepTitle,
+  username,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(currentQuestionIndex);
   const [localResponses, setLocalResponses] = useState(responses);
   const [showAnswerInterface, setShowAnswerInterface] = useState(false);
+  const [showAIIntro, setShowAIIntro] = useState(true); // Show AI intro when questions first load
+   
+  // Debug logging
+  console.log('🔍 QuestionsStep received:', {
+    questionsCount: questions?.length || 0,
+    questions: questions,
+    currentIndex,
+    totalQuestions,
+    isLoading,
+  });
   
   // Initialize answered questions based on existing responses
   const [answeredQuestions, setAnsweredQuestions] = useState(() => {
@@ -70,6 +82,15 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
   const handleTypingComplete = useCallback(() => {
     setShowAnswerInterface(true);
   }, []);
+
+  // Reset AI intro and current index when questions change
+  React.useEffect(() => {
+    if (questions.length > 0) {
+      setShowAIIntro(true);
+      // Reset to first question when questions array changes
+      setCurrentIndex(0);
+    }
+  }, [questions.length]);
 
   // Reset showAnswerInterface when question changes
   React.useEffect(() => {
@@ -136,17 +157,15 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
   }, [currentQuestion, localResponses]);
 
   if (isLoading) {
+    // Determine analysis phase based on step title
+    const analysisPhase = stepTitle?.includes('Initial') ? 'initial' : 
+                         stepTitle?.includes('Follow') ? 'followup' : null;
+    
     return (
-      <OnboardingCard
-        title=""
-        subtitle=""
-        scrollable={true}
-      >
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>AI is creating questions just for you...</Text>
-          <View style={styles.loadingSpinner} />
-        </View>
-      </OnboardingCard>
+      <AILoadingScreen 
+        username={username}
+        analysisPhase={analysisPhase}
+      />
     );
   }
 
@@ -161,6 +180,21 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
           <Text style={styles.errorText}>No questions available</Text>
         </View>
       </OnboardingCard>
+    );
+  }
+
+  // Show AI intro after questions are loaded, before showing questions
+  if (showAIIntro && questions.length > 0) {
+    const analysisPhase = stepTitle?.includes('Initial') ? 'initial' : 
+                         stepTitle?.includes('Follow') ? 'followup' : null;
+    
+    return (
+      <AILoadingScreen 
+        username={username}
+        analysisPhase={analysisPhase}
+        showContinueButton={true}
+        onContinue={() => setShowAIIntro(false)}
+      />
     );
   }
 
@@ -242,27 +276,6 @@ const styles = StyleSheet.create({
   },
   answerContainer: {
     marginBottom: 16,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: colors.muted,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  loadingSpinner: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 3,
-    borderColor: colors.primary,
-    borderTopColor: 'transparent',
-    // Add rotation animation here if needed
   },
   progressIndicator: {
     marginBottom: 12,

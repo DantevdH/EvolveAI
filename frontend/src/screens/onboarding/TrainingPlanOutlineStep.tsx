@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TextInput, TouchableOpacity, Text } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { TrainingPlanOutline, DailyWorkout } from '../../types/onboarding';
 import { OnboardingCard } from '../../components/onboarding/OnboardingCard';
 import { colors } from '../../constants/designSystem';
 import { IconSymbol } from '../../../components/ui/IconSymbol';
+import { AILoadingScreen } from '../../components/shared/AILoadingScreen';
 
 interface TrainingPlanOutlineStepProps {
   outline: TrainingPlanOutline | null;
@@ -14,6 +15,7 @@ interface TrainingPlanOutlineStepProps {
   onPrevious: () => void;
   isLoading: boolean;
   error?: string;
+  username?: string;
 }
 
 export const TrainingPlanOutlineStep: React.FC<TrainingPlanOutlineStepProps> = ({
@@ -24,9 +26,27 @@ export const TrainingPlanOutlineStep: React.FC<TrainingPlanOutlineStepProps> = (
   onPrevious,
   isLoading,
   error,
+  username,
 }) => {
   const [viewMode, setViewMode] = useState<'overview' | 'week'>('overview');
   const [currentWeekIndex, setCurrentWeekIndex] = useState(0);
+  const [showAIIntro, setShowAIIntro] = useState(true);
+
+  // Reset AI intro when outline loads
+  React.useEffect(() => {
+    if (outline) {
+      setShowAIIntro(true);
+    }
+  }, [outline]);
+
+  if (isLoading) {
+    return (
+      <AILoadingScreen 
+        username={username}
+        analysisPhase="outline"
+      />
+    );
+  }
 
   if (!outline) {
     return (
@@ -43,6 +63,18 @@ export const TrainingPlanOutlineStep: React.FC<TrainingPlanOutlineStepProps> = (
           </ThemedText>
         </View>
       </OnboardingCard>
+    );
+  }
+
+  // Show AI intro after outline is generated
+  if (showAIIntro && outline) {
+    return (
+      <AILoadingScreen 
+        username={username}
+        analysisPhase="outline"
+        showContinueButton={true}
+        onContinue={() => setShowAIIntro(false)}
+      />
     );
   }
 

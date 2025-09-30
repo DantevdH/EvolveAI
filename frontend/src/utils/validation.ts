@@ -1,157 +1,74 @@
 /**
- * Validation utilities for forms
+ * Validation utilities for onboarding data
  */
-
-export interface ValidationResult {
-  isValid: boolean;
-  errorMessage?: string;
-}
 
 /**
- * Validates email format
+ * Validates if a value is a properly formatted response string
  */
-export const validateEmail = (email: string): ValidationResult => {
-  if (!email.trim()) {
-    return {
-      isValid: false,
-      errorMessage: 'Email is required'
-    };
-  }
-
-  // Email regex pattern
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  
-  if (!emailRegex.test(email)) {
-    return {
-      isValid: false,
-      errorMessage: 'Please enter a valid email address'
-    };
-  }
-
-  return {
-    isValid: true
-  };
+export const isValidFormattedResponse = (response: any): response is string => {
+  return typeof response === 'string' && 
+         response.length > 0 && 
+         response.includes('Q:') && 
+         response.includes('A:');
 };
 
 /**
- * Validates password strength
- * Requirements: At least 8 characters, 1 uppercase, 1 lowercase, 1 special character
+ * Validates if a value is a valid plan outline object
  */
-export const validatePassword = (password: string): ValidationResult => {
-  if (!password) {
-    return {
-      isValid: false,
-      errorMessage: 'Password is required'
-    };
-  }
-
-  if (password.length < 8) {
-    return {
-      isValid: false,
-      errorMessage: 'Password must be at least 8 characters long'
-    };
-  }
-
-  // Check for at least one uppercase letter
-  if (!/[A-Z]/.test(password)) {
-    return {
-      isValid: false,
-      errorMessage: 'Password must contain at least one uppercase letter'
-    };
-  }
-
-  // Check for at least one lowercase letter
-  if (!/[a-z]/.test(password)) {
-    return {
-      isValid: false,
-      errorMessage: 'Password must contain at least one lowercase letter'
-    };
-  }
-
-  // Check for at least one special character
-  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
-    return {
-      isValid: false,
-      errorMessage: 'Password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)'
-    };
-  }
-
-  return {
-    isValid: true
-  };
+export const isValidPlanOutline = (outline: any): outline is object => {
+  return typeof outline === 'object' && 
+         outline !== null && 
+         !Array.isArray(outline) &&
+         (outline.weekly_schedule || outline.focus_areas || outline.progression);
 };
 
 /**
- * Validates password confirmation
+ * Validates if a value is a valid user profile for onboarding
  */
-export const validatePasswordConfirmation = (password: string, confirmPassword: string): ValidationResult => {
-  if (!confirmPassword) {
-    return {
-      isValid: false,
-      errorMessage: 'Please confirm your password'
-    };
-  }
-
-  if (password !== confirmPassword) {
-    return {
-      isValid: false,
-      errorMessage: 'Passwords do not match'
-    };
-  }
-
-  return {
-    isValid: true
-  };
+export const isValidUserProfile = (profile: any): boolean => {
+  return profile && 
+         typeof profile === 'object' &&
+         typeof profile.username === 'string' &&
+         typeof profile.age === 'number' &&
+         typeof profile.weight === 'number' &&
+         typeof profile.height === 'number';
 };
 
 /**
- * Validates login form
+ * Validates if a value is a valid workout plan
  */
-export const validateLoginForm = (email: string, password: string): ValidationResult => {
-  const emailValidation = validateEmail(email);
-  if (!emailValidation.isValid) {
-    return emailValidation;
-  }
-
-  if (!password.trim()) {
-    return {
-      isValid: false,
-      errorMessage: 'Password is required'
-    };
-  }
-
-  return {
-    isValid: true
-  };
+export const isValidWorkoutPlan = (plan: any): boolean => {
+  return plan && 
+         typeof plan === 'object' &&
+         (plan.weekly_schedules || plan.workout_plan_id);
 };
 
 /**
- * Validates signup form
+ * Cleans and validates user profile data for resume flow
  */
-export const validateSignupForm = (email: string, password: string, confirmPassword: string): ValidationResult => {
-  const emailValidation = validateEmail(email);
-  if (!emailValidation.isValid) {
-    return emailValidation;
-  }
-
-  const passwordValidation = validatePassword(password);
-  if (!passwordValidation.isValid) {
-    return passwordValidation;
-  }
-
-  const confirmPasswordValidation = validatePasswordConfirmation(password, confirmPassword);
-  if (!confirmPasswordValidation.isValid) {
-    return confirmPasswordValidation;
+export const cleanUserProfileForResume = (profile: any) => {
+  if (!isValidUserProfile(profile)) {
+    console.warn('Invalid user profile detected, using defaults');
+    return null;
   }
 
   return {
-    isValid: true
+    username: profile.username || '',
+    age: profile.age || 25,
+    weight: profile.weight || 70,
+    height: profile.height || 175,
+    weight_unit: profile.weight_unit || 'kg',
+    height_unit: profile.height_unit || 'cm',
+    measurement_system: profile.weight_unit === 'lbs' ? 'imperial' : 'metric',
+    gender: profile.gender || 'male',
+    goal_description: profile.goal_description || profile.primaryGoalDescription || '',
+    experience_level: profile.experience_level || 'novice',
+    initial_questions: profile.initial_questions || null,
+    follow_up_questions: profile.follow_up_questions || null,
+    initial_responses: profile.initial_responses || null,
+    follow_up_responses: profile.follow_up_responses || null,
+    plan_outline: isValidPlanOutline(profile.plan_outline) 
+      ? profile.plan_outline 
+      : null,
   };
-};
-
-/**
- * Validates forgot password form
- */
-export const validateForgotPasswordForm = (email: string): ValidationResult => {
-  return validateEmail(email);
 };

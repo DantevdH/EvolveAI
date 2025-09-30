@@ -12,6 +12,7 @@ import {
 
 export class FitnessService {
   private static readonly BASE_URL = '/api/fitness';
+  private static readonly BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
 
   /**
    * Test if backend is accessible
@@ -19,7 +20,7 @@ export class FitnessService {
   static async testBackendConnection(): Promise<boolean> {
     try {
       console.log('🔍 Testing backend connection...');
-      const response = await fetch('http://127.0.0.1:8000/docs', {
+      const response = await fetch(`${this.BACKEND_URL}/docs`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -112,20 +113,20 @@ export class FitnessService {
    */
   static async getFollowUpQuestions(
     personalInfo: PersonalInfo,
-    initialResponses: Record<string, any>,
-    initialQuestions?: AIQuestion[],
+    initialResponses: Record<string, any>,  // Raw responses from frontend
+    initialQuestions: AIQuestion[],  // Initial questions from frontend
     userProfileId?: number,
     jwtToken?: string
   ): Promise<AIQuestionResponse> {
     try {
       console.log('🚀 Starting follow-up questions request...');
       console.log('📋 Personal info:', JSON.stringify(personalInfo, null, 2));
-      console.log('📋 Initial responses:', JSON.stringify(initialResponses, null, 2));
+      console.log('📋 Initial responses:', initialResponses);
       
       const request: FollowUpQuestionsRequest = {
         personal_info: personalInfo,
-        initial_responses: initialResponses,
-        initial_questions: initialQuestions,
+        initial_responses: initialResponses,  // Send raw responses
+        initial_questions: initialQuestions,  // Send initial questions
         user_profile_id: userProfileId?.toString(),
         jwt_token: jwtToken,
       };
@@ -189,10 +190,10 @@ export class FitnessService {
    */
   static async generateTrainingPlanOutline(
     personalInfo: PersonalInfo,
-    initialResponses: Record<string, any>,
-    followUpResponses: Record<string, any>,
-    initialQuestions: AIQuestion[],
-    followUpQuestions: AIQuestion[],
+    initialResponses: Record<string, any>,  // Raw responses from frontend
+    followUpResponses: Record<string, any>,  // Raw responses from frontend
+    initialQuestions: AIQuestion[],  // Initial questions from frontend
+    followUpQuestions: AIQuestion[],  // Follow-up questions from frontend
     jwtToken?: string
   ): Promise<{ success: boolean; data?: any; message?: string }> {
     try {
@@ -200,10 +201,10 @@ export class FitnessService {
 
       const request: TrainingPlanOutlineRequest = {
         personal_info: personalInfo,
-        initial_responses: initialResponses,
-        follow_up_responses: followUpResponses,
-        initial_questions: initialQuestions,
-        follow_up_questions: followUpQuestions,
+        initial_responses: initialResponses,  // Send raw responses
+        follow_up_responses: followUpResponses,  // Send raw responses
+        initial_questions: initialQuestions,  // Send initial questions
+        follow_up_questions: followUpQuestions,  // Send follow-up questions
         jwt_token: jwtToken || '',
       };
 
@@ -265,21 +266,25 @@ export class FitnessService {
    */
   static async generateWorkoutPlan(
     personalInfo: PersonalInfo,
-    initialResponses: Record<string, any>,
-    followUpResponses: Record<string, any>,
-    initialQuestions?: AIQuestion[],
-    followUpQuestions?: AIQuestion[],
-    jwtToken?: string,
-    outlineFeedback?: string
+    initialResponses: Record<string, any>,  // Raw responses from frontend
+    followUpResponses: Record<string, any>,  // Raw responses from frontend
+    planOutline?: any,
+    planOutlineFeedback?: string,  // User feedback on plan outline
+    initialQuestions: AIQuestion[],  // Initial questions from frontend
+    followUpQuestions: AIQuestion[],  // Follow-up questions from frontend
+    userProfileId?: number,
+    jwtToken?: string
   ): Promise<any> {
     try {
       const request: PlanGenerationRequest = {
         personal_info: personalInfo,
-        initial_responses: initialResponses,
-        follow_up_responses: followUpResponses,
-        initial_questions: initialQuestions,
-        follow_up_questions: followUpQuestions,
-        outline_feedback: outlineFeedback,
+        initial_responses: initialResponses,  // Send raw responses
+        follow_up_responses: followUpResponses,  // Send raw responses
+        plan_outline: planOutline,
+        plan_outline_feedback: planOutlineFeedback,  // Send user feedback separately
+        initial_questions: initialQuestions,  // Send initial questions
+        follow_up_questions: followUpQuestions,  // Send follow-up questions
+        user_profile_id: userProfileId,
         jwt_token: jwtToken,
       };
 
