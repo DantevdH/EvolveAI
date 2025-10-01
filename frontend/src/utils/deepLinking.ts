@@ -13,7 +13,7 @@ export const DOMAIN = 'evolveai.app';
 export const DEEP_LINK_PATTERNS = {
   EMAIL_VERIFICATION: `${URL_SCHEME}://auth/verify-email`,
   PASSWORD_RESET: `${URL_SCHEME}://auth/reset-password`,
-  WORKOUT: `${URL_SCHEME}://workout`,
+  WORKOUT: `${URL_SCHEME}://training`,
   PROFILE: `${URL_SCHEME}://profile`,
   ONBOARDING: `${URL_SCHEME}://onboarding`,
 } as const;
@@ -64,8 +64,8 @@ export const handleDeepLink = (url: string) => {
     case 'auth':
       handleAuthDeepLink(path, queryParams);
       break;
-    case 'workout':
-      handleWorkoutDeepLink(path, queryParams);
+    case 'training':
+      handleTrainingDeepLink(path, queryParams);
       break;
     case 'profile':
       handleProfileDeepLink(path, queryParams);
@@ -99,17 +99,17 @@ const handleAuthDeepLink = (path: string | null, queryParams: any) => {
 };
 
 /**
- * Handle workout deep links
+ * Handle training deep links
  */
-const handleWorkoutDeepLink = (path: string | null, queryParams: any) => {
+const handleTrainingDeepLink = (path: string | null, queryParams: any) => {
   switch (path) {
     case '/':
       if (queryParams?.id) {
-        DeepLinkHandlers.handleWorkout(queryParams.id);
+        DeepLinkHandlers.handleTraining(queryParams.id);
       }
       break;
     default:
-      console.warn('Unknown workout deep link path:', path);
+      console.warn('Unknown training deep link path:', path);
   }
 };
 
@@ -162,10 +162,10 @@ export const generatePasswordResetLink = (token: string): string => {
 };
 
 /**
- * Generate workout link
+ * Generate training link
  */
-export const generateWorkoutLink = (workoutId: string): string => {
-  return generateDeepLink('workout', '/', { id: workoutId });
+export const generateTrainingLink = (trainingId: string): string => {
+  return generateDeepLink('training', '/', { id: trainingId });
 };
 
 /**

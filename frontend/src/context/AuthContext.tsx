@@ -2,7 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, useCallback, R
 import { AuthService, AuthState } from '@/src/services/authService';
 import { UserService } from '@/src/services/userService';
 import { UserProfile } from '@/src/types';
-import { WorkoutPlan } from '@/src/types/training';
+import { TrainingPlan } from '@/src/types/training';
 import { supabase } from '@/src/config/supabase';
 import { NotificationService } from '@/src/services/NotificationService';
 
@@ -10,9 +10,9 @@ import { NotificationService } from '@/src/services/NotificationService';
 interface SimpleAuthState {
   user: any | null;
   userProfile: UserProfile | null;
-  workoutPlan: WorkoutPlan | null;
+  trainingPlan: TrainingPlan | null;
   isLoading: boolean;
-  workoutPlanLoading: boolean;
+  trainingPlanLoading: boolean;
   error: string | null;
   isInitialized: boolean;
 }
@@ -23,7 +23,7 @@ type SimpleAuthAction =
   | { type: 'SET_WORKOUT_PLAN_LOADING'; payload: boolean }
   | { type: 'SET_USER'; payload: any | null }
   | { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
-  | { type: 'SET_WORKOUT_PLAN'; payload: WorkoutPlan | null }
+  | { type: 'SET_WORKOUT_PLAN'; payload: TrainingPlan | null }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_INITIALIZED'; payload: boolean }
   | { type: 'CLEAR_AUTH' };
@@ -32,9 +32,9 @@ type SimpleAuthAction =
 const initialState: SimpleAuthState = {
   user: null,
   userProfile: null,
-  workoutPlan: null,
+  trainingPlan: null,
   isLoading: false,
-  workoutPlanLoading: false,
+  trainingPlanLoading: false,
   error: null,
   isInitialized: false,
 };
@@ -50,7 +50,7 @@ const authReducer = (state: SimpleAuthState, action: SimpleAuthAction): SimpleAu
     case 'SET_WORKOUT_PLAN_LOADING':
       return {
         ...state,
-        workoutPlanLoading: action.payload,
+        trainingPlanLoading: action.payload,
       };
     case 'SET_USER':
       return {
@@ -65,7 +65,7 @@ const authReducer = (state: SimpleAuthState, action: SimpleAuthAction): SimpleAu
     case 'SET_WORKOUT_PLAN':
       return {
         ...state,
-        workoutPlan: action.payload,
+        trainingPlan: action.payload,
       };
     case 'SET_ERROR':
       return {
@@ -108,10 +108,10 @@ interface AuthContextType {
   refreshUserProfile: () => Promise<void>;
   dispatch: (action: SimpleAuthAction) => void;
   
-  // Workout plan methods
-  // generateWorkoutPlan: () => Promise<boolean>; // REMOVED: Use GeneratePlanScreen instead
-  refreshWorkoutPlan: () => Promise<void>;
-  setWorkoutPlan: (workoutPlan: WorkoutPlan) => void;
+  // Training plan methods
+  // generateTrainingPlan: () => Promise<boolean>; // REMOVED: Use GeneratePlanScreen instead
+  refreshTrainingPlan: () => Promise<void>;
+  setTrainingPlan: (trainingPlan: TrainingPlan) => void;
   
   // Utility methods
   clearError: () => void;
@@ -149,35 +149,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('✅ User profile loaded');
         dispatch({ type: 'SET_USER_PROFILE', payload: response.data || null });
         
-        // Load workout plan if user profile exists
+        // Load training plan if user profile exists
         if (response.data) {
           try {
-            console.log('💪 Loading workout plan...');
+            console.log('💪 Loading training plan...');
             dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: true });
             
             const { TrainingService } = await import('../services/trainingService');
-            const workoutResult = await TrainingService.getWorkoutPlan(response.data.id!);
+            const trainingResult = await TrainingService.getTrainingPlan(response.data.id!);
             
-            if (workoutResult.success) {
-              console.log('✅ Workout plan loaded');
+            if (trainingResult.success) {
+              console.log('✅ Training plan loaded');
             } else {
-              console.log('ℹ️ No workout plan found');
+              console.log('ℹ️ No training plan found');
             }
             
-            const workoutPlan = workoutResult.success ? workoutResult.data || null : null;
-            dispatch({ type: 'SET_WORKOUT_PLAN', payload: workoutPlan });
+            const trainingPlan = trainingResult.success ? trainingResult.data || null : null;
+            dispatch({ type: 'SET_WORKOUT_PLAN', payload: trainingPlan });
             
-            // Schedule workout reminder if workout plan exists
-            if (workoutPlan) {
+            // Schedule training reminder if training plan exists
+            if (trainingPlan) {
               try {
-                await NotificationService.scheduleWorkoutReminder(workoutPlan);
-                console.log('🔔 Workout reminder scheduled');
+                await NotificationService.scheduleTrainingReminder(trainingPlan);
+                console.log('🔔 Training reminder scheduled');
               } catch (notificationError) {
-                console.log('⚠️ Failed to schedule workout reminder:', notificationError);
+                console.log('⚠️ Failed to schedule training reminder:', notificationError);
               }
             }
-          } catch (workoutError) {
-            console.error('❌ Error loading workout plan:', workoutError instanceof Error ? workoutError.message : String(workoutError));
+          } catch (trainingError) {
+            console.error('❌ Error loading training plan:', trainingError instanceof Error ? trainingError.message : String(trainingError));
             dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
           } finally {
             dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: false });
@@ -543,12 +543,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   };
 
-  // Generate workout plan
-  // REMOVED: generateWorkoutPlan function
+  // Generate training plan
+  // REMOVED: generateTrainingPlan function
   // This has been replaced by GeneratePlanScreen.handleGeneratePlan() which uses the backend flow
 
-  // Refresh workout plan
-  const refreshWorkoutPlan = async (): Promise<void> => {
+  // Refresh training plan
+  const refreshTrainingPlan = async (): Promise<void> => {
     try {
       if (!state.userProfile) {
         return;
@@ -556,47 +556,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: true });
 
-      // Import WorkoutService dynamically to avoid circular dependencies
+      // Import TrainingService dynamically to avoid circular dependencies
       const { TrainingService } = await import('../services/trainingService');
       
-      const result = await TrainingService.getWorkoutPlan(state.userProfile.id!);
+      const result = await TrainingService.getTrainingPlan(state.userProfile.id!);
       
       if (result.success && result.data) {
         dispatch({ type: 'SET_WORKOUT_PLAN', payload: result.data });
         
-        // Schedule workout reminder for the new workout plan
+        // Schedule training reminder for the new training plan
         try {
-          await NotificationService.scheduleWorkoutReminder(result.data);
-          console.log('🔔 Workout reminder scheduled for new plan');
+          await NotificationService.scheduleTrainingReminder(result.data);
+          console.log('🔔 Training reminder scheduled for new plan');
         } catch (notificationError) {
-          console.log('⚠️ Failed to schedule workout reminder:', notificationError);
+          console.log('⚠️ Failed to schedule training reminder:', notificationError);
         }
 
       } else {
-        // No workout plan found, clear it
+        // No training plan found, clear it
         dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
         
-        // Cancel any existing workout reminders
+        // Cancel any existing training reminders
         try {
-          await NotificationService.cancelWorkoutReminder();
-          console.log('🔔 Workout reminder cancelled (no plan)');
+          await NotificationService.cancelTrainingReminder();
+          console.log('🔔 Training reminder cancelled (no plan)');
         } catch (notificationError) {
-          console.log('⚠️ Failed to cancel workout reminder:', notificationError);
+          console.log('⚠️ Failed to cancel training reminder:', notificationError);
         }
       }
       
       dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: false });
     } catch (error) {
-      console.error('Failed to refresh workout plan:', error);
+      console.error('Failed to refresh training plan:', error);
       dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: false });
       throw error;
     }
   };
 
-  // Set workout plan directly (for use after generation)
-  const setWorkoutPlan = (workoutPlan: WorkoutPlan): void => {
-    console.log('💪 Workout plan set');
-    dispatch({ type: 'SET_WORKOUT_PLAN', payload: workoutPlan });
+  // Set training plan directly (for use after generation)
+  const setTrainingPlan = (trainingPlan: TrainingPlan): void => {
+    console.log('💪 Training plan set');
+    dispatch({ type: 'SET_WORKOUT_PLAN', payload: trainingPlan });
   };
 
 
@@ -615,9 +615,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     updateUserProfile,
     refreshUserProfile,
     dispatch,
-    // generateWorkoutPlan, // REMOVED: Use GeneratePlanScreen instead
-    refreshWorkoutPlan,
-    setWorkoutPlan,
+    // generateTrainingPlan, // REMOVED: Use GeneratePlanScreen instead
+    refreshTrainingPlan,
+    setTrainingPlan,
     clearError,
     checkAuthState,
     getCurrentUser,

@@ -1,5 +1,5 @@
 /**
- * Recent Activity Component - Shows recent workout history
+ * Recent Activity Component - Shows recent training history
  */
 
 import React from 'react';
@@ -9,7 +9,7 @@ import { colors } from '../../constants/colors';
 
 interface ActivityItem {
   id: string;
-  type: 'workout' | 'rest' | 'achievement';
+  type: 'training' | 'rest' | 'achievement';
   title: string;
   subtitle: string;
   date: string;
@@ -38,9 +38,9 @@ export const RecentActivity: React.FC<RecentActivityProps> = ({
           ))
         ) : (
           <View style={styles.emptyState}>
-            <Ionicons name="fitness" size={32} color={colors.muted} />
-            <Text style={styles.emptyText}>No completed workouts yet</Text>
-            <Text style={styles.emptySubtext}>Complete your first workout to see it here!</Text>
+            <Ionicons name="training" size={32} color={colors.muted} />
+            <Text style={styles.emptyText}>No completed trainings yet</Text>
+            <Text style={styles.emptySubtext}>Complete your first training to see it here!</Text>
           </View>
         )}
       </View>
@@ -55,8 +55,8 @@ interface ActivityItemProps {
 const ActivityItem: React.FC<ActivityItemProps> = ({ activity }) => {
   const getActivityIcon = () => {
     switch (activity.type) {
-      case 'workout':
-        return 'fitness';
+      case 'training':
+        return 'training';
       case 'rest':
         return 'moon';
       case 'achievement':
@@ -68,7 +68,7 @@ const ActivityItem: React.FC<ActivityItemProps> = ({ activity }) => {
 
   const getActivityColor = () => {
     switch (activity.type) {
-      case 'workout':
+      case 'training':
         return colors.primary;
       case 'rest':
         return colors.secondary;

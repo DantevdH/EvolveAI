@@ -5,7 +5,7 @@ import { supabase } from '../config/supabase';
 import { 
   ExerciseAnalyticsEngine, 
   ExerciseInsights, 
-  WorkoutHistory 
+  TrainingHistory 
 } from './exerciseAnalyticsEngine';
 
 export { ExerciseInsights } from './exerciseAnalyticsEngine';
@@ -16,7 +16,7 @@ export interface ExerciseInsightsResponse {
   error?: string;
 }
 
-export interface RawWorkoutData {
+export interface RawTrainingData {
   date: string;
   volume: number;
   maxWeight: number;
@@ -44,14 +44,14 @@ export class ExerciseInsightsService {
         return { success: true, data: cached.data };
       }
 
-      // Fetch raw workout data
-      const rawData = await this.fetchWorkoutHistory(exerciseId, userProfileId);
+      // Fetch raw training data
+      const rawData = await this.fetchTrainingHistory(exerciseId, userProfileId);
       if (!rawData.success || !rawData.data) {
-        return { success: false, error: rawData.error || 'Failed to fetch workout data' };
+        return { success: false, error: rawData.error || 'Failed to fetch training data' };
       }
 
       // Process data into structured format
-      const processedHistory = ExerciseAnalyticsEngine.processWorkoutHistory(rawData.data);
+      const processedHistory = ExerciseAnalyticsEngine.processTrainingHistory(rawData.data);
 
       // Generate comprehensive insights
       const insights = ExerciseAnalyticsEngine.generateInsights(processedHistory);
@@ -71,56 +71,56 @@ export class ExerciseInsightsService {
   }
 
   /**
-   * Fetch workout history from Supabase
+   * Fetch training history from Supabase
    */
-  private static async fetchWorkoutHistory(
+  private static async fetchTrainingHistory(
     exerciseId: number, 
     userProfileId: number
-  ): Promise<{ success: boolean; data?: RawWorkoutData[]; error?: string }> {
+  ): Promise<{ success: boolean; data?: RawTrainingData[]; error?: string }> {
     try {
-      // Get all COMPLETED workout exercises for this specific exercise and user
-      // First, get the workout exercises
-      const { data: workoutExercises, error: exercisesError } = await supabase
-        .from('workout_exercises')
+      // Get all COMPLETED training exercises for this specific exercise and user
+      // First, get the training exercises
+      const { data: trainingExercises, error: exercisesError } = await supabase
+        .from('training_exercises')
         .select('*')
         .eq('exercise_id', exerciseId)
         .eq('completed', true)
         .order('updated_at', { ascending: false });
 
       if (exercisesError) {
-        console.error('Error fetching workout exercises:', exercisesError);
+        console.error('Error fetching training exercises:', exercisesError);
         return { success: false, error: exercisesError.message };
       }
 
-      if (!workoutExercises || workoutExercises.length === 0) {
+      if (!trainingExercises || trainingExercises.length === 0) {
         return { success: true, data: [] };
       }
 
-      // Get the daily workout IDs
-      const dailyWorkoutIds = [...new Set(workoutExercises.map(we => we.daily_workout_id))];
+      // Get the daily training IDs
+      const dailyTrainingIds = [...new Set(trainingExercises.map(we => we.daily_training_id))];
       
-      // Get daily workouts with their related data
-      const { data: dailyWorkouts, error: dailyError } = await supabase
-        .from('daily_workouts')
+      // Get daily trainings with their related data
+      const { data: dailyTrainings, error: dailyError } = await supabase
+        .from('daily_trainings')
         .select(`
           *,
           weekly_schedules!inner(
-            workout_plans!inner(
+            training_plans!inner(
               user_profile_id
             )
           )
         `)
-        .in('id', dailyWorkoutIds)
-        .eq('weekly_schedules.workout_plans.user_profile_id', userProfileId);
+        .in('id', dailyTrainingIds)
+        .eq('weekly_schedules.training_plans.user_profile_id', userProfileId);
 
       if (dailyError) {
-        console.error('Error fetching daily workouts:', dailyError);
+        console.error('Error fetching daily trainings:', dailyError);
         return { success: false, error: dailyError.message };
       }
 
-      // Filter workout exercises to only include those from valid daily workouts
-      const validDailyWorkoutIds = new Set(dailyWorkouts?.map(dw => dw.id) || []);
-      const data = workoutExercises.filter(we => validDailyWorkoutIds.has(we.daily_workout_id));
+      // Filter training exercises to only include those from valid daily trainings
+      const validDailyTrainingIds = new Set(dailyTrainings?.map(dw => dw.id) || []);
+      const data = trainingExercises.filter(we => validDailyTrainingIds.has(we.daily_training_id));
 
       if (!data || data.length === 0) {
         return { 
@@ -130,10 +130,10 @@ export class ExerciseInsightsService {
       }
 
       // Process the raw data
-      const processedData: RawWorkoutData[] = data.map((workoutExercise) => {
-        const date = new Date(workoutExercise.updated_at).toISOString().split('T')[0];
-        const weights = Array.isArray(workoutExercise.weight) ? workoutExercise.weight : [];
-        const reps = Array.isArray(workoutExercise.reps) ? workoutExercise.reps : [];
+      const processedData: RawTrainingData[] = data.map((trainingExercise) => {
+        const date = new Date(trainingExercise.updated_at).toISOString().split('T')[0];
+        const weights = Array.isArray(trainingExercise.weight) ? trainingExercise.weight : [];
+        const reps = Array.isArray(trainingExercise.reps) ? trainingExercise.reps : [];
         
         // Calculate volume (total reps × total weight)
         let volume = 0;
@@ -148,7 +148,7 @@ export class ExerciseInsightsService {
         
         return {
           date,
-          sets: workoutExercise.sets || 0,
+          sets: trainingExercise.sets || 0,
           reps,
           weights,
           volume,
@@ -159,7 +159,7 @@ export class ExerciseInsightsService {
       return { success: true, data: processedData };
 
     } catch (error) {
-      console.error('Error processing workout history:', error);
+      console.error('Error processing training history:', error);
       return { 
         success: false, 
         error: error instanceof Error ? error.message : 'Unknown error occurred' 
@@ -193,9 +193,9 @@ export class ExerciseInsightsService {
       const data = insights.data;
       
       // Generate quick summary
-      const keyInsight = data.keyInsights[0] || 'Start tracking your workouts for insights';
+      const keyInsight = data.keyInsights[0] || 'Start tracking your trainings for insights';
       const trend = data.volumeTrend.trend;
-      const nextRecommendation = data.recommendations.nextWorkout.reasoning || 'Continue current approach';
+      const nextRecommendation = data.recommendations.nextTraining.reasoning || 'Continue current approach';
 
       return {
         success: true,

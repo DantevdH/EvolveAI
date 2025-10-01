@@ -105,7 +105,7 @@ export interface Database {
           updated_at?: string;
         };
       };
-      workout_plans: {
+      training_plans: {
         Row: {
           id: number;
           user_profile_id: number;
@@ -134,27 +134,27 @@ export interface Database {
       weekly_schedules: {
         Row: {
           id: number;
-          workout_plan_id: number;
+          training_plan_id: number;
           week_number: number;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: number;
-          workout_plan_id: number;
+          training_plan_id: number;
           week_number: number;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: number;
-          workout_plan_id?: number;
+          training_plan_id?: number;
           week_number?: number;
           created_at?: string;
           updated_at?: string;
         };
       };
-      daily_workouts: {
+      daily_trainings: {
         Row: {
           id: number;
           weekly_schedule_id: number;
@@ -180,10 +180,10 @@ export interface Database {
           updated_at?: string;
         };
       };
-      workout_exercises: {
+      training_exercises: {
         Row: {
           id: number;
-          daily_workout_id: number;
+          daily_training_id: number;
           exercise_id: number;
           sets: number;
           reps: number[];
@@ -195,7 +195,7 @@ export interface Database {
         };
         Insert: {
           id?: number;
-          daily_workout_id: number;
+          daily_training_id: number;
           exercise_id: number;
           sets: number;
           reps: number[];
@@ -207,7 +207,7 @@ export interface Database {
         };
         Update: {
           id?: number;
-          daily_workout_id?: number;
+          daily_training_id?: number;
           exercise_id?: number;
           sets?: number;
           reps?: number[];

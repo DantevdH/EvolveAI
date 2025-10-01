@@ -18,7 +18,7 @@ export const useAppRouting = (): AppRoutingState => {
 
   return useMemo(() => {
     // If we're loading, don't navigate at all - stay on current page
-    if (state.isLoading || state.workoutPlanLoading) {
+    if (state.isLoading || state.trainingPlanLoading) {
       return {
         targetRoute: null,
         isLoading: true,
@@ -73,7 +73,7 @@ export const useAppRouting = (): AppRoutingState => {
     const hasFollowUpQuestions = !!state.userProfile.follow_up_questions;
     const hasFollowUpResponses = !!state.userProfile.follow_up_responses;
     const hasPlanOutline = !!state.userProfile.plan_outline;
-    const hasWorkoutPlan = !!state.workoutPlan;
+    const hasTrainingPlan = !!state.trainingPlan;
 
     console.log('🔍 Checking onboarding progress:', {
       hasInitialQuestions,
@@ -81,7 +81,7 @@ export const useAppRouting = (): AppRoutingState => {
       hasFollowUpQuestions,
       hasFollowUpResponses,
       hasPlanOutline,
-      hasWorkoutPlan,
+      hasTrainingPlan,
     });
 
     // Granular routing based on what's missing
@@ -112,12 +112,12 @@ export const useAppRouting = (): AppRoutingState => {
       };
     }
 
-    if (!hasWorkoutPlan) {
+    if (!hasTrainingPlan) {
       return {
         targetRoute: '/generate-plan',
         isLoading: false,
         hasError: false,
-        routingReason: 'Missing workout plan → /generate-plan'
+        routingReason: 'Missing training plan → /generate-plan'
       };
     }
 
@@ -130,10 +130,10 @@ export const useAppRouting = (): AppRoutingState => {
     };
   }, [
     state.isLoading,
-    state.workoutPlanLoading,
+    state.trainingPlanLoading,
     state.user,
     state.userProfile,
-    state.workoutPlan,
+    state.trainingPlan,
     state.error
   ]);
 };

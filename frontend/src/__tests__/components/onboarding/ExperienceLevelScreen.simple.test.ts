@@ -95,8 +95,8 @@ describe('ExperienceLevelScreen Component - Simple Tests', () => {
 
     it('should have proper experience level descriptions', () => {
       const levelDescriptions = {
-        beginner: 'New to fitness or returning after a long break',
-        intermediate: 'Some experience with regular workouts',
+        beginner: 'New to training or returning after a long break',
+        intermediate: 'Some experience with regular trainings',
         advanced: 'Experienced with various training methods'
       };
 

@@ -12,7 +12,7 @@ export interface Exercise {
   completed: boolean;
 }
 
-export interface TodaysWorkout {
+export interface TodaysTraining {
   id: string;
   name: string;
   isRestDay: boolean;
@@ -24,16 +24,16 @@ export interface RecentActivity {
   title: string;
   subtitle: string;
   date: string;
-  type: 'workout';
+  type: 'training';
   duration: string;
   calories: number;
 }
 
 export interface HomeData {
   streak: number;
-  weeklyWorkouts: number;
+  weeklyTrainings: number;
   goalProgress: number;
-  todaysWorkout: TodaysWorkout | null;
+  todaysTraining: TodaysTraining | null;
   recentActivity: RecentActivity[];
   isLoading: boolean;
   error: string | null;
@@ -43,9 +43,9 @@ export const useHomeData = (): HomeData => {
   const { state: authState } = useAuth();
   const [data, setData] = useState<HomeData>({
     streak: 0,
-    weeklyWorkouts: 0,
+    weeklyTrainings: 0,
     goalProgress: 0,
-    todaysWorkout: null,
+    todaysTraining: null,
     recentActivity: [],
     isLoading: true,
     error: null,
@@ -63,23 +63,23 @@ export const useHomeData = (): HomeData => {
       // Fetch all data in parallel
       const [
         streakResult,
-        weeklyWorkoutsResult,
+        weeklyTrainingsResult,
         goalProgressResult,
-        todaysWorkoutResult,
+        todaysTrainingResult,
         recentActivityResult,
       ] = await Promise.all([
-        TrainingService.getWorkoutStreak(authState.userProfile.id),
-        TrainingService.getWeeklyWorkoutCount(authState.userProfile.id),
+        TrainingService.getTrainingStreak(authState.userProfile.id),
+        TrainingService.getWeeklyTrainingCount(authState.userProfile.id),
         TrainingService.getGoalProgress(authState.userProfile.id),
-        TrainingService.getTodaysWorkout(authState.userProfile.id),
+        TrainingService.getTodaysTraining(authState.userProfile.id),
         TrainingService.getRecentActivity(authState.userProfile.id),
       ]);
 
       const homeData = {
         streak: streakResult.success ? streakResult.data || 0 : 0,
-        weeklyWorkouts: weeklyWorkoutsResult.success ? weeklyWorkoutsResult.data || 0 : 0,
+        weeklyTrainings: weeklyTrainingsResult.success ? weeklyTrainingsResult.data || 0 : 0,
         goalProgress: goalProgressResult.success ? goalProgressResult.data || 0 : 0,
-        todaysWorkout: todaysWorkoutResult.success ? todaysWorkoutResult.data : null,
+        todaysTraining: todaysTrainingResult.success ? todaysTrainingResult.data : null,
         recentActivity: recentActivityResult.success ? recentActivityResult.data || [] : [],
         isLoading: false,
         error: null,
@@ -101,39 +101,39 @@ export const useHomeData = (): HomeData => {
     fetchHomeData();
   }, [fetchHomeData]);
 
-  // Hybrid approach: Use local workout plan data when available for immediate updates
+  // Hybrid approach: Use local training plan data when available for immediate updates
   const hybridData = useMemo(() => {
-    if (!authState.workoutPlan || !authState.userProfile) {
+    if (!authState.trainingPlan || !authState.userProfile) {
       return data; // Use service data when no local data
     }
 
-    // Validate workout plan structure before processing
-    const workoutPlan = authState.workoutPlan;
+    // Validate training plan structure before processing
+    const trainingPlan = authState.trainingPlan;
     
-    if (!workoutPlan || !workoutPlan.weeklySchedules || !Array.isArray(workoutPlan.weeklySchedules)) {
-      console.warn('⚠️ Invalid workout plan structure, using service data');
+    if (!trainingPlan || !trainingPlan.weeklySchedules || !Array.isArray(trainingPlan.weeklySchedules)) {
+      console.warn('⚠️ Invalid training plan structure, using service data');
       return data;
     }
     
     // Calculate streak from local data
     let streak = 0;
-    const allDailyWorkouts: any[] = [];
+    const allDailyTrainings: any[] = [];
     const currentDate = new Date();
     const todayName = currentDate.toLocaleDateString('en-US', { weekday: 'long' });
     const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const todayIndex = dayOrder.indexOf(todayName);
     
-    workoutPlan.weeklySchedules.forEach(week => {
+    trainingPlan.weeklySchedules.forEach(week => {
       // Validate week structure
-      if (!week || !week.dailyWorkouts || !Array.isArray(week.dailyWorkouts)) {
+      if (!week || !week.dailyTrainings || !Array.isArray(week.dailyTrainings)) {
         console.warn('⚠️ Invalid week structure, skipping week');
         return;
       }
       
-      week.dailyWorkouts.forEach(daily => {
-        // Validate daily workout structure
+      week.dailyTrainings.forEach(daily => {
+        // Validate daily training structure
         if (!daily || typeof daily.isRestDay !== 'boolean') {
-          console.warn('⚠️ Invalid daily workout structure, skipping');
+          console.warn('⚠️ Invalid daily training structure, skipping');
           return;
         }
         
@@ -141,12 +141,12 @@ export const useHomeData = (): HomeData => {
           const isCompleted = daily.exercises && Array.isArray(daily.exercises) && 
                              daily.exercises.length > 0 && daily.exercises.every(ex => ex.completed);
           const dayIndex = dayOrder.indexOf(daily.dayOfWeek);
-          const isPastOrToday = dayIndex <= todayIndex; // Only include past and today's workouts
+          const isPastOrToday = dayIndex <= todayIndex; // Only include past and today's trainings
           
 
-          // Only include past and today's workouts in streak calculation
+          // Only include past and today's trainings in streak calculation
           if (isPastOrToday) {
-            allDailyWorkouts.push({
+            allDailyTrainings.push({
               ...daily,
               weekNumber: week.weekNumber,
               completed: isCompleted
@@ -157,7 +157,7 @@ export const useHomeData = (): HomeData => {
     });
     
     // Sort by week number (descending) and day order (descending) - most recent first
-    allDailyWorkouts.sort((a, b) => {
+    allDailyTrainings.sort((a, b) => {
       if (a.weekNumber !== b.weekNumber) {
         return b.weekNumber - a.weekNumber; // Most recent week first
       }
@@ -165,8 +165,8 @@ export const useHomeData = (): HomeData => {
       return dayOrder.indexOf(b.dayOfWeek) - dayOrder.indexOf(a.dayOfWeek); // Most recent day first
     });
     
-    for (const workout of allDailyWorkouts) {
-      if (workout.completed) {
+    for (const training of allDailyTrainings) {
+      if (training.completed) {
         streak++;
       } else {
         break;
@@ -175,40 +175,40 @@ export const useHomeData = (): HomeData => {
     
 
     // Calculate goal progress from local data
-    let totalCompletedWorkouts = 0;
-    let totalWorkoutDays = 0;
+    let totalCompletedTrainings = 0;
+    let totalTrainingDays = 0;
     
-    workoutPlan.weeklySchedules.forEach(week => {
-      if (!week || !week.dailyWorkouts || !Array.isArray(week.dailyWorkouts)) {
+    trainingPlan.weeklySchedules.forEach(week => {
+      if (!week || !week.dailyTrainings || !Array.isArray(week.dailyTrainings)) {
         return; // Skip invalid weeks
       }
       
-      week.dailyWorkouts.forEach(daily => {
+      week.dailyTrainings.forEach(daily => {
         if (!daily || typeof daily.isRestDay !== 'boolean') {
-          return; // Skip invalid daily workouts
+          return; // Skip invalid daily trainings
         }
         
         if (!daily.isRestDay && daily.exercises && Array.isArray(daily.exercises) && daily.exercises.length > 0) {
-          totalWorkoutDays++;
+          totalTrainingDays++;
           if (daily.exercises.every(ex => ex && typeof ex.completed === 'boolean' && ex.completed)) {
-            totalCompletedWorkouts++;
+            totalCompletedTrainings++;
           }
         }
       });
     });
 
-    const goalProgress = totalWorkoutDays > 0 ? Math.round((totalCompletedWorkouts / totalWorkoutDays) * 100) : 0;
+    const goalProgress = totalTrainingDays > 0 ? Math.round((totalCompletedTrainings / totalTrainingDays) * 100) : 0;
 
-    // Calculate today's workout from local data
-    const currentWeek = workoutPlan.weeklySchedules.find(w => w && w.weekNumber === (workoutPlan.currentWeek || 1));
-    const todaysWorkoutData = currentWeek?.dailyWorkouts?.find(daily => daily && daily.dayOfWeek === todayName);
+    // Calculate today's training from local data
+    const currentWeek = trainingPlan.weeklySchedules.find(w => w && w.weekNumber === (trainingPlan.currentWeek || 1));
+    const todaysTrainingData = currentWeek?.dailyTrainings?.find(daily => daily && daily.dayOfWeek === todayName);
     
-    const todaysWorkout: TodaysWorkout | null = todaysWorkoutData ? {
-      id: todaysWorkoutData.id || 'unknown',
-      name: `${todaysWorkoutData.dayOfWeek} Workout`,
-      isRestDay: todaysWorkoutData.isRestDay,
-      exercises: (todaysWorkoutData.exercises && Array.isArray(todaysWorkoutData.exercises)) 
-        ? todaysWorkoutData.exercises.map(ex => ({
+    const todaysTraining: TodaysTraining | null = todaysTrainingData ? {
+      id: todaysTrainingData.id || 'unknown',
+      name: `${todaysTrainingData.dayOfWeek} Training`,
+      isRestDay: todaysTrainingData.isRestDay,
+      exercises: (todaysTrainingData.exercises && Array.isArray(todaysTrainingData.exercises)) 
+        ? todaysTrainingData.exercises.map(ex => ({
             id: ex.id || 'unknown',
             name: ex.exercise?.name || 'Exercise',
             completed: ex.completed || false
@@ -217,15 +217,15 @@ export const useHomeData = (): HomeData => {
     } : null;
 
     // Calculate recent activity from local data
-    const recentActivity: RecentActivity[] = allDailyWorkouts
-      .filter(workout => workout && workout.completed)
+    const recentActivity: RecentActivity[] = allDailyTrainings
+      .filter(training => training && training.completed)
       .slice(0, 5)
-      .map((workout, index) => ({
-        id: workout.id || 'unknown',
-        title: `${workout.dayOfWeek} Workout`,
-        subtitle: `${workout.exercises?.length || 0} exercises • 45 minutes • 320 calories`,
+      .map((training, index) => ({
+        id: training.id || 'unknown',
+        title: `${training.dayOfWeek} Training`,
+        subtitle: `${training.exercises?.length || 0} exercises • 45 minutes • 320 calories`,
         date: index === 0 ? 'Yesterday' : index === 1 ? '2 days ago' : index === 2 ? '3 days ago' : `${index + 1} days ago`,
-        type: 'workout' as const,
+        type: 'training' as const,
         duration: '45 min',
         calories: 320,
       }));
@@ -234,11 +234,11 @@ export const useHomeData = (): HomeData => {
       ...data,
       streak,
       goalProgress,
-      todaysWorkout,
+      todaysTraining,
       recentActivity,
-      // Keep weeklyWorkouts from service data (this is calculated from database)
+      // Keep weeklyTrainings from service data (this is calculated from database)
     };
-  }, [data, authState.workoutPlan, authState.userProfile]);
+  }, [data, authState.trainingPlan, authState.userProfile]);
 
   return hybridData;
 };

@@ -1,7 +1,7 @@
 /**
  * E2E Test: Existing User Journey (Complete Profile + Plan)
  * Tests: Login → Main App → Home Screen
- * Note: This test assumes user has complete profile and workout plan
+ * Note: This test assumes user has complete profile and training plan
  */
 
 describe('Existing User Journey (Complete Profile)', () => {
@@ -40,11 +40,11 @@ describe('Existing User Journey (Complete Profile)', () => {
 
     // Step 4: Verify user is on home screen with existing plan
     await expect(element(by.text('Welcome back'))).toBeVisible();
-    await expect(element(by.text('Your Workout Plan'))).toBeVisible();
+    await expect(element(by.text('Your Training Plan'))).toBeVisible();
     
     // Step 5: Verify main navigation is available
     await expect(element(by.text('Home'))).toBeVisible();
-    await expect(element(by.text('Workouts'))).toBeVisible();
+    await expect(element(by.text('Trainings'))).toBeVisible();
     await expect(element(by.text('Profile'))).toBeVisible();
   });
 

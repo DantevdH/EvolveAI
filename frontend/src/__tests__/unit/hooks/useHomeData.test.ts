@@ -2,7 +2,7 @@
  * Unit tests for useHomeData hook logic
  */
 
-import { mockAuthState } from '../../fixtures/mockWorkoutData';
+import { mockAuthState } from '../../fixtures/mockTrainingData';
 
 describe('useHomeData Hook Logic', () => {
   describe('Service Integration', () => {
@@ -13,10 +13,10 @@ describe('useHomeData Hook Logic', () => {
 
       // Verify expected service method names
       const expectedServiceMethods = [
-        'getWorkoutStreak',
-        'getWeeklyWorkoutCount', 
+        'getTrainingStreak',
+        'getWeeklyTrainingCount', 
         'getGoalProgress',
-        'getTodaysWorkout',
+        'getTodaysTraining',
         'getRecentActivity'
       ];
 
@@ -44,14 +44,14 @@ describe('useHomeData Hook Logic', () => {
       // Test partial success handling
       const mockResponses = {
         streak: { success: true, data: 3 },
-        weeklyWorkouts: { success: false, error: 'Service error' },
+        weeklyTrainings: { success: false, error: 'Service error' },
         goalProgress: { success: true, data: 50 }
       };
 
       expect(mockResponses.streak.success).toBe(true);
       expect(mockResponses.streak.data).toBe(3);
-      expect(mockResponses.weeklyWorkouts.success).toBe(false);
-      expect(mockResponses.weeklyWorkouts.error).toBe('Service error');
+      expect(mockResponses.weeklyTrainings.success).toBe(false);
+      expect(mockResponses.weeklyTrainings.error).toBe('Service error');
       expect(mockResponses.goalProgress.success).toBe(true);
       expect(mockResponses.goalProgress.data).toBe(50);
     });
@@ -95,75 +95,75 @@ describe('useHomeData Hook Logic', () => {
     it('should process successful service responses correctly', () => {
       const mockResponses = {
         streak: { success: true, data: 5 },
-        weeklyWorkouts: { success: true, data: 4 },
+        weeklyTrainings: { success: true, data: 4 },
         goalProgress: { success: true, data: 75 },
-        todaysWorkout: { success: true, data: { id: 1, name: 'Test Workout' } },
+        todaysTraining: { success: true, data: { id: 1, name: 'Test Training' } },
         recentActivity: { success: true, data: [{ id: '1', title: 'Test Activity' }] }
       };
 
       // Test data processing logic
       const processedData = {
         streak: mockResponses.streak.success ? mockResponses.streak.data || 0 : 0,
-        weeklyWorkouts: mockResponses.weeklyWorkouts.success ? mockResponses.weeklyWorkouts.data || 0 : 0,
+        weeklyTrainings: mockResponses.weeklyTrainings.success ? mockResponses.weeklyTrainings.data || 0 : 0,
         goalProgress: mockResponses.goalProgress.success ? mockResponses.goalProgress.data || 0 : 0,
-        todaysWorkout: mockResponses.todaysWorkout.success ? mockResponses.todaysWorkout.data : null,
+        todaysTraining: mockResponses.todaysTraining.success ? mockResponses.todaysTraining.data : null,
         recentActivity: mockResponses.recentActivity.success ? mockResponses.recentActivity.data || [] : []
       };
 
       expect(processedData.streak).toBe(5);
-      expect(processedData.weeklyWorkouts).toBe(4);
+      expect(processedData.weeklyTrainings).toBe(4);
       expect(processedData.goalProgress).toBe(75);
-      expect(processedData.todaysWorkout).toEqual({ id: 1, name: 'Test Workout' });
+      expect(processedData.todaysTraining).toEqual({ id: 1, name: 'Test Training' });
       expect(processedData.recentActivity).toEqual([{ id: '1', title: 'Test Activity' }]);
     });
 
     it('should handle failed service responses with fallback values', () => {
       const mockResponses = {
         streak: { success: false, error: 'Service error' } as any,
-        weeklyWorkouts: { success: false, error: 'Service error' } as any,
+        weeklyTrainings: { success: false, error: 'Service error' } as any,
         goalProgress: { success: false, error: 'Service error' } as any,
-        todaysWorkout: { success: false, error: 'Service error' } as any,
+        todaysTraining: { success: false, error: 'Service error' } as any,
         recentActivity: { success: false, error: 'Service error' } as any
       };
 
       // Test fallback logic
       const processedData = {
         streak: mockResponses.streak.success ? mockResponses.streak.data || 0 : 0,
-        weeklyWorkouts: mockResponses.weeklyWorkouts.success ? mockResponses.weeklyWorkouts.data || 0 : 0,
+        weeklyTrainings: mockResponses.weeklyTrainings.success ? mockResponses.weeklyTrainings.data || 0 : 0,
         goalProgress: mockResponses.goalProgress.success ? mockResponses.goalProgress.data || 0 : 0,
-        todaysWorkout: mockResponses.todaysWorkout.success ? mockResponses.todaysWorkout.data : null,
+        todaysTraining: mockResponses.todaysTraining.success ? mockResponses.todaysTraining.data : null,
         recentActivity: mockResponses.recentActivity.success ? mockResponses.recentActivity.data || [] : []
       };
 
       expect(processedData.streak).toBe(0);
-      expect(processedData.weeklyWorkouts).toBe(0);
+      expect(processedData.weeklyTrainings).toBe(0);
       expect(processedData.goalProgress).toBe(0);
-      expect(processedData.todaysWorkout).toBeNull();
+      expect(processedData.todaysTraining).toBeNull();
       expect(processedData.recentActivity).toEqual([]);
     });
 
     it('should handle null data responses', () => {
       const mockResponses = {
         streak: { success: true, data: null },
-        weeklyWorkouts: { success: true, data: null },
+        weeklyTrainings: { success: true, data: null },
         goalProgress: { success: true, data: null },
-        todaysWorkout: { success: true, data: null },
+        todaysTraining: { success: true, data: null },
         recentActivity: { success: true, data: null }
       };
 
       // Test null data handling
       const processedData = {
         streak: mockResponses.streak.success ? mockResponses.streak.data || 0 : 0,
-        weeklyWorkouts: mockResponses.weeklyWorkouts.success ? mockResponses.weeklyWorkouts.data || 0 : 0,
+        weeklyTrainings: mockResponses.weeklyTrainings.success ? mockResponses.weeklyTrainings.data || 0 : 0,
         goalProgress: mockResponses.goalProgress.success ? mockResponses.goalProgress.data || 0 : 0,
-        todaysWorkout: mockResponses.todaysWorkout.success ? mockResponses.todaysWorkout.data : null,
+        todaysTraining: mockResponses.todaysTraining.success ? mockResponses.todaysTraining.data : null,
         recentActivity: mockResponses.recentActivity.success ? mockResponses.recentActivity.data || [] : []
       };
 
       expect(processedData.streak).toBe(0);
-      expect(processedData.weeklyWorkouts).toBe(0);
+      expect(processedData.weeklyTrainings).toBe(0);
       expect(processedData.goalProgress).toBe(0);
-      expect(processedData.todaysWorkout).toBeNull();
+      expect(processedData.todaysTraining).toBeNull();
       expect(processedData.recentActivity).toEqual([]);
     });
   });
@@ -173,18 +173,18 @@ describe('useHomeData Hook Logic', () => {
       // Test the expected interface
       const expectedInterface = {
         streak: 0,
-        weeklyWorkouts: 0,
+        weeklyTrainings: 0,
         goalProgress: 0,
-        todaysWorkout: null,
+        todaysTraining: null,
         recentActivity: [],
         isLoading: true,
         error: null
       };
 
       expect(typeof expectedInterface.streak).toBe('number');
-      expect(typeof expectedInterface.weeklyWorkouts).toBe('number');
+      expect(typeof expectedInterface.weeklyTrainings).toBe('number');
       expect(typeof expectedInterface.goalProgress).toBe('number');
-      expect(expectedInterface.todaysWorkout).toBeNull();
+      expect(expectedInterface.todaysTraining).toBeNull();
       expect(Array.isArray(expectedInterface.recentActivity)).toBe(true);
       expect(typeof expectedInterface.isLoading).toBe('boolean');
       expect(expectedInterface.error).toBeNull();
@@ -237,12 +237,12 @@ describe('useHomeData Hook Logic', () => {
     it('should handle zero values correctly', () => {
       const zeroValues = {
         streak: 0,
-        weeklyWorkouts: 0,
+        weeklyTrainings: 0,
         goalProgress: 0
       };
 
       expect(zeroValues.streak).toBe(0);
-      expect(zeroValues.weeklyWorkouts).toBe(0);
+      expect(zeroValues.weeklyTrainings).toBe(0);
       expect(zeroValues.goalProgress).toBe(0);
     });
   });

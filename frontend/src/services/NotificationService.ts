@@ -1,10 +1,10 @@
 /**
- * Notification Service - Handles workout reminders and notifications
+ * Notification Service - Handles training reminders and notifications
  */
 
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { WorkoutPlan, DailyWorkout } from '../types/training';
+import { TrainingPlan, DailyTraining } from '../types/training';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -18,7 +18,7 @@ Notifications.setNotificationHandler({
 });
 
 export class NotificationService {
-  private static readonly WORKOUT_REMINDER_ID = 'workout-reminder';
+  private static readonly WORKOUT_REMINDER_ID = 'training-reminder';
   private static readonly DEFAULT_REMINDER_TIME = 18; // 6 PM
 
   /**
@@ -55,10 +55,10 @@ export class NotificationService {
   }
 
   /**
-   * Schedule workout reminder for today if workout exists
+   * Schedule training reminder for today if training exists
    */
-  static async scheduleWorkoutReminder(
-    workoutPlan: WorkoutPlan | null,
+  static async scheduleTrainingReminder(
+    trainingPlan: TrainingPlan | null,
     reminderTime: number = this.DEFAULT_REMINDER_TIME
   ): Promise<boolean> {
     try {
@@ -69,19 +69,19 @@ export class NotificationService {
         return false;
       }
 
-      // Cancel any existing workout reminders
-      await this.cancelWorkoutReminder();
+      // Cancel any existing training reminders
+      await this.cancelTrainingReminder();
 
-      // Check if there's a workout today
-      const todayWorkout = this.getTodayWorkout(workoutPlan);
-      if (!todayWorkout) {
-        console.log('No workout scheduled for today - checking workout plan structure...');
-        console.log('Workout plan:', workoutPlan ? 'exists' : 'null');
-        if (workoutPlan) {
-          console.log('Weekly schedules:', workoutPlan.weeklySchedules?.length || 0);
-          if (workoutPlan.weeklySchedules) {
-            workoutPlan.weeklySchedules.forEach((week, index) => {
-              console.log(`Week ${index + 1}:`, week.dailyWorkouts?.length || 0, 'daily workouts');
+      // Check if there's a training today
+      const todayTraining = this.getTodayTraining(trainingPlan);
+      if (!todayTraining) {
+        console.log('No training scheduled for today - checking training plan structure...');
+        console.log('Training plan:', trainingPlan ? 'exists' : 'null');
+        if (trainingPlan) {
+          console.log('Weekly schedules:', trainingPlan.weeklySchedules?.length || 0);
+          if (trainingPlan.weeklySchedules) {
+            trainingPlan.weeklySchedules.forEach((week, index) => {
+              console.log(`Week ${index + 1}:`, week.dailyTrainings?.length || 0, 'daily trainings');
             });
           }
         }
@@ -102,11 +102,11 @@ export class NotificationService {
       await Notifications.scheduleNotificationAsync({
         identifier: this.WORKOUT_REMINDER_ID,
         content: {
-          title: 'Workout Time! 💪',
-          body: `You have a workout scheduled for today`,
+          title: 'Training Time! 💪',
+          body: `You have a training scheduled for today`,
           data: {
-            type: 'workout_reminder',
-            workoutId: todayWorkout.id,
+            type: 'training_reminder',
+            trainingId: todayTraining.id,
           },
         },
         trigger: {
@@ -115,60 +115,60 @@ export class NotificationService {
         },
       });
 
-      console.log(`Workout reminder scheduled for ${reminderDate.toLocaleString()}`);
+      console.log(`Training reminder scheduled for ${reminderDate.toLocaleString()}`);
       return true;
     } catch (error) {
-      console.error('Error scheduling workout reminder:', error);
+      console.error('Error scheduling training reminder:', error);
       return false;
     }
   }
 
   /**
-   * Cancel existing workout reminder
+   * Cancel existing training reminder
    */
-  static async cancelWorkoutReminder(): Promise<void> {
+  static async cancelTrainingReminder(): Promise<void> {
     try {
       await Notifications.cancelScheduledNotificationAsync(this.WORKOUT_REMINDER_ID);
-      console.log('Workout reminder cancelled');
+      console.log('Training reminder cancelled');
     } catch (error) {
-      console.error('Error cancelling workout reminder:', error);
+      console.error('Error cancelling training reminder:', error);
     }
   }
 
   /**
-   * Get today's workout from the workout plan
-   * Uses the same logic as the training hook to find today's workout
+   * Get today's training from the training plan
+   * Uses the same logic as the training hook to find today's training
    */
-  private static getTodayWorkout(workoutPlan: WorkoutPlan | null): DailyWorkout | null {
-    if (!workoutPlan || !workoutPlan.weeklySchedules) {
+  private static getTodayTraining(trainingPlan: TrainingPlan | null): DailyTraining | null {
+    if (!trainingPlan || !trainingPlan.weeklySchedules) {
       return null;
     }
 
-    // Get the current workout week
-    const currentWeek = workoutPlan.currentWeek || 1;
-    const currentWeekSchedule = workoutPlan.weeklySchedules.find(week => week.weekNumber === currentWeek);
+    // Get the current training week
+    const currentWeek = trainingPlan.currentWeek || 1;
+    const currentWeekSchedule = trainingPlan.weeklySchedules.find(week => week.weekNumber === currentWeek);
     
-    if (!currentWeekSchedule || !currentWeekSchedule.dailyWorkouts) {
-      console.log(`No workout schedule found for week ${currentWeek}`);
+    if (!currentWeekSchedule || !currentWeekSchedule.dailyTrainings) {
+      console.log(`No training schedule found for week ${currentWeek}`);
       return null;
     }
 
-    // Use the same logic as the training hook to find today's workout
+    // Use the same logic as the training hook to find today's training
     const today = new Date();
     const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const todayName = dayNames[today.getDay() === 0 ? 6 : today.getDay() - 1]; // Convert Sunday=0 to Sunday=6
     
-    console.log(`Looking for today's workout: ${todayName} in week ${currentWeek}`);
+    console.log(`Looking for today's training: ${todayName} in week ${currentWeek}`);
     
-    // Find today's workout in the current week
-    const todayWorkout = currentWeekSchedule.dailyWorkouts.find(workout => workout.dayOfWeek === todayName);
+    // Find today's training in the current week
+    const todayTraining = currentWeekSchedule.dailyTrainings.find(training => training.dayOfWeek === todayName);
     
-    if (todayWorkout) {
-      console.log(`Found today's workout: ${todayWorkout.dayOfWeek}, isRestDay: ${todayWorkout.isRestDay}`);
-      return todayWorkout;
+    if (todayTraining) {
+      console.log(`Found today's training: ${todayTraining.dayOfWeek}, isRestDay: ${todayTraining.isRestDay}`);
+      return todayTraining;
     }
 
-    console.log(`No workout found for ${todayName} in week ${currentWeek}`);
+    console.log(`No training found for ${todayName} in week ${currentWeek}`);
     return null;
   }
 

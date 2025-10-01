@@ -14,7 +14,7 @@ import { useHomeData } from '@/src/hooks/useHomeData';
 // Home Components
 import { WelcomeHeader } from '@/src/components/home/WelcomeHeader';
 import { ProgressSummary } from '@/src/components/home/ProgressSummary';
-import { TodaysWorkout } from '@/src/components/home/TodaysWorkout';
+import { TodaysTraining } from '@/src/components/home/TodaysTraining';
 import { AIInsightsCard } from '@/src/components/home/AIInsightsCard';
 import { RecentActivity } from '@/src/components/home/RecentActivity';
 
@@ -24,9 +24,9 @@ export const HomeScreen: React.FC = () => {
   const router = useRouter();
 
 
-  const handleStartWorkout = () => {
-    console.log('Starting workout...');
-    ExpoNavigation.goToWorkouts();
+  const handleStartTraining = () => {
+    console.log('Starting training...');
+    ExpoNavigation.goToTrainings();
   };
 
   const handleViewInsights = () => {
@@ -47,15 +47,15 @@ export const HomeScreen: React.FC = () => {
     );
   }
 
-  // No workout plan state - matches Swift implementation
-  if (!authState.workoutPlan) {
+  // No training plan state - matches Swift implementation
+  if (!authState.trainingPlan) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.emptyContainer}>
           <Ionicons name="home" size={60} color={colors.primary} />
           <Text style={styles.emptyTitle}>Welcome to EvolveAI!</Text>
           <Text style={styles.emptySubtitle}>
-            Let's get started by creating your first workout plan.
+            Let's get started by creating your first training plan.
           </Text>
         </View>
       </SafeAreaView>
@@ -73,12 +73,12 @@ export const HomeScreen: React.FC = () => {
         <WelcomeHeader username={authState.userProfile?.username} />
         <ProgressSummary 
           streak={homeData.streak}
-          weeklyWorkouts={homeData.weeklyWorkouts}
+          weeklyTrainings={homeData.weeklyTrainings}
           goalProgress={homeData.goalProgress}
         />
-        <TodaysWorkout 
-          workout={homeData.todaysWorkout}
-          onStartWorkout={handleStartWorkout}
+        <TodaysTraining 
+          training={homeData.todaysTraining}
+          onStartTraining={handleStartTraining}
         />
         <AIInsightsCard onViewInsights={handleViewInsights} />
         <RecentActivity activities={homeData.recentActivity} />

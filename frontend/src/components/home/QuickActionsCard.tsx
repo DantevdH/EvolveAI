@@ -1,5 +1,5 @@
 /**
- * Quick Actions Card Component - Quick workout actions
+ * Quick Actions Card Component - Quick training actions
  */
 
 import React from 'react';
@@ -16,23 +16,23 @@ interface QuickAction {
 }
 
 interface QuickActionsCardProps {
-  onStartWorkout?: () => void;
+  onStartTraining?: () => void;
   onLogFood?: () => void;
   onAskAI?: () => void;
 }
 
 export const QuickActionsCard: React.FC<QuickActionsCardProps> = ({
-  onStartWorkout,
+  onStartTraining,
   onLogFood,
   onAskAI,
 }) => {
   const actions: QuickAction[] = [
     {
-      id: 'start-workout',
+      id: 'start-training',
       icon: 'flash',
-      label: 'Start Workout',
+      label: 'Start Training',
       color: colors.primary,
-      onPress: onStartWorkout || (() => console.log('Start Workout')),
+      onPress: onStartTraining || (() => console.log('Start Training')),
     },
     {
       id: 'log-food',

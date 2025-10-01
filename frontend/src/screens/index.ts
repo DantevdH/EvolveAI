@@ -1,5 +1,5 @@
 export {HomeScreen} from './HomeScreen';
 export {OnboardingScreen} from './OnboardingScreen';
 export {ProfileScreen} from './ProfileScreen';
-export {WorkoutScreen} from './WorkoutScreen';
+export {TrainingScreen} from './TrainingScreen';
 export {LoginScreen} from './LoginScreen';

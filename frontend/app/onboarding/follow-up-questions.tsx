@@ -19,7 +19,7 @@ export default function FollowUpQuestionsStep() {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleComplete = async (workoutPlan: any) => {
+  const handleComplete = async (trainingPlan: any) => {
     console.log('✅ Follow-up questions completed successfully');
     
     // Refresh user profile to get updated data

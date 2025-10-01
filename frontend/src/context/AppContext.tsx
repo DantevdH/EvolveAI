@@ -1,5 +1,5 @@
 import React, {createContext, useContext, useReducer, ReactNode} from 'react';
-import {UserProfile, WorkoutPlan, Theme, AppState as AppStateEnum, Coach} from '@/src/types';
+import {UserProfile, TrainingPlan, Theme, AppState as AppStateEnum, Coach} from '@/src/types';
 import { colors } from '../constants/designSystem';
 
 // Create theme object from design system
@@ -64,8 +64,8 @@ interface AppState {
   isAuthenticated: boolean;
   authToken: string | null;
   
-  // Workout data
-  currentWorkout: WorkoutPlan | null;
+  // Training data
+  currentTraining: TrainingPlan | null;
   
   // UI state
   theme: Theme;
@@ -79,7 +79,7 @@ type AppAction =
   | {type: 'SET_AUTHENTICATED'; payload: boolean}
   | {type: 'SET_AUTH_TOKEN'; payload: string | null}
   | {type: 'SET_SELECTED_COACH'; payload: Coach | null}
-  | {type: 'SET_CURRENT_WORKOUT'; payload: WorkoutPlan | null}
+  | {type: 'SET_CURRENT_WORKOUT'; payload: TrainingPlan | null}
   | {type: 'SET_LOADING'; payload: boolean}
   | {type: 'SET_ERROR'; payload: string | null}
   | {type: 'SET_REDIRECT_DELAY'; payload: boolean}
@@ -99,8 +99,8 @@ const initialState: AppState = {
   isAuthenticated: false,
   authToken: null,
   
-  // Workout data
-  currentWorkout: null,
+  // Training data
+  currentTraining: null,
   
   // UI state
   theme: theme,
@@ -138,7 +138,7 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
     case 'SET_CURRENT_WORKOUT':
       return {
         ...state,
-        currentWorkout: action.payload,
+        currentTraining: action.payload,
       };
     case 'SET_LOADING':
       return {
@@ -181,8 +181,8 @@ interface AppContextType {
   setAuthenticated: (isAuthenticated: boolean) => void;
   setAuthToken: (token: string | null) => void;
   
-  // Workout management
-  setCurrentWorkout: (workout: WorkoutPlan | null) => void;
+  // Training management
+  setCurrentTraining: (training: TrainingPlan | null) => void;
   
   // UI management
   toggleTheme: () => void;
@@ -221,9 +221,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({children}) => {
     setAuthToken: (token: string | null) =>
       dispatch({type: 'SET_AUTH_TOKEN', payload: token}),
     
-    // Workout management
-    setCurrentWorkout: (workout: WorkoutPlan | null) =>
-      dispatch({type: 'SET_CURRENT_WORKOUT', payload: workout}),
+    // Training management
+    setCurrentTraining: (training: TrainingPlan | null) =>
+      dispatch({type: 'SET_CURRENT_WORKOUT', payload: training}),
     
     // UI management
     toggleTheme: () => dispatch({type: 'TOGGLE_THEME'}),

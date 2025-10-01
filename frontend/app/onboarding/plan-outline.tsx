@@ -19,7 +19,7 @@ export default function PlanOutlineStep() {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleComplete = async (workoutPlan: any) => {
+  const handleComplete = async (trainingPlan: any) => {
     console.log('✅ Plan outline completed successfully');
     
     // Refresh user profile to get updated data

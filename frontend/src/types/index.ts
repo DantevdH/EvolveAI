@@ -5,7 +5,7 @@ export type RootStackParamList = {
   Home: undefined;
   Login: undefined;
   Onboarding: undefined;
-  WorkoutPlan: {workoutId: string};
+  TrainingPlan: {trainingId: string};
   Profile: undefined;
   MainTabs: undefined;
   GeneratePlan: undefined;
@@ -73,7 +73,7 @@ export interface UserProfile {
 
 // Legacy preferences interface for compatibility
 export interface UserPreferences {
-  fitnessLevel: 'beginner' | 'intermediate' | 'advanced';
+  trainingLevel: 'beginner' | 'intermediate' | 'advanced';
   goals: string[];
   availableTime: number; // minutes
   equipmentAccess: string[];
@@ -95,7 +95,7 @@ export interface Exercise {
 }
 
 // MARK: - Database Structure Models (Core Entities)
-export interface WorkoutPlan {
+export interface TrainingPlan {
   id: number;
   userProfileId: number;
   title: string;
@@ -107,13 +107,13 @@ export interface WorkoutPlan {
 
 export interface WeeklySchedule {
   id: number;
-  workoutPlanId: number;
+  trainingPlanId: number;
   weekNumber: number;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export interface DailyWorkout {
+export interface DailyTraining {
   id: number;
   weeklyScheduleId: number;
   dayOfWeek: string;
@@ -121,9 +121,9 @@ export interface DailyWorkout {
   updatedAt: Date;
 }
 
-export interface WorkoutExercise {
+export interface TrainingExercise {
   id: number;
-  dailyWorkoutId: number;
+  dailyTrainingId: number;
   exerciseId: number;
   sets: number;
   reps: number[];
@@ -133,17 +133,17 @@ export interface WorkoutExercise {
   updatedAt: Date;
 }
 
-// MARK: - Complete Workout Structure (for API responses)
-export interface CompleteWorkoutPlan {
-  workoutPlan: WorkoutPlan;
+// MARK: - Complete Training Structure (for API responses)
+export interface CompleteTrainingPlan {
+  trainingPlan: TrainingPlan;
   weeklySchedules: WeeklySchedule[];
-  dailyWorkouts: DailyWorkout[];
-  workoutExercises: WorkoutExercise[];
+  dailyTrainings: DailyTraining[];
+  trainingExercises: TrainingExercise[];
   exercises: Exercise[];
 }
 
-// MARK: - AI-Generated Workout Models (for API responses from backend)
-export interface GeneratedWorkoutPlan {
+// MARK: - AI-Generated Training Models (for API responses from backend)
+export interface GeneratedTrainingPlan {
   title: string;
   summary: string;
   weeklySchedules: GeneratedWeeklySchedule[];
@@ -151,16 +151,16 @@ export interface GeneratedWorkoutPlan {
 
 export interface GeneratedWeeklySchedule {
   weekNumber: number;
-  dailyWorkouts: GeneratedDailyWorkout[];
+  dailyTrainings: GeneratedDailyTraining[];
 }
 
-export interface GeneratedDailyWorkout {
+export interface GeneratedDailyTraining {
   dayOfWeek: string;
   isRestDay: boolean;
-  exercises: GeneratedWorkoutExercise[];
+  exercises: GeneratedTrainingExercise[];
 }
 
-export interface GeneratedWorkoutExercise {
+export interface GeneratedTrainingExercise {
   name: string;
   sets: number;
   reps: number[];
@@ -179,18 +179,18 @@ export interface ProgressUpdateRequest {
 }
 
 // MARK: - Database Insert Models (for creating new records)
-export interface WorkoutPlanInsert {
+export interface TrainingPlanInsert {
   user_profile_id: number;
   title: string;
   summary: string;
 }
 
 export interface WeeklyScheduleInsert {
-  workout_plan_id: number;
+  training_plan_id: number;
   week_number: number;
 }
 
-export interface DailyWorkoutInsert {
+export interface DailyTrainingInsert {
   weekly_schedule_id: number;
   day_of_week: string;
 }
@@ -201,8 +201,8 @@ export interface ExerciseInsert {
   video_url?: string;
 }
 
-export interface WorkoutExerciseInsert {
-  daily_workout_id: number;
+export interface TrainingExerciseInsert {
+  daily_training_id: number;
   exercise_id: number;
   sets: number;
   reps: number[];
@@ -211,12 +211,12 @@ export interface WorkoutExerciseInsert {
 }
 
 // MARK: - API Response Models
-export interface WorkoutPlanResponse {
-  workout_plan: WorkoutPlan;
+export interface TrainingPlanResponse {
+  training_plan: TrainingPlan;
 }
 
-// MARK: - Legacy Workout Model (for backward compatibility)
-export interface Workout {
+// MARK: - Legacy Training Model (for backward compatibility)
+export interface Training {
   id: number;
   name: string;
   exercises: Exercise[];

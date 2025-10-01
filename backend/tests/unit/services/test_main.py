@@ -29,8 +29,8 @@ class TestMainApplication:
     def test_app_initialization(self):
         """Test that the FastAPI app is properly initialized."""
         assert app is not None
-        assert app.title == "EvolveAI Workout Plan Generator"
-        assert app.description == "FastAPI backend for generating personalized workout plans using enhanced AI Fitness Coach"
+        assert app.title == "EvolveAI Training Plan Generator"
+        assert app.description == "FastAPI backend for generating personalized training plans using enhanced AI training Coach"
         assert app.version == "2.0.0"
     
     def test_cors_middleware_configuration(self):
@@ -42,11 +42,11 @@ class TestMainApplication:
         # The middleware should allow all origins, methods, and headers for development
         # In production, this should be more restrictive
     
-    def test_fitness_router_inclusion(self):
-        """Test that the fitness router is properly included."""
-        # Check that the fitness router is included
+    def test_training_router_inclusion(self):
+        """Test that the training router is properly included."""
+        # Check that the training router is included
         route_paths = [route.path for route in app.routes]
-        assert any("/api/fitness" in path for path in route_paths)
+        assert any("/api/training" in path for path in route_paths)
     
     def test_root_endpoint(self, client):
         """Test the root endpoint."""
@@ -54,7 +54,7 @@ class TestMainApplication:
         
         assert response.status_code == 200
         data = response.json()
-        assert data["message"] == "EvolveAI Workout Plan Generator API v2.0"
+        assert data["message"] == "EvolveAI Training Plan Generator API v2.0"
         assert data["status"] == "healthy"
     
     def test_health_check_endpoint(self, client):
@@ -66,17 +66,17 @@ class TestMainApplication:
         assert data["status"] == "healthy"
         assert data["version"] == "2.0.0"
     
-    def test_fitness_endpoints_available(self, client):
-        """Test that fitness endpoints are available."""
-        # Test that fitness endpoints are accessible
+    def test_training_endpoints_available(self, client):
+        """Test that training endpoints are available."""
+        # Test that training endpoints are accessible
         # These should return 422 (validation error) for empty requests, not 404
-        response = client.post("/api/fitness/initial-questions", json={})
+        response = client.post("/api/training/initial-questions", json={})
         assert response.status_code == 422  # Validation error, not 404
         
-        response = client.post("/api/fitness/follow-up-questions", json={})
+        response = client.post("/api/training/follow-up-questions", json={})
         assert response.status_code == 422  # Validation error, not 404
         
-        response = client.post("/api/fitness/generate-plan", json={})
+        response = client.post("/api/training/generate-plan", json={})
         assert response.status_code == 422  # Validation error, not 404
     
     def test_cors_headers(self, client):
@@ -88,8 +88,8 @@ class TestMainApplication:
     
     def test_application_metadata(self):
         """Test application metadata and configuration."""
-        assert app.title == "EvolveAI Workout Plan Generator"
-        assert "FastAPI backend for generating personalized workout plans" in app.description
+        assert app.title == "EvolveAI Training Plan Generator"
+        assert "FastAPI backend for generating personalized training plans" in app.description
         assert app.version == "2.0.0"
     
     def test_route_registration(self):
@@ -99,9 +99,9 @@ class TestMainApplication:
         # Check for expected routes
         assert "/" in route_paths
         assert "/api/health/" in route_paths
-        assert any("/api/fitness/initial-questions" in path for path in route_paths)
-        assert any("/api/fitness/follow-up-questions" in path for path in route_paths)
-        assert any("/api/fitness/generate-plan" in path for path in route_paths)
+        assert any("/api/training/initial-questions" in path for path in route_paths)
+        assert any("/api/training/follow-up-questions" in path for path in route_paths)
+        assert any("/api/training/generate-plan" in path for path in route_paths)
     
     def test_application_startup(self):
         """Test application startup behavior."""
@@ -133,13 +133,13 @@ class TestMainApplicationEdgeCases:
     def test_invalid_method_on_existing_endpoint(self, client):
         """Test using invalid HTTP method on existing endpoint."""
         # GET request to POST-only endpoint
-        response = client.get("/api/fitness/initial-questions")
+        response = client.get("/api/training/initial-questions")
         assert response.status_code == 405  # Method not allowed
     
     def test_malformed_json_request(self, client):
         """Test sending malformed JSON to API endpoints."""
         response = client.post(
-            "/api/fitness/initial-questions",
+            "/api/training/initial-questions",
             data="invalid json",
             headers={"Content-Type": "application/json"}
         )
@@ -147,7 +147,7 @@ class TestMainApplicationEdgeCases:
     
     def test_missing_content_type_header(self, client):
         """Test sending request without Content-Type header."""
-        response = client.post("/api/fitness/initial-questions", data="{}")
+        response = client.post("/api/training/initial-questions", data="{}")
         # Should still work as FastAPI can handle this
         assert response.status_code in [200, 422]
     
@@ -166,7 +166,7 @@ class TestMainApplicationEdgeCases:
             }
         }
         
-        response = client.post("/api/fitness/initial-questions", json=large_data)
+        response = client.post("/api/training/initial-questions", json=large_data)
         # Should handle large payloads gracefully
         assert response.status_code in [200, 422, 413]  # 413 if too large
     
@@ -185,7 +185,7 @@ class TestMainApplicationEdgeCases:
             }
         }
         
-        response = client.post("/api/fitness/initial-questions", json=special_data)
+        response = client.post("/api/training/initial-questions", json=special_data)
         # Should handle special characters gracefully
         assert response.status_code in [200, 422]
     
@@ -204,7 +204,7 @@ class TestMainApplicationEdgeCases:
             }
         }
         
-        response = client.post("/api/fitness/initial-questions", json=unicode_data)
+        response = client.post("/api/training/initial-questions", json=unicode_data)
         # Should handle unicode characters gracefully
         assert response.status_code in [200, 422]
     
@@ -247,7 +247,7 @@ class TestMainApplicationEdgeCases:
     
     def test_application_configuration_consistency(self):
         """Test that application configuration is consistent."""
-        assert app.title == "EvolveAI Workout Plan Generator"
+        assert app.title == "EvolveAI Training Plan Generator"
         assert app.version == "2.0.0"
         assert "FastAPI backend" in app.description
         
@@ -267,16 +267,16 @@ class TestMainApplicationIntegration:
     
     def test_application_with_mocked_dependencies(self, client):
         """Test application behavior with mocked dependencies."""
-        # Mock the fitness coach dependency
-        with patch('main.get_fitness_coach') as mock_get_coach:
+        # Mock the training coach dependency
+        with patch('main.get_training_coach') as mock_get_coach:
             mock_coach = Mock()
             mock_coach.generate_initial_questions.return_value = Mock(total_questions=5)
             mock_get_coach.return_value = mock_coach
             
             # Override the dependency
-            app.dependency_overrides[app.dependency_overrides.get('get_fitness_coach', lambda: mock_coach)] = lambda: mock_coach
+            app.dependency_overrides[app.dependency_overrides.get('get_training_coach', lambda: mock_coach)] = lambda: mock_coach
             
-            response = client.post("/api/fitness/initial-questions", json={
+            response = client.post("/api/training/initial-questions", json={
                 "personal_info": {
                     "username": "testuser",
                     "age": 25,
@@ -295,7 +295,7 @@ class TestMainApplicationIntegration:
     def test_application_error_handling(self, client):
         """Test application error handling."""
         # Test with invalid data that should cause validation errors
-        response = client.post("/api/fitness/initial-questions", json={
+        response = client.post("/api/training/initial-questions", json={
             "invalid_field": "invalid_value"
         })
         
@@ -303,7 +303,7 @@ class TestMainApplicationIntegration:
         assert response.status_code == 422
         
         # Test with missing required fields
-        response = client.post("/api/fitness/initial-questions", json={})
+        response = client.post("/api/training/initial-questions", json={})
         assert response.status_code == 422
     
     def test_application_performance(self, client):

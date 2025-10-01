@@ -89,12 +89,12 @@ class TestBaseAgent:
     
     def test_system_prompt_creation(self, mock_environment, mock_clients):
         """Test system prompt creation."""
-        agent = ConcreteTestAgent("Fitness Coach", "Expert in fitness", "fitness")
+        agent = ConcreteTestAgent("training Coach", "Expert in training", "training")
         
         prompt = agent.system_prompt
-        assert "Fitness Coach" in prompt
-        assert "fitness" in prompt
-        assert "Expert in fitness" in prompt
+        assert "training Coach" in prompt
+        assert "training" in prompt
+        assert "Expert in training" in prompt
         assert "IMPORTANT: Always use your knowledge base" in prompt
     
     def test_search_knowledge_base_success(self, mock_environment, mock_clients):
@@ -305,7 +305,7 @@ class TestBaseAgent:
             {
                 'chunk_text': 'Test content 1',
                 'document_title': 'Test Doc 1',
-                'document_keywords': ['test', 'fitness']
+                'document_keywords': ['test', 'training']
             },
             {
                 'chunk_text': 'Test content 2',
@@ -320,7 +320,7 @@ class TestBaseAgent:
         assert "Test content 2" in context
         assert "Test Doc 1" in context
         assert "Test Doc 2" in context
-        assert "test, fitness" in context
+        assert "test, training" in context
         assert "None" in context  # Empty keywords
     
     def test_prepare_context_no_documents(self, mock_environment, mock_clients):

@@ -14,8 +14,8 @@ import sys
 # Add the backend directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from core.fitness.helpers.response_formatter import ResponseFormatter
-from core.fitness.helpers.ai_question_schemas import AIQuestion, QuestionType, QuestionOption, QuestionCategory
+from core.training.helpers.response_formatter import ResponseFormatter
+from core.training.helpers.ai_question_schemas import AIQuestion, QuestionType, QuestionOption, QuestionCategory
 
 
 class TestResponseFormatter:
@@ -44,13 +44,13 @@ class TestResponseFormatter:
             ),
             AIQuestion(
                 id="specific_goals",
-                text="Do you have any specific fitness goals?",
+                text="Do you have any specific training goals?",
                 response_type=QuestionType.FREE_TEXT,
                 category=QuestionCategory.GOALS_PREFERENCES
             ),
             AIQuestion(
                 id="session_duration",
-                text="How long are your workout sessions?",
+                text="How long are your training sessions?",
                 response_type=QuestionType.SLIDER,
                 category=QuestionCategory.TIME_COMMITMENT,
                 min_value=15,
@@ -89,7 +89,7 @@ class TestResponseFormatter:
             ),
             AIQuestion(
                 id="satisfaction_rating",
-                text="Rate your current fitness level",
+                text="Rate your current training level",
                 response_type=QuestionType.RATING,
                 category=QuestionCategory.TRAINING_EXPERIENCE,
                 min_value=1,
@@ -128,13 +128,13 @@ class TestResponseFormatter:
         # Should contain proper formatting for different question types
         assert "Q: How many days per week do you train?\nA: Daily" in result
         assert "Q: What's your favorite exercise type?\nA: pilates" in result
-        assert "Q: Do you have any specific fitness goals?\nA: Yes i am dante so pleaae" in result
-        assert "Q: How long are your workout sessions?\nA: 45 minutes" in result
+        assert "Q: Do you have any specific training goals?\nA: Yes i am dante so pleaae" in result
+        assert "Q: How long are your training sessions?\nA: 45 minutes" in result
         assert "Q: What's your current weight?\nA: 108 kg" in result
         assert "Q: Do you have access to gym equipment?\nA: No" in result
         assert "Q: Do you have any injuries or limitations?\nA: No" in result
         assert "Q: How motivated are you to achieve your goals?\nA: 4/5 rating (1=Not motivated, 5=Very motivated)" in result
-        assert "Q: Rate your current fitness level\nA: 7/10 rating (1=Beginner, 10=Expert)" in result
+        assert "Q: Rate your current training level\nA: 7/10 rating (1=Beginner, 10=Expert)" in result
     
     def test_format_responses_without_questions(self, sample_responses):
         """Test formatting responses without question context."""

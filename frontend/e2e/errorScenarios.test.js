@@ -188,7 +188,7 @@ describe('Error Scenarios', () => {
     await element(by.id('gender-male')).tap();
     await element(by.id('next-button')).tap();
     
-    // Fitness Goals
+    // training Goals
     await element(by.id('goal-description-input')).typeText('I want to lose weight and build muscle');
     await element(by.id('next-button')).tap();
     
@@ -211,7 +211,7 @@ describe('Error Scenarios', () => {
     await element(by.id('gender-male')).tap();
     await element(by.id('next-button')).tap();
     
-    // Fitness Goals
+    // training Goals
     await element(by.id('goal-description-input')).typeText('I want to lose weight and build muscle');
     await element(by.id('next-button')).tap();
     

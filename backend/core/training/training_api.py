@@ -1,7 +1,7 @@
 """
-Fitness API Endpoints
+training API Endpoints
 
-Handles the complete fitness workflow with a clean, unified interface:
+Handles the complete training workflow with a clean, unified interface:
 - Initial Questions (AI-generated)
 - Follow-up Questions (AI-generated) 
 - Plan Generation (AI)
@@ -13,7 +13,7 @@ import logging
 import os
 import jwt
 
-from core.fitness.helpers.ai_question_schemas import (
+from core.training.helpers.ai_question_schemas import (
     InitialQuestionsRequest,
     FollowUpQuestionsRequest,
     TrainingPlanOutlineRequest,
@@ -21,18 +21,18 @@ from core.fitness.helpers.ai_question_schemas import (
     PlanGenerationResponse,
     PersonalInfo
 )
-from core.fitness.fitness_coach import FitnessCoach
-from core.fitness.helpers.schemas import WorkoutPlanSchema
-from core.fitness.helpers.database_service import db_service
+from core.training.training_coach import TrainingCoach
+from core.training.helpers.training_schemas import TrainingPlan
+from core.training.helpers.database_service import db_service
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/fitness", tags=["fitness"])
+router = APIRouter(prefix="/api/training", tags=["training"])
 
-# Dependency to get FitnessCoach instance
-def get_fitness_coach() -> FitnessCoach:
-    """Get FitnessCoach instance with all capabilities."""
-    return FitnessCoach()
+# Dependency to get TrainingCoach instance
+def get_training_coach() -> TrainingCoach:
+    """Get TrainingCoach instance with all capabilities."""
+    return TrainingCoach()
 
 # Shared JWT extraction dependency
 def extract_user_id_from_jwt(jwt_token: str) -> str:
@@ -53,7 +53,7 @@ def extract_user_id_from_jwt(jwt_token: str) -> str:
 @router.post("/initial-questions")
 async def get_initial_questions(
     request: InitialQuestionsRequest,
-    coach: FitnessCoach = Depends(get_fitness_coach)
+    coach: TrainingCoach = Depends(get_training_coach)
 ):
     """Generate initial personalized questions based on personal info and goal."""
     try:
@@ -100,12 +100,15 @@ async def get_initial_questions(
         
         questions_response = coach.generate_initial_questions(request.personal_info)
         
-        # Store initial questions in user profile
+        # Store initial questions and AI message in user profile
         try:
             update_result = await db_service.update_user_profile(
                 user_id=user_id,
                 data={
-                    "initial_questions": [question.dict() for question in questions_response.questions]
+                    "initial_questions": {
+                        "questions": [question.model_dump() for question in questions_response.questions],
+                        "AImessage": questions_response.ai_message
+                    }
                 },
                 jwt_token=request.jwt_token
             )
@@ -121,7 +124,13 @@ async def get_initial_questions(
         
         return {
             "success": True,
-            "data": questions_response,
+            "data": {
+                "questions": questions_response.questions,
+                "total_questions": questions_response.total_questions,
+                "estimated_time_minutes": questions_response.estimated_time_minutes,
+                "categories": questions_response.categories,
+                "ai_message": questions_response.ai_message
+            },
             "message": "Initial questions generated successfully"
         }
         
@@ -137,7 +146,7 @@ async def get_initial_questions(
 @router.post("/follow-up-questions")
 async def get_follow_up_questions(
     request: FollowUpQuestionsRequest,
-    coach: FitnessCoach = Depends(get_fitness_coach)
+    coach: TrainingCoach = Depends(get_training_coach)
 ):
     """Generate follow-up questions based on initial responses."""
     try:
@@ -175,7 +184,7 @@ async def get_follow_up_questions(
             }
         
         # Format responses using backend ResponseFormatter
-        from core.fitness.helpers.response_formatter import ResponseFormatter
+        from core.training.helpers.response_formatter import ResponseFormatter
         formatted_responses = ResponseFormatter.format_responses(
             request.initial_responses,
             initial_questions
@@ -205,12 +214,15 @@ async def get_follow_up_questions(
             initial_questions
         )
         
-        # Store follow-up questions AFTER generation
+        # Store follow-up questions and AI message AFTER generation
         try:
             update_result = await db_service.update_user_profile(
                 user_id=user_id,
                 data={
-                    "follow_up_questions": [question.dict() for question in questions_response.questions]
+                    "follow_up_questions": {
+                        "questions": [question.model_dump() for question in questions_response.questions],
+                        "AImessage": questions_response.ai_message
+                    }
                 },
                 jwt_token=request.jwt_token
             )
@@ -248,7 +260,7 @@ async def get_follow_up_questions(
 @router.post("/training-plan-outline")
 async def generate_training_plan_outline(
     request: TrainingPlanOutlineRequest,
-    coach: FitnessCoach = Depends(get_fitness_coach)
+    coach: TrainingCoach = Depends(get_training_coach)
 ):
     """Generate a training plan outline before creating the final plan."""
     
@@ -303,7 +315,7 @@ async def generate_training_plan_outline(
             }
         
         # Format responses using backend ResponseFormatter
-        from core.fitness.helpers.response_formatter import ResponseFormatter
+        from core.training.helpers.response_formatter import ResponseFormatter
         formatted_initial_responses = ResponseFormatter.format_responses(
             request.initial_responses,
             initial_questions
@@ -344,12 +356,15 @@ async def generate_training_plan_outline(
         if result.get('success'):
             logger.info("Training plan outline generated successfully")
             
-            # Store plan outline and initialize feedback AFTER generation
+            # Store plan outline, AI message and initialize feedback AFTER generation
             try:
                 update_result = await db_service.update_user_profile(
                     user_id=user_id,
                     data={
-                        "plan_outline": result.get('outline'),
+                        "plan_outline": {
+                            "outline": result.get('outline'),
+                            "AImessage": result.get('ai_message')
+                        },
                         "plan_outline_feedback": ""  # Initialize as empty string
                     },
                     jwt_token=request.jwt_token
@@ -390,11 +405,11 @@ async def generate_training_plan_outline(
 
 
 @router.post("/generate-plan")
-async def generate_workout_plan(
+async def generate_training_plan(
     request: PlanGenerationRequest,
-    coach: FitnessCoach = Depends(get_fitness_coach)
+    coach: TrainingCoach = Depends(get_training_coach)
 ):
-    """Generate the final workout plan using only initial/follow-up questions and exercises."""
+    """Generate the final training plan using only initial/follow-up questions and exercises."""
 
     try:
         # Validate input
@@ -412,7 +427,7 @@ async def generate_workout_plan(
                 "message": "Follow-up responses cannot be empty"
             }
         
-        logger.info(f"Generating workout plan for user: {request.personal_info.goal_description}")
+        logger.info(f"Generating training plan for user: {request.personal_info.goal_description}")
         
         # Extract user_id from JWT token and get user profile ID
         try:
@@ -480,7 +495,7 @@ async def generate_workout_plan(
             }
         
         # Format responses using backend ResponseFormatter
-        from core.fitness.helpers.response_formatter import ResponseFormatter
+        from core.training.helpers.response_formatter import ResponseFormatter
         formatted_initial_responses = ResponseFormatter.format_responses(
             request.initial_responses,
             initial_questions
@@ -520,63 +535,63 @@ async def generate_workout_plan(
         logger.info(f"Coach result: {result}")
         
         if result.get('success'):
-            logger.info("Workout plan generated successfully")
+            logger.info("Training plan generated successfully")
             
-            # Save workout plan to database - REQUIRED
-            workout_plan_data = result.get('workout_plan')
+            # Save training plan to database - REQUIRED
+            training_plan_data = result.get('training_plan')
             
             try:
-                logger.info(f"Saving workout plan to database for user_profile_id: {user_profile_id}")
+                logger.info(f"Saving training plan to database for user_profile_id: {user_profile_id}")
                 
                 # Save to database
-                save_result = await db_service.save_workout_plan(
+                save_result = await db_service.save_training_plan(
                     user_profile_id=user_profile_id,
-                    workout_plan_data=workout_plan_data,
+                    training_plan_data=training_plan_data,
                     jwt_token=request.jwt_token
                 )
                 
                 if save_result.get('success'):
-                    logger.info(f"✅ Workout plan saved successfully (ID: {save_result.get('data', {}).get('workout_plan_id')}) for user {user_profile_id}")
+                    logger.info(f"✅ Training plan saved successfully (ID: {save_result.get('data', {}).get('training_plan_id')}) for user {user_profile_id}")
                     response_data = {
                         "success": True,
                         "data": {
-                            "workout_plan_id": save_result.get('data', {}).get('workout_plan_id'),
+                            "training_plan_id": save_result.get('data', {}).get('training_plan_id'),
                             "metadata": result.get('metadata', {}),
                             "initial_questions": initial_questions,  # Return questions from frontend
                             "follow_up_questions": follow_up_questions,  # Return questions from frontend
                             "plan_outline": plan_outline  # Return plan outline from frontend
                         },
-                        "message": "Workout plan generated and saved successfully"
+                        "message": "Training plan generated and saved successfully"
                     }
                 else:
-                    logger.error(f"❌ Failed to save workout plan to database: {save_result.get('error')}")
+                    logger.error(f"❌ Failed to save training plan to database: {save_result.get('error')}")
                     response_data = {
                         "success": False,
                         "data": None,
-                        "message": f"Workout plan generated but failed to save: {save_result.get('error')}"
+                        "message": f"Training plan generated but failed to save: {save_result.get('error')}"
                     }
             except Exception as e:
-                logger.error(f"❌ Error saving workout plan to database: {str(e)}")
+                logger.error(f"❌ Error saving training plan to database: {str(e)}")
                 response_data = {
                     "success": False,
                     "data": None,
-                    "message": f"Workout plan generated but failed to save: {str(e)}"
+                    "message": f"Training plan generated but failed to save: {str(e)}"
                 }
             
             logger.info(f"API response data: {response_data}")
             return response_data
         else:
-            logger.error(f"Workout plan generation failed: {result.get('error')}")
+            logger.error(f"Training plan generation failed: {result.get('error')}")
             return {
                 "success": False,
                 "data": None,
-                "message": result.get('error', 'Failed to generate workout plan')
+                "message": result.get('error', 'Failed to generate training plan')
             }
             
     except Exception as e:
-        logger.error(f"Error generating workout plan: {str(e)}")
+        logger.error(f"Error generating training plan: {str(e)}")
         return {
             "success": False,
             "data": None,
-            "message": f"Failed to generate workout plan: {str(e)}"
+            "message": f"Failed to generate training plan: {str(e)}"
         }

@@ -116,15 +116,15 @@ export const DeepLinkHandlers = {
   },
   
   /**
-   * Handle workout deep link
+   * Handle training deep link
    */
-  handleWorkout: (workoutId: string) => {
-    // Navigate to specific workout
+  handleTraining: (trainingId: string) => {
+    // Navigate to specific training
     navigate('Main', { 
-      screen: 'WorkoutTab', 
+      screen: 'TrainingTab', 
       params: { 
-        screen: 'WorkoutDetail', 
-        params: { workoutId } 
+        screen: 'TrainingDetail', 
+        params: { trainingId } 
       } 
     });
   },

@@ -1,32 +1,32 @@
 /**
- * Simple structural tests for TodaysWorkout component
+ * Simple structural tests for TodaysTraining component
  * Tests core functionality without React Native dependencies
  */
 
-describe('TodaysWorkout Component - Simple Tests', () => {
+describe('TodaysTraining Component - Simple Tests', () => {
   describe('Component Structure', () => {
     it('should validate component props interface', () => {
       const props = {
-        workout: {
+        training: {
           id: 1,
-          name: 'Monday Workout',
+          name: 'Monday Training',
           isRestDay: false,
           exercises: []
         },
-        onStartWorkout: jest.fn()
+        onStartTraining: jest.fn()
       };
       
-      expect(typeof props.workout.id).toBe('number');
-      expect(typeof props.workout.name).toBe('string');
-      expect(typeof props.workout.isRestDay).toBe('boolean');
-      expect(Array.isArray(props.workout.exercises)).toBe(true);
-      expect(typeof props.onStartWorkout).toBe('function');
+      expect(typeof props.training.id).toBe('number');
+      expect(typeof props.training.name).toBe('string');
+      expect(typeof props.training.isRestDay).toBe('boolean');
+      expect(Array.isArray(props.training.exercises)).toBe(true);
+      expect(typeof props.onStartTraining).toBe('function');
     });
 
-    it('should handle workout data structure correctly', () => {
-      const mockWorkout = {
+    it('should handle training data structure correctly', () => {
+      const mockTraining = {
         id: 1,
-        name: 'Monday Workout',
+        name: 'Monday Training',
         isRestDay: false,
         exercises: [
           { id: '1', name: 'Push-ups', completed: false },
@@ -35,10 +35,10 @@ describe('TodaysWorkout Component - Simple Tests', () => {
         ]
       };
 
-      expect(mockWorkout.id).toBe(1);
-      expect(mockWorkout.name).toBe('Monday Workout');
-      expect(mockWorkout.isRestDay).toBe(false);
-      expect(mockWorkout.exercises).toHaveLength(3);
+      expect(mockTraining.id).toBe(1);
+      expect(mockTraining.name).toBe('Monday Training');
+      expect(mockTraining.isRestDay).toBe(false);
+      expect(mockTraining.exercises).toHaveLength(3);
     });
 
     it('should handle rest day data structure correctly', () => {
@@ -56,8 +56,8 @@ describe('TodaysWorkout Component - Simple Tests', () => {
     });
   });
 
-  describe('Workout Data Processing', () => {
-    it('should process workout exercises correctly', () => {
+  describe('Training Data Processing', () => {
+    it('should process training exercises correctly', () => {
       const exercises = [
         { id: '1', name: 'Push-ups', completed: false },
         { id: '2', name: 'Squats', completed: true },
@@ -111,22 +111,22 @@ describe('TodaysWorkout Component - Simple Tests', () => {
 
   describe('Rest Day Logic', () => {
     it('should identify rest days correctly', () => {
-      const restDayWorkout = { isRestDay: true };
-      const workoutDay = { isRestDay: false };
+      const restDayTraining = { isRestDay: true };
+      const trainingDay = { isRestDay: false };
 
-      expect(restDayWorkout.isRestDay).toBe(true);
-      expect(workoutDay.isRestDay).toBe(false);
+      expect(restDayTraining.isRestDay).toBe(true);
+      expect(trainingDay.isRestDay).toBe(false);
     });
 
-    it('should handle null workout as rest day', () => {
-      const workout: any = null;
-      const isRestDay = !workout || workout.isRestDay;
+    it('should handle null training as rest day', () => {
+      const training: any = null;
+      const isRestDay = !training || training.isRestDay;
       expect(isRestDay).toBe(true);
     });
 
-    it('should handle undefined workout as rest day', () => {
-      const workout: any = undefined;
-      const isRestDay = !workout || workout.isRestDay;
+    it('should handle undefined training as rest day', () => {
+      const training: any = undefined;
+      const isRestDay = !training || training.isRestDay;
       expect(isRestDay).toBe(true);
     });
   });
@@ -171,7 +171,7 @@ describe('TodaysWorkout Component - Simple Tests', () => {
   });
 
   describe('Callback Handling', () => {
-    it('should handle onStartWorkout callback', () => {
+    it('should handle onStartTraining callback', () => {
       const mockCallback = jest.fn();
       
       // Simulate callback execution
@@ -193,16 +193,16 @@ describe('TodaysWorkout Component - Simple Tests', () => {
   });
 
   describe('Data Validation', () => {
-    it('should validate workout ID', () => {
-      const workout = { id: 1, name: 'Test Workout' };
-      expect(typeof workout.id).toBe('number');
-      expect(workout.id).toBeGreaterThan(0);
+    it('should validate training ID', () => {
+      const training = { id: 1, name: 'Test Training' };
+      expect(typeof training.id).toBe('number');
+      expect(training.id).toBeGreaterThan(0);
     });
 
-    it('should validate workout name', () => {
-      const workout = { id: 1, name: 'Test Workout' };
-      expect(typeof workout.name).toBe('string');
-      expect(workout.name.length).toBeGreaterThan(0);
+    it('should validate training name', () => {
+      const training = { id: 1, name: 'Test Training' };
+      expect(typeof training.name).toBe('string');
+      expect(training.name.length).toBeGreaterThan(0);
     });
 
     it('should validate exercise structure', () => {
@@ -215,19 +215,19 @@ describe('TodaysWorkout Component - Simple Tests', () => {
   });
 
   describe('Edge Cases', () => {
-    it('should handle workout with no exercises', () => {
-      const workout = {
+    it('should handle training with no exercises', () => {
+      const training = {
         id: 1,
-        name: 'Empty Workout',
+        name: 'Empty Training',
         isRestDay: false,
         exercises: []
       };
 
-      expect(workout.exercises).toHaveLength(0);
-      expect(workout.isRestDay).toBe(false);
+      expect(training.exercises).toHaveLength(0);
+      expect(training.isRestDay).toBe(false);
     });
 
-    it('should handle workout with mixed exercise completion', () => {
+    it('should handle training with mixed exercise completion', () => {
       const exercises = [
         { id: '1', name: 'Exercise 1', completed: true },
         { id: '2', name: 'Exercise 2', completed: false },

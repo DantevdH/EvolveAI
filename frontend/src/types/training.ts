@@ -1,10 +1,10 @@
-// Training Types - Based on Swift TrainingViewModel and WorkoutModels
+// Training Types - Based on Swift TrainingViewModel and TrainingModels
 
 export interface TrainingState {
   currentWeekSelected: number;
   selectedDayIndex: number;
   completedExercises: Set<string>;
-  completedWorkouts: Set<string>;
+  completedTrainings: Set<string>;
   isShowingExerciseDetail: boolean;
   selectedExercise: Exercise | null;
   isLoading: boolean;
@@ -27,7 +27,7 @@ export interface Exercise {
   videoUrl?: string;
 }
 
-export interface WorkoutSet {
+export interface TrainingSet {
   id: string;
   reps: number;
   weight: number;
@@ -35,21 +35,21 @@ export interface WorkoutSet {
   restTime?: number; // in seconds
 }
 
-export interface WorkoutExercise {
+export interface TrainingExercise {
   id: string;
   exerciseId: string;
   exercise: Exercise;
-  sets: WorkoutSet[];
+  sets: TrainingSet[];
   completed: boolean;
   order: number;
   weight1RM?: number[]; // Weight as percentage of 1RM for each set (e.g., [80, 75, 70])
 }
 
-export interface DailyWorkout {
+export interface DailyTraining {
   id: string;
   dayOfWeek: string;
   isRestDay: boolean;
-  exercises: WorkoutExercise[];
+  exercises: TrainingExercise[];
   completed?: boolean; // Optional since it's calculated from exercises
   completedAt?: Date;
   duration?: number; // in minutes
@@ -59,12 +59,12 @@ export interface DailyWorkout {
 export interface WeeklySchedule {
   id: string;
   weekNumber: number;
-  dailyWorkouts: DailyWorkout[];
+  dailyTrainings: DailyTraining[];
   completed: boolean;
   completedAt?: Date;
 }
 
-export interface WorkoutPlan {
+export interface TrainingPlan {
   id: string;
   title: string;
   description: string;
@@ -120,7 +120,7 @@ export interface RestTimer {
   exerciseName: string;
 }
 
-export interface WorkoutProgress {
+export interface TrainingProgress {
   currentExercise: number;
   totalExercises: number;
   currentSet: number;
@@ -129,9 +129,9 @@ export interface WorkoutProgress {
 }
 
 // API Response Types
-export interface WorkoutPlanResponse {
+export interface TrainingPlanResponse {
   success: boolean;
-  data?: WorkoutPlan;
+  data?: TrainingPlan;
   error?: string;
 }
 
@@ -143,14 +143,14 @@ export interface ExerciseResponse {
 
 export interface UpdateSetResponse {
   success: boolean;
-  data?: WorkoutSet;
+  data?: TrainingSet;
   error?: string;
 }
 
-export interface CompleteWorkoutResponse {
+export interface CompleteTrainingResponse {
   success: boolean;
   data?: {
-    workoutId: string;
+    trainingId: string;
   };
   error?: string;
 }
@@ -159,15 +159,15 @@ export interface CompleteWorkoutResponse {
 export interface UseTrainingReturn {
   // State
   trainingState: TrainingState;
-  workoutPlan: WorkoutPlan | null;
-  selectedDayWorkout: DailyWorkout | null;
+  trainingPlan: TrainingPlan | null;
+  selectedDayTraining: DailyTraining | null;
   progressRing: ProgressRingData;
   weekNavigation: WeekNavigationData;
   dayIndicators: DayIndicator[];
   exerciseDetailTabs: ExerciseDetailTabs;
   oneRMCalculator: OneRMCalculator;
   restTimer: RestTimer;
-  workoutProgress: WorkoutProgress;
+  trainingProgress: TrainingProgress;
   
   // Actions
   selectWeek: (week: number) => void;
@@ -181,11 +181,11 @@ export interface UseTrainingReturn {
   calculateOneRM: (weight: number, reps: number) => number;
   startRestTimer: (duration: number, exerciseName: string) => void;
   stopRestTimer: () => void;
-  completeWorkout: () => Promise<void>;
-  reopenWorkout: () => void;
-  confirmReopenWorkout: (resetExercises?: boolean) => void;
-  cancelReopenWorkout: () => void;
-  refreshWorkoutPlan: () => Promise<void>;
+  completeTraining: () => Promise<void>;
+  reopenTraining: () => void;
+  confirmReopenTraining: (resetExercises?: boolean) => void;
+  cancelReopenTraining: () => void;
+  refreshTrainingPlan: () => Promise<void>;
   
   // Exercise swap actions
   showExerciseSwapModal: (exercise: Exercise) => void;
@@ -199,17 +199,17 @@ export interface UseTrainingReturn {
   // Computed
   isPlanComplete: boolean;
   currentWeekProgress: number;
-  totalWorkoutsCompleted: number;
+  totalTrainingsCompleted: number;
   streak: number;
 }
 
 // Component Props Types
 export interface TrainingHeaderProps {
-  workoutPlan: WorkoutPlan | null;
+  trainingPlan: TrainingPlan | null;
   progressRing: ProgressRingData;
   currentWeek: number;
-  completedWorkoutsThisWeek: number;
-  totalWorkoutsThisWeek: number;
+  completedTrainingsThisWeek: number;
+  totalTrainingsThisWeek: number;
 }
 
 export interface WeekNavigationProps {
@@ -229,19 +229,19 @@ export interface WeekNavigationAndOverviewProps {
   onDaySelect: (dayIndex: number) => void;
 }
 
-export interface DailyWorkoutDetailProps {
-  dailyWorkout: DailyWorkout | null;
+export interface DailyTrainingDetailProps {
+  dailyTraining: DailyTraining | null;
   isPastWeek: boolean;
   onExerciseToggle: (exerciseId: string) => void;
   onSetUpdate: (exerciseId: string, setIndex: number, reps: number, weight: number) => Promise<void>;
   onExerciseDetail: (exercise: Exercise) => void;
   onOneRMCalculator: (exerciseName: string) => void;
   onSwapExercise?: (exercise: Exercise) => void;
-  onReopenWorkout?: () => void;
+  onReopenTraining?: () => void;
 }
 
 export interface ExerciseRowProps {
-  exercise: WorkoutExercise;
+  exercise: TrainingExercise;
   onToggle: () => void;
   onSetUpdate: (setIndex: number, reps: number, weight: number) => Promise<void>;
   onShowDetail: () => void;
@@ -251,7 +251,7 @@ export interface ExerciseRowProps {
 }
 
 export interface SetRowProps {
-  set: WorkoutSet;
+  set: TrainingSet;
   setIndex: number;
   onUpdate: (reps: number, weight: number) => Promise<void>;
 }

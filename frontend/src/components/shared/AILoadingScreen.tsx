@@ -10,6 +10,7 @@ interface AILoadingScreenProps {
   username?: string;
   analysisPhase?: 'initial' | 'followup' | 'outline' | 'generation' | null;
   customMessage?: string;
+  aiMessage?: string; // AI message from backend
   coachName?: string;
   onContinue?: () => void;
   showContinueButton?: boolean;
@@ -24,6 +25,7 @@ export const AILoadingScreen: React.FC<AILoadingScreenProps> = ({
   username = 'there',
   analysisPhase = null,
   customMessage,
+  aiMessage,
   coachName = 'AI Coach',
   onContinue,
   showContinueButton = false,
@@ -53,13 +55,13 @@ export const AILoadingScreen: React.FC<AILoadingScreenProps> = ({
   const getLoadingDescription = () => {
     switch (analysisPhase) {
       case 'initial':
-        return "Our AI coach is reviewing your fitness goals and personal information...";
+        return "Our AI coach is reviewing your training goals and personal information...";
       case 'followup':
         return "Our AI coach is analyzing your responses to create personalized follow-up questions...";
       case 'outline':
         return "Our AI coach is crafting your personalized training plan outline...";
       case 'generation':
-        return "Our AI coach is creating your complete personalized workout plan...";
+        return "Our AI coach is creating your complete personalized training plan...";
       default:
         return "Please wait while our AI coach processes your information.";
     }
@@ -79,6 +81,7 @@ export const AILoadingScreen: React.FC<AILoadingScreenProps> = ({
               username={username}
               analysisPhase={analysisPhase}
               customMessage={customMessage}
+              aiMessage={aiMessage}
               onTypingComplete={handleTypingComplete}
             />
           </View>

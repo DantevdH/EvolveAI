@@ -13,7 +13,7 @@ export const API_CONFIG = {
 export const STORAGE_KEYS = {
   USER_TOKEN: 'user_token',
   USER_PROFILE: 'user_profile',
-  WORKOUT_HISTORY: 'workout_history',
+  WORKOUT_HISTORY: 'training_history',
   APP_SETTINGS: 'app_settings',
   ONBOARDING_COMPLETED: 'onboarding_completed',
 } as const;
@@ -26,13 +26,13 @@ export const APP_CONFIG = {
   ENABLE_LOGGING: __DEV__,
 } as const;
 
-// Workout Constants
+// Training Constants
 export const WORKOUT_CONFIG = {
   MIN_WORKOUT_DURATION: 10, // minutes
   MAX_WORKOUT_DURATION: 120, // minutes
   DEFAULT_REST_TIME: 60, // seconds
   DIFFICULTY_LEVELS: ['easy', 'medium', 'hard'] as const,
-  FITNESS_LEVELS: ['beginner', 'intermediate', 'advanced'] as const,
+  training_LEVELS: ['beginner', 'intermediate', 'advanced'] as const,
 } as const;
 
 // Animation Durations

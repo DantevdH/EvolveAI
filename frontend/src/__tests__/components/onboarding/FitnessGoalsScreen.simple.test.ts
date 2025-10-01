@@ -1,9 +1,9 @@
 /**
- * Simple structural tests for FitnessGoalsScreen
+ * Simple structural tests for trainingGoalsScreen
  * Tests core functionality without React Native dependencies
  */
 
-describe('FitnessGoalsScreen Component - Simple Tests', () => {
+describe('trainingGoalsScreen Component - Simple Tests', () => {
   describe('Validation Functions', () => {
     it('should validate goal description correctly', () => {
       const { validateGoalDescription } = require('../../../utils/onboardingValidation');
@@ -33,19 +33,19 @@ describe('FitnessGoalsScreen Component - Simple Tests', () => {
     });
   });
 
-  describe('Fitness Goals Data', () => {
-    it('should have fitness goals defined', () => {
-      const { fitnessGoals } = require('../../../types/onboarding');
+  describe('training Goals Data', () => {
+    it('should have training goals defined', () => {
+      const { trainingGoals } = require('../../../types/onboarding');
       
-      expect(fitnessGoals).toBeDefined();
-      expect(Array.isArray(fitnessGoals)).toBe(true);
-      expect(fitnessGoals.length).toBeGreaterThan(0);
+      expect(trainingGoals).toBeDefined();
+      expect(Array.isArray(trainingGoals)).toBe(true);
+      expect(trainingGoals.length).toBeGreaterThan(0);
     });
 
-    it('should have proper fitness goal structure', () => {
-      const { fitnessGoals } = require('../../../types/onboarding');
+    it('should have proper training goal structure', () => {
+      const { trainingGoals } = require('../../../types/onboarding');
       
-      fitnessGoals.forEach((goal: any) => {
+      trainingGoals.forEach((goal: any) => {
         expect(goal).toHaveProperty('value');
         expect(goal).toHaveProperty('title');
         expect(goal).toHaveProperty('description');
@@ -124,15 +124,15 @@ describe('FitnessGoalsScreen Component - Simple Tests', () => {
   });
 
   describe('Form Fields Structure', () => {
-    it('should have all required fitness goal fields', () => {
-      const fitnessGoalFields = [
+    it('should have all required training goal fields', () => {
+      const trainingGoalFields = [
         'primaryGoal',
         'goalDescription',
         'availableCoaches',
         'selectedCoachId'
       ];
 
-      fitnessGoalFields.forEach(field => {
+      trainingGoalFields.forEach(field => {
         expect(field).toBeDefined();
         expect(typeof field).toBe('string');
         expect(field.length).toBeGreaterThan(0);
@@ -346,32 +346,32 @@ describe('FitnessGoalsScreen Component - Simple Tests', () => {
   });
 
   describe('Data Persistence', () => {
-    it('should persist all fitness goal data', () => {
+    it('should persist all training goal data', () => {
       const mockUpdateData = jest.fn();
       
-      const fitnessGoalData = {
+      const trainingGoalData = {
         primaryGoal: 'muscle_gain',
         goalDescription: 'I want to build muscle and strength',
         availableCoaches: [{ id: '1', name: 'Coach A' }],
         selectedCoachId: '1'
       };
       
-      mockUpdateData(fitnessGoalData);
+      mockUpdateData(trainingGoalData);
       
-      expect(mockUpdateData).toHaveBeenCalledWith(fitnessGoalData);
+      expect(mockUpdateData).toHaveBeenCalledWith(trainingGoalData);
     });
 
     it('should maintain state across navigation', () => {
       const mockState = {
         currentStep: 3,
         data: {
-          primaryGoal: 'cardio_fitness',
+          primaryGoal: 'cardio_training',
           goalDescription: 'I want to improve my cardiovascular health',
           selectedCoachId: 'coach_456'
         }
       };
       
-      expect(mockState.data.primaryGoal).toBe('cardio_fitness');
+      expect(mockState.data.primaryGoal).toBe('cardio_training');
       expect(mockState.data.goalDescription).toBe('I want to improve my cardiovascular health');
       expect(mockState.data.selectedCoachId).toBe('coach_456');
     });
@@ -403,12 +403,12 @@ describe('FitnessGoalsScreen Component - Simple Tests', () => {
   describe('Auto-selection Logic', () => {
     it('should auto-select first goal if none selected', () => {
       const mockUpdateData = jest.fn();
-      const { fitnessGoals } = require('../../../types/onboarding');
+      const { trainingGoals } = require('../../../types/onboarding');
       
       // Simulate auto-selection
-      if (fitnessGoals.length > 0) {
-        mockUpdateData({ primaryGoal: fitnessGoals[0].value });
-        expect(mockUpdateData).toHaveBeenCalledWith({ primaryGoal: fitnessGoals[0].value });
+      if (trainingGoals.length > 0) {
+        mockUpdateData({ primaryGoal: trainingGoals[0].value });
+        expect(mockUpdateData).toHaveBeenCalledWith({ primaryGoal: trainingGoals[0].value });
       }
     });
 
@@ -431,8 +431,8 @@ describe('FitnessGoalsScreen Component - Simple Tests', () => {
     it('should have proper modal text content', () => {
       const modalContent = {
         title: 'Missing Goal Description',
-        subtitle: 'You haven\'t described your specific fitness goals yet. Adding details will help our AI create a more personalized training plan for you.',
-        question: 'Would you like to add details about your fitness goals now?',
+        subtitle: 'You haven\'t described your specific training goals yet. Adding details will help our AI create a more personalized training plan for you.',
+        question: 'Would you like to add details about your training goals now?',
         skipButton: 'Skip',
         addInfoButton: 'Add Info'
       };

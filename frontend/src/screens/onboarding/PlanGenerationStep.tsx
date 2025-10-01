@@ -43,7 +43,7 @@ export const PlanGenerationStep: React.FC<PlanGenerationStepProps> = ({
         <AnimatedSpinner coachName="AI Coach" />
         <LoadingIndicator 
           isLoading={true} 
-          message="Creating your personalized workout plan..." 
+          message="Creating your personalized training plan..." 
         />
       </View>
     </OnboardingCard>

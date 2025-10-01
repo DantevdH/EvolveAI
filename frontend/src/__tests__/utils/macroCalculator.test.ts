@@ -5,7 +5,7 @@
 import {
   calculateMacros,
   estimateBaseActivityFromProfile,
-  estimateWorkoutIntensity,
+  estimateTrainingIntensity,
   estimateWeightGoalFromProfile,
   convertWeightToKg,
   convertHeightToCm,
@@ -22,8 +22,8 @@ describe('MacroCalculator', () => {
         height: 180, // cm
         age: 30,
         baseActivity: 'moderate' as const,
-        workoutsPerWeek: 4,
-        workoutIntensity: 'medium' as const,
+        trainingsPerWeek: 4,
+        trainingIntensity: 'medium' as const,
         targetWeight: 75, // kg (5kg loss)
         timeframeWeeks: 6, // weeks
       };
@@ -58,8 +58,8 @@ describe('MacroCalculator', () => {
         height: 165, // cm
         age: 25,
         baseActivity: 'light' as const,
-        workoutsPerWeek: 3,
-        workoutIntensity: 'low' as const,
+        trainingsPerWeek: 3,
+        trainingIntensity: 'low' as const,
         targetWeight: 65, // kg (maintenance)
         timeframeWeeks: 6,
       };
@@ -82,8 +82,8 @@ describe('MacroCalculator', () => {
         height: 175, // cm
         age: 28,
         baseActivity: 'high' as const,
-        workoutsPerWeek: 5,
-        workoutIntensity: 'high' as const,
+        trainingsPerWeek: 5,
+        trainingIntensity: 'high' as const,
         targetWeight: 78, // kg (3kg gain)
         timeframeWeeks: 6,
       };
@@ -119,19 +119,19 @@ describe('MacroCalculator', () => {
     });
   });
 
-  describe('estimateWorkoutIntensity', () => {
-    it('should return low for light workouts', () => {
-      const result = estimateWorkoutIntensity(3, 45); // 135 min/week
+  describe('estimateTrainingIntensity', () => {
+    it('should return low for light trainings', () => {
+      const result = estimateTrainingIntensity(3, 45); // 135 min/week
       expect(result).toBe(WORKOUT_INTENSITY.low);
     });
 
-    it('should return medium for moderate workouts', () => {
-      const result = estimateWorkoutIntensity(4, 75); // 300 min/week
+    it('should return medium for moderate trainings', () => {
+      const result = estimateTrainingIntensity(4, 75); // 300 min/week
       expect(result).toBe(WORKOUT_INTENSITY.medium);
     });
 
-    it('should return high for intensive workouts', () => {
-      const result = estimateWorkoutIntensity(5, 90); // 450 min/week
+    it('should return high for intensive trainings', () => {
+      const result = estimateTrainingIntensity(5, 90); // 450 min/week
       expect(result).toBe(WORKOUT_INTENSITY.high);
     });
   });
@@ -149,8 +149,8 @@ describe('MacroCalculator', () => {
       expect(result.timeframeWeeks).toBe(6);
     });
 
-    it('should return maintenance for general fitness goals', () => {
-      const result = estimateWeightGoalFromProfile('General Fitness', 70);
+    it('should return maintenance for general training goals', () => {
+      const result = estimateWeightGoalFromProfile('General training', 70);
       expect(result.targetWeight).toBe(70);
       expect(result.timeframeWeeks).toBe(6);
     });

@@ -37,8 +37,8 @@ class TestRAGTool:
         """Create sample search results for testing."""
         return [
             {
-                'document_title': 'Fitness Guide 1',
-                'chunk_text': 'Beginner workout plan for chest exercises',
+                'document_title': 'training Guide 1',
+                'chunk_text': 'Beginner training plan for chest exercises',
                 'relevance_score': 0.8,
                 'document_metadata': {
                     'difficulty_level': 'beginner',
@@ -46,7 +46,7 @@ class TestRAGTool:
                 }
             },
             {
-                'document_title': 'Fitness Guide 2',
+                'document_title': 'training Guide 2',
                 'chunk_text': 'Advanced strength training for legs',
                 'relevance_score': 0.9,
                 'document_metadata': {
@@ -55,8 +55,8 @@ class TestRAGTool:
                 }
             },
             {
-                'document_title': 'Fitness Guide 3',
-                'chunk_text': 'Intermediate back workout routine',
+                'document_title': 'training Guide 3',
+                'chunk_text': 'Intermediate back training routine',
                 'relevance_score': 0.7,
                 'document_metadata': {
                     'difficulty_level': 'intermediate',
@@ -106,7 +106,7 @@ class TestRAGTool:
         assert filters['body_part'] == 'chest'
         
         # Test back
-        query = "Need back and lat workout"
+        query = "Need back and lat training"
         filters = rag_tool.extract_metadata_filters(query)
         assert filters['body_part'] == 'back'
         
@@ -121,19 +121,19 @@ class TestRAGTool:
         assert filters['body_part'] == 'arms'
         
         # Test core
-        query = "Core and abs workout"
+        query = "Core and abs training"
         filters = rag_tool.extract_metadata_filters(query)
         assert filters['body_part'] == 'core'
         
         # Test full body
-        query = "Full body compound workout"
+        query = "Full body compound training"
         filters = rag_tool.extract_metadata_filters(query)
         assert filters['body_part'] == 'full_body'
     
     def test_extract_metadata_filters_sport_types(self, rag_tool):
         """Test metadata extraction for sport types."""
         # Test strength training
-        query = "Strength and muscle building workout"
+        query = "Strength and muscle building training"
         filters = rag_tool.extract_metadata_filters(query)
         assert filters['sport_type'] == 'strength_training'
         
@@ -160,7 +160,7 @@ class TestRAGTool:
         assert filters['equipment_needed'] == ['bodyweight']
         
         # Test dumbbells
-        query = "Dumbbell workout routine"
+        query = "Dumbbell training routine"
         filters = rag_tool.extract_metadata_filters(query)
         assert filters['equipment_needed'] == ['dumbbells']
         
@@ -170,7 +170,7 @@ class TestRAGTool:
         assert filters['equipment_needed'] == ['barbell']
         
         # Test machine
-        query = "Machine-based workout"
+        query = "Machine-based training"
         filters = rag_tool.extract_metadata_filters(query)
         assert filters['equipment_needed'] == ['machine']
     
@@ -187,12 +187,12 @@ class TestRAGTool:
         assert filters['training_frequency'] == '4-5_times_per_week'
         
         # Test daily
-        query = "Daily workout routine"
+        query = "Daily training routine"
         filters = rag_tool.extract_metadata_filters(query)
         assert filters['training_frequency'] == 'daily'
     
     def test_extract_metadata_filters_goals(self, rag_tool):
-        """Test metadata extraction for fitness goals."""
+        """Test metadata extraction for training goals."""
         # Test weight loss
         query = "I want to lose weight and burn calories"
         filters = rag_tool.extract_metadata_filters(query)
@@ -243,7 +243,7 @@ class TestRAGTool:
         # Mock the base agent to return results
         rag_tool.base_agent.search_knowledge_base.return_value = sample_search_results
         
-        query = "beginner chest workout"
+        query = "beginner chest training"
         results = rag_tool.perform_hybrid_search(query, max_results=5)
         
         # Should call search_knowledge_base with metadata filters
@@ -287,7 +287,7 @@ class TestRAGTool:
     
     def test_re_rank_results(self, rag_tool, sample_search_results):
         """Test result re-ranking."""
-        query = "beginner chest workout"
+        query = "beginner chest training"
         ranked_results = rag_tool._re_rank_results(query, sample_search_results)
         
         # Should add final_score to each result
@@ -319,7 +319,7 @@ class TestRAGTool:
         # Mock hybrid search to return results
         rag_tool.perform_hybrid_search = Mock(return_value=sample_search_results)
         
-        query = "beginner workout"
+        query = "beginner training"
         augmented = rag_tool.augment_context(query, max_context_length=1000)
         
         # Should include original query
@@ -364,7 +364,7 @@ class TestRAGTool:
         rag_tool.extract_metadata_filters = Mock(return_value={'difficulty_level': 'beginner'})
         rag_tool.perform_hybrid_search = Mock(return_value=sample_search_results)
         
-        query = "beginner chest workout"
+        query = "beginner chest training"
         insights = rag_tool.get_search_insights(query)
         
         # Should return structured insights
@@ -386,7 +386,7 @@ class TestRAGTool:
         rag_tool.extract_metadata_filters = Mock(return_value={})
         rag_tool.perform_hybrid_search = Mock(return_value=sample_search_results)
         
-        query = "general fitness"
+        query = "general training"
         insights = rag_tool.get_search_insights(query)
         
         # Should indicate vector-only strategy
@@ -430,7 +430,7 @@ class TestRAGTool:
     
     def test_edge_case_special_characters(self, rag_tool):
         """Test edge case with special characters in query."""
-        query = "I want a workout plan! @#$%^&*()"
+        query = "I want a training plan! @#$%^&*()"
         filters = rag_tool.extract_metadata_filters(query)
         
         # Should still extract relevant filters if patterns match

@@ -97,14 +97,14 @@ export class ErrorHandler {
   }
 
   /**
-   * Show workout plan generation errors
+   * Show training plan generation errors
    */
-  static showWorkoutPlanError(
+  static showTrainingPlanError(
     error: string, 
     onRetry?: () => void
   ): void {
     this.showError(
-      `Workout Plan Generation Failed: ${error}\n\nPlease check your connection and try again.`,
+      `Training Plan Generation Failed: ${error}\n\nPlease check your connection and try again.`,
       {
         title: 'Generation Error',
         showRetry: !!onRetry,

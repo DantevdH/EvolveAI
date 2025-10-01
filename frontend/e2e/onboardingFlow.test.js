@@ -29,8 +29,8 @@ describe('Onboarding Flow', () => {
     // Step 3: Personal Info Screen
     await testPersonalInfoScreen();
 
-    // Step 4: Fitness Goals Screen
-    await testFitnessGoalsScreen();
+    // Step 4: training Goals Screen
+    await testtrainingGoalsScreen();
 
     // Step 5: Time Availability Screen
     await testTimeAvailabilityScreen();
@@ -131,9 +131,9 @@ describe('Onboarding Flow', () => {
     await element(by.id('next-button')).tap();
   }
 
-  async function testFitnessGoalsScreen() {
+  async function testtrainingGoalsScreen() {
     await expect(element(by.id('goal-description-input'))).toBeVisible();
-    await element(by.id('goal-description-input')).typeText('I want to lose weight and build muscle through a balanced workout routine');
+    await element(by.id('goal-description-input')).typeText('I want to lose weight and build muscle through a balanced training routine');
     
     await element(by.id('next-button')).tap();
   }

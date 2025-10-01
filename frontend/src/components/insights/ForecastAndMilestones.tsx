@@ -266,7 +266,7 @@ export const ForecastAndMilestones: React.FC<ForecastAndMilestonesProps> = ({
           <Ionicons name="trending-up" size={48} color={colors.muted} />
           <Text style={styles.emptyTitle}>No Predictions Available</Text>
           <Text style={styles.emptyText}>
-            Complete more workouts to unlock performance predictions and milestone forecasts.
+            Complete more trainings to unlock performance predictions and milestone forecasts.
           </Text>
         </View>
       )}

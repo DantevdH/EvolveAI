@@ -7,7 +7,7 @@ export const OnboardingScreen: React.FC = () => {
       <View style={styles.content}>
         <Text style={styles.title}>Get Started</Text>
         <Text style={styles.subtitle}>
-          Let&apos;s set up your fitness profile
+          Let&apos;s set up your training profile
         </Text>
       </View>
     </SafeAreaView>

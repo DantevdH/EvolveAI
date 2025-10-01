@@ -37,14 +37,14 @@ export const ProfileScreen: React.FC = () => {
           <View style={styles.userInfo}>
             <Text style={styles.userName}>{authState.userProfile.username}</Text>
             <Text style={styles.userEmail}>Email: {authState.user?.email}</Text>
-            <Text style={styles.fitnessLevel}>
+            <Text style={styles.trainingLevel}>
               Experience Level: {authState.userProfile.experienceLevel}
             </Text>
-            <Text style={styles.fitnessLevel}>
+            <Text style={styles.trainingLevel}>
               Goal: {authState.userProfile.primaryGoal}
             </Text>
-            <Text style={styles.fitnessLevel}>
-              Workouts per week: {authState.userProfile.daysPerWeek}
+            <Text style={styles.trainingLevel}>
+              Trainings per week: {authState.userProfile.daysPerWeek}
             </Text>
           </View>
         )}
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     marginBottom: 10,
   },
-  fitnessLevel: {
+  trainingLevel: {
     fontSize: 16,
     color: '#007AFF',
     fontWeight: '500',

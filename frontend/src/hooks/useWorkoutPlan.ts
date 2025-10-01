@@ -1,21 +1,21 @@
 import { useState, useCallback } from 'react';
 import { TrainingService } from '../services/trainingService';
-import { WorkoutPlan } from '../types/training';
+import { TrainingPlan } from '../types/training';
 import { useAuth } from '../context/AuthContext';
 
-export interface UseWorkoutPlanReturn {
-  generateWorkoutPlan: (profileData: any, userProfileId: number, userId: string) => Promise<boolean>;
+export interface UseTrainingPlanReturn {
+  generateTrainingPlan: (profileData: any, userProfileId: number, userId: string) => Promise<boolean>;
   isLoading: boolean;
   error: string | null;
   clearError: () => void;
 }
 
-export const useWorkoutPlan = (): UseWorkoutPlanReturn => {
+export const useTrainingPlan = (): UseTrainingPlanReturn => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { setWorkoutPlan } = useAuth();
+  const { setTrainingPlan } = useAuth();
 
-  const generateWorkoutPlan = useCallback(async (
+  const generateTrainingPlan = useCallback(async (
     profileData: any,
     userProfileId: number,
     userId: string
@@ -24,24 +24,24 @@ export const useWorkoutPlan = (): UseWorkoutPlanReturn => {
     setError(null);
 
     try {
-      const result = await TrainingService.generateWorkoutPlan(profileData, userProfileId, userId);
+      const result = await TrainingService.generateTrainingPlan(profileData, userProfileId, userId);
       
       if (result.success && result.data) {
-        // Store the workout plan in the auth context
-        console.log('💪 Setting workout plan');
-        setWorkoutPlan(result.data);
+        // Store the training plan in the auth context
+        console.log('💪 Setting training plan');
+        setTrainingPlan(result.data);
         return true;
       } else {
         // Check if this is a duplicate error - if so, don't treat it as an error
         const isDuplicateError = result.error?.includes('already exists') || result.error?.includes('duplicate');
         
         if (isDuplicateError) {
-          console.log('ℹ️ Duplicate workout plan detected');
+          console.log('ℹ️ Duplicate training plan detected');
           // Don't set error for duplicate - just return false
           return false;
         }
         
-        setError(result.error || 'Failed to generate workout plan');
+        setError(result.error || 'Failed to generate training plan');
         return false;
       }
     } catch (err) {
@@ -51,14 +51,14 @@ export const useWorkoutPlan = (): UseWorkoutPlanReturn => {
     } finally {
       setIsLoading(false);
     }
-  }, [setWorkoutPlan]);
+  }, [setTrainingPlan]);
 
   const clearError = useCallback(() => {
     setError(null);
   }, []);
 
   return {
-    generateWorkoutPlan,
+    generateTrainingPlan,
     isLoading,
     error,
     clearError,

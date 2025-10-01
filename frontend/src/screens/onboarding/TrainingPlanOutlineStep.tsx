@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TextInput, TouchableOpacity, Text } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
-import { TrainingPlanOutline, DailyWorkout } from '../../types/onboarding';
+import { TrainingPlanOutline, DailyTraining } from '../../types/onboarding';
 import { OnboardingCard } from '../../components/onboarding/OnboardingCard';
 import { colors } from '../../constants/designSystem';
 import { IconSymbol } from '../../../components/ui/IconSymbol';
@@ -101,10 +101,10 @@ export const TrainingPlanOutlineStep: React.FC<TrainingPlanOutlineStepProps> = (
     }
   };
 
-  const renderDayCard = (day: DailyWorkout) => (
+  const renderDayCard = (day: DailyTraining) => (
     <View key={day.day} style={styles.dayCard}>
       <View style={styles.dayHeader}>
-        <Text style={styles.workoutName}>{day.workout_name}</Text>
+        <Text style={styles.trainingName}>{day.training_name}</Text>
       </View>
       
       <Text style={styles.dayDescription}>{day.description}</Text>
@@ -158,7 +158,7 @@ export const TrainingPlanOutlineStep: React.FC<TrainingPlanOutlineStepProps> = (
                           </View>
                           <Text style={styles.weekFocus}>{period.duration_weeks} weeks</Text>
                           <Text style={styles.weekSessionsCount}>
-                            {period.daily_workouts.length} sessions
+                            {period.daily_trainings.length} sessions
                           </Text>
                         </View>
                       </TouchableOpacity>
@@ -232,14 +232,14 @@ export const TrainingPlanOutlineStep: React.FC<TrainingPlanOutlineStepProps> = (
             </View>
             <Text style={styles.weekHeaderTitle}>{currentWeek.period_name}</Text>
             <Text style={styles.weekHeaderSubtitle}>
-              {currentWeek.daily_workouts.length} training sessions
+              {currentWeek.daily_trainings.length} training sessions
             </Text>
             <Text style={styles.periodExplanation}>{currentWeek.explanation}</Text>
           </View>
 
-          {/* Daily Workouts */}
+          {/* Daily Trainings */}
           <View style={styles.daysSection}>
-            {currentWeek.daily_workouts.map((day: any) => renderDayCard(day))}
+            {currentWeek.daily_trainings.map((day: any) => renderDayCard(day))}
           </View>
 
           {/* Period Navigation */}
@@ -529,7 +529,7 @@ const styles = StyleSheet.create({
   dayHeaderLeft: {
     flex: 1,
   },
-  workoutName: {
+  trainingName: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,

@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { colors } from '../constants/colors';
 import TrainingHeader from '../components/training/TrainingHeader';
 import WeekNavigationAndOverview from '../components/training/WeekNavigationAndOverview';
-import DailyWorkoutDetail from '../components/training/DailyWorkoutDetail';
+import DailyTrainingDetail from '../components/training/DailyTrainingDetail';
 import ConfirmationDialog from '../components/shared/ConfirmationDialog';
 import ExerciseDetailView from '../components/training/ExerciseDetailView';
 import OneRMCalculatorView from '../components/training/OneRMCalculatorView';
@@ -19,8 +19,8 @@ const TrainingScreen: React.FC = () => {
   
   const {
     trainingState,
-    workoutPlan,
-    selectedDayWorkout,
+    trainingPlan,
+    selectedDayTraining,
     progressRing,
     weekNavigation,
     dayIndicators,
@@ -31,10 +31,10 @@ const TrainingScreen: React.FC = () => {
     showExerciseDetail,
     hideExerciseDetail,
     toggleOneRMCalculator,
-    completeWorkout,
-    reopenWorkout,
-    confirmReopenWorkout,
-    cancelReopenWorkout,
+    completeTraining,
+    reopenTraining,
+    confirmReopenTraining,
+    cancelReopenTraining,
     showExerciseSwapModal,
     hideExerciseSwapModal,
     swapExercise,
@@ -52,9 +52,9 @@ const TrainingScreen: React.FC = () => {
   const handleOneRMCalculate = (estimated1RM: number) => {
     console.log('Calculated 1RM:', estimated1RM, 'for exercise:', selectedExerciseForCalculator);
     
-    // Find the exercise in the current workout and apply the 1RM calculation
-    if (selectedDayWorkout && selectedExerciseForCalculator) {
-      const exercise = selectedDayWorkout.exercises.find(
+    // Find the exercise in the current training and apply the 1RM calculation
+    if (selectedDayTraining && selectedExerciseForCalculator) {
+      const exercise = selectedDayTraining.exercises.find(
         ex => ex.exercise?.name === selectedExerciseForCalculator
       );
       
@@ -81,9 +81,9 @@ const TrainingScreen: React.FC = () => {
   };
 
   const handleConfirmExerciseSwap = (newExercise: any) => {
-    if (exerciseToSwap && selectedDayWorkout) {
-      // Find the exercise to swap in the current workout
-      const exerciseToReplace = selectedDayWorkout.exercises.find(
+    if (exerciseToSwap && selectedDayTraining) {
+      // Find the exercise to swap in the current training
+      const exerciseToReplace = selectedDayTraining.exercises.find(
         ex => ex.exercise?.name === exerciseToSwap.name
       );
       
@@ -99,7 +99,7 @@ const TrainingScreen: React.FC = () => {
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading workout plan...</Text>
+          <Text style={styles.loadingText}>Loading training plan...</Text>
         </View>
       </SafeAreaView>
     );
@@ -117,14 +117,14 @@ const TrainingScreen: React.FC = () => {
     );
   }
 
-  // Handle no workout plan
-  if (!workoutPlan) {
+  // Handle no training plan
+  if (!trainingPlan) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.noPlanContainer}>
-          <Text style={styles.noPlanTitle}>No Workout Plan</Text>
+          <Text style={styles.noPlanTitle}>No Training Plan</Text>
           <Text style={styles.noPlanText}>
-            You don't have an active workout plan yet. Create one to get started with your training.
+            You don't have an active training plan yet. Create one to get started with your training.
           </Text>
         </View>
       </SafeAreaView>
@@ -138,7 +138,7 @@ const TrainingScreen: React.FC = () => {
         <View style={styles.completeContainer}>
           <Text style={styles.completeTitle}>🎉 Plan Complete!</Text>
           <Text style={styles.completeText}>
-            Congratulations! You've completed your workout plan. Ready for the next challenge?
+            Congratulations! You've completed your training plan. Ready for the next challenge?
           </Text>
         </View>
       </SafeAreaView>
@@ -146,19 +146,19 @@ const TrainingScreen: React.FC = () => {
   }
 
   // Calculate current week stats
-  const currentWeek = workoutPlan.weeklySchedules.find(
+  const currentWeek = trainingPlan.weeklySchedules.find(
     week => week.weekNumber === trainingState.currentWeekSelected
   );
   
-  const completedWorkoutsThisWeek = currentWeek?.dailyWorkouts.filter(
-    workout => workout.completed && !workout.isRestDay
+  const completedTrainingsThisWeek = currentWeek?.dailyTrainings.filter(
+    training => training.completed && !training.isRestDay
   ).length || 0;
   
-  const totalWorkoutsThisWeek = currentWeek?.dailyWorkouts.filter(
-    workout => !workout.isRestDay
+  const totalTrainingsThisWeek = currentWeek?.dailyTrainings.filter(
+    training => !training.isRestDay
   ).length || 0;
 
-  const isPastWeek = trainingState.currentWeekSelected < workoutPlan.currentWeek;
+  const isPastWeek = trainingState.currentWeekSelected < trainingPlan.currentWeek;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -169,11 +169,11 @@ const TrainingScreen: React.FC = () => {
       >
         {/* Training Header */}
         <TrainingHeader
-          workoutPlan={workoutPlan}
+          trainingPlan={trainingPlan}
           progressRing={progressRing}
           currentWeek={trainingState.currentWeekSelected}
-          completedWorkoutsThisWeek={completedWorkoutsThisWeek}
-          totalWorkoutsThisWeek={totalWorkoutsThisWeek}
+          completedTrainingsThisWeek={completedTrainingsThisWeek}
+          totalTrainingsThisWeek={totalTrainingsThisWeek}
         />
 
         {/* Week Navigation and Overview */}
@@ -184,16 +184,16 @@ const TrainingScreen: React.FC = () => {
           onDaySelect={selectDay}
         />
 
-        {/* Daily Workout Detail */}
-        <DailyWorkoutDetail
-          dailyWorkout={selectedDayWorkout}
+        {/* Daily Training Detail */}
+        <DailyTrainingDetail
+          dailyTraining={selectedDayTraining}
           isPastWeek={isPastWeek}
           onExerciseToggle={toggleExerciseCompletion}
           onSetUpdate={updateSetDetails}
           onExerciseDetail={showExerciseDetail}
           onOneRMCalculator={handleOneRMCalculator}
           onSwapExercise={handleExerciseSwap}
-          onReopenWorkout={reopenWorkout}
+          onReopenTraining={reopenTraining}
         />
 
         {/* Bottom spacing for scroll comfort */}
@@ -224,20 +224,20 @@ const TrainingScreen: React.FC = () => {
           currentExercise={exerciseToSwap}
           onClose={hideExerciseSwapModal}
           onSwapExercise={handleConfirmExerciseSwap}
-          scheduledExerciseIds={selectedDayWorkout?.exercises.map(ex => ex.exercise?.id).filter(Boolean) || []}
-          scheduledExerciseNames={selectedDayWorkout?.exercises.map(ex => ex.exercise?.name).filter(Boolean) || []}
+          scheduledExerciseIds={selectedDayTraining?.exercises.map(ex => ex.exercise?.id).filter(Boolean) || []}
+          scheduledExerciseNames={selectedDayTraining?.exercises.map(ex => ex.exercise?.name).filter(Boolean) || []}
         />
       )}
 
-      {/* Reopen Workout Confirmation Dialog */}
+      {/* Reopen Training Confirmation Dialog */}
       <ConfirmationDialog
         visible={trainingState.showReopenDialog}
-        title="Reopen Workout"
-        message="Reopening this workout will unlock all exercises for editing. All exercise completion checkmarks will be reset, but your weight inputs will be preserved."
+        title="Reopen Training"
+        message="Reopening this training will unlock all exercises for editing. All exercise completion checkmarks will be reset, but your weight inputs will be preserved."
         confirmText="Reopen"
         cancelText="Cancel"
-        onConfirm={() => confirmReopenWorkout(true)}
-        onCancel={() => confirmReopenWorkout(false)}
+        onConfirm={() => confirmReopenTraining(true)}
+        onCancel={() => confirmReopenTraining(false)}
         confirmButtonColor={colors.primary}
         icon="refresh"
       />

@@ -16,7 +16,7 @@ export default function Index() {
   // Use useEffect to handle navigation based on routing state
   useEffect(() => {
     // Create a state signature to detect actual changes
-    const currentState = `${state.isLoading}-${state.workoutPlanLoading}-${!!state.user}-${!!state.userProfile}-${!!state.workoutPlan}-${!!state.error}`;
+    const currentState = `${state.isLoading}-${state.trainingPlanLoading}-${!!state.user}-${!!state.userProfile}-${!!state.trainingPlan}-${!!state.error}`;
     
     // Skip if state hasn't actually changed
     if (currentState === lastStateRef.current) {
@@ -78,7 +78,7 @@ export default function Index() {
         }
       }, 50); // Reduced delay for better responsiveness
     }
-  }, [state.isLoading, state.workoutPlanLoading, state.user, state.userProfile, state.workoutPlan, state.error, router]);
+  }, [state.isLoading, state.trainingPlanLoading, state.user, state.userProfile, state.trainingPlan, state.error, router]);
 
   // Cleanup timeout on unmount and state changes
   useEffect(() => {
@@ -98,7 +98,7 @@ export default function Index() {
         navigationTimeoutRef.current = null;
       }
     };
-  }, [state.isLoading, state.workoutPlanLoading, state.user, state.userProfile, state.workoutPlan, state.error]);
+  }, [state.isLoading, state.trainingPlanLoading, state.user, state.userProfile, state.trainingPlan, state.error]);
 
   // Show loading screen when auth is loading
   if (routingState.isLoading) {

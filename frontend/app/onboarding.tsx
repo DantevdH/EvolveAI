@@ -19,8 +19,8 @@ export default function Onboarding() {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleComplete = async (workoutPlan: any) => {
-    console.log('✅ Workout plan generated successfully');
+  const handleComplete = async (trainingPlan: any) => {
+    console.log('✅ Training plan generated successfully');
     
     // Refresh user profile to get updated data
     await refreshUserProfile();

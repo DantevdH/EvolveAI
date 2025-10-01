@@ -27,7 +27,7 @@ const ExerciseDetailView: React.FC<ExerciseDetailViewProps> = ({
   const [selectedTab, setSelectedTab] = useState<ExerciseTab>(ExerciseTab.General);
   const [historyData, setHistoryData] = useState<{
     volumeData: Array<{ date: string; volume: number }>;
-    recentWorkouts: Array<{ 
+    recentTrainings: Array<{ 
       date: string; 
       volume: number; 
       maxWeight: number;
@@ -212,7 +212,7 @@ const GeneralInfoTab: React.FC<{ exercise: Exercise; difficultyColor: (difficult
       {/* Muscles Worked */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="fitness" size={20} color={colors.primary} />
+          <Ionicons name="training" size={20} color={colors.primary} />
           <Text style={styles.sectionTitle}>Muscles Worked</Text>
         </View>
 
@@ -322,7 +322,7 @@ const HistoryTab: React.FC<{
   exercise: Exercise; 
   historyData: {
     volumeData: Array<{ date: string; volume: number }>;
-    recentWorkouts: Array<{ 
+    recentTrainings: Array<{ 
       date: string; 
       volume: number; 
       maxWeight: number;
@@ -364,7 +364,7 @@ const HistoryTab: React.FC<{
             <Text style={styles.sectionTitle}>Loading History...</Text>
           </View>
           <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Fetching your workout data...</Text>
+            <Text style={styles.loadingText}>Fetching your training data...</Text>
           </View>
         </View>
       </View>
@@ -382,7 +382,7 @@ const HistoryTab: React.FC<{
           <View style={styles.chartPlaceholder}>
             <Ionicons name="trending-up" size={48} color={colors.primary} />
             <Text style={styles.chartTitle}>No Data Yet</Text>
-            <Text style={styles.chartSubtitle}>Complete some workouts to see your progress</Text>
+            <Text style={styles.chartSubtitle}>Complete some trainings to see your progress</Text>
           </View>
         </View>
 
@@ -475,7 +475,7 @@ const HistoryTab: React.FC<{
           <View style={styles.chartPlaceholder}>
             <Ionicons name="trending-up" size={48} color={colors.primary} />
             <Text style={styles.chartTitle}>No Volume Data</Text>
-            <Text style={styles.chartSubtitle}>Complete workouts with weights to see volume trends</Text>
+            <Text style={styles.chartSubtitle}>Complete trainings with weights to see volume trends</Text>
           </View>
         )}
       </View>
@@ -732,10 +732,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.muted,
   },
-  workoutHistory: {
+  trainingHistory: {
     gap: 12,
   },
-  workoutEntry: {
+  trainingEntry: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -743,27 +743,27 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderRadius: 8,
   },
-  workoutInfo: {
+  trainingInfo: {
     gap: 4,
   },
-  workoutTitle: {
+  trainingTitle: {
     fontSize: 14,
     fontWeight: '500',
     color: colors.text,
   },
-  workoutDate: {
+  trainingDate: {
     fontSize: 12,
     color: colors.muted,
   },
-  workoutStats: {
+  trainingStats: {
     alignItems: 'flex-end',
     gap: 4,
   },
-  workoutSets: {
+  trainingSets: {
     fontSize: 14,
     color: colors.text,
   },
-  workoutWeight: {
+  trainingWeight: {
     fontSize: 12,
     color: colors.primary,
   },
@@ -859,7 +859,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
   },
-  workoutVolume: {
+  trainingVolume: {
     fontSize: 12,
     color: colors.muted,
     marginBottom: 2,

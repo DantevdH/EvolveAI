@@ -37,11 +37,11 @@ export const staticCoaches: Coach[] = [
   {
     id: 4,
     name: 'Coach Balance',
-    goal: 'General Fitness',
+    goal: 'General training',
     specialization: 'Overall Wellness',
     bio: 'Your daily dose of wellness.',
     experience_years: 6,
-    certifications: ['General Fitness Trainer', 'Wellness Coach'],
+    certifications: ['General training Trainer', 'Wellness Coach'],
     created_at: '2024-01-01T00:00:00Z',
     updated_at: '2024-01-01T00:00:00Z'
   },

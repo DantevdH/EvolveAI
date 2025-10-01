@@ -56,7 +56,7 @@ export class CoachService {
   }
 
   /**
-   * Filter coaches by fitness goal
+   * Filter coaches by training goal
    */
   static filterCoachesByGoal(coaches: Coach[], goal: string): Coach[] {
     // Validate input

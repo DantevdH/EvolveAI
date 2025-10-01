@@ -22,6 +22,7 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
   error,
   stepTitle,
   username,
+  aiMessage, // Add aiMessage prop
 }) => {
   const [currentIndex, setCurrentIndex] = useState(currentQuestionIndex);
   const [localResponses, setLocalResponses] = useState(responses);
@@ -165,6 +166,7 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
       <AILoadingScreen 
         username={username}
         analysisPhase={analysisPhase}
+        aiMessage={aiMessage}
       />
     );
   }
@@ -192,6 +194,7 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
       <AILoadingScreen 
         username={username}
         analysisPhase={analysisPhase}
+        aiMessage={aiMessage}
         showContinueButton={true}
         onContinue={() => setShowAIIntro(false)}
       />

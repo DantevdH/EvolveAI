@@ -38,7 +38,7 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
   return (
     <OnboardingCard
       title="Welcome to EvolveAI"
-      subtitle="Your personalized fitness journey starts here"
+      subtitle="Your personalized training journey starts here"
       scrollable={false}
     >
       <View style={styles.container}>
@@ -49,7 +49,7 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
               <IconSymbol name="sparkles" size={28} color={colors.primary} />
             </View>
             <Text style={styles.welcomeTitle}>Ready to evolve yourself?</Text>
-            <Text style={styles.welcomeSubtitle}>Transform your fitness journey with AI-powered personalization</Text>
+            <Text style={styles.welcomeSubtitle}>Transform your training journey with AI-powered personalization</Text>
           </View>
           
           {/* Enhanced Username Section */}
@@ -105,7 +105,7 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
                  </View>
                  <View style={styles.featureContent}>
                    <Text style={styles.featureTitle}>AI-Powered Plans</Text>
-                   <Text style={styles.featureDescription}>Personalized workouts tailored to your goals and preferences</Text>
+                   <Text style={styles.featureDescription}>Personalized trainings tailored to your goals and preferences</Text>
                  </View>
                </View>
                
@@ -115,7 +115,7 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
                  </View>
                  <View style={styles.featureContent}>
                    <Text style={styles.featureTitle}>Progress Tracking</Text>
-                   <Text style={styles.featureDescription}>Monitor your fitness journey with detailed analytics and insights</Text>
+                   <Text style={styles.featureDescription}>Monitor your training journey with detailed analytics and insights</Text>
                  </View>
                </View>
                

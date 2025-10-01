@@ -55,6 +55,7 @@ class AIQuestionResponse(BaseModel):
     total_questions: int = Field(..., description="Total number of questions")
     estimated_time_minutes: int = Field(..., description="Estimated time to complete in minutes")
     categories: List[QuestionCategory] = Field(..., description="Categories covered in this question set")
+    ai_message: Optional[str] = Field(default=None, description="Personalized AI coach message for this phase")
 
 
 class AIQuestionResponseWithFormatted(BaseModel):
@@ -64,6 +65,7 @@ class AIQuestionResponseWithFormatted(BaseModel):
     estimated_time_minutes: int = Field(..., description="Estimated time to complete in minutes")
     categories: List[QuestionCategory] = Field(..., description="Categories covered in this question set")
     formatted_responses: str = Field(..., description="Formatted responses for database storage")
+    ai_message: Optional[str] = Field(default=None, description="Personalized AI coach message for this phase")
 
 
 class PersonalInfo(BaseModel):
@@ -77,7 +79,7 @@ class PersonalInfo(BaseModel):
     measurement_system: str = Field(default="metric", description="Measurement system preference (metric or imperial)")
     gender: str = Field(..., description="User's gender")
     goal_description: str = Field(..., description="User's goal description in their own words")
-    experience_level: str = Field(default="novice", description="User's fitness experience level")
+    experience_level: str = Field(default="novice", description="User's training experience level")
 
 
 class InitialQuestionsRequest(BaseModel):
@@ -107,7 +109,7 @@ class TrainingPlanOutlineRequest(BaseModel):
 
 
 class PlanGenerationRequest(BaseModel):
-    """Request for workout plan generation."""
+    """Request for training plan generation."""
     personal_info: PersonalInfo = Field(..., description="Basic personal information")
     initial_responses: Dict[str, Any] = Field(..., description="Raw responses to initial questions")
     follow_up_responses: Dict[str, Any] = Field(..., description="Raw responses to follow-up questions")
@@ -125,11 +127,11 @@ class TrainingPlanOutlineResponse(BaseModel):
     error: Optional[str] = Field(default=None, description="Error message if unsuccessful")
 
 
-class DailyWorkout(BaseModel):
-    """Daily workout structure for training plan outline."""
+class DailyTraining(BaseModel):
+    """Daily training structure for training plan outline."""
     day: int = Field(..., description="Day number (1-7)")
-    workout_name: str = Field(..., description="Name of the workout (e.g., 'Upper Body Strength', 'Easy Cardio')")
-    description: str = Field(..., description="Explanation in max. 20 words of the day's workout which can include items as duration, intensity, muscle groups, heart rate zones, distance, and equipment needed dependent on the workout type")
+    training_name: str = Field(..., description="Name of the training (e.g., 'Upper Body Strength', 'Easy Cardio')")
+    description: str = Field(..., description="Explanation in max. 20 words of the day's training which can include items as duration, intensity, muscle groups, heart rate zones, distance, and equipment needed dependent on the training type")
     tags: List[str] = Field(..., description="Tags for categorization (e.g., 'strength', 'cardio', 'recovery', 'high-intensity')")
 
 
@@ -138,7 +140,7 @@ class TrainingPeriod(BaseModel):
     period_name: str = Field(..., description="Name of the training period (e.g., 'Foundation Phase', 'Build Phase', 'Peak Phase')")
     duration_weeks: int = Field(..., description="Duration of this period in weeks")
     explanation: str = Field(..., description="Detailed explanation of what this period involves")
-    daily_workouts: List[DailyWorkout] = Field(..., description="Sample daily workouts for this period")
+    daily_trainings: List[DailyTraining] = Field(..., description="Sample daily trainings for this period")
 
 
 class TrainingPlanOutline(BaseModel):
@@ -147,10 +149,22 @@ class TrainingPlanOutline(BaseModel):
     duration_weeks: int = Field(..., description="Total program duration in weeks")
     explanation: str = Field(..., description="High-level overview and explanation of the training plan")
     training_periods: List[TrainingPeriod] = Field(..., description="Training periods breakdown of the program")
+    ai_message: Optional[str] = Field(default=None, description="Personalized AI coach message for this phase")
+
+
+class ExerciseRetrievalDecision(BaseModel):
+    """AI's decision on whether to retrieve exercises from database."""
+    
+    retrieve_exercises: bool = Field(..., description="Whether you need exercises from the database")
+    difficulty: Optional[str] = Field(default=None, description="If retrieving exercises, what difficulty level?")
+    equipment: Optional[List[str]] = Field(default=None, description="If retrieving exercises, what equipment types?")
+    max_exercises: Optional[int] = Field(default=None, description="If retrieving exercises, how many do you need?")
+    reasoning: str = Field(..., description="Your reasoning for this decision")
+    alternative_approach: Optional[str] = Field(default=None, description="If not using exercises, what approach will you take?")
 
 
 class PlanGenerationResponse(BaseModel):
-    """Response from workout plan generation."""
+    """Response from training plan generation."""
     success: bool = Field(..., description="Whether plan generation was successful")
-    workout_plan: Optional[dict] = Field(default=None, description="Generated workout plan")
+    training_plan: Optional[dict] = Field(default=None, description="Generated training plan")
     error: Optional[str] = Field(default=None, description="Error message if unsuccessful")

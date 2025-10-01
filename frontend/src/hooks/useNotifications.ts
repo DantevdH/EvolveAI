@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { NotificationService } from '../services/NotificationService';
-import { WorkoutPlan } from '../types/training';
+import { TrainingPlan } from '../types/training';
 
 interface UseNotificationsReturn {
   notificationsEnabled: boolean;
@@ -15,8 +15,8 @@ interface UseNotificationsReturn {
   enableNotifications: () => Promise<boolean>;
   disableNotifications: () => Promise<void>;
   setReminderTime: (hour: number) => void;
-  scheduleWorkoutReminder: (workoutPlan: WorkoutPlan | null) => Promise<boolean>;
-  cancelWorkoutReminder: () => Promise<void>;
+  scheduleTrainingReminder: (trainingPlan: TrainingPlan | null) => Promise<boolean>;
+  cancelTrainingReminder: () => Promise<void>;
   refreshScheduledNotification: () => Promise<void>;
 }
 
@@ -78,7 +78,7 @@ export const useNotifications = (): UseNotificationsReturn => {
       setIsLoading(true);
       setError(null);
       
-      await NotificationService.cancelWorkoutReminder();
+      await NotificationService.cancelTrainingReminder();
       setNotificationsEnabled(false);
       setNextScheduledNotification(null);
     } catch (err) {
@@ -95,7 +95,7 @@ export const useNotifications = (): UseNotificationsReturn => {
     }
   }, []);
 
-  const scheduleWorkoutReminder = async (workoutPlan: WorkoutPlan | null): Promise<boolean> => {
+  const scheduleTrainingReminder = async (trainingPlan: TrainingPlan | null): Promise<boolean> => {
     try {
       setIsLoading(true);
       setError(null);
@@ -105,41 +105,41 @@ export const useNotifications = (): UseNotificationsReturn => {
         return false;
       }
       
-      const success = await NotificationService.scheduleWorkoutReminder(workoutPlan, reminderTime);
+      const success = await NotificationService.scheduleTrainingReminder(trainingPlan, reminderTime);
       
       if (success) {
         await refreshScheduledNotification();
         setError(null); // Clear any previous errors
       } else {
-        // Only show error if there's no workout plan, not if there's no workout today
-        if (!workoutPlan) {
-          setError('No workout plan available');
+        // Only show error if there's no training plan, not if there's no training today
+        if (!trainingPlan) {
+          setError('No training plan available');
         } else {
-          // No workout today is normal, don't show error
+          // No training today is normal, don't show error
           setError(null);
         }
       }
       
       return success;
     } catch (err) {
-      setError('Failed to schedule workout reminder');
-      console.error('Error scheduling workout reminder:', err);
+      setError('Failed to schedule training reminder');
+      console.error('Error scheduling training reminder:', err);
       return false;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const cancelWorkoutReminder = async (): Promise<void> => {
+  const cancelTrainingReminder = async (): Promise<void> => {
     try {
       setIsLoading(true);
       setError(null);
       
-      await NotificationService.cancelWorkoutReminder();
+      await NotificationService.cancelTrainingReminder();
       setNextScheduledNotification(null);
     } catch (err) {
-      setError('Failed to cancel workout reminder');
-      console.error('Error cancelling workout reminder:', err);
+      setError('Failed to cancel training reminder');
+      console.error('Error cancelling training reminder:', err);
     } finally {
       setIsLoading(false);
     }
@@ -167,8 +167,8 @@ export const useNotifications = (): UseNotificationsReturn => {
     enableNotifications,
     disableNotifications,
     setReminderTime,
-    scheduleWorkoutReminder,
-    cancelWorkoutReminder,
+    scheduleTrainingReminder,
+    cancelTrainingReminder,
     refreshScheduledNotification,
   };
 };

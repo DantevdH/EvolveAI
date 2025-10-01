@@ -82,7 +82,7 @@ const MainTitleView: React.FC = () => {
   return (
     <View style={styles.titleContainer}>
       <Text style={styles.mainTitle}>Evolve</Text>
-      <Text style={styles.subtitle}>Your Personal Fitness Journey</Text>
+      <Text style={styles.subtitle}>Your Personal training Journey</Text>
     </View>
   );
 };

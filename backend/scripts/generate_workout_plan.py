@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Workout Plan Generator and Excel Exporter for EvolveAI
+Training Plan Generator and Excel Exporter for EvolveAI
 
-This script generates a personalized workout plan based on a user profile
+This script generates a personalized training plan based on a user profile
 and exports it to a well-structured Excel file with multiple sheets containing:
-- Workout plan details
+- Training plan details
 - User profile information
 - Generated prompt
 - Metadata and timestamps
@@ -29,8 +29,9 @@ from supabase import create_client, Client
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from core.fitness.fitness_coach import FitnessCoach
-from core.fitness.helpers.schemas import UserProfileSchema, WorkoutPlanSchema
+from core.training.training_coach import TrainingCoach
+from core.training.helpers.schemas import UserProfileSchema
+from core.training.helpers.training_schemas import TrainingPlan
 from utils.mock_data import create_mock_user_profile
 
 # Configure logging
@@ -43,16 +44,16 @@ logger = logging.getLogger(__name__)
 # Load environment variables
 load_dotenv()
 
-class WorkoutPlanExcelGenerator:
-    """Generates workout plans and exports them to Excel files."""
+class TrainingPlanExcelGenerator:
+    """Generates training plans and exports them to Excel files."""
     
     def __init__(self):
-        """Initialize the workout plan generator."""
+        """Initialize the training plan generator."""
         self._validate_environment()
         self._initialize_clients()
-        self.fitness_coach = FitnessCoach()
+        self.training_coach = TrainingCoach()
         self.exercise_cache = {}  # Cache for exercise names
-        logger.info("✅ Workout plan generator initialized")
+        logger.info("✅ Training plan generator initialized")
 
     def _validate_environment(self):
         """Validate that all required environment variables are set."""
@@ -102,27 +103,27 @@ class WorkoutPlanExcelGenerator:
             logger.warning(f"Error fetching exercise name for ID {exercise_id}: {e}")
             return f"Exercise {exercise_id}"
 
-    def generate_workout_plan(self, user_profile: UserProfileSchema, 
+    def generate_training_plan(self, user_profile: UserProfileSchema, 
                             enrich_with_knowledge: bool = False) -> Dict[str, Any]:
         """
-        Generate a workout plan using the Fitness Coach.
+        Generate a training plan using the training Coach.
         
         Args:
             user_profile: User profile data
             enrich_with_knowledge: Whether to use RAG enhancement
             
         Returns:
-            Dictionary containing workout plan and metadata
+            Dictionary containing training plan and metadata
         """
         try:
-            logger.info("🏋️‍♂️ Generating workout plan...")
+            logger.info("🏋️‍♂️ Generating training plan...")
             logger.info(f"   User: {user_profile.age}yo {user_profile.gender}")
             logger.info(f"   Goal: {user_profile.primary_goal}")
             logger.info(f"   Experience: {user_profile.experience_level}")
             logger.info(f"   Frequency: {user_profile.days_per_week} days/week")
             
-            # Generate the workout plan
-            workout_plan = self.fitness_coach.generate_workout_plan(
+            # Generate the training plan
+            training_plan = self.training_coach.generate_training_plan(
                 user_profile=user_profile,
                 openai_client=self.openai_client,
                 enrich_with_knowledge=enrich_with_knowledge
@@ -132,33 +133,33 @@ class WorkoutPlanExcelGenerator:
             prompt = self._get_generation_prompt(user_profile)
             
             return {
-                "workout_plan": workout_plan,
+                "training_plan": training_plan,
                 "user_profile": user_profile,
                 "generation_prompt": prompt,
                 "generation_timestamp": datetime.now().isoformat(),
                 "enrich_with_knowledge": enrich_with_knowledge,
-                "agent_used": "Fitness Coach"
+                "agent_used": "training Coach"
             }
             
         except Exception as e:
-            logger.error(f"❌ Error generating workout plan: {e}")
+            logger.error(f"❌ Error generating training plan: {e}")
             raise
 
     def _get_generation_prompt(self, user_profile: UserProfileSchema) -> str:
         """Get the prompt that would be used for generation."""
         try:
             # Get exercise candidates
-            exercise_candidates = self.fitness_coach._get_exercise_candidates_for_profile(
+            exercise_candidates = self.training_coach._get_exercise_candidates_for_profile(
                 user_profile, max_exercises=300
             )
             
             # Generate the base prompt
-            base_prompt = self.fitness_coach.prompt_generator.create_initial_plan_prompt(
+            base_prompt = self.training_coach.prompt_generator.create_initial_plan_prompt(
                 user_profile, exercise_candidates
             )
             
             # Add foundations
-            enhanced_prompt = self.fitness_coach._add_foundations_of_creating_a_workout_plan(
+            enhanced_prompt = self.training_coach._add_foundations_of_creating_a_training_plan(
                 base_prompt, user_profile
             )
             
@@ -181,52 +182,52 @@ class WorkoutPlanExcelGenerator:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M")
         
         # Build filename
-        filename = f"WorkoutPlan_{goal}_{experience}_{frequency}_{age}{gender}_{timestamp}.xlsx"
+        filename = f"TrainingPlan_{goal}_{experience}_{frequency}_{age}{gender}_{timestamp}.xlsx"
         
         # Clean filename of any invalid characters
         filename = "".join(c for c in filename if c.isalnum() or c in "._-")
         
         return filename
 
-    def export_to_excel(self, workout_data: Dict[str, Any], output_path: str) -> bool:
+    def export_to_excel(self, training_data: Dict[str, Any], output_path: str) -> bool:
         """
-        Export workout plan data to an Excel file with multiple sheets.
+        Export training plan data to an Excel file with multiple sheets.
         
         Args:
-            workout_data: Dictionary containing workout plan and metadata
+            training_data: Dictionary containing training plan and metadata
             output_path: Path where to save the Excel file
             
         Returns:
             True if successful, False otherwise
         """
         try:
-            workout_plan = workout_data["workout_plan"]
-            user_profile = workout_data["user_profile"]
+            training_plan = training_data["training_plan"]
+            user_profile = training_data["user_profile"]
             
             logger.info(f"📊 Creating Excel file: {output_path}")
             
             with pd.ExcelWriter(output_path, engine='openpyxl') as writer:
                 
-                # Sheet 1: Workout Plan Overview
-                self._create_overview_sheet(writer, workout_plan, user_profile)
+                # Sheet 1: Training Plan Overview
+                self._create_overview_sheet(writer, training_plan, user_profile)
                 
                 # Sheet 2: Weekly Schedules
-                self._create_weekly_schedules_sheet(writer, workout_plan)
+                self._create_weekly_schedules_sheet(writer, training_plan)
                 
-                # Sheet 3: Daily Workouts (Detailed)
-                self._create_daily_workouts_sheet(writer, workout_plan)
+                # Sheet 3: Daily Trainings (Detailed)
+                self._create_daily_trainings_sheet(writer, training_plan)
                 
                 # Sheet 4: Exercise Details
-                self._create_exercise_details_sheet(writer, workout_plan)
+                self._create_exercise_details_sheet(writer, training_plan)
                 
                 # Sheet 5: User Profile
                 self._create_user_profile_sheet(writer, user_profile)
                 
                 # Sheet 6: Generation Details
-                self._create_generation_details_sheet(writer, workout_data)
+                self._create_generation_details_sheet(writer, training_data)
                 
                 # Sheet 7: Program Justifications
-                self._create_justifications_sheet(writer, workout_plan)
+                self._create_justifications_sheet(writer, training_plan)
             
             logger.info(f"✅ Excel file created successfully: {output_path}")
             return True
@@ -235,7 +236,7 @@ class WorkoutPlanExcelGenerator:
             logger.error(f"❌ Error creating Excel file: {e}")
             return False
 
-    def _create_overview_sheet(self, writer, workout_plan: WorkoutPlanSchema, user_profile: UserProfileSchema):
+    def _create_overview_sheet(self, writer, training_plan: TrainingPlan, user_profile: UserProfileSchema):
         """Create the overview sheet with basic plan information."""
         overview_data = {
             "Property": [
@@ -251,29 +252,29 @@ class WorkoutPlanExcelGenerator:
                 "Agent Used"
             ],
             "Value": [
-                workout_plan.title,
-                workout_plan.summary,
-                len(workout_plan.weekly_schedules),
+                training_plan.title,
+                training_plan.summary,
+                len(training_plan.weekly_schedules),
                 user_profile.primary_goal,
                 user_profile.experience_level,
                 f"{user_profile.days_per_week} days/week",
                 f"{user_profile.minutes_per_session} minutes",
                 user_profile.equipment,
                 datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "Fitness Coach AI"
+                "training Coach AI"
             ]
         }
         
         df = pd.DataFrame(overview_data)
         df.to_excel(writer, sheet_name="Overview", index=False)
 
-    def _create_weekly_schedules_sheet(self, writer, workout_plan: WorkoutPlanSchema):
+    def _create_weekly_schedules_sheet(self, writer, training_plan: TrainingPlan):
         """Create a sheet with weekly schedule summary."""
         weekly_data = []
         
-        for week in workout_plan.weekly_schedules:
-            training_days = [day for day in week.daily_workouts if not day.is_rest_day]
-            rest_days = [day for day in week.daily_workouts if day.is_rest_day]
+        for week in training_plan.weekly_schedules:
+            training_days = [day for day in week.daily_trainings if not day.is_rest_day]
+            rest_days = [day for day in week.daily_trainings if day.is_rest_day]
             
             weekly_data.append({
                 "Week": week.week_number,
@@ -286,14 +287,14 @@ class WorkoutPlanExcelGenerator:
         df = pd.DataFrame(weekly_data)
         df.to_excel(writer, sheet_name="Weekly Schedules", index=False)
 
-    def _create_daily_workouts_sheet(self, writer, workout_plan: WorkoutPlanSchema):
-        """Create a detailed sheet with all daily workouts."""
+    def _create_daily_trainings_sheet(self, writer, training_plan: TrainingPlan):
+        """Create a detailed sheet with all daily trainings."""
         daily_data = []
         
-        for week in workout_plan.weekly_schedules:
-            for day in week.daily_workouts:
+        for week in training_plan.weekly_schedules:
+            for day in week.daily_trainings:
                 if not day.is_rest_day:
-                    for exercise in day.exercises:
+                    for exercise in day.strength_exercises:
                         exercise_name = self.get_exercise_name(exercise.exercise_id)
                         daily_data.append({
                             "Week": week.week_number,
@@ -303,7 +304,7 @@ class WorkoutPlanExcelGenerator:
                             "Sets": exercise.sets,
                             "Reps": str(exercise.reps),
                             "Weight % 1RM": str(exercise.weight_1rm) if isinstance(exercise.weight_1rm, list) else str([exercise.weight_1rm]),
-                            "Description": exercise.description
+                            "Description": f"Exercise ID: {exercise.exercise_id}"
                         })
                 else:
                     daily_data.append({
@@ -318,24 +319,24 @@ class WorkoutPlanExcelGenerator:
                     })
         
         df = pd.DataFrame(daily_data)
-        df.to_excel(writer, sheet_name="Daily Workouts", index=False)
+        df.to_excel(writer, sheet_name="Daily Trainings", index=False)
 
-    def _create_exercise_details_sheet(self, writer, workout_plan: WorkoutPlanSchema):
+    def _create_exercise_details_sheet(self, writer, training_plan: TrainingPlan):
         """Create a sheet with unique exercises and their details."""
         exercise_data = []
         seen_exercises = set()
         
-        for week in workout_plan.weekly_schedules:
-            for day in week.daily_workouts:
+        for week in training_plan.weekly_schedules:
+            for day in week.daily_trainings:
                 if not day.is_rest_day:
-                    for exercise in day.exercises:
+                    for exercise in day.strength_exercises:
                         exercise_key = f"{exercise.exercise_id}"
                         if exercise_key not in seen_exercises:
                             exercise_name = self.get_exercise_name(exercise.exercise_id)
                             exercise_data.append({
                                 "Exercise ID": exercise.exercise_id,
                                 "Exercise Name": exercise_name,
-                                "Description": exercise.description,
+                                "Description": f"Exercise ID: {exercise.exercise_id}",
                                 "Sets": exercise.sets,
                                 "Reps": str(exercise.reps),
                                 "Weight % 1RM": str(exercise.weight_1rm) if isinstance(exercise.weight_1rm, list) else str([exercise.weight_1rm]),
@@ -389,7 +390,7 @@ class WorkoutPlanExcelGenerator:
         df = pd.DataFrame(profile_data)
         df.to_excel(writer, sheet_name="User Profile", index=False)
 
-    def _create_generation_details_sheet(self, writer, workout_data: Dict[str, Any]):
+    def _create_generation_details_sheet(self, writer, training_data: Dict[str, Any]):
         """Create a sheet with generation details and prompt."""
         generation_data = {
             "Property": [
@@ -402,12 +403,12 @@ class WorkoutPlanExcelGenerator:
                 "Generation Status"
             ],
             "Value": [
-                workout_data["generation_timestamp"],
-                workout_data["agent_used"],
-                workout_data["enrich_with_knowledge"],
-                len(workout_data["generation_prompt"]),
-                len(workout_data["workout_plan"].weekly_schedules),
-                sum(len(day.exercises) for week in workout_data["workout_plan"].weekly_schedules for day in week.daily_workouts if not day.is_rest_day),
+                training_data["generation_timestamp"],
+                training_data["agent_used"],
+                training_data["enrich_with_knowledge"],
+                len(training_data["generation_prompt"]),
+                len(training_data["training_plan"].weekly_schedules),
+                sum(len(day.exercises) for week in training_data["training_plan"].weekly_schedules for day in week.daily_trainings if not day.is_rest_day),
                 "Success"
             ]
         }
@@ -417,37 +418,37 @@ class WorkoutPlanExcelGenerator:
         
         # Add the full prompt as a separate section
         prompt_data = {
-            "Generation Prompt": [workout_data["generation_prompt"]]
+            "Generation Prompt": [training_data["generation_prompt"]]
         }
         prompt_df = pd.DataFrame(prompt_data)
         prompt_df.to_excel(writer, sheet_name="Generation Prompt", index=False)
 
-    def _create_justifications_sheet(self, writer, workout_plan: WorkoutPlanSchema):
+    def _create_justifications_sheet(self, writer, training_plan: TrainingPlan):
         """Create a sheet with all justifications."""
         justification_data = {
-            "Level": ["Program"],
-            "Justification": [workout_plan.program_justification]
+            "Level": [],
+            "Justification": []
         }
         
-        # Add weekly justifications
-        for week in workout_plan.weekly_schedules:
-            justification_data["Level"].append(f"Week {week.week_number}")
-            justification_data["Justification"].append(week.weekly_justification)
+        # Add weekly justifications (not available in new schema)
+        # for week in training_plan.weekly_schedules:
+        #     justification_data["Level"].append(f"Week {week.week_number}")
+        #     justification_data["Justification"].append(week.weekly_justification)
         
-        # Add daily justifications
-        for week in workout_plan.weekly_schedules:
-            for day in week.daily_workouts:
-                justification_data["Level"].append(f"Week {week.week_number} - {day.day_of_week}")
-                justification_data["Justification"].append(day.daily_justification)
+        # Add daily justifications (not available in new schema)
+        # for week in training_plan.weekly_schedules:
+        #     for day in week.daily_trainings:
+        #         justification_data["Level"].append(f"Week {week.week_number} - {day.day_of_week}")
+        #         justification_data["Justification"].append(day.daily_justification)
         
         df = pd.DataFrame(justification_data)
         df.to_excel(writer, sheet_name="Justifications", index=False)
 
-    def process_workout_generation(self, user_profile_data: Dict[str, Any], 
+    def process_training_generation(self, user_profile_data: Dict[str, Any], 
                                  output_dir: str = "./output",
                                  enrich_with_knowledge: bool = True) -> str:
         """
-        Complete workflow: generate workout plan and export to Excel.
+        Complete workflow: generate training plan and export to Excel.
         
         Args:
             user_profile_data: User profile data as dictionary
@@ -465,24 +466,24 @@ class WorkoutPlanExcelGenerator:
             # Create user profile
             user_profile = self.create_user_profile_from_dict(user_profile_data)
             
-            # Generate workout plan
-            workout_data = self.generate_workout_plan(user_profile, enrich_with_knowledge)
+            # Generate training plan
+            training_data = self.generate_training_plan(user_profile, enrich_with_knowledge)
             
             # Create filename
             filename = self.create_excel_filename(user_profile)
             file_path = output_path / filename
             
             # Export to Excel
-            success = self.export_to_excel(workout_data, str(file_path))
+            success = self.export_to_excel(training_data, str(file_path))
             
             if success:
-                logger.info(f"🎉 Workout plan successfully exported to: {file_path}")
+                logger.info(f"🎉 Training plan successfully exported to: {file_path}")
                 return str(file_path)
             else:
                 raise Exception("Failed to create Excel file")
                 
         except Exception as e:
-            logger.error(f"❌ Error in workout generation process: {e}")
+            logger.error(f"❌ Error in training generation process: {e}")
             raise
 
 def create_sample_user_profiles() -> Dict[str, Dict[str, Any]]:
@@ -541,7 +542,7 @@ def create_sample_user_profiles() -> Dict[str, Dict[str, Any]]:
         },
         "beginner_weight_loss": {
             "primary_goal": "Weight Loss",
-            "primary_goal_description": "Lose weight and improve overall fitness",
+            "primary_goal_description": "Lose weight and improve overall training",
             "experience_level": "Beginner",
             "days_per_week": 3,
             "minutes_per_session": 60,
@@ -554,28 +555,28 @@ def create_sample_user_profiles() -> Dict[str, Dict[str, Any]]:
             "gender": "Female",
             "has_limitations": True,
             "limitations_description": "Lower back issues, avoid heavy lifting",
-            "final_chat_notes": "Starting fitness journey, needs beginner-friendly program"
+            "final_chat_notes": "Starting training journey, needs beginner-friendly program"
         }
     }
 
 def main():
-    """Main function to run the workout plan generator."""
+    """Main function to run the training plan generator."""
     parser = argparse.ArgumentParser(
-        description="Generate workout plans and export to Excel",
+        description="Generate training plans and export to Excel",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   # Generate with sample profile
-  python generate_workout_plan_excel.py --profile=beginner_strength
+  python generate_training_plan_excel.py --profile=beginner_strength
   
   # Generate with custom profile
-  python generate_workout_plan_excel.py --profile-file=my_profile.json
+  python generate_training_plan_excel.py --profile-file=my_profile.json
   
   # Generate without RAG enhancement
-  python generate_workout_plan_excel.py --profile=intermediate_hypertrophy --no-rag
+  python generate_training_plan_excel.py --profile=intermediate_hypertrophy --no-rag
   
   # Specify output directory
-  python generate_workout_plan_excel.py --profile=advanced_powerlifting --output-dir=./workout_plans
+  python generate_training_plan_excel.py --profile=advanced_powerlifting --output-dir=./training_plans
         """
     )
     
@@ -611,7 +612,7 @@ Examples:
         logging.getLogger().setLevel(logging.DEBUG)
     
     try:
-        generator = WorkoutPlanExcelGenerator()
+        generator = TrainingPlanExcelGenerator()
         
         # Determine user profile data
         if args.profile:
@@ -628,14 +629,14 @@ Examples:
             logger.error("Must specify either --profile or --profile-file")
             sys.exit(1)
         
-        # Generate workout plan and export to Excel
-        excel_path = generator.process_workout_generation(
+        # Generate training plan and export to Excel
+        excel_path = generator.process_training_generation(
             user_profile_data=user_profile_data,
             output_dir=args.output_dir,
             enrich_with_knowledge=False
         )
         
-        logger.info(f"✅ Success! Workout plan exported to: {excel_path}")
+        logger.info(f"✅ Success! Training plan exported to: {excel_path}")
         
     except Exception as e:
         logger.error(f"❌ Script failed: {e}")

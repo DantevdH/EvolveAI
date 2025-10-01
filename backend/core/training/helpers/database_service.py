@@ -1,5 +1,5 @@
 """
-Database service for handling user profiles and workout plans with Supabase.
+Database service for handling user profiles and training plans with Supabase.
 """
 
 import os
@@ -8,6 +8,7 @@ from supabase import create_client, Client
 from settings import settings
 import json
 from datetime import datetime
+from logging_config import get_logger
 
 
 class DatabaseService:
@@ -15,6 +16,7 @@ class DatabaseService:
     
     def __init__(self):
         """Initialize Supabase client."""
+        self.logger = get_logger(__name__)
         self.supabase: Client = create_client(
             settings.SUPABASE_URL,
             settings.SUPABASE_ANON_KEY
@@ -22,7 +24,7 @@ class DatabaseService:
     
     def _get_authenticated_client(self, jwt_token: str) -> Client:
         """Create an authenticated Supabase client with service role key for server-side operations."""
-        print(f"🔍 DEBUG: Creating authenticated client with service role key")
+        self.logger.debug("Creating authenticated client with service role key")
         
         # Use service role key for server-side operations (bypasses RLS)
         if settings.SUPABASE_SERVICE_ROLE_KEY:
@@ -30,19 +32,19 @@ class DatabaseService:
                 settings.SUPABASE_URL,
                 settings.SUPABASE_SERVICE_ROLE_KEY
             )
-            print("✅ DEBUG: Using service role key for authentication")
+            self.logger.debug("Using service role key for authentication")
         else:
             # Fallback to anon key with JWT token
-            print("⚠️  DEBUG: No service role key found, using anon key with JWT token")
+            self.logger.warning("No service role key found, using anon key with JWT token")
             client = create_client(
                 settings.SUPABASE_URL,
                 settings.SUPABASE_ANON_KEY
             )
             try:
                 client.postgrest.auth(jwt_token)
-                print("✅ DEBUG: JWT token set successfully")
+                self.logger.debug("JWT token set successfully")
             except Exception as e:
-                print(f"❌ DEBUG: Error setting JWT token: {e}")
+                self.logger.error(f"Error setting JWT token: {e}")
                 raise
         
         return client
@@ -63,14 +65,14 @@ class DatabaseService:
             }).execute()
             
             if result.data and len(result.data) > 0:
-                print(f"✅ DB: User profile created successfully (ID: {result.data[0]['id']})")
+                self.logger.info(f"User profile created successfully (ID: {result.data[0]['id']})")
                 return {
                     'success': True,
                     'data': result.data[0],
                     'message': 'User profile created successfully'
                 }
             else:
-                print(f"❌ DB: Failed to create user profile")
+                self.logger.error("Failed to create user profile")
                 return {
                     'success': False,
                     'error': 'Failed to create user profile',
@@ -79,15 +81,12 @@ class DatabaseService:
                 
         except Exception as e:
             error_str = str(e)
-            print(f"💥 DB: Exception during user profile creation:", {
-                "error": error_str,
+            self.logger.error(f"Exception during user profile creation: {error_str}")
+            return {
+                "success": False,
+                "error": f"Failed to create user profile: {error_str}",
                 "error_type": type(e).__name__,
                 "user_id": user_id
-            })
-            return {
-                'success': False,
-                'error': error_str,
-                'message': f'Error creating user profile: {error_str}'
             }
     
     async def update_user_profile(self, user_id: str, data: Dict[str, Any], jwt_token: Optional[str] = None) -> Dict[str, Any]:
@@ -119,7 +118,7 @@ class DatabaseService:
             update_data = {k: v for k, v in update_data.items() if v is not None}
             
             if not update_data:
-                print(f"❌ DB: No valid fields to update for user {user_id}")
+                self.logger.warning(f"No valid fields to update for user {user_id}")
                 return {
                     'success': False,
                     'error': 'No valid fields to update',
@@ -131,14 +130,14 @@ class DatabaseService:
             
             if result.data and len(result.data) > 0:
                 updated_fields = list(update_data.keys())
-                print(f"✅ DB: User profile updated successfully with fields: {updated_fields}")
+                self.logger.info(f"User profile updated successfully with fields: {updated_fields}")
                 return {
                     'success': True,
                     'data': result.data[0],
                     'message': f'User profile updated successfully with fields: {updated_fields}'
                 }
             else:
-                print(f"❌ DB: Failed to update user profile")
+                self.logger.error("Failed to update user profile")
                 return {
                     'success': False,
                     'error': 'No data returned from update',
@@ -147,16 +146,13 @@ class DatabaseService:
                 
         except Exception as e:
             error_str = str(e)
-            print(f"💥 DB: Exception during user profile update:", {
+            self.logger.error(f"Exception during user profile update: {error_str}")
+            return {
+                "success": False,
                 "error": error_str,
                 "error_type": type(e).__name__,
                 "user_id": user_id,
                 "fields": list(data.keys()) if data else []
-            })
-            return {
-                'success': False,
-                'error': error_str,
-                'message': f'Error updating user profile: {error_str}'
             }
     
     async def get_user_profile(self, user_id: str) -> Dict[str, Any]:
@@ -185,19 +181,19 @@ class DatabaseService:
                 }
                 
         except Exception as e:
-            print(f"❌ Error fetching user profile: {str(e)}")
+            self.logger.error(f"Error fetching user profile: {str(e)}")
             return {
                 "success": False,
                 "error": f"Failed to fetch user profile: {str(e)}"
             }
     
-    async def save_workout_plan(self, user_profile_id: int, workout_plan_data: Dict[str, Any], jwt_token: Optional[str] = None) -> Dict[str, Any]:
+    async def save_training_plan(self, user_profile_id: int, training_plan_data: Dict[str, Any], jwt_token: Optional[str] = None) -> Dict[str, Any]:
         """
-        Save a complete workout plan to the database.
+        Save a complete training plan to the database.
         
         Args:
             user_profile_id: The user profile ID
-            workout_plan_data: The complete workout plan data from the AI
+            training_plan_data: The complete training plan data from the AI
             
         Returns:
             Dict containing success status and plan data or error
@@ -209,46 +205,46 @@ class DatabaseService:
             else:
                 supabase_client = self.supabase
             
-            # First, check if a workout plan already exists for this user
-            existing_plan_result = supabase_client.table("workout_plans").select("id").eq("user_profile_id", user_profile_id).execute()
+            # First, check if a training plan already exists for this user
+            existing_plan_result = supabase_client.table("training_plans").select("id").eq("user_profile_id", user_profile_id).execute()
             
             if existing_plan_result.data and len(existing_plan_result.data) > 0:
                 existing_plan_id = existing_plan_result.data[0]["id"]
-                print(f"❌ DB: Workout plan already exists (ID: {existing_plan_id}) for user {user_profile_id}")
+                self.logger.warning(f"Training plan already exists (ID: {existing_plan_id}) for user {user_profile_id}")
                 return {
                     "success": False,
-                    "error": f"Workout plan already exists for this user (ID: {existing_plan_id}). Cannot create duplicate."
+                    "error": f"Training plan already exists for this user (ID: {existing_plan_id}). Cannot create duplicate."
                 }
             
-            # First, create the main workout plan record
+            # First, create the main training plan record
             # Convert Pydantic model to dict if needed
             # Convert Pydantic model to dict if needed
-            if hasattr(workout_plan_data, 'dict'):
-                plan_dict = workout_plan_data.dict()
-            elif hasattr(workout_plan_data, 'model_dump'):
-                plan_dict = workout_plan_data.model_dump()
+            if hasattr(training_plan_data, 'model_dump'):
+                plan_dict = training_plan_data.model_dump()
+            elif hasattr(training_plan_data, 'dict'):
+                plan_dict = training_plan_data.dict()
             else:
-                plan_dict = workout_plan_data
+                plan_dict = training_plan_data
             
             plan_record = {
                 "user_profile_id": user_profile_id,
-                "title": plan_dict.get("title", "Personalized Workout Plan"),
+                "title": plan_dict.get("title", "Personalized Training Plan"),
                 "summary": plan_dict.get("summary", ""),
                 "created_at": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat()
             }
             
-            # Insert the workout plan
-            plan_result = supabase_client.table("workout_plans").insert(plan_record).execute()
+            # Insert the training plan
+            plan_result = supabase_client.table("training_plans").insert(plan_record).execute()
             
             if not plan_result.data:
-                print(f"❌ DB: Failed to create workout plan record")
+                self.logger.error("Failed to create training plan record")
                 return {
                     "success": False,
-                    "error": f"Failed to create workout plan record: {plan_result}"
+                    "error": f"Failed to create training plan record: {plan_result}"
                 }
             
-            workout_plan_id = plan_result.data[0]["id"]
+            training_plan_id = plan_result.data[0]["id"]
             
             # Save weekly schedules and their details
             weekly_schedules = plan_dict.get("weekly_schedules", [])
@@ -258,7 +254,7 @@ class DatabaseService:
                 
                 # Create weekly schedule record
                 weekly_schedule_record = {
-                    "workout_plan_id": workout_plan_id,
+                    "training_plan_id": training_plan_id,
                     "week_number": week_number,
                     "created_at": datetime.utcnow().isoformat(),
                     "updated_at": datetime.utcnow().isoformat()
@@ -271,42 +267,44 @@ class DatabaseService:
                 
                 weekly_schedule_id = weekly_result.data[0]["id"]
                 
-                # Save daily workouts
-                daily_workouts = week_data.get("daily_workouts", [])
+                # Save daily trainings
+                daily_trainings = week_data.get("daily_trainings", [])
                 
-                for daily_index, daily_data in enumerate(daily_workouts):
+                for daily_index, daily_data in enumerate(daily_trainings):
                     day_of_week = daily_data.get("day_of_week", "Monday")
                     is_rest_day = daily_data.get("is_rest_day", False)
                     
-                    # Create daily workout record
-                    daily_workout_record = {
+                    # Create daily training record
+                    daily_training_record = {
                         "weekly_schedule_id": weekly_schedule_id,
                         "day_of_week": day_of_week,
                         "is_rest_day": is_rest_day,
+                        "training_type": daily_data.get("training_type", "recovery" if is_rest_day else "strength"),
                         "created_at": datetime.utcnow().isoformat(),
                         "updated_at": datetime.utcnow().isoformat()
                     }
                     
-                    daily_result = supabase_client.table("daily_workouts").insert(daily_workout_record).execute()
+                    daily_result = supabase_client.table("daily_training").insert(daily_training_record).execute()
                     
                     if not daily_result.data:
                         continue
                     
-                    daily_workout_id = daily_result.data[0]["id"]
+                    daily_training_id = daily_result.data[0]["id"]
                     
-                    # Save exercises if not a rest day
+                    # Save exercises and endurance sessions if not a rest day
                     if not is_rest_day:
-                        exercises = daily_data.get("exercises", [])
+                        # Save strength exercises
+                        strength_exercises = daily_data.get("strength_exercises", [])
                         
-                        for exercise_index, exercise_data in enumerate(exercises):
+                        for exercise_index, exercise_data in enumerate(strength_exercises):
                             exercise_id = exercise_data.get("exercise_id")
                             sets = exercise_data.get("sets", 3)
                             reps = exercise_data.get("reps", [10, 10, 10])
                             weight_1rm = exercise_data.get("weight_1rm", [80, 80, 80])
                             
-                            # Create workout exercise record
-                            workout_exercise_record = {
-                                "daily_workout_id": daily_workout_id,
+                            # Create strength exercise record
+                            strength_exercise_record = {
+                                "daily_training_id": daily_training_id,
                                 "exercise_id": exercise_id,
                                 "sets": sets,
                                 "reps": reps,
@@ -317,49 +315,69 @@ class DatabaseService:
                                 "updated_at": datetime.utcnow().isoformat()
                             }
                             
-                            exercise_result = supabase_client.table("workout_exercises").insert(workout_exercise_record).execute()
+                            exercise_result = supabase_client.table("strength_exercise").insert(strength_exercise_record).execute()
+                        
+                        # Save endurance sessions
+                        endurance_sessions = daily_data.get("endurance_sessions", [])
+                        
+                        for session_index, session_data in enumerate(endurance_sessions):
+                            sport_type = session_data.get("sport_type", "running")
+                            training_volume = session_data.get("training_volume", 30.0)
+                            unit = session_data.get("unit", "minutes")
+                            heart_rate_zone = session_data.get("heart_rate_zone")
+                            
+                            # Create endurance session record
+                            endurance_session_record = {
+                                "daily_training_id": daily_training_id,
+                                "sport_type": sport_type,
+                                "training_volume": training_volume,
+                                "unit": unit,
+                                "heart_rate_zone": heart_rate_zone,
+                                "completed": False,
+                                "created_at": datetime.utcnow().isoformat(),
+                                "updated_at": datetime.utcnow().isoformat()
+                            }
+                            
+                            session_result = supabase_client.table("endurance_session").insert(endurance_session_record).execute()
             
-            print(f"✅ DB: Workout plan saved successfully (ID: {workout_plan_id})")
+            self.logger.info(f"Training plan saved successfully (ID: {training_plan_id})")
             
             return {
                 "success": True,
                 "data": {
-                    "workout_plan_id": workout_plan_id,
+                    "training_plan_id": training_plan_id,
                     "title": plan_record["title"],
                     "summary": plan_record["summary"]
                 },
-                "message": "Workout plan saved successfully"
+                "message": "Training plan saved successfully"
             }
             
         except Exception as e:
             error_str = str(e)
-            print(f"💥 DB: Exception during workout plan save:", {
-                "error": error_str,
-                "error_type": type(e).__name__,
-                "user_profile_id": user_profile_id
-            })
+            self.logger.error(f"Exception during training plan save: {error_str}")
             
+            # Handle specific database errors
             # Check for specific error types
             if "23505" in error_str or "duplicate key value violates unique constraint" in error_str:
-                print(f"🚨 DB: DUPLICATE KEY VIOLATION DETECTED!")
-                print(f"🚨 DB: This means a workout plan already exists for user_profile_id: {user_profile_id}")
-                print(f"🚨 DB: The unique constraint 'unique_user_workout_plan' is being violated")
+                self.logger.error("DUPLICATE KEY VIOLATION DETECTED!")
+                self.logger.error(f"This means a training plan already exists for user_profile_id: {user_profile_id}")
+                self.logger.error("The unique constraint 'unique_user_training_plan' is being violated")
                 return {
                     "success": False,
-                    "error": f"Workout plan already exists for this user. Duplicate key constraint violation: {error_str}"
+                    "error": f"Training plan already exists for this user. Duplicate key constraint violation: {error_str}"
                 }
             elif "23503" in error_str or "foreign key constraint" in error_str:
-                print(f"🚨 DB: FOREIGN KEY CONSTRAINT VIOLATION DETECTED!")
-                print(f"🚨 DB: This means a referenced record doesn't exist")
+                self.logger.error("FOREIGN KEY CONSTRAINT VIOLATION DETECTED!")
+                self.logger.error("This means a referenced record doesn't exist")
                 return {
                     "success": False,
                     "error": f"Database constraint violation: {error_str}"
                 }
             else:
-                print(f"❌ DB: Generic error saving workout plan: {error_str}")
+                self.logger.error(f"Generic error saving training plan: {error_str}")
                 return {
                     "success": False,
-                    "error": f"Failed to save workout plan: {error_str}"
+                    "error": f"Failed to save training plan: {error_str}"
                 }
     
     async def get_user_profile_by_user_id(self, user_id: str, jwt_token: Optional[str] = None) -> Dict[str, Any]:
@@ -377,27 +395,27 @@ class DatabaseService:
             # Use authenticated client if JWT token is provided, otherwise use service role
             if jwt_token:
                 supabase_client = self._get_authenticated_client(jwt_token)
-                print(f"🔍 DB: Using authenticated client with JWT for user_id: {user_id}")
+                self.logger.debug(f"Using authenticated client with JWT for user_id: {user_id}")
             else:
                 supabase_client = self._get_authenticated_client(None)  # This will use service role
-                print(f"🔍 DB: Using service role client for user_id: {user_id}")
+                self.logger.debug(f"Using service role client for user_id: {user_id}")
             
             # Get user profile by user_id
-            print(f"🔍 DB: Querying user_profiles table for user_id: {user_id}")
+            self.logger.debug(f"Querying user_profiles table for user_id: {user_id}")
             result = supabase_client.table("user_profiles").select("*").eq("user_id", user_id).execute()
-            print(f"🔍 DB: Query result: {result}")
-            print(f"🔍 DB: Result data: {result.data}")
-            print(f"🔍 DB: Result count: {len(result.data) if result.data else 0}")
+            self.logger.debug(f"Query result: {result}")
+            self.logger.debug(f"Result data: {result.data}")
+            self.logger.debug(f"Result count: {len(result.data) if result.data else 0}")
             
             if not result.data or len(result.data) == 0:
-                print(f"❌ DB: No user profile found for user_id: {user_id}")
+                self.logger.warning(f"No user profile found for user_id: {user_id}")
                 
                 # Debug: List all user profiles to see what's in the database
                 try:
                     all_profiles = self.supabase.table("user_profiles").select("id, user_id, username").execute()
-                    print(f"🔍 DB: All user profiles in database: {all_profiles.data}")
+                    self.logger.debug(f"All user profiles in database: {all_profiles.data}")
                 except Exception as debug_e:
-                    print(f"❌ DB: Error getting all profiles for debug: {debug_e}")
+                    self.logger.error(f"Error getting all profiles for debug: {debug_e}")
                 
                 return {
                     "success": False,
@@ -410,15 +428,15 @@ class DatabaseService:
             }
             
         except Exception as e:
-            print(f"❌ DB: Error getting user profile by user_id: {str(e)}")
+            self.logger.error(f"Error getting user profile by user_id: {str(e)}")
             return {
                 "success": False,
                 "error": f"Database error: {str(e)}"
             }
 
-    async def get_workout_plan(self, user_profile_id: int) -> Dict[str, Any]:
+    async def get_training_plan(self, user_profile_id: int) -> Dict[str, Any]:
         """
-        Get a user's workout plan from the database.
+        Get a user's training plan from the database.
         
         Args:
             user_profile_id: The user profile ID
@@ -427,54 +445,60 @@ class DatabaseService:
             Dict containing success status and plan data or error
         """
         try:
-            # Get the main workout plan
-            plan_result = self.supabase.table("workout_plans").select("*").eq("user_profile_id", user_profile_id).execute()
+            # Get the main training plan
+            plan_result = self.supabase.table("training_plans").select("*").eq("user_profile_id", user_profile_id).execute()
             
             if not plan_result.data or len(plan_result.data) == 0:
                 return {
                     "success": False,
-                    "error": "No workout plan found"
+                    "error": "No training plan found"
                 }
             
-            workout_plan = plan_result.data[0]
-            workout_plan_id = workout_plan["id"]
+            training_plan = plan_result.data[0]
+            training_plan_id = training_plan["id"]
             
             # Get weekly schedules
-            weekly_result = self.supabase.table("weekly_schedules").select("*").eq("workout_plan_id", workout_plan_id).execute()
+            weekly_result = self.supabase.table("weekly_schedules").select("*").eq("training_plan_id", training_plan_id).execute()
             weekly_schedules = weekly_result.data or []
             
-            # Get daily workouts for each weekly schedule
+            # Get daily trainings for each weekly schedule
             for weekly_schedule in weekly_schedules:
                 weekly_schedule_id = weekly_schedule["id"]
                 
-                daily_result = self.supabase.table("daily_workouts").select("*").eq("weekly_schedule_id", weekly_schedule_id).execute()
-                daily_workouts = daily_result.data or []
+                daily_result = self.supabase.table("daily_training").select("*").eq("weekly_schedule_id", weekly_schedule_id).execute()
+                daily_trainings = daily_result.data or []
                 
-                # Get exercises for each daily workout
-                for daily_workout in daily_workouts:
-                    daily_workout_id = daily_workout["id"]
+                # Get exercises and endurance sessions for each daily training
+                for daily_training in daily_trainings:
+                    daily_training_id = daily_training["id"]
                     
-                    if not daily_workout["is_rest_day"]:
-                        exercise_result = self.supabase.table("workout_exercises").select("*").eq("daily_workout_id", daily_workout_id).execute()
-                        daily_workout["exercises"] = exercise_result.data or []
+                    if not daily_training["is_rest_day"]:
+                        # Get strength exercises
+                        exercise_result = self.supabase.table("strength_exercise").select("*").eq("daily_training_id", daily_training_id).execute()
+                        daily_training["strength_exercises"] = exercise_result.data or []
+                        
+                        # Get endurance sessions
+                        session_result = self.supabase.table("endurance_session").select("*").eq("daily_training_id", daily_training_id).execute()
+                        daily_training["endurance_sessions"] = session_result.data or []
                     else:
-                        daily_workout["exercises"] = []
+                        daily_training["strength_exercises"] = []
+                        daily_training["endurance_sessions"] = []
                 
-                weekly_schedule["daily_workouts"] = daily_workouts
+                weekly_schedule["daily_trainings"] = daily_trainings
             
-            workout_plan["weekly_schedules"] = weekly_schedules
+            training_plan["weekly_schedules"] = weekly_schedules
             
             return {
                 "success": True,
-                "data": workout_plan,
-                "message": "Workout plan retrieved successfully"
+                "data": training_plan,
+                "message": "Training plan retrieved successfully"
             }
             
         except Exception as e:
-            print(f"❌ Error fetching workout plan: {str(e)}")
+            self.logger.error(f"Error fetching training plan: {str(e)}")
             return {
                 "success": False,
-                "error": f"Failed to fetch workout plan: {str(e)}"
+                "error": f"Failed to fetch training plan: {str(e)}"
             }
     
     # Coaches functions removed - now handled by frontend Supabase client

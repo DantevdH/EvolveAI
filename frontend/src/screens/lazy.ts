@@ -15,7 +15,7 @@ export const LazyEmailVerificationScreen = lazy(() => import('./auth/EmailVerifi
 export const LazyWelcomeScreen = lazy(() => import('./onboarding/WelcomeScreen').then(module => ({ default: module.WelcomeScreen })));
 export const LazyExperienceLevelScreen = lazy(() => import('./onboarding/ExperienceLevelScreen').then(module => ({ default: module.ExperienceLevelScreen })));
 export const LazyPersonalInfoScreen = lazy(() => import('./onboarding/PersonalInfoScreen').then(module => ({ default: module.PersonalInfoScreen })));
-export const LazyFitnessGoalsScreen = lazy(() => import('./onboarding/FitnessGoalsScreen').then(module => ({ default: module.FitnessGoalsScreen })));
+export const LazytrainingGoalsScreen = lazy(() => import('./onboarding/trainingGoalsScreen').then(module => ({ default: module.trainingGoalsScreen })));
 export const LazyTimeAvailabilityScreen = lazy(() => import('./onboarding/TimeAvailabilityScreen').then(module => ({ default: module.TimeAvailabilityScreen })));
 export const LazyEquipmentAccessScreen = lazy(() => import('./onboarding/EquipmentAccessScreen').then(module => ({ default: module.EquipmentAccessScreen })));
 export const LazyPhysicalLimitationsScreen = lazy(() => import('./onboarding/PhysicalLimitationsScreen').then(module => ({ default: module.PhysicalLimitationsScreen })));
@@ -23,7 +23,7 @@ export const LazyOnboardingCompleteScreen = lazy(() => import('./onboarding/Onbo
 
 // Main app screens - loaded when user has completed onboarding
 export const LazyHomeScreen = lazy(() => import('./HomeScreen').then(module => ({ default: module.HomeScreen })));
-export const LazyWorkoutScreen = lazy(() => import('./WorkoutScreen').then(module => ({ default: module.WorkoutScreen })));
+export const LazyTrainingScreen = lazy(() => import('./TrainingScreen').then(module => ({ default: module.TrainingScreen })));
 export const LazyProfileScreen = lazy(() => import('./ProfileScreen').then(module => ({ default: module.ProfileScreen })));
 export const LazyGeneratePlanScreen = lazy(() => import('./GeneratePlanScreen').then(module => ({ default: module.GeneratePlanScreen })));
 

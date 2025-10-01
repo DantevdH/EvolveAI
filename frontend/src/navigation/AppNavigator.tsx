@@ -44,7 +44,7 @@ export const AppNavigator: React.FC = () => {
       return 'Onboarding';
     }
     
-    if (!state.workoutPlan) {
+    if (!state.trainingPlan) {
       return 'Onboarding'; // Will redirect to generate plan
     }
     

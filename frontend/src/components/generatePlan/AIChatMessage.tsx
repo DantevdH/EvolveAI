@@ -7,6 +7,7 @@ interface AIChatMessageProps {
   username?: string;
   analysisPhase?: 'initial' | 'followup' | 'outline' | 'generation' | null;
   customMessage?: string;
+  aiMessage?: string; // AI message from backend
   onTypingComplete?: () => void;
   skipAnimation?: boolean;
 }
@@ -15,6 +16,7 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
   username,
   analysisPhase,
   customMessage,
+  aiMessage,
   onTypingComplete,
   skipAnimation = false,
 }) => {
@@ -30,26 +32,26 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
       case 'initial':
         return {
           greeting: `Hi ${username}! 👋`,
-          analysis: "I'm excited to help you on your fitness journey! I've analyzed your personal profile and can see your starting point, plus I love your fitness goals and ambition!",
+          analysis: "I'm excited to help you on your training journey! I've analyzed your personal profile and can see your starting point, plus I love your training goals and ambition!",
           conclusion: "To create the perfect plan for YOU, I need to understand you better. Ready to answer some quick questions? 🚀"
         };
       case 'followup':
         return {
           greeting: `Hi ${username}! 💪`,
-          analysis: "Great answers! I'm getting a clearer picture of your fitness journey, including your preferences, lifestyle patterns, and the specific challenges and motivations that drive you.",
+          analysis: "Great answers! I'm getting a clearer picture of your training journey, including your preferences, lifestyle patterns, and the specific challenges and motivations that drive you.",
           conclusion: "Just a few more questions to fine-tune your personalized plan. We're almost there! ✨"
         };
       case 'outline':
         return {
           greeting: `Hi ${username}! 📋`,
           analysis: "Excellent! I've analyzed all your responses and I'm now crafting a comprehensive training plan outline tailored specifically to your goals, experience level, and lifestyle.",
-          conclusion: "Your personalized training plan outline is being created. This will be the foundation of your fitness journey! 💪"
+          conclusion: "Your personalized training plan outline is being created. This will be the foundation of your training journey! 💪"
         };
       case 'generation':
         return {
           greeting: `Hi ${username}! 🎉`,
-          analysis: "Fantastic! I've completed my analysis and I'm thrilled with what I've learned about your complete fitness profile - you're going to love this personalized workout plan that I've crafted just for you!",
-          conclusion: "Your custom workout plan is ready! Let's create something amazing together! 🔥"
+          analysis: "Fantastic! I've completed my analysis and I'm thrilled with what I've learned about your complete training profile - you're going to love this personalized training plan that I've crafted just for you!",
+          conclusion: "Your custom training plan is ready! Let's create something amazing together! 🔥"
         };
       default:
         return {
@@ -62,11 +64,15 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
 
   const content = useMemo(() => getMessageContent(), [username, analysisPhase]);
   const fullMessage = useMemo(() => {
+    // Priority: customMessage > aiMessage (from backend) > hardcoded content
     if (customMessage) {
       return customMessage;
     }
+    if (aiMessage) {
+      return aiMessage;
+    }
     return `${content.greeting}\n\n${content.analysis}\n\n${content.conclusion}`;
-  }, [customMessage, content]);
+  }, [customMessage, aiMessage, content]);
 
   // Memoize the typing complete callback to prevent dependency issues
   const memoizedOnTypingComplete = useCallback(() => {

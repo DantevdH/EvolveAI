@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Workout System Integration Tests
+Training System Integration Tests
 
-This module contains comprehensive integration tests for the workout system:
-- Component interactions (ExerciseSelector, ExerciseValidator, FitnessCoach)
-- Workout generation workflows
+This module contains comprehensive integration tests for the training system:
+- Component interactions (ExerciseSelector, ExerciseValidator, TrainingCoach)
+- Training generation workflows
 - System-level behavior and error handling
-- End-to-end workout plan generation
+- End-to-end training plan generation
 """
 
 import os
@@ -18,11 +18,12 @@ from dotenv import load_dotenv
 # Add the backend directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from core.fitness.fitness_coach import FitnessCoach
-from core.fitness.helpers.schemas import UserProfileSchema, ExerciseSchema, DailyWorkoutSchema, WeeklyScheduleSchema, WorkoutPlanSchema
-from core.fitness.helpers.exercise_selector import ExerciseSelector
-from core.fitness.helpers.exercise_validator import ExerciseValidator
-# WorkoutPromptGenerator is now integrated into FitnessCoach
+from core.training.training_coach import TrainingCoach
+from core.training.helpers.schemas import UserProfileSchema
+from core.training.helpers.training_schemas import TrainingPlan
+from core.training.helpers.exercise_selector import ExerciseSelector
+from core.training.helpers.exercise_validator import ExerciseValidator
+# TrainingPromptGenerator is now integrated into TrainingCoach
 
 # Load environment variables
 load_dotenv()
@@ -44,12 +45,12 @@ def exercise_selector():
 
 
 @pytest.fixture
-def fitness_coach():
-    """Fixture providing FitnessCoach instance."""
+def training_coach():
+    """Fixture providing TrainingCoach instance."""
     try:
-        return FitnessCoach()
+        return TrainingCoach()
     except Exception as e:
-        pytest.skip(f"Could not initialize FitnessCoach: {e}")
+        pytest.skip(f"Could not initialize TrainingCoach: {e}")
 
 
 @pytest.fixture
@@ -61,19 +62,19 @@ def exercise_validator():
         pytest.skip(f"Could not initialize ExerciseValidator: {e}")
 
 
-# WorkoutPromptGenerator is now integrated into FitnessCoach
+# TrainingPromptGenerator is now integrated into TrainingCoach
 
 
 @pytest.fixture
-def mock_workout_plan():
-    """Fixture providing a mock workout plan for testing."""
+def mock_training_plan():
+    """Fixture providing a mock training plan for testing."""
     return {
-        "title": "Test Workout Plan",
-        "summary": "A comprehensive test workout plan",
+        "title": "Test Training Plan",
+        "summary": "A comprehensive test training plan",
         "weekly_schedules": [
             {
                 "week_number": 1,
-                "daily_workouts": [
+                "daily_trainings": [
                     {
                         "day_of_week": "Monday",
                         "is_rest_day": False,
@@ -144,9 +145,9 @@ def create_sample_user_profiles():
             training_schedule="Tuesday, Thursday, Sunday",
             final_chat_notes="Emphasis on consistency and gradual progression"
         ),
-        "general_fitness": UserProfileSchema(
-            primary_goal="general_fitness",
-            primary_goal_description="Improve overall fitness, endurance, and functional strength",
+        "general_training": UserProfileSchema(
+            primary_goal="general_training",
+            primary_goal_description="Improve overall training, endurance, and functional strength",
             experience_level="Beginner",
             days_per_week=5,
             minutes_per_session=30,
@@ -160,7 +161,7 @@ def create_sample_user_profiles():
             has_limitations=False,
             limitations_description="",
             training_schedule="Monday through Friday",
-            final_chat_notes="Balanced approach focusing on all fitness components"
+            final_chat_notes="Balanced approach focusing on all training components"
         )
     }
 
@@ -231,12 +232,12 @@ def test_exercise_validator_id_validation(exercise_validator):
     """Test exercise ID validation."""
     test_ids = [2399, "invalid_id_2", 2407]
     
-    # Test the validate_workout_plan method
-    workout_plan = {
+    # Test the validate_training_plan method
+    training_plan = {
         "title": "Test Plan",
         "weekly_schedules": [{
             "week_number": 1,
-            "daily_workouts": [{
+            "daily_trainings": [{
                 "day_of_week": "Monday",
                 "is_rest_day": False,
                 "exercises": [{"exercise_id": id_val, "sets": 3, "reps": [8, 8, 8]} for id_val in test_ids]
@@ -244,19 +245,19 @@ def test_exercise_validator_id_validation(exercise_validator):
         }]
     }
     
-    result, messages = exercise_validator.validate_workout_plan(workout_plan)
+    result, messages = exercise_validator.validate_training_plan(training_plan)
     
     # Assertions
     assert isinstance(result, dict)
     assert isinstance(messages, list)
     
-    print(f"✅ Validated workout plan with {len(test_ids)} exercises: {len(messages)} messages")
+    print(f"✅ Validated training plan with {len(test_ids)} exercises: {len(messages)} messages")
 
 
-def test_exercise_validator_exercise_validation(exercise_validator, mock_workout_plan):
+def test_exercise_validator_exercise_validation(exercise_validator, mock_training_plan):
     """Test exercise validation."""
-    # Validate the workout plan directly
-    result, messages = exercise_validator.validate_workout_plan(mock_workout_plan)
+    # Validate the training plan directly
+    result, messages = exercise_validator.validate_training_plan(mock_training_plan)
     
     # Assertions
     assert isinstance(result, dict)
@@ -265,14 +266,14 @@ def test_exercise_validator_exercise_validation(exercise_validator, mock_workout
     print(f"✅ Exercise validation: {len(messages)} messages")
 
 
-def test_exercise_validator_invalid_exercise_handling(exercise_validator, mock_workout_plan):
+def test_exercise_validator_invalid_exercise_handling(exercise_validator, mock_training_plan):
     """Test that invalid exercises are handled properly."""
-    # Create workout plan with invalid exercise IDs
-    invalid_workout_plan = {
+    # Create training plan with invalid exercise IDs
+    invalid_training_plan = {
         "title": "Test Plan",
         "weekly_schedules": [{
             "week_number": 1,
-            "daily_workouts": [{
+            "daily_trainings": [{
                 "day_of_week": "Monday",
                 "is_rest_day": False,
                 "exercises": [
@@ -283,8 +284,8 @@ def test_exercise_validator_invalid_exercise_handling(exercise_validator, mock_w
         }]
     }
     
-    # Validate the workout plan
-    result, messages = exercise_validator.validate_workout_plan(invalid_workout_plan)
+    # Validate the training plan
+    result, messages = exercise_validator.validate_training_plan(invalid_training_plan)
     
     # Assertions
     assert isinstance(result, dict)
@@ -295,12 +296,12 @@ def test_exercise_validator_invalid_exercise_handling(exercise_validator, mock_w
 
 def test_exercise_validator_exercise_references(exercise_validator):
     """Test exercise reference validation."""
-    # Create workout plan with mixed valid/invalid exercise references
-    workout_plan = {
+    # Create training plan with mixed valid/invalid exercise references
+    training_plan = {
         "title": "Test Plan",
         "weekly_schedules": [{
             "week_number": 1,
-            "daily_workouts": [{
+            "daily_trainings": [{
                 "day_of_week": "Monday",
                 "is_rest_day": False,
                 "exercises": [
@@ -313,7 +314,7 @@ def test_exercise_validator_exercise_references(exercise_validator):
     }
     
     # Validate references
-    result, messages = exercise_validator.validate_workout_plan(workout_plan)
+    result, messages = exercise_validator.validate_training_plan(training_plan)
     
     # Assertions
     assert isinstance(result, dict)
@@ -322,10 +323,10 @@ def test_exercise_validator_exercise_references(exercise_validator):
     print(f"✅ Exercise reference validation: {len(messages)} messages")
 
 
-def test_exercise_validator_exercise_summary(exercise_validator, mock_workout_plan):
+def test_exercise_validator_exercise_summary(exercise_validator, mock_training_plan):
     """Test exercise validation summary."""
-    # Validate workout plan
-    result, messages = exercise_validator.validate_workout_plan(mock_workout_plan)
+    # Validate training plan
+    result, messages = exercise_validator.validate_training_plan(mock_training_plan)
     
     # Assertions
     assert isinstance(result, dict)
@@ -335,19 +336,19 @@ def test_exercise_validator_exercise_summary(exercise_validator, mock_workout_pl
 
 
 # ============================================================================
-# FITNESS COACH INTEGRATION TESTS
+# training COACH INTEGRATION TESTS
 # ============================================================================
 
 
-def test_fitness_coach_initial_questions_generation(fitness_coach, sample_user_profiles):
-    """Test fitness coach initial questions generation."""
+def test_training_coach_initial_questions_generation(training_coach, sample_user_profiles):
+    """Test training coach initial questions generation."""
     muscle_user = sample_user_profiles["muscle_builder"]
     
     # Convert UserProfileSchema to dict for the API
     user_profile_dict = muscle_user.model_dump() if hasattr(muscle_user, 'model_dump') else muscle_user.__dict__
     
     # Generate initial questions
-    result = fitness_coach.generate_initial_questions(user_profile_dict)
+    result = training_coach.generate_initial_questions(user_profile_dict)
     
     # Assertions
     assert hasattr(result, 'questions'), "Should return questions"
@@ -362,8 +363,8 @@ def test_fitness_coach_initial_questions_generation(fitness_coach, sample_user_p
     print(f"✅ Generated {len(result.questions)} initial questions")
 
 
-def test_fitness_coach_follow_up_questions_generation(fitness_coach, sample_user_profiles):
-    """Test fitness coach follow-up questions generation."""
+def test_training_coach_follow_up_questions_generation(training_coach, sample_user_profiles):
+    """Test training coach follow-up questions generation."""
     muscle_user = sample_user_profiles["muscle_builder"]
     
     # Convert UserProfileSchema to dict for the API
@@ -377,7 +378,7 @@ def test_fitness_coach_follow_up_questions_generation(fitness_coach, sample_user
     }
     
     # Generate follow-up questions
-    result = fitness_coach.generate_follow_up_questions(user_profile_dict, initial_responses)
+    result = training_coach.generate_follow_up_questions(user_profile_dict, initial_responses)
     
     # Assertions
     assert hasattr(result, 'questions'), "Should return questions"
@@ -387,8 +388,8 @@ def test_fitness_coach_follow_up_questions_generation(fitness_coach, sample_user
     print(f"✅ Generated {len(result.questions)} follow-up questions")
 
 
-def test_fitness_coach_training_plan_generation(fitness_coach, sample_user_profiles):
-    """Test fitness coach training plan generation."""
+def test_training_coach_training_plan_generation(training_coach, sample_user_profiles):
+    """Test training coach training plan generation."""
     muscle_user = sample_user_profiles["muscle_builder"]
     
     print("\n🔍 Testing Training Plan Generation:")
@@ -403,32 +404,32 @@ def test_fitness_coach_training_plan_generation(fitness_coach, sample_user_profi
         "experience_level": "intermediate",
         "equipment": "home gym"
     }
-    result = fitness_coach.generate_training_plan(user_profile_dict, user_responses)
+    result = training_coach.generate_training_plan(user_profile_dict, user_responses)
     
     # Assertions
     assert isinstance(result, dict), "Should return a dictionary"
     assert "success" in result, "Should have success status"
-    assert "workout_plan" in result, "Should have workout plan"
+    assert "training_plan" in result, "Should have training plan"
     
     if result["success"]:
-        workout_plan = result["workout_plan"]
-        assert isinstance(workout_plan, dict), "Workout plan should be a dictionary"
-        assert "title" in workout_plan, "Should have title"
+        training_plan = result["training_plan"]
+        assert isinstance(training_plan, dict), "Training plan should be a dictionary"
+        assert "title" in training_plan, "Should have title"
         
-        print(f"✅ Generated training plan: {workout_plan.get('title', 'Unknown')}")
+        print(f"✅ Generated training plan: {training_plan.get('title', 'Unknown')}")
     else:
         print(f"⚠️ Training plan generation failed: {result.get('error', 'Unknown error')}")
 
 
-def test_fitness_coach_exercise_candidates(fitness_coach, sample_user_profiles):
-    """Test fitness coach exercise candidate selection."""
+def test_training_coach_exercise_candidates(training_coach, sample_user_profiles):
+    """Test training coach exercise candidate selection."""
     muscle_user = sample_user_profiles["muscle_builder"]
     
     # Convert UserProfileSchema to dict for the API
     user_profile_dict = muscle_user.model_dump() if hasattr(muscle_user, 'model_dump') else muscle_user.__dict__
     
     # Test exercise selection through the selector
-    result = fitness_coach.exercise_selector.get_exercise_candidates(
+    result = training_coach.exercise_selector.get_exercise_candidates(
         max_exercises=20,
         difficulty="Intermediate"
     )
@@ -443,7 +444,7 @@ def test_fitness_coach_exercise_candidates(fitness_coach, sample_user_profiles):
         print(f"⚠️ No exercise candidates found")
 
 
-def test_fitness_coach_target_muscle_groups(fitness_coach, sample_user_profiles):
+def test_training_coach_target_muscle_groups(training_coach, sample_user_profiles):
     """Test exercise selection for different user profiles."""
     
     for profile_name, profile in sample_user_profiles.items():
@@ -451,7 +452,7 @@ def test_fitness_coach_target_muscle_groups(fitness_coach, sample_user_profiles)
         user_profile_dict = profile.model_dump() if hasattr(profile, 'model_dump') else profile.__dict__
         
         # Test exercise selection
-        result = fitness_coach.exercise_selector.get_exercise_candidates(
+        result = training_coach.exercise_selector.get_exercise_candidates(
             max_exercises=10,
             difficulty=profile.experience_level
         )
@@ -462,7 +463,7 @@ def test_fitness_coach_target_muscle_groups(fitness_coach, sample_user_profiles)
         print(f"✅ {profile_name}: Exercise selection completed")
 
 
-def test_fitness_coach_profile_processing(fitness_coach, sample_user_profiles):
+def test_training_coach_profile_processing(training_coach, sample_user_profiles):
     """Test profile processing for training plan generation."""
     muscle_user = sample_user_profiles["muscle_builder"]
     
@@ -475,7 +476,7 @@ def test_fitness_coach_profile_processing(fitness_coach, sample_user_profiles):
         "experience_level": "intermediate",
         "equipment": "home gym"
     }
-    result = fitness_coach.generate_training_plan(user_profile_dict, user_responses)
+    result = training_coach.generate_training_plan(user_profile_dict, user_responses)
     
     # Assertions
     assert isinstance(result, dict), "Should return a dictionary"
@@ -493,15 +494,15 @@ def test_fitness_coach_profile_processing(fitness_coach, sample_user_profiles):
 # PROMPT GENERATOR INTEGRATION TESTS
 # ============================================================================
 
-def test_workout_generation_with_exercise_candidates(fitness_coach, sample_user_profiles):
-    """Test workout plan generation with exercise candidates."""
+def test_training_generation_with_exercise_candidates(training_coach, sample_user_profiles):
+    """Test training plan generation with exercise candidates."""
     weight_loss_user = sample_user_profiles["weight_loss"]
     
     # Convert UserProfileSchema to dict for the API
     user_profile_dict = weight_loss_user.model_dump() if hasattr(weight_loss_user, 'model_dump') else weight_loss_user.__dict__
     
     # Get exercise candidates
-    exercise_result = fitness_coach.exercise_selector.get_exercise_candidates(
+    exercise_result = training_coach.exercise_selector.get_exercise_candidates(
         max_exercises=20,
         difficulty="Beginner"
     )
@@ -518,7 +519,7 @@ def test_workout_generation_with_exercise_candidates(fitness_coach, sample_user_
             "experience_level": "beginner",
             "equipment": "bodyweight"
         }
-        plan_result = fitness_coach.generate_training_plan(user_profile_dict, user_responses)
+        plan_result = training_coach.generate_training_plan(user_profile_dict, user_responses)
         
         # Assertions
         assert isinstance(plan_result, dict)
@@ -533,15 +534,15 @@ def test_workout_generation_with_exercise_candidates(fitness_coach, sample_user_
         print(f"⚠️ No exercise candidates found")
 
 
-def test_fitness_coach_user_profile_integration(fitness_coach, sample_user_profiles):
-    """Test fitness coach integration with user profiles."""
+def test_training_coach_user_profile_integration(training_coach, sample_user_profiles):
+    """Test training coach integration with user profiles."""
     muscle_user = sample_user_profiles["muscle_builder"]
     
     # Convert UserProfileSchema to dict for the API
     user_profile_dict = muscle_user.model_dump() if hasattr(muscle_user, 'model_dump') else muscle_user.__dict__
     
     # Test initial questions generation for different profile types
-    result = fitness_coach.generate_initial_questions(user_profile_dict)
+    result = training_coach.generate_initial_questions(user_profile_dict)
     
     # Assertions
     assert hasattr(result, 'questions'), "Should return questions"
@@ -553,18 +554,18 @@ def test_fitness_coach_user_profile_integration(fitness_coach, sample_user_profi
     assert len(questions_text) > 0, "Should have question text"
     # The questions are generic and don't need to contain specific profile terms
     
-    print(f"✅ Fitness coach integration: {len(result.questions)} questions generated")
+    print(f"✅ training coach integration: {len(result.questions)} questions generated")
 
 
 # ============================================================================
 # END-TO-END WORKFLOW TESTS
 # ============================================================================
 
-def test_complete_workout_generation_workflow(fitness_coach, sample_user_profiles):
-    """Test the complete workout generation workflow from profile to plan."""
+def test_complete_training_generation_workflow(training_coach, sample_user_profiles):
+    """Test the complete training generation workflow from profile to plan."""
     muscle_user = sample_user_profiles["muscle_builder"]
     
-    print("\n🚀 Testing Complete Workout Generation Workflow:")
+    print("\n🚀 Testing Complete Training Generation Workflow:")
     print("=" * 60)
     
     # Convert UserProfileSchema to dict for the API
@@ -572,14 +573,14 @@ def test_complete_workout_generation_workflow(fitness_coach, sample_user_profile
     
     # Step 1: Generate initial questions
     print("1️⃣ Generating initial questions...")
-    initial_result = fitness_coach.generate_initial_questions(user_profile_dict)
+    initial_result = training_coach.generate_initial_questions(user_profile_dict)
     assert hasattr(initial_result, 'questions')
     assert len(initial_result.questions) > 0
     print(f"   ✅ Generated {len(initial_result.questions)} initial questions")
     
     # Step 2: Get exercise candidates
     print("2️⃣ Getting exercise candidates...")
-    exercise_result = fitness_coach.exercise_selector.get_exercise_candidates(
+    exercise_result = training_coach.exercise_selector.get_exercise_candidates(
         max_exercises=20,
         difficulty="Intermediate"
     )
@@ -597,21 +598,21 @@ def test_complete_workout_generation_workflow(fitness_coach, sample_user_profile
         "experience_level": "intermediate",
         "equipment": "home gym"
     }
-    plan_result = fitness_coach.generate_training_plan(user_profile_dict, user_responses)
+    plan_result = training_coach.generate_training_plan(user_profile_dict, user_responses)
     assert isinstance(plan_result, dict)
     assert "success" in plan_result
     
     if plan_result["success"]:
-        workout_plan = plan_result["workout_plan"]
-        assert isinstance(workout_plan, dict)
-        print(f"   ✅ Generated training plan: {workout_plan.get('plan_name', 'Unknown')}")
+        training_plan = plan_result["training_plan"]
+        assert isinstance(training_plan, dict)
+        print(f"   ✅ Generated training plan: {training_plan.get('plan_name', 'Unknown')}")
     else:
         print(f"   ⚠️ Plan generation failed: {plan_result.get('error', 'Unknown error')}")
     
     print("\n🎉 Complete workflow test passed!")
 
 
-def test_error_handling_integration(fitness_coach, sample_user_profiles):
+def test_error_handling_integration(training_coach, sample_user_profiles):
     """Test error handling across the integrated system."""
     muscle_user = sample_user_profiles["muscle_builder"]
     
@@ -625,7 +626,7 @@ def test_error_handling_integration(fitness_coach, sample_user_profiles):
         user_profile_dict = muscle_user.model_dump() if hasattr(muscle_user, 'model_dump') else muscle_user.__dict__
         user_profile_dict["equipment"] = "Invalid Equipment Type"
         
-        result = fitness_coach.exercise_selector.get_exercise_candidates(
+        result = training_coach.exercise_selector.get_exercise_candidates(
             max_exercises=20,
             difficulty="Beginner"
         )
@@ -647,7 +648,7 @@ def test_error_handling_integration(fitness_coach, sample_user_profiles):
             "equipment": "bodyweight"
         }
         
-        result = fitness_coach.generate_initial_questions(minimal_profile)
+        result = training_coach.generate_initial_questions(minimal_profile)
         assert hasattr(result, 'questions')
         print(f"   ✅ Invalid profile data handled gracefully: {len(result.questions)} questions")
         
@@ -662,9 +663,9 @@ def test_error_handling_integration(fitness_coach, sample_user_profiles):
 # ============================================================================
 
 def test_large_exercise_list_handling(exercise_validator):
-    """Test handling of large workout plans."""
-    # Create a large workout plan
-    large_workout_plan = {
+    """Test handling of large training plans."""
+    # Create a large training plan
+    large_training_plan = {
         "title": "Large Test Plan",
         "weekly_schedules": []
     }
@@ -673,7 +674,7 @@ def test_large_exercise_list_handling(exercise_validator):
     for week_num in range(1, 5):
         week = {
             "week_number": week_num,
-            "daily_workouts": []
+            "daily_trainings": []
         }
         
         for day_num in range(7):
@@ -699,26 +700,26 @@ def test_large_exercise_list_handling(exercise_validator):
                     "exercises": exercises
                 }
             
-            week["daily_workouts"].append(day)
+            week["daily_trainings"].append(day)
         
-        large_workout_plan["weekly_schedules"].append(week)
+        large_training_plan["weekly_schedules"].append(week)
     
     # Test validation performance
-    print(f"📊 Testing large workout plan: {len(large_workout_plan['weekly_schedules'])} weeks")
+    print(f"📊 Testing large training plan: {len(large_training_plan['weekly_schedules'])} weeks")
     
-    result, messages = exercise_validator.validate_workout_plan(large_workout_plan)
+    result, messages = exercise_validator.validate_training_plan(large_training_plan)
     
     # Assertions
     assert isinstance(result, dict)
     assert isinstance(messages, list)
     
-    print(f"✅ Large workout plan validation completed: {len(messages)} messages")
+    print(f"✅ Large training plan validation completed: {len(messages)} messages")
 
 
 if __name__ == "__main__":
-    print("🚀 Enhanced Workout System Integration Test Suite")
+    print("🚀 Enhanced Training System Integration Test Suite")
     print("=" * 70)
-    print("Now covers: Component interactions, workout generation workflows,")
+    print("Now covers: Component interactions, training generation workflows,")
     print("system-level behavior, error handling, and end-to-end testing!")
     print("=" * 70)
     

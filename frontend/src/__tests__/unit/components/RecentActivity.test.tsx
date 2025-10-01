@@ -10,8 +10,8 @@ describe('RecentActivity Component - Simple Tests', () => {
         activities: [
           {
             id: '1',
-            type: 'workout' as const,
-            title: 'Monday Workout',
+            type: 'training' as const,
+            title: 'Monday Training',
             subtitle: 'Upper Body',
             date: '2024-01-01',
             duration: '45 min',
@@ -30,8 +30,8 @@ describe('RecentActivity Component - Simple Tests', () => {
       const mockActivities = [
         {
           id: '1',
-          type: 'workout' as const,
-          title: 'Monday Workout',
+          type: 'training' as const,
+          title: 'Monday Training',
           subtitle: 'Upper Body',
           date: '2024-01-01',
           duration: '45 min',
@@ -39,8 +39,8 @@ describe('RecentActivity Component - Simple Tests', () => {
         },
         {
           id: '2',
-          type: 'workout' as const,
-          title: 'Wednesday Workout',
+          type: 'training' as const,
+          title: 'Wednesday Training',
           subtitle: 'Lower Body',
           date: '2024-01-03',
           duration: '50 min',
@@ -50,8 +50,8 @@ describe('RecentActivity Component - Simple Tests', () => {
 
       expect(mockActivities).toHaveLength(2);
       expect(mockActivities[0].id).toBe('1');
-      expect(mockActivities[0].type).toBe('workout');
-      expect(mockActivities[0].title).toBe('Monday Workout');
+      expect(mockActivities[0].type).toBe('training');
+      expect(mockActivities[0].title).toBe('Monday Training');
     });
   });
 
@@ -60,8 +60,8 @@ describe('RecentActivity Component - Simple Tests', () => {
       const activities = [
         {
           id: '1',
-          type: 'workout' as const,
-          title: 'Monday Workout',
+          type: 'training' as const,
+          title: 'Monday Training',
           subtitle: 'Upper Body',
           date: '2024-01-01',
           duration: '45 min',
@@ -69,8 +69,8 @@ describe('RecentActivity Component - Simple Tests', () => {
         },
         {
           id: '2',
-          type: 'workout' as const,
-          title: 'Wednesday Workout',
+          type: 'training' as const,
+          title: 'Wednesday Training',
           subtitle: 'Lower Body',
           date: '2024-01-03',
           duration: '50 min',
@@ -88,16 +88,16 @@ describe('RecentActivity Component - Simple Tests', () => {
       ];
 
       expect(activities).toHaveLength(3);
-      expect(activities[0].title).toBe('Monday Workout');
-      expect(activities[1].title).toBe('Wednesday Workout');
+      expect(activities[0].title).toBe('Monday Training');
+      expect(activities[1].title).toBe('Wednesday Training');
       expect(activities[2].title).toBe('New Personal Record');
     });
 
     it('should limit activities to 3 maximum', () => {
       const manyActivities = Array.from({ length: 10 }, (_, i) => ({
         id: `${i + 1}`,
-        type: 'workout' as const,
-        title: `Workout ${i + 1}`,
+        type: 'training' as const,
+        title: `Training ${i + 1}`,
         subtitle: 'Strength Training',
         date: `2024-01-${String(i + 1).padStart(2, '0')}`,
         duration: '45 min',
@@ -106,8 +106,8 @@ describe('RecentActivity Component - Simple Tests', () => {
 
       const limitedActivities = manyActivities.slice(0, 3);
       expect(limitedActivities).toHaveLength(3);
-      expect(limitedActivities[0].title).toBe('Workout 1');
-      expect(limitedActivities[2].title).toBe('Workout 3');
+      expect(limitedActivities[0].title).toBe('Training 1');
+      expect(limitedActivities[2].title).toBe('Training 3');
     });
 
     it('should handle empty activities array', () => {
@@ -119,8 +119,8 @@ describe('RecentActivity Component - Simple Tests', () => {
       const singleActivity = [
         {
           id: '1',
-          type: 'workout' as const,
-          title: 'Monday Workout',
+          type: 'training' as const,
+          title: 'Monday Training',
           subtitle: 'Upper Body',
           date: '2024-01-01',
           duration: '45 min',
@@ -129,7 +129,7 @@ describe('RecentActivity Component - Simple Tests', () => {
       ];
 
       expect(singleActivity).toHaveLength(1);
-      expect(singleActivity[0].title).toBe('Monday Workout');
+      expect(singleActivity[0].title).toBe('Monday Training');
     });
   });
 
@@ -138,8 +138,8 @@ describe('RecentActivity Component - Simple Tests', () => {
       const mixedActivities = [
         {
           id: '1',
-          type: 'workout' as const,
-          title: 'Workout Session',
+          type: 'training' as const,
+          title: 'Training Session',
           subtitle: 'Strength Training',
           date: '2024-01-01',
           duration: '45 min',
@@ -158,21 +158,21 @@ describe('RecentActivity Component - Simple Tests', () => {
           id: '3',
           type: 'achievement' as const,
           title: 'Milestone Reached',
-          subtitle: '100 Workouts',
+          subtitle: '100 Trainings',
           date: '2024-01-03',
           duration: undefined,
           calories: undefined
         }
       ];
 
-      expect(mixedActivities[0].type).toBe('workout');
+      expect(mixedActivities[0].type).toBe('training');
       expect(mixedActivities[1].type).toBe('rest');
       expect(mixedActivities[2].type).toBe('achievement');
     });
 
     it('should validate activity type values', () => {
-      const validTypes = ['workout', 'rest', 'achievement'];
-      const activityType = 'workout';
+      const validTypes = ['training', 'rest', 'achievement'];
+      const activityType = 'training';
       
       expect(validTypes.includes(activityType)).toBe(true);
     });
@@ -182,8 +182,8 @@ describe('RecentActivity Component - Simple Tests', () => {
     it('should handle activities with duration and calories', () => {
       const activity = {
         id: '1',
-        type: 'workout' as const,
-        title: 'Monday Workout',
+        type: 'training' as const,
+        title: 'Monday Training',
         subtitle: 'Upper Body',
         date: '2024-01-01',
         duration: '45 min',
@@ -214,8 +214,8 @@ describe('RecentActivity Component - Simple Tests', () => {
     it('should handle activities with null values', () => {
       const activity = {
         id: '1',
-        type: 'workout' as const,
-        title: 'Workout Session',
+        type: 'training' as const,
+        title: 'Training Session',
         subtitle: 'Strength Training',
         date: '2024-01-01',
         duration: null,
@@ -239,8 +239,8 @@ describe('RecentActivity Component - Simple Tests', () => {
       const activities = [
         {
           id: '1',
-          type: 'workout' as const,
-          title: 'Monday Workout',
+          type: 'training' as const,
+          title: 'Monday Training',
           subtitle: 'Upper Body',
           date: '2024-01-01',
           duration: '45 min',
@@ -282,7 +282,7 @@ describe('RecentActivity Component - Simple Tests', () => {
     it('should validate activity structure', () => {
       const activity = {
         id: '1',
-        type: 'workout' as const,
+        type: 'training' as const,
         title: 'Test Activity',
         subtitle: 'Test Subtitle',
         date: '2024-01-01',
@@ -302,7 +302,7 @@ describe('RecentActivity Component - Simple Tests', () => {
     it('should handle very long activity titles', () => {
       const activity = {
         id: '1',
-        type: 'workout' as const,
+        type: 'training' as const,
         title: 'Very Long Activity Title That Might Cause Layout Issues In The UI Component',
         subtitle: 'Test Subtitle',
         date: '2024-01-01',
@@ -332,8 +332,8 @@ describe('RecentActivity Component - Simple Tests', () => {
     it('should handle activities with very high calorie counts', () => {
       const activity = {
         id: '1',
-        type: 'workout' as const,
-        title: 'Intense Workout',
+        type: 'training' as const,
+        title: 'Intense Training',
         subtitle: 'HIIT Training',
         date: '2024-01-01',
         duration: '60 min',
@@ -354,12 +354,12 @@ describe('RecentActivity Component - Simple Tests', () => {
 
     it('should have proper empty state messages', () => {
       const emptyStateMessages = {
-        title: 'No completed workouts yet',
-        subtitle: 'Complete your first workout to see it here!'
+        title: 'No completed trainings yet',
+        subtitle: 'Complete your first training to see it here!'
       };
 
-      expect(emptyStateMessages.title).toBe('No completed workouts yet');
-      expect(emptyStateMessages.subtitle).toBe('Complete your first workout to see it here!');
+      expect(emptyStateMessages.title).toBe('No completed trainings yet');
+      expect(emptyStateMessages.subtitle).toBe('Complete your first training to see it here!');
     });
 
     it('should have proper activity limit', () => {

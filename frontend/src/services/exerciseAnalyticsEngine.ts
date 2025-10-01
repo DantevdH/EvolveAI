@@ -1,7 +1,7 @@
 // Exercise Analytics Engine - Advanced data-driven insights
 // Senior React Developer implementation with real Supabase data
 
-export interface WorkoutHistory {
+export interface TrainingHistory {
   date: string;
   sets: number;
   reps: number[];
@@ -29,17 +29,17 @@ export interface StrengthProgression {
   strengthGains: Array<{ date: string; estimated1RM: number }>;
   progressionCurve: 'linear' | 'logarithmic' | 'plateau' | 'declining';
   nextMilestone: { target: number; timeframe: string };
-  totalImprovement: number; // % improvement since first workout
+  totalImprovement: number; // % improvement since first training
 }
 
 export interface ConsistencyMetrics {
-  workoutFrequency: number; // sessions per week
+  trainingFrequency: number; // sessions per week
   consistencyScore: number; // 0-100
   longestStreak: number; // days
   averageGap: number; // days between sessions
   bestPeriod: { start: string; end: string; performance: number };
   consistencyTrend: 'improving' | 'stable' | 'declining';
-  missedWorkouts: number;
+  missedTrainings: number;
   adherenceRate: number; // %
 }
 
@@ -63,7 +63,7 @@ export interface PlateauDetection {
 }
 
 export interface ProgressionRecommendation {
-  nextWorkout: {
+  nextTraining: {
     suggestedWeight: number[];
     suggestedReps: number[];
     confidence: number;
@@ -109,33 +109,33 @@ export class ExerciseAnalyticsEngine {
   }
 
   /**
-   * Process raw workout data into structured history
+   * Process raw training data into structured history
    */
-  static processWorkoutHistory(rawData: Array<{
+  static processTrainingHistory(rawData: Array<{
     date: string;
     volume: number;
     maxWeight: number;
     sets: number;
     reps: number[];
     weights: number[];
-  }>): WorkoutHistory[] {
-    return rawData.map(workout => {
+  }>): TrainingHistory[] {
+    return rawData.map(training => {
       // Calculate intensity (average weight relative to max weight)
-      const avgWeight = workout.weights.reduce((sum, w) => sum + w, 0) / workout.weights.length;
-      const intensity = workout.maxWeight > 0 ? (avgWeight / workout.maxWeight) * 100 : 0;
+      const avgWeight = training.weights.reduce((sum, w) => sum + w, 0) / training.weights.length;
+      const intensity = training.maxWeight > 0 ? (avgWeight / training.maxWeight) * 100 : 0;
       
-      // Calculate estimated 1RM for this workout
-      const bestSetIndex = workout.weights.findIndex(w => w === workout.maxWeight);
-      const bestReps = bestSetIndex >= 0 ? workout.reps[bestSetIndex] : Math.max(...workout.reps);
-      const estimated1RM = this.calculateEstimated1RM(workout.maxWeight, bestReps);
+      // Calculate estimated 1RM for this training
+      const bestSetIndex = training.weights.findIndex(w => w === training.maxWeight);
+      const bestReps = bestSetIndex >= 0 ? training.reps[bestSetIndex] : Math.max(...training.reps);
+      const estimated1RM = this.calculateEstimated1RM(training.maxWeight, bestReps);
       
       return {
-        date: workout.date,
-        sets: workout.sets,
-        reps: workout.reps,
-        weights: workout.weights,
-        volume: workout.volume,
-        maxWeight: workout.maxWeight,
+        date: training.date,
+        sets: training.sets,
+        reps: training.reps,
+        weights: training.weights,
+        volume: training.volume,
+        maxWeight: training.maxWeight,
         intensity,
         estimated1RM
       };
@@ -145,7 +145,7 @@ export class ExerciseAnalyticsEngine {
   /**
    * Analyze volume trends using linear regression
    */
-  static analyzeVolumeTrend(historyData: WorkoutHistory[]): VolumeTrendAnalysis {
+  static analyzeVolumeTrend(historyData: TrainingHistory[]): VolumeTrendAnalysis {
     if (historyData.length < 3) {
       return {
         trend: 'stable',
@@ -238,7 +238,7 @@ export class ExerciseAnalyticsEngine {
   /**
    * Analyze strength progression over time
    */
-  static analyzeStrengthProgression(historyData: WorkoutHistory[]): StrengthProgression {
+  static analyzeStrengthProgression(historyData: TrainingHistory[]): StrengthProgression {
     if (historyData.length < 2) {
       return {
         current1RM: 0,
@@ -252,9 +252,9 @@ export class ExerciseAnalyticsEngine {
     }
 
     // Calculate strength gains over time
-    const strengthGains = historyData.map(workout => ({
-      date: workout.date,
-      estimated1RM: workout.estimated1RM
+    const strengthGains = historyData.map(training => ({
+      date: training.date,
+      estimated1RM: training.estimated1RM
     }));
 
     const current1RM = strengthGains[strengthGains.length - 1].estimated1RM;
@@ -299,23 +299,23 @@ export class ExerciseAnalyticsEngine {
   }
 
   /**
-   * Analyze workout consistency
+   * Analyze training consistency
    */
-  static analyzeConsistency(historyData: WorkoutHistory[]): ConsistencyMetrics {
+  static analyzeConsistency(historyData: TrainingHistory[]): ConsistencyMetrics {
     if (historyData.length < 2) {
       return {
-        workoutFrequency: 0,
+        trainingFrequency: 0,
         consistencyScore: 0,
         longestStreak: 0,
         averageGap: 0,
         bestPeriod: { start: '', end: '', performance: 0 },
         consistencyTrend: 'stable',
-        missedWorkouts: 0,
+        missedTrainings: 0,
         adherenceRate: 0
       };
     }
 
-    // Calculate gaps between workouts
+    // Calculate gaps between trainings
     const gaps: number[] = [];
     for (let i = 1; i < historyData.length; i++) {
       const gap = this.getDaysBetween(historyData[i-1].date, historyData[i].date);
@@ -323,13 +323,13 @@ export class ExerciseAnalyticsEngine {
     }
     
     const averageGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-    const workoutFrequency = 7 / averageGap; // workouts per week
+    const trainingFrequency = 7 / averageGap; // trainings per week
     
     // Calculate longest streak
     let currentStreak = 1;
     let longestStreak = 1;
     for (const gap of gaps) {
-      if (gap <= 3) { // Consider workouts within 3 days as part of streak
+      if (gap <= 3) { // Consider trainings within 3 days as part of streak
         currentStreak++;
       } else {
         longestStreak = Math.max(longestStreak, currentStreak);
@@ -339,7 +339,7 @@ export class ExerciseAnalyticsEngine {
     longestStreak = Math.max(longestStreak, currentStreak);
     
     // Calculate consistency score (0-100)
-    const idealGap = 2; // Ideal 2-day gap between workouts
+    const idealGap = 2; // Ideal 2-day gap between trainings
     const gapVariance = gaps.reduce((sum, gap) => sum + Math.pow(gap - idealGap, 2), 0) / gaps.length;
     const consistencyScore = Math.max(0, 100 - Math.sqrt(gapVariance) * 10);
     
@@ -349,9 +349,9 @@ export class ExerciseAnalyticsEngine {
       week.volume > best.volume ? week : best, weeklyVolumes[0] || { volume: 0, start: '', end: '' });
     
     // Calculate adherence rate (assuming user should work out 3x per week)
-    const expectedWorkouts = Math.floor(this.getDaysBetween(historyData[0].date, historyData[historyData.length-1].date) / 7) * 3;
-    const actualWorkouts = historyData.length;
-    const adherenceRate = expectedWorkouts > 0 ? (actualWorkouts / expectedWorkouts) * 100 : 100;
+    const expectedTrainings = Math.floor(this.getDaysBetween(historyData[0].date, historyData[historyData.length-1].date) / 7) * 3;
+    const actualTrainings = historyData.length;
+    const adherenceRate = expectedTrainings > 0 ? (actualTrainings / expectedTrainings) * 100 : 100;
     
     // Determine consistency trend
     const recentGaps = gaps.slice(-3);
@@ -363,7 +363,7 @@ export class ExerciseAnalyticsEngine {
                            recentAvgGap > earlyAvgGap * 1.1 ? 'declining' : 'stable';
     
     return {
-      workoutFrequency: Math.round(workoutFrequency * 100) / 100,
+      trainingFrequency: Math.round(trainingFrequency * 100) / 100,
       consistencyScore: Math.round(consistencyScore * 100) / 100,
       longestStreak,
       averageGap: Math.round(averageGap * 100) / 100,
@@ -373,7 +373,7 @@ export class ExerciseAnalyticsEngine {
         performance: bestWeek.volume
       },
       consistencyTrend,
-      missedWorkouts: Math.max(0, expectedWorkouts - actualWorkouts),
+      missedTrainings: Math.max(0, expectedTrainings - actualTrainings),
       adherenceRate: Math.round(adherenceRate * 100) / 100
     };
   }
@@ -381,7 +381,7 @@ export class ExerciseAnalyticsEngine {
   /**
    * Detect plateaus in performance
    */
-  static detectPlateau(historyData: WorkoutHistory[]): PlateauDetection {
+  static detectPlateau(historyData: TrainingHistory[]): PlateauDetection {
     if (historyData.length < 6) {
       return {
         isPlateaued: false,
@@ -455,7 +455,7 @@ export class ExerciseAnalyticsEngine {
   /**
    * Generate performance predictions
    */
-  static predictPerformance(historyData: WorkoutHistory[]): PerformancePrediction {
+  static predictPerformance(historyData: TrainingHistory[]): PerformancePrediction {
     if (historyData.length < 4) {
       return {
         next4Weeks: [],
@@ -528,10 +528,10 @@ export class ExerciseAnalyticsEngine {
   /**
    * Generate progression recommendations
    */
-  static generateProgressionRecommendation(historyData: WorkoutHistory[]): ProgressionRecommendation {
+  static generateProgressionRecommendation(historyData: TrainingHistory[]): ProgressionRecommendation {
     if (historyData.length < 2) {
       return {
-        nextWorkout: {
+        nextTraining: {
           suggestedWeight: [],
           suggestedReps: [],
           confidence: 0,
@@ -547,23 +547,23 @@ export class ExerciseAnalyticsEngine {
       };
     }
 
-    const lastWorkout = historyData[historyData.length - 1];
+    const lastTraining = historyData[historyData.length - 1];
     const plateauDetection = this.detectPlateau(historyData);
     const trendAnalysis = this.analyzeVolumeTrend(historyData);
     
     // Determine progression type
-    let progressionType: ProgressionRecommendation['nextWorkout']['progressionType'] = 'linear';
+    let progressionType: ProgressionRecommendation['nextTraining']['progressionType'] = 'linear';
     if (plateauDetection.isPlateaued) {
       progressionType = plateauDetection.severity === 'severe' ? 'deload' : 'wave';
     } else if (trendAnalysis.trend === 'decreasing') {
       progressionType = 'deload';
-    } else if (trendAnalysis.volatility > lastWorkout.volume * 0.3) {
+    } else if (trendAnalysis.volatility > lastTraining.volume * 0.3) {
       progressionType = 'step';
     }
     
-    // Generate next workout suggestions
-    const suggestedWeight = [...lastWorkout.weights];
-    const suggestedReps = [...lastWorkout.reps];
+    // Generate next training suggestions
+    const suggestedWeight = [...lastTraining.weights];
+    const suggestedReps = [...lastTraining.reps];
     let reasoning = '';
     
     if (progressionType === 'linear') {
@@ -595,7 +595,7 @@ export class ExerciseAnalyticsEngine {
     }
     
     // Generate milestones
-    const current1RM = lastWorkout.estimated1RM;
+    const current1RM = lastTraining.estimated1RM;
     const milestones = [
       {
         target: Math.ceil(current1RM * 1.1),
@@ -613,13 +613,13 @@ export class ExerciseAnalyticsEngine {
     const riskFactors = [];
     if (plateauDetection.isPlateaued) riskFactors.push('plateau');
     if (trendAnalysis.trend === 'decreasing') riskFactors.push('declining_performance');
-    if (trendAnalysis.volatility > lastWorkout.volume * 0.3) riskFactors.push('high_variability');
+    if (trendAnalysis.volatility > lastTraining.volume * 0.3) riskFactors.push('high_variability');
     
     const riskAssessment = riskFactors.length >= 2 ? 'high' : 
                           riskFactors.length === 1 ? 'medium' : 'low';
     
     return {
-      nextWorkout: {
+      nextTraining: {
         suggestedWeight,
         suggestedReps,
         confidence: Math.round(trendAnalysis.trendStrength * 100) / 100,
@@ -643,7 +643,7 @@ export class ExerciseAnalyticsEngine {
   /**
    * Generate comprehensive insights
    */
-  static generateInsights(historyData: WorkoutHistory[]): ExerciseInsights {
+  static generateInsights(historyData: TrainingHistory[]): ExerciseInsights {
     if (historyData.length === 0) {
       return {
         volumeTrend: this.analyzeVolumeTrend([]),
@@ -654,7 +654,7 @@ export class ExerciseAnalyticsEngine {
         recommendations: this.generateProgressionRecommendation([]),
         overallScore: 0,
         keyInsights: ['No data available for analysis'],
-        actionItems: ['Start logging workouts to get insights']
+        actionItems: ['Start logging trainings to get insights']
       };
     }
 
@@ -684,7 +684,7 @@ export class ExerciseAnalyticsEngine {
       keyInsights.push(`💪 Strength increased by ${strengthProgression.improvementRate}% recently`);
     }
     if (consistency.consistencyScore > 80) {
-      keyInsights.push('🎯 Excellent workout consistency');
+      keyInsights.push('🎯 Excellent training consistency');
     }
     if (plateauDetection.isPlateaued) {
       keyInsights.push('⏸️ Performance plateau detected - time for variation');
@@ -695,14 +695,14 @@ export class ExerciseAnalyticsEngine {
     
     // Generate action items
     const actionItems: string[] = [];
-    if (recommendations.nextWorkout.reasoning) {
-      actionItems.push(`Next workout: ${recommendations.nextWorkout.reasoning}`);
+    if (recommendations.nextTraining.reasoning) {
+      actionItems.push(`Next training: ${recommendations.nextTraining.reasoning}`);
     }
     if (plateauDetection.suggestedInterventions.length > 0) {
       actionItems.push(...plateauDetection.suggestedInterventions);
     }
     if (consistency.consistencyScore < 70) {
-      actionItems.push('Focus on more consistent workout schedule');
+      actionItems.push('Focus on more consistent training schedule');
     }
     
     return {
@@ -730,16 +730,16 @@ export class ExerciseAnalyticsEngine {
   /**
    * Helper: Calculate weekly volumes
    */
-  private static calculateWeeklyVolumes(historyData: WorkoutHistory[]): Array<{ volume: number; start: string; end: string }> {
+  private static calculateWeeklyVolumes(historyData: TrainingHistory[]): Array<{ volume: number; start: string; end: string }> {
     const weeklyData: { [key: string]: number } = {};
     
-    historyData.forEach(workout => {
-      const date = new Date(workout.date);
+    historyData.forEach(training => {
+      const date = new Date(training.date);
       const weekStart = new Date(date);
       weekStart.setDate(date.getDate() - date.getDay()); // Start of week (Sunday)
       const weekKey = weekStart.toISOString().split('T')[0];
       
-      weeklyData[weekKey] = (weeklyData[weekKey] || 0) + workout.volume;
+      weeklyData[weekKey] = (weeklyData[weekKey] || 0) + training.volume;
     });
     
     return Object.entries(weeklyData).map(([weekStart, volume]) => {

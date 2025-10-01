@@ -54,7 +54,7 @@ export default function TabLayout() {
           title: 'Training',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons 
-              name={focused ? 'fitness' : 'fitness-outline'} 
+              name={focused ? 'training' : 'training-outline'} 
               size={24} 
               color={color} 
             />

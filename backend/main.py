@@ -1,28 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-import logging
-import sys
-from core.fitness.fitness_api import router as fitness_router
+from logging_config import get_logger
+from core.training.training_api import router as training_router
 
 # Load environment variables
 load_dotenv()
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-
-# Test logging
-logger = logging.getLogger(__name__)
+# Initialize logging
+logger = get_logger(__name__)
 
 app = FastAPI(
-    title="EvolveAI Workout Plan Generator",
-    description="FastAPI backend for generating personalized workout plans using enhanced AI Fitness Coach",
+    title="EvolveAI Training Plan Generator",
+    description="FastAPI backend for generating personalized training plans using enhanced AI training Coach",
     version="2.0.0"
 )
 
@@ -35,14 +25,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include fitness router
-app.include_router(fitness_router)
+# Include training router
+app.include_router(training_router)
 
 
 @app.get("/")
 async def root():
     """Health check endpoint."""
-    return {"message": "EvolveAI Workout Plan Generator API v2.0", "status": "healthy"}
+    return {"message": "EvolveAI Training Plan Generator API v2.0", "status": "healthy"}
 
 
 @app.get("/api/health/")

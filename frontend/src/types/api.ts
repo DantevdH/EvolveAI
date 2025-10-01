@@ -10,8 +10,8 @@ export interface ApiResponse<T = any> {
   message?: string;
 }
 
-// Workout plan generation request
-export interface GenerateWorkoutPlanRequest {
+// Training plan generation request
+export interface GenerateTrainingPlanRequest {
   primaryGoal: string;
   primaryGoalDescription: string;
   experienceLevel: string;
@@ -31,38 +31,38 @@ export interface GenerateWorkoutPlanRequest {
   user_profile_id: number;
 }
 
-// Workout plan generation response
-export interface GenerateWorkoutPlanResponse {
+// Training plan generation response
+export interface GenerateTrainingPlanResponse {
   status: 'success' | 'error';
   message: string;
-  workout_plan?: WorkoutPlanData;
+  training_plan?: TrainingPlanData;
   error?: string;
 }
 
-// Workout plan data structure
-export interface WorkoutPlanData {
+// Training plan data structure
+export interface TrainingPlanData {
   title: string;
   summary: string;
   weekly_schedules: WeeklyScheduleData[];
-  daily_workouts: DailyWorkoutData[];
-  workout_exercises: WorkoutExerciseData[];
+  daily_trainings: DailyTrainingData[];
+  training_exercises: TrainingExerciseData[];
 }
 
 // Weekly schedule data
 export interface WeeklyScheduleData {
   week_number: number;
-  daily_workouts: DailyWorkoutData[];
+  daily_trainings: DailyTrainingData[];
 }
 
-// Daily workout data
-export interface DailyWorkoutData {
+// Daily training data
+export interface DailyTrainingData {
   day_of_week: string;
   is_rest_day: boolean;
-  workout_exercises: WorkoutExerciseData[];
+  training_exercises: TrainingExerciseData[];
 }
 
-// Workout exercise data
-export interface WorkoutExerciseData {
+// Training exercise data
+export interface TrainingExerciseData {
   exercise_id: number;
   exercise_name: string;
   sets: number;

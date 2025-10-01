@@ -26,7 +26,7 @@ describe('AIInsightsCard Component - Simple Tests', () => {
 
   describe('Insight Text Processing', () => {
     it('should handle custom insight text', () => {
-      const customInsight = 'Your workout consistency is improving! Keep up the great work.';
+      const customInsight = 'Your training consistency is improving! Keep up the great work.';
       
       expect(customInsight).toBeDefined();
       expect(typeof customInsight).toBe('string');
@@ -181,7 +181,7 @@ describe('AIInsightsCard Component - Simple Tests', () => {
     });
 
     it('should handle insight text with special characters', () => {
-      const specialInsight = 'Your workout is 100% complete! 🎉 Keep it up! 💪';
+      const specialInsight = 'Your training is 100% complete! 🎉 Keep it up! 💪';
       
       expect(specialInsight).toBeDefined();
       expect(typeof specialInsight).toBe('string');

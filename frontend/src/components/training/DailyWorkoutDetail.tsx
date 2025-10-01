@@ -1,37 +1,37 @@
-// Daily Workout Detail Component - Shows selected day's workout
+// Daily Training Detail Component - Shows selected day's training
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import ExerciseRow from './ExerciseRow';
-import { DailyWorkoutDetailProps } from '../../types/training';
+import { DailyTrainingDetailProps } from '../../types/training';
 
 
-const DailyWorkoutDetail: React.FC<DailyWorkoutDetailProps> = ({
-  dailyWorkout,
+const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
+  dailyTraining,
   isPastWeek,
   onExerciseToggle,
   onSetUpdate,
   onExerciseDetail,
   onOneRMCalculator,
   onSwapExercise,
-  onReopenWorkout
+  onReopenTraining
 }) => {
-  if (!dailyWorkout) {
+  if (!dailyTraining) {
     return (
       <View style={styles.container}>
-        <Text style={styles.noWorkoutText}>No workout selected</Text>
+        <Text style={styles.noTrainingText}>No training selected</Text>
       </View>
     );
   }
 
-  if (dailyWorkout.isRestDay) {
+  if (dailyTraining.isRestDay) {
     return (
       <View style={styles.container}>
-        <View style={styles.workoutCard}>
+        <View style={styles.trainingCard}>
           {/* Day Header */}
           <View style={styles.dayHeader}>
-            <Text style={styles.dayName}>{dailyWorkout.dayOfWeek}</Text>
+            <Text style={styles.dayName}>{dailyTraining.dayOfWeek}</Text>
             
             {/* Show past week indicator */}
             {isPastWeek && (
@@ -47,7 +47,7 @@ const DailyWorkoutDetail: React.FC<DailyWorkoutDetailProps> = ({
             <Ionicons name="moon" size={48} color={colors.purple + '60'} />
             <Text style={styles.restDayTitle}>Rest Day</Text>
             <Text style={[styles.restDaySubtitle, { color: colors.purple + '60', fontStyle: 'italic' }]}>
-              Recharge and get ready for your next workout!
+              Recharge and get ready for your next training!
             </Text>
           </View>
         </View>
@@ -55,16 +55,16 @@ const DailyWorkoutDetail: React.FC<DailyWorkoutDetailProps> = ({
     );
   }
 
-  const completedExercises = dailyWorkout.exercises.filter(ex => ex.completed).length;
-  const totalExercises = dailyWorkout.exercises.length;
+  const completedExercises = dailyTraining.exercises.filter(ex => ex.completed).length;
+  const totalExercises = dailyTraining.exercises.length;
   const progress = totalExercises > 0 ? (completedExercises / totalExercises) * 100 : 0;
 
   return (
     <View style={styles.container}>
-      <View style={styles.workoutCard}>
+      <View style={styles.trainingCard}>
         {/* Day Header */}
         <View style={styles.dayHeader}>
-          <Text style={styles.dayName}>{dailyWorkout.dayOfWeek}</Text>
+          <Text style={styles.dayName}>{dailyTraining.dayOfWeek}</Text>
           
           {/* Show past week indicator */}
           {isPastWeek && (
@@ -77,7 +77,7 @@ const DailyWorkoutDetail: React.FC<DailyWorkoutDetailProps> = ({
 
         {/* Content */}
         <View style={styles.exercisesContainer}>
-            {dailyWorkout.exercises.map((exercise) => (
+            {dailyTraining.exercises.map((exercise) => (
               <ExerciseRow
                 key={exercise.id}
                 exercise={exercise}
@@ -86,29 +86,29 @@ const DailyWorkoutDetail: React.FC<DailyWorkoutDetailProps> = ({
                   onSetUpdate(exercise.id, setIndex, reps, weight)
                 }
                 onShowDetail={() => {
-                  console.log('🔍 DailyWorkoutDetail: Calling onExerciseDetail with exercise:', exercise.exercise);
+                  console.log('🔍 DailyTrainingDetail: Calling onExerciseDetail with exercise:', exercise.exercise);
                   onExerciseDetail(exercise.exercise);
                 }}
                 onOneRMCalculator={onOneRMCalculator}
                 onSwapExercise={onSwapExercise ? () => onSwapExercise(exercise.exercise) : undefined}
-                isLocked={dailyWorkout.completed}
+                isLocked={dailyTraining.completed}
               />
             ))}
             
-            {/* Workout completion status */}
-            <View style={styles.workoutStatus}>
-              {dailyWorkout.completed ? (
+            {/* Training completion status */}
+            <View style={styles.trainingStatus}>
+              {dailyTraining.completed ? (
                 <View style={styles.completedStatusContainer}>
                   <View style={styles.statusRow}>
                     <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
-                    <Text style={styles.statusTextComplete}>Workout Complete</Text>
-                    {onReopenWorkout && (
+                    <Text style={styles.statusTextComplete}>Training Complete</Text>
+                    {onReopenTraining && (
                       <TouchableOpacity 
                         style={styles.reopenButton}
-                        onPress={onReopenWorkout}
+                        onPress={onReopenTraining}
                       >
                         <Ionicons name="lock-open-outline" size={16} color={colors.primary} />
-                        <Text style={styles.reopenButtonText}>Reopen Workout</Text>
+                        <Text style={styles.reopenButtonText}>Reopen Training</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -116,7 +116,7 @@ const DailyWorkoutDetail: React.FC<DailyWorkoutDetailProps> = ({
               ) : (
                 <View style={styles.statusRow}>
                   <Ionicons name="ellipse-outline" size={20} color={colors.muted} />
-                  <Text style={styles.statusTextIncomplete}>Workout Incomplete</Text>
+                  <Text style={styles.statusTextIncomplete}>Training Incomplete</Text>
                 </View>
               )}
             </View>
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background
   },
-  workoutCard: {
+  trainingCard: {
     backgroundColor: colors.card,
     padding: 16,
     marginHorizontal: 16,
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   exercisesContainer: {
     gap: 12
   },
-  workoutStatus: {
+  trainingStatus: {
     paddingTop: 8
   },
   completedStatusContainer: {
@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.muted
   },
-  noWorkoutText: {
+  noTrainingText: {
     textAlign: 'center',
     fontSize: 16,
     color: colors.muted,
@@ -237,4 +237,4 @@ const styles = StyleSheet.create({
   }
 });
 
-export default DailyWorkoutDetail;
+export default DailyTrainingDetail;

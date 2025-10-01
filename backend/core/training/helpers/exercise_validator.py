@@ -1,7 +1,7 @@
 """
 Exercise Validator Service for EvolveAI
 
-This service validates workout plans to ensure all referenced exercises exist
+This service validates training plans to ensure all referenced exercises exist
 in the database and provides fallback alternatives when needed using cosine similarity.
 """
 
@@ -16,7 +16,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 class ExerciseValidator:
-    """Validates workout plans and ensures exercise authenticity using cosine similarity fallback."""
+    """Validates training plans and ensures exercise authenticity using cosine similarity fallback."""
     
     def __init__(self):
         """Initialize the exercise validator."""
@@ -44,38 +44,38 @@ class ExerciseValidator:
             'candidate_cache_size': len(self._candidate_cache)
         }
     
-    def validate_workout_plan(self, workout_plan: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
+    def validate_training_plan(self, training_plan: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str]]:
         """
-        Validate a workout plan and fix any invalid exercise references using cosine similarity.
+        Validate a training plan and fix any invalid exercise references using cosine similarity.
         
         Args:
-            workout_plan: The workout plan to validate
+            training_plan: The training plan to validate
             
         Returns:
-            Tuple of (validated_workout, validation_messages)
+            Tuple of (validated_training, validation_messages)
         """
         validation_messages = []
         
         # Early validation checks
-        if not workout_plan:
-            validation_messages.append("Workout plan is empty")
-            return workout_plan, validation_messages
+        if not training_plan:
+            validation_messages.append("Training plan is empty")
+            return training_plan, validation_messages
         
         # Check for valid structure first
-        structure_messages = self._validate_workout_structure(workout_plan)
+        structure_messages = self._validate_training_structure(training_plan)
         validation_messages.extend(structure_messages)
         
         # If structure is fundamentally broken, return early
         if any("has no weeks" in msg or "error" in msg.lower() for msg in structure_messages):
-            return workout_plan, validation_messages
+            return training_plan, validation_messages
         
         try:
             # Extract and validate exercise IDs in one pass
-            exercise_data = self._extract_and_validate_exercises(workout_plan)
+            exercise_data = self._extract_and_validate_exercises(training_plan)
             
             if not exercise_data['all_ids']:
-                validation_messages.append("No exercise IDs found in workout plan")
-                return workout_plan, validation_messages
+                validation_messages.append("No exercise IDs found in training plan")
+                return training_plan, validation_messages
             
             # Process invalid exercises if any found
             if exercise_data['invalid_ids']:
@@ -84,27 +84,27 @@ class ExerciseValidator:
                 )
                 
                 # Fix invalid exercises using optimized similarity matching
-                validated_workout = self._fix_invalid_exercises_optimized(
-                    workout_plan, exercise_data
+                validated_training = self._fix_invalid_exercises_optimized(
+                    training_plan, exercise_data
                 )
                 validation_messages.append(f"Replaced {len(exercise_data['invalid_ids'])} invalid exercises")
             else:
                 validation_messages.append("All exercise IDs are valid")
-                validated_workout = workout_plan
+                validated_training = training_plan
             
-            return validated_workout, validation_messages
+            return validated_training, validation_messages
             
         except Exception as e:
-            logger.error(f"Error validating workout plan: {e}")
+            logger.error(f"Error validating training plan: {e}")
             validation_messages.append(f"Validation error: {str(e)}")
-            return workout_plan, validation_messages
+            return training_plan, validation_messages
     
-    def _extract_and_validate_exercises(self, workout_plan: Dict[str, Any]) -> Dict[str, Any]:
+    def _extract_and_validate_exercises(self, training_plan: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Extract and validate exercise IDs from a workout plan in one pass.
+        Extract and validate exercise IDs from a training plan in one pass.
         
         Args:
-            workout_plan: The workout plan to process
+            training_plan: The training plan to process
             
         Returns:
             Dictionary containing all_ids, valid_ids, invalid_ids, and exercise_locations
@@ -114,11 +114,11 @@ class ExerciseValidator:
         
         try:
             # Handle both 'weeks' and 'weekly_schedules' keys for compatibility
-            weeks = workout_plan.get('weeks', workout_plan.get('weekly_schedules', []))
+            weeks = training_plan.get('weeks', training_plan.get('weekly_schedules', []))
             
             for week_idx, week in enumerate(weeks):
-                # Handle both 'days' and 'daily_workouts' keys
-                days = week.get('days', week.get('daily_workouts', []))
+                # Handle both 'days' and 'daily_trainings' keys
+                days = week.get('days', week.get('daily_trainings', []))
                 
                 for day_idx, day in enumerate(days):
                     if not day.get('is_rest_day', False):
@@ -161,42 +161,42 @@ class ExerciseValidator:
                 'exercise_locations': []
             }
     
-    def _extract_exercise_ids(self, workout_plan: Dict[str, Any]) -> List[str]:
+    def _extract_exercise_ids(self, training_plan: Dict[str, Any]) -> List[str]:
         """
-        Extract all exercise IDs from a workout plan.
+        Extract all exercise IDs from a training plan.
         
         Note: This method is kept for backward compatibility.
         Use _extract_and_validate_exercises for better performance.
         """
-        result = self._extract_and_validate_exercises(workout_plan)
+        result = self._extract_and_validate_exercises(training_plan)
         return result['all_ids']
     
     def _fix_invalid_exercises_optimized(self, 
-                                       workout_plan: Dict[str, Any], 
+                                       training_plan: Dict[str, Any], 
                                        exercise_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Optimized method to replace invalid exercises using location tracking.
         
         Args:
-            workout_plan: The workout plan to fix
+            training_plan: The training plan to fix
             exercise_data: Pre-extracted exercise data with locations
             
         Returns:
-            Fixed workout plan
+            Fixed training plan
         """
         if not exercise_data['invalid_ids']:
-            return workout_plan
+            return training_plan
         
-        fixed_workout = workout_plan.copy()
+        fixed_training = training_plan.copy()
         invalid_ids_set = set(exercise_data['invalid_ids'])
         replacement_cache = {}  # Cache replacements to avoid repeated similarity calculations
         
         try:
             # Handle both structure types
-            weeks_key = 'weeks' if 'weeks' in fixed_workout else 'weekly_schedules'
-            days_key = 'days' if 'weeks' in fixed_workout else 'daily_workouts'
+            weeks_key = 'weeks' if 'weeks' in fixed_training else 'weekly_schedules'
+            days_key = 'days' if 'weeks' in fixed_training else 'daily_trainings'
             
-            weeks = fixed_workout.get(weeks_key, [])
+            weeks = fixed_training.get(weeks_key, [])
             
             # Process invalid exercises using pre-computed locations
             for location in exercise_data['exercise_locations']:
@@ -240,11 +240,11 @@ class ExerciseValidator:
                         exercises = day.get('exercises', [])
                         day['exercises'] = [ex for ex in exercises if ex is not None]
             
-            return fixed_workout
+            return fixed_training
             
         except Exception as e:
             logger.error(f"Error in optimized invalid exercise fixing: {e}")
-            return workout_plan
+            return training_plan
     
     
     def _find_replacement_exercise(self, 
@@ -472,26 +472,26 @@ class ExerciseValidator:
         
         return None
     
-    def _validate_workout_structure(self, workout_plan: Dict[str, Any]) -> List[str]:
-        """Validate the overall structure of the workout plan with optimized checks."""
+    def _validate_training_structure(self, training_plan: Dict[str, Any]) -> List[str]:
+        """Validate the overall structure of the training plan with optimized checks."""
         messages = []
         
         try:
             # Handle both structure types
-            weeks = workout_plan.get('weeks', workout_plan.get('weekly_schedules', []))
+            weeks = training_plan.get('weeks', training_plan.get('weekly_schedules', []))
             
             if not weeks:
-                messages.append("Workout plan has no weeks")
+                messages.append("Training plan has no weeks")
                 return messages
             
             # Batch validation for better performance
             total_exercises = 0
-            empty_workout_days = 0
+            empty_training_days = 0
             missing_exercise_ids = 0
             
             for week_idx, week in enumerate(weeks):
                 # Handle both structure types
-                days = week.get('days', week.get('daily_workouts', []))
+                days = week.get('days', week.get('daily_trainings', []))
                 
                 # Quick length check (more flexible than exactly 7)
                 if len(days) < 1:
@@ -507,7 +507,7 @@ class ExerciseValidator:
                         total_exercises += len(exercises)
                         
                         if not exercises:
-                            empty_workout_days += 1
+                            empty_training_days += 1
                         else:
                             # Quick scan for missing exercise_ids
                             for exercise in exercises:
@@ -515,19 +515,19 @@ class ExerciseValidator:
                                     missing_exercise_ids += 1
             
             # Generate summary messages instead of individual ones
-            if empty_workout_days > 0:
-                messages.append(f"Found {empty_workout_days} workout days with no exercises")
+            if empty_training_days > 0:
+                messages.append(f"Found {empty_training_days} training days with no exercises")
             
             if missing_exercise_ids > 0:
                 messages.append(f"Found {missing_exercise_ids} exercises missing exercise_id")
             
             if total_exercises == 0:
-                messages.append("Workout plan contains no exercises")
+                messages.append("Training plan contains no exercises")
             else:
-                messages.append(f"Workout structure validated: {len(weeks)} weeks, {total_exercises} total exercises")
+                messages.append(f"Training structure validated: {len(weeks)} weeks, {total_exercises} total exercises")
             
             return messages
             
         except Exception as e:
-            logger.error(f"Error validating workout structure: {e}")
+            logger.error(f"Error validating training structure: {e}")
             return [f"Structure validation error: {e}"]

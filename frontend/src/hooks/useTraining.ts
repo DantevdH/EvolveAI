@@ -7,8 +7,8 @@ import { ExerciseSwapService } from '../services/exerciseSwapService';
 import { supabase } from '../config/supabase';
 import {
   TrainingState,
-  WorkoutPlan,
-  DailyWorkout,
+  TrainingPlan,
+  DailyTraining,
   Exercise,
   ProgressRingData,
   WeekNavigationData,
@@ -16,7 +16,7 @@ import {
   ExerciseDetailTabs,
   OneRMCalculator,
   RestTimer,
-  WorkoutProgress,
+  TrainingProgress,
   UseTrainingReturn
 } from '../types/training';
 
@@ -24,7 +24,7 @@ const initialState: TrainingState = {
   currentWeekSelected: 1,
   selectedDayIndex: -1, // -1 means "auto-select today"
   completedExercises: new Set(),
-  completedWorkouts: new Set(),
+  completedTrainings: new Set(),
   isShowingExerciseDetail: false,
   selectedExercise: null,
   isLoading: false,
@@ -33,9 +33,9 @@ const initialState: TrainingState = {
 };
 
 export const useTraining = (): UseTrainingReturn => {
-  const { state: authState, refreshWorkoutPlan: refreshAuthWorkoutPlan, setWorkoutPlan: setAuthWorkoutPlan } = useAuth();
+  const { state: authState, refreshTrainingPlan: refreshAuthTrainingPlan, setTrainingPlan: setAuthTrainingPlan } = useAuth();
   const [trainingState, setTrainingState] = useState<TrainingState>(initialState);
-  const [workoutPlan, setWorkoutPlan] = useState<WorkoutPlan | null>(null);
+  const [trainingPlan, setTrainingPlan] = useState<TrainingPlan | null>(null);
   const hasInitialized = useRef(false);
 
   const [restTimer, setRestTimer] = useState<RestTimer>({
@@ -49,44 +49,44 @@ export const useTraining = (): UseTrainingReturn => {
   const [showExerciseSwapModalState, setShowExerciseSwapModalState] = useState(false);
   const [exerciseToSwap, setExerciseToSwap] = useState<Exercise | null>(null);
 
-  // Helper function to update both local and auth context workout plans
-  // Only use this when we actually modify the workout plan, not during initialization
-  const updateWorkoutPlan = useCallback((updatedPlan: WorkoutPlan) => {
-    setWorkoutPlan(updatedPlan);
-    setAuthWorkoutPlan(updatedPlan);
-  }, [setAuthWorkoutPlan]);
+  // Helper function to update both local and auth context training plans
+  // Only use this when we actually modify the training plan, not during initialization
+  const updateTrainingPlan = useCallback((updatedPlan: TrainingPlan) => {
+    setTrainingPlan(updatedPlan);
+    setAuthTrainingPlan(updatedPlan);
+  }, [setAuthTrainingPlan]);
 
   // Initialize training data
   useEffect(() => {
-    if (authState.userProfile && authState.workoutPlan) {
-      // Use the workout plan directly (new TrainingService format)
+    if (authState.userProfile && authState.trainingPlan) {
+      // Use the training plan directly (new TrainingService format)
       console.log('✅ useTraining: Using TrainingService format directly');
-      setWorkoutPlan(authState.workoutPlan);
+      setTrainingPlan(authState.trainingPlan);
       
-      // Only auto-select today's workout on first initialization, not on updates
+      // Only auto-select today's training on first initialization, not on updates
       if (!hasInitialized.current) {
         setTrainingState(prev => ({
           ...prev,
           currentWeekSelected: 1, // Start with week 1
-          selectedDayIndex: -1 // Auto-select today's workout only on first load
+          selectedDayIndex: -1 // Auto-select today's training only on first load
         }));
         hasInitialized.current = true;
       }
     }
-  }, [authState.userProfile, authState.workoutPlan]);
+  }, [authState.userProfile, authState.trainingPlan]);
 
 
   // Computed values
-  const selectedDayWorkout = useMemo(() => {
-    if (!workoutPlan) return null;
+  const selectedDayTraining = useMemo(() => {
+    if (!trainingPlan) return null;
     
-    const currentWeek = workoutPlan.weeklySchedules.find(
+    const currentWeek = trainingPlan.weeklySchedules.find(
       week => week.weekNumber === trainingState.currentWeekSelected
     );
     
     if (!currentWeek) return null;
     
-    // If selectedDayIndex is -1, auto-select today's workout
+    // If selectedDayIndex is -1, auto-select today's training
     let dayIndex = trainingState.selectedDayIndex;
     if (dayIndex === -1) {
       const today = new Date();
@@ -96,34 +96,34 @@ export const useTraining = (): UseTrainingReturn => {
       const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
       const todayName = dayNames[mondayFirstIndex];
       
-      dayIndex = currentWeek.dailyWorkouts.findIndex(workout => workout.dayOfWeek === todayName);
+      dayIndex = currentWeek.dailyTrainings.findIndex(training => training.dayOfWeek === todayName);
       if (dayIndex === -1) {
         dayIndex = 0; // Fallback to first day if today not found
       }
     }
     
-    if (!currentWeek.dailyWorkouts[dayIndex]) {
+    if (!currentWeek.dailyTrainings[dayIndex]) {
       return null;
     }
     
-    const dailyWorkout = currentWeek.dailyWorkouts[dayIndex];
+    const dailyTraining = currentWeek.dailyTrainings[dayIndex];
     
     // Compute completion status dynamically
-    const isCompleted = dailyWorkout.exercises.length > 0 && 
-                       dailyWorkout.exercises.every(exercise => exercise.completed);
+    const isCompleted = dailyTraining.exercises.length > 0 && 
+                       dailyTraining.exercises.every(exercise => exercise.completed);
     
     return {
-      ...dailyWorkout,
+      ...dailyTraining,
       completed: isCompleted
     };
-  }, [workoutPlan, trainingState.currentWeekSelected, trainingState.selectedDayIndex]);
+  }, [trainingPlan, trainingState.currentWeekSelected, trainingState.selectedDayIndex]);
 
   const progressRing = useMemo((): ProgressRingData => {
-    if (!workoutPlan) {
+    if (!trainingPlan) {
       return { progress: 0, total: 0, completed: 0, color: '#4CAF50' };
     }
 
-    const currentWeek = workoutPlan.weeklySchedules.find(
+    const currentWeek = trainingPlan.weeklySchedules.find(
       week => week.weekNumber === trainingState.currentWeekSelected
     );
 
@@ -131,24 +131,24 @@ export const useTraining = (): UseTrainingReturn => {
       return { progress: 0, total: 0, completed: 0, color: '#4CAF50' };
     }
 
-    const totalWorkouts = currentWeek.dailyWorkouts.filter(workout => !workout.isRestDay).length;
-    const completedWorkouts = currentWeek.dailyWorkouts.filter(workout => {
-      if (workout.isRestDay) return false;
+    const totalTrainings = currentWeek.dailyTrainings.filter(training => !training.isRestDay).length;
+    const completedTrainings = currentWeek.dailyTrainings.filter(training => {
+      if (training.isRestDay) return false;
       // Compute completion status dynamically
-      return workout.exercises.length > 0 && workout.exercises.every(exercise => exercise.completed);
+      return training.exercises.length > 0 && training.exercises.every(exercise => exercise.completed);
     }).length;
-    const progress = totalWorkouts > 0 ? completedWorkouts / totalWorkouts : 0;
+    const progress = totalTrainings > 0 ? completedTrainings / totalTrainings : 0;
 
     return {
       progress,
-      total: totalWorkouts,
-      completed: completedWorkouts,
+      total: totalTrainings,
+      completed: completedTrainings,
       color: '#932322' // Primary red color
     };
-  }, [workoutPlan, trainingState.currentWeekSelected]);
+  }, [trainingPlan, trainingState.currentWeekSelected]);
 
   const weekNavigation = useMemo((): WeekNavigationData => {
-    if (!workoutPlan) {
+    if (!trainingPlan) {
       return {
         currentWeek: 1,
         totalWeeks: 1,
@@ -159,16 +159,16 @@ export const useTraining = (): UseTrainingReturn => {
 
     return {
       currentWeek: trainingState.currentWeekSelected,
-      totalWeeks: workoutPlan.totalWeeks,
+      totalWeeks: trainingPlan.totalWeeks,
       canGoBack: trainingState.currentWeekSelected > 1,
-      canGoForward: trainingState.currentWeekSelected < workoutPlan.totalWeeks
+      canGoForward: trainingState.currentWeekSelected < trainingPlan.totalWeeks
     };
-  }, [workoutPlan, trainingState.currentWeekSelected]);
+  }, [trainingPlan, trainingState.currentWeekSelected]);
 
   const dayIndicators = useMemo((): DayIndicator[] => {
-    if (!workoutPlan) return [];
+    if (!trainingPlan) return [];
 
-    const currentWeek = workoutPlan.weeklySchedules.find(
+    const currentWeek = trainingPlan.weeklySchedules.find(
       week => week.weekNumber === trainingState.currentWeekSelected
     );
 
@@ -184,30 +184,30 @@ export const useTraining = (): UseTrainingReturn => {
     // Calculate which day should be selected (auto-select today if selectedDayIndex is -1)
     let selectedDayIndex = trainingState.selectedDayIndex;
     if (selectedDayIndex === -1) {
-      selectedDayIndex = currentWeek.dailyWorkouts.findIndex(workout => workout.dayOfWeek === todayName);
+      selectedDayIndex = currentWeek.dailyTrainings.findIndex(training => training.dayOfWeek === todayName);
       if (selectedDayIndex === -1) {
         selectedDayIndex = 0; // Fallback to first day
       }
     }
 
-    return currentWeek.dailyWorkouts.map((workout, index) => {
-      const isToday = workout.dayOfWeek === todayName;
-      const isPastWeek = trainingState.currentWeekSelected < workoutPlan.currentWeek;
+    return currentWeek.dailyTrainings.map((training, index) => {
+      const isToday = training.dayOfWeek === todayName;
+      const isPastWeek = trainingState.currentWeekSelected < trainingPlan.currentWeek;
       
       // Compute completion status dynamically
-      const isCompleted = workout.exercises.length > 0 && 
-                         workout.exercises.every(exercise => exercise.completed);
+      const isCompleted = training.exercises.length > 0 && 
+                         training.exercises.every(exercise => exercise.completed);
 
       return {
-        dayOfWeek: workout.dayOfWeek,
+        dayOfWeek: training.dayOfWeek,
         isSelected: index === selectedDayIndex,
         isCompleted: isCompleted,
-        isRestDay: workout.isRestDay,
+        isRestDay: training.isRestDay,
         isToday: isToday && !isPastWeek,
         isPastWeek: isPastWeek
       };
     });
-  }, [workoutPlan, trainingState.currentWeekSelected, trainingState.selectedDayIndex]);
+  }, [trainingPlan, trainingState.currentWeekSelected, trainingState.selectedDayIndex]);
 
   const exerciseDetailTabs: ExerciseDetailTabs = {
     general: true,
@@ -222,8 +222,8 @@ export const useTraining = (): UseTrainingReturn => {
     isVisible: false
   };
 
-  const workoutProgress = useMemo((): WorkoutProgress => {
-    if (!selectedDayWorkout) {
+  const trainingProgress = useMemo((): TrainingProgress => {
+    if (!selectedDayTraining) {
       return {
         currentExercise: 0,
         totalExercises: 0,
@@ -233,8 +233,8 @@ export const useTraining = (): UseTrainingReturn => {
       };
     }
 
-    const totalExercises = selectedDayWorkout.exercises.length;
-    const completedExercises = selectedDayWorkout.exercises.filter(ex => ex.completed).length;
+    const totalExercises = selectedDayTraining.exercises.length;
+    const completedExercises = selectedDayTraining.exercises.filter(ex => ex.completed).length;
     const progress = totalExercises > 0 ? completedExercises / totalExercises : 0;
 
     return {
@@ -244,35 +244,35 @@ export const useTraining = (): UseTrainingReturn => {
       totalSets: 1,
       progress
     };
-  }, [selectedDayWorkout]);
+  }, [selectedDayTraining]);
 
   // Actions
   const selectWeek = useCallback((week: number) => {
-    if (!workoutPlan) return;
+    if (!trainingPlan) return;
     
-    if (week >= 1 && week <= workoutPlan.totalWeeks) {
+    if (week >= 1 && week <= trainingPlan.totalWeeks) {
       setTrainingState(prev => ({
         ...prev,
         currentWeekSelected: week,
-        selectedDayIndex: -1 // Auto-select today's workout when changing weeks
+        selectedDayIndex: -1 // Auto-select today's training when changing weeks
       }));
     }
-  }, [workoutPlan]);
+  }, [trainingPlan]);
 
   const selectDay = useCallback((dayIndex: number) => {
-    if (!workoutPlan) return;
+    if (!trainingPlan) return;
     
-    const currentWeek = workoutPlan.weeklySchedules.find(
+    const currentWeek = trainingPlan.weeklySchedules.find(
       week => week.weekNumber === trainingState.currentWeekSelected
     );
     
-    if (currentWeek && dayIndex >= 0 && dayIndex < currentWeek.dailyWorkouts.length) {
+    if (currentWeek && dayIndex >= 0 && dayIndex < currentWeek.dailyTrainings.length) {
       setTrainingState(prev => ({
         ...prev,
         selectedDayIndex: dayIndex
       }));
     }
-  }, [workoutPlan, trainingState.currentWeekSelected]);
+  }, [trainingPlan, trainingState.currentWeekSelected]);
 
   const toggleExerciseCompletion = useCallback(async (exerciseId: string) => {
     try {
@@ -281,24 +281,24 @@ export const useTraining = (): UseTrainingReturn => {
         error: null
       }));
 
-      // Check if the current workout is completed and locked
-      const currentWeek = workoutPlan?.weeklySchedules.find(
+      // Check if the current training is completed and locked
+      const currentWeek = trainingPlan?.weeklySchedules.find(
         week => week.weekNumber === trainingState.currentWeekSelected
       );
-      const currentDailyWorkout = currentWeek?.dailyWorkouts[trainingState.selectedDayIndex];
+      const currentDailyTraining = currentWeek?.dailyTrainings[trainingState.selectedDayIndex];
       
-      if (currentDailyWorkout?.completed) {
-        // Workout is completed and locked - don't allow changes
-        console.log('🔒 Workout is completed and locked. Use reopenWorkout to make changes.');
+      if (currentDailyTraining?.completed) {
+        // Training is completed and locked - don't allow changes
+        console.log('🔒 Training is completed and locked. Use reopenTraining to make changes.');
         return;
       }
 
       // Update both local and auth context state immediately and also update database for homepage tracking
       const updatedPlan = {
-        ...workoutPlan!,
-        weeklySchedules: workoutPlan!.weeklySchedules.map(week => ({
+        ...trainingPlan!,
+        weeklySchedules: trainingPlan!.weeklySchedules.map(week => ({
           ...week,
-          dailyWorkouts: week.dailyWorkouts.map(daily => ({
+          dailyTrainings: week.dailyTrainings.map(daily => ({
             ...daily,
             exercises: daily.exercises.map(exercise => 
               exercise.id === exerciseId 
@@ -309,13 +309,13 @@ export const useTraining = (): UseTrainingReturn => {
         }))
       };
 
-      // Check workout completion status
+      // Check training completion status
       const updatedCurrentWeek = updatedPlan.weeklySchedules.find(
         week => week.weekNumber === trainingState.currentWeekSelected
       );
       
       if (updatedCurrentWeek) {
-        // Calculate the correct day index (same logic as selectedDayWorkout)
+        // Calculate the correct day index (same logic as selectedDayTraining)
         let dayIndex = trainingState.selectedDayIndex;
         if (dayIndex === -1) {
           const today = new Date();
@@ -325,52 +325,52 @@ export const useTraining = (): UseTrainingReturn => {
           const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
           const todayName = dayNames[mondayFirstIndex];
           
-          dayIndex = updatedCurrentWeek.dailyWorkouts.findIndex(workout => workout.dayOfWeek === todayName);
+          dayIndex = updatedCurrentWeek.dailyTrainings.findIndex(training => training.dayOfWeek === todayName);
           if (dayIndex === -1) {
             dayIndex = 0; // Fallback to first day if today not found
           }
         }
         
-        const updatedCurrentDailyWorkout = updatedCurrentWeek.dailyWorkouts[dayIndex];
-        if (updatedCurrentDailyWorkout) {
-          const allExercisesCompleted = updatedCurrentDailyWorkout.exercises.every(exercise => exercise.completed);
+        const updatedCurrentDailyTraining = updatedCurrentWeek.dailyTrainings[dayIndex];
+        if (updatedCurrentDailyTraining) {
+          const allExercisesCompleted = updatedCurrentDailyTraining.exercises.every(exercise => exercise.completed);
           
-          if (allExercisesCompleted && !updatedCurrentDailyWorkout.isRestDay) {
-            // All exercises completed - mark daily workout as completed
-            console.log('🎉 All exercises completed! Marking daily workout as completed...');
+          if (allExercisesCompleted && !updatedCurrentDailyTraining.isRestDay) {
+            // All exercises completed - mark daily training as completed
+            console.log('🎉 All exercises completed! Marking daily training as completed...');
             
-            // Update the daily workout completion status
+            // Update the daily training completion status
             updatedPlan.weeklySchedules = updatedPlan.weeklySchedules.map(week => ({
               ...week,
-              dailyWorkouts: week.dailyWorkouts.map(daily => 
-                daily.id === updatedCurrentDailyWorkout.id 
+              dailyTrainings: week.dailyTrainings.map(daily => 
+                daily.id === updatedCurrentDailyTraining.id 
                   ? { ...daily, completed: true }
                   : daily
               )
             }));
 
-            // Update database: Mark all exercises as completed and complete the daily workout
-            const exerciseUpdatePromises = updatedCurrentDailyWorkout.exercises.map(exercise => 
+            // Update database: Mark all exercises as completed and complete the daily training
+            const exerciseUpdatePromises = updatedCurrentDailyTraining.exercises.map(exercise => 
               TrainingService.updateExerciseCompletion(exercise.id, true)
             );
             
             Promise.all(exerciseUpdatePromises).then(() => {
-              return TrainingService.completeDailyWorkout(updatedCurrentDailyWorkout.id);
+              return TrainingService.completeDailyTraining(updatedCurrentDailyTraining.id);
             }).catch(error => {
-              console.error('❌ Error updating exercise completion or completing daily workout:', error);
+              console.error('❌ Error updating exercise completion or completing daily training:', error);
               setTrainingState(prev => ({
                 ...prev,
-                error: 'Failed to complete workout'
+                error: 'Failed to complete training'
               }));
             });
-          } else if (!allExercisesCompleted && updatedCurrentDailyWorkout.completed) {
-            // Some exercises were unchecked - mark workout as incomplete
+          } else if (!allExercisesCompleted && updatedCurrentDailyTraining.completed) {
+            // Some exercises were unchecked - mark training as incomplete
             
-            // Update the daily workout completion status
+            // Update the daily training completion status
             updatedPlan.weeklySchedules = updatedPlan.weeklySchedules.map(week => ({
               ...week,
-              dailyWorkouts: week.dailyWorkouts.map(daily => 
-                daily.id === updatedCurrentDailyWorkout.id 
+              dailyTrainings: week.dailyTrainings.map(daily => 
+                daily.id === updatedCurrentDailyTraining.id 
                   ? { ...daily, completed: false }
                   : daily
               )
@@ -379,15 +379,15 @@ export const useTraining = (): UseTrainingReturn => {
         }
       }
 
-      // Update both local and auth context workout plans to trigger homepage KPI recalculation
-      updateWorkoutPlan(updatedPlan);
+      // Update both local and auth context training plans to trigger homepage KPI recalculation
+      updateTrainingPlan(updatedPlan);
     } catch (error) {
       setTrainingState(prev => ({
         ...prev,
         error: 'Failed to toggle exercise completion'
       }));
     }
-  }, [workoutPlan, trainingState.currentWeekSelected, trainingState.selectedDayIndex, updateWorkoutPlan]);
+  }, [trainingPlan, trainingState.currentWeekSelected, trainingState.selectedDayIndex, updateTrainingPlan]);
 
   const updateSetDetails = useCallback(async (
     exerciseId: string, 
@@ -406,10 +406,10 @@ export const useTraining = (): UseTrainingReturn => {
       if (result.success) {
         // Update both local and auth context state instead of refetching
         const updatedPlan = {
-          ...workoutPlan!,
-          weeklySchedules: workoutPlan!.weeklySchedules.map(week => ({
+          ...trainingPlan!,
+          weeklySchedules: trainingPlan!.weeklySchedules.map(week => ({
             ...week,
-            dailyWorkouts: week.dailyWorkouts.map(daily => ({
+            dailyTrainings: week.dailyTrainings.map(daily => ({
               ...daily,
               exercises: daily.exercises.map(exercise => 
                 exercise.id === exerciseId 
@@ -427,7 +427,7 @@ export const useTraining = (): UseTrainingReturn => {
           }))
         };
         
-        updateWorkoutPlan(updatedPlan);
+        updateTrainingPlan(updatedPlan);
       } else {
         setTrainingState(prev => ({
           ...prev,
@@ -440,7 +440,7 @@ export const useTraining = (): UseTrainingReturn => {
         error: 'Failed to update set details'
       }));
     }
-  }, [workoutPlan, updateWorkoutPlan]);
+  }, [trainingPlan, updateTrainingPlan]);
 
   const showExerciseDetail = useCallback((exercise: Exercise) => {
     setTrainingState(prev => ({
@@ -507,8 +507,8 @@ export const useTraining = (): UseTrainingReturn => {
     }));
   }, []);
 
-  const completeWorkout = useCallback(async () => {
-    if (!selectedDayWorkout) return;
+  const completeTraining = useCallback(async () => {
+    if (!selectedDayTraining) return;
 
     try {
       setTrainingState(prev => ({
@@ -517,55 +517,55 @@ export const useTraining = (): UseTrainingReturn => {
         error: null
       }));
 
-      const result = await TrainingService.completeDailyWorkout(
-        selectedDayWorkout.id
+      const result = await TrainingService.completeDailyTraining(
+        selectedDayTraining.id
       );
 
       if (result.success) {
         setTrainingState(prev => ({
           ...prev,
-          completedWorkouts: new Set([...prev.completedWorkouts, selectedDayWorkout.id]),
+          completedTrainings: new Set([...prev.completedTrainings, selectedDayTraining.id]),
           isLoading: false
         }));
 
-        // Cancel today's workout reminder since workout is completed
-        await NotificationService.cancelWorkoutReminder();
+        // Cancel today's training reminder since training is completed
+        await NotificationService.cancelTrainingReminder();
       } else {
         setTrainingState(prev => ({
           ...prev,
-          error: result.error || 'Failed to complete workout',
+          error: result.error || 'Failed to complete training',
           isLoading: false
         }));
       }
     } catch (error) {
       setTrainingState(prev => ({
         ...prev,
-        error: 'Failed to complete workout',
+        error: 'Failed to complete training',
         isLoading: false
       }));
     }
-  }, [selectedDayWorkout]);
+  }, [selectedDayTraining]);
 
-  const reopenWorkout = useCallback(() => {
-    if (!selectedDayWorkout) return;
+  const reopenTraining = useCallback(() => {
+    if (!selectedDayTraining) return;
 
     // Show confirmation dialog
     setTrainingState(prev => ({
       ...prev,
       showReopenDialog: true
     }));
-  }, [selectedDayWorkout]);
+  }, [selectedDayTraining]);
 
-  const confirmReopenWorkout = useCallback((resetExercises: boolean = false) => {
-    if (!selectedDayWorkout || !workoutPlan) return;
+  const confirmReopenTraining = useCallback((resetExercises: boolean = false) => {
+    if (!selectedDayTraining || !trainingPlan) return;
 
-    // Mark the workout as incomplete to unlock exercises
+    // Mark the training as incomplete to unlock exercises
     const updatedPlan = {
-      ...workoutPlan,
-      weeklySchedules: workoutPlan.weeklySchedules.map(week => ({
+      ...trainingPlan,
+      weeklySchedules: trainingPlan.weeklySchedules.map(week => ({
         ...week,
-        dailyWorkouts: week.dailyWorkouts.map(daily => 
-          daily.id === selectedDayWorkout.id 
+        dailyTrainings: week.dailyTrainings.map(daily => 
+          daily.id === selectedDayTraining.id 
             ? { 
                 ...daily, 
                 completed: false,
@@ -578,11 +578,11 @@ export const useTraining = (): UseTrainingReturn => {
       }))
     };
     
-    updateWorkoutPlan(updatedPlan);
+    updateTrainingPlan(updatedPlan);
 
     // Update database if exercises were reset to incomplete
-    if (resetExercises && selectedDayWorkout) {
-      const exerciseUpdatePromises = selectedDayWorkout.exercises.map(exercise => 
+    if (resetExercises && selectedDayTraining) {
+      const exerciseUpdatePromises = selectedDayTraining.exercises.map(exercise => 
         TrainingService.updateExerciseCompletion(exercise.id, false)
       );
       
@@ -597,10 +597,10 @@ export const useTraining = (): UseTrainingReturn => {
       showReopenDialog: false
     }));
 
-    console.log(`🔓 Workout reopened - exercises are now unlocked for editing${resetExercises ? ' (all exercises reset)' : ' (exercise completion preserved)'}`);
-  }, [selectedDayWorkout, workoutPlan, updateWorkoutPlan]);
+    console.log(`🔓 Training reopened - exercises are now unlocked for editing${resetExercises ? ' (all exercises reset)' : ' (exercise completion preserved)'}`);
+  }, [selectedDayTraining, trainingPlan, updateTrainingPlan]);
 
-  const cancelReopenWorkout = useCallback(() => {
+  const cancelReopenTraining = useCallback(() => {
     setTrainingState(prev => ({
       ...prev,
       showReopenDialog: false
@@ -619,16 +619,16 @@ export const useTraining = (): UseTrainingReturn => {
   }, []);
 
   const swapExercise = useCallback(async (exerciseId: string, newExercise: Exercise) => {
-    if (!workoutPlan) return;
+    if (!trainingPlan) return;
 
     try {
       
       // Update both local and auth context state immediately
       const updatedPlan = {
-        ...workoutPlan,
-        weeklySchedules: workoutPlan.weeklySchedules.map(week => ({
+        ...trainingPlan,
+        weeklySchedules: trainingPlan.weeklySchedules.map(week => ({
           ...week,
-          dailyWorkouts: week.dailyWorkouts.map(daily => ({
+          dailyTrainings: week.dailyTrainings.map(daily => ({
             ...daily,
             exercises: daily.exercises.map(exercise => 
               exercise.id === exerciseId 
@@ -653,7 +653,7 @@ export const useTraining = (): UseTrainingReturn => {
 
       // Update database
       const { error } = await supabase
-        .from('workout_exercises')
+        .from('training_exercises')
         .update({
           exercise_id: parseInt(newExercise.id),
           completed: false,
@@ -670,8 +670,8 @@ export const useTraining = (): UseTrainingReturn => {
         return;
       }
 
-      // Update both local and auth context workout plans
-      updateWorkoutPlan(updatedPlan);
+      // Update both local and auth context training plans
+      updateTrainingPlan(updatedPlan);
       
       
       // Hide the modal
@@ -684,9 +684,9 @@ export const useTraining = (): UseTrainingReturn => {
         error: 'Failed to swap exercise'
       }));
     }
-  }, [workoutPlan, updateWorkoutPlan, hideExerciseSwapModal]);
+  }, [trainingPlan, updateTrainingPlan, hideExerciseSwapModal]);
 
-  const refreshWorkoutPlan = useCallback(async () => {
+  const refreshTrainingPlan = useCallback(async () => {
     if (!authState.userProfile) return;
 
     try {
@@ -696,10 +696,10 @@ export const useTraining = (): UseTrainingReturn => {
         error: null
       }));
 
-      const result = await TrainingService.getWorkoutPlan(authState.userProfile.id!);
+      const result = await TrainingService.getTrainingPlan(authState.userProfile.id!);
       
       if (result.success && result.data) {
-        updateWorkoutPlan(result.data);
+        updateTrainingPlan(result.data);
         setTrainingState(prev => ({
           ...prev,
           isLoading: false
@@ -707,62 +707,62 @@ export const useTraining = (): UseTrainingReturn => {
       } else {
         setTrainingState(prev => ({
           ...prev,
-          error: result.error || 'Failed to refresh workout plan',
+          error: result.error || 'Failed to refresh training plan',
           isLoading: false
         }));
       }
     } catch (error) {
       setTrainingState(prev => ({
         ...prev,
-        error: 'Failed to refresh workout plan',
+        error: 'Failed to refresh training plan',
         isLoading: false
       }));
     }
-  }, [authState.userProfile, updateWorkoutPlan]);
+  }, [authState.userProfile, updateTrainingPlan]);
 
   // Computed properties
   const isPlanComplete = useMemo(() => {
-    return workoutPlan?.completed || false;
-  }, [workoutPlan]);
+    return trainingPlan?.completed || false;
+  }, [trainingPlan]);
 
   const currentWeekProgress = useMemo(() => {
-    if (!workoutPlan) return 0;
+    if (!trainingPlan) return 0;
     
-    const currentWeek = workoutPlan.weeklySchedules.find(
+    const currentWeek = trainingPlan.weeklySchedules.find(
       week => week.weekNumber === trainingState.currentWeekSelected
     );
     
     if (!currentWeek) return 0;
     
-    return TrainingService.calculateWeeklyProgress(currentWeek.dailyWorkouts);
-  }, [workoutPlan, trainingState.currentWeekSelected]);
+    return TrainingService.calculateWeeklyProgress(currentWeek.dailyTrainings);
+  }, [trainingPlan, trainingState.currentWeekSelected]);
 
-  const totalWorkoutsCompleted = useMemo(() => {
-    if (!workoutPlan) return 0;
+  const totalTrainingsCompleted = useMemo(() => {
+    if (!trainingPlan) return 0;
     
-    return workoutPlan.weeklySchedules.reduce((total, week) => {
-      return total + week.dailyWorkouts.filter(workout => workout.completed).length;
+    return trainingPlan.weeklySchedules.reduce((total, week) => {
+      return total + week.dailyTrainings.filter(training => training.completed).length;
     }, 0);
-  }, [workoutPlan]);
+  }, [trainingPlan]);
 
   const streak = useMemo(() => {
-    // This would calculate the current workout streak
+    // This would calculate the current training streak
     // For now, return a placeholder
     return 0;
-  }, [workoutPlan]);
+  }, [trainingPlan]);
 
   return {
     // State
     trainingState,
-    workoutPlan,
-    selectedDayWorkout,
+    trainingPlan,
+    selectedDayTraining,
     progressRing,
     weekNavigation,
     dayIndicators,
     exerciseDetailTabs,
     oneRMCalculator,
     restTimer,
-    workoutProgress,
+    trainingProgress,
     
     // Actions
     selectWeek,
@@ -776,11 +776,11 @@ export const useTraining = (): UseTrainingReturn => {
     calculateOneRM,
     startRestTimer,
     stopRestTimer,
-    completeWorkout,
-    reopenWorkout,
-    confirmReopenWorkout,
-    cancelReopenWorkout,
-    refreshWorkoutPlan,
+    completeTraining,
+    reopenTraining,
+    confirmReopenTraining,
+    cancelReopenTraining,
+    refreshTrainingPlan,
     showExerciseSwapModal,
     hideExerciseSwapModal,
     swapExercise,
@@ -792,7 +792,7 @@ export const useTraining = (): UseTrainingReturn => {
     // Computed
     isPlanComplete,
     currentWeekProgress,
-    totalWorkoutsCompleted,
+    totalTrainingsCompleted,
     streak
   };
 };

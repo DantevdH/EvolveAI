@@ -6,7 +6,7 @@
 export const API_CONFIG = {
   BASE_URL: process.env.EXPO_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000',
   ENDPOINTS: {
-    GENERATE_WORKOUT_PLAN: '/api/workoutplan/generate/',
+    GENERATE_WORKOUT_PLAN: '/api/trainingplan/generate/',
     USER_PROFILE: '/api/user/profile/',
     COACHES: '/api/coaches/',
   },
@@ -59,7 +59,7 @@ export const DEFAULT_VALUES = {
     HAS_LIMITATIONS: false,
   },
   WORKOUT_PLAN: {
-    TITLE: 'Personalized Workout Plan',
+    TITLE: 'Personalized Training Plan',
     SUMMARY: '',
   },
 } as const;
@@ -101,8 +101,8 @@ export const ERROR_MESSAGES = {
   },
   WORKOUT_PLAN: {
     GENERATION_FAILED: 'We couldn\'t create your plan. Please check your connection and try again.',
-    SAVE_FAILED: 'Failed to save your workout plan. Please try again.',
-    NOT_FOUND: 'No workout plan found.',
+    SAVE_FAILED: 'Failed to save your training plan. Please try again.',
+    NOT_FOUND: 'No training plan found.',
   },
   COACHES: {
     FETCH_FAILED: 'Failed to load coaches. Please try again.',

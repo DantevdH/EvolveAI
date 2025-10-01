@@ -17,8 +17,8 @@ def test_keyword_extraction():
         # Create instance (without full initialization)
         populator = VectorDBPopulator.__new__(VectorDBPopulator)
         
-        # Test fitness content
-        fitness_text = """
+        # Test training content
+        training_text = """
         This is a comprehensive strength training guide for beginners. 
         It covers essential exercises like squats, deadlifts, and bench press.
         The program focuses on progressive overload and proper form.
@@ -27,11 +27,11 @@ def test_keyword_extraction():
         Progressive overload is the key principle for muscle building and strength gains.
         """
         
-        print("🏋️‍♂️ Testing Fitness Content:")
-        keywords = populator._extract_keywords(fitness_text)
+        print("🏋️‍♂️ Testing training Content:")
+        keywords = populator._extract_keywords(training_text)
         print(f"   Keywords: {keywords}")
         
-        topic = populator._detect_topic(fitness_text)
+        topic = populator._detect_topic(training_text)
         print(f"   Topic: {topic}")
         
         # Test nutrition content
@@ -68,7 +68,7 @@ def test_keyword_extraction():
         # Test TF-IDF vs fallback
         print("\n🔬 Testing TF-IDF Keyword Extraction:")
         try:
-            tfidf_keywords = populator._extract_keywords(fitness_text)
+            tfidf_keywords = populator._extract_keywords(training_text)
             print(f"   TF-IDF Keywords: {tfidf_keywords}")
         except Exception as e:
             print(f"   TF-IDF failed: {e}")

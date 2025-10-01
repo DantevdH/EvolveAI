@@ -24,7 +24,7 @@ export const GoalDescriptionStep: React.FC<GoalDescriptionStepProps> = ({
 
   const handleNext = () => {
     if (!isValid) {
-      Alert.alert('Error', 'Please describe your fitness goal');
+      Alert.alert('Error', 'Please describe your training goal');
       return;
     }
     onNext();
@@ -34,7 +34,7 @@ export const GoalDescriptionStep: React.FC<GoalDescriptionStepProps> = ({
 
   return (
     <OnboardingCard
-      title="What's your fitness goal?"
+      title="What's your training goal?"
       subtitle="Tell us what you want to achieve so we can create the perfect plan for you"
       scrollable={false}
     >
@@ -46,14 +46,14 @@ export const GoalDescriptionStep: React.FC<GoalDescriptionStepProps> = ({
               <IconSymbol name="target" size={32} color={colors.primary} />
             </View>
             <Text style={styles.heroTitle}>What drives you?</Text>
-            <Text style={styles.heroSubtitle}>Share your fitness aspirations and we'll create a plan that gets you there</Text>
+            <Text style={styles.heroSubtitle}>Share your training aspirations and we'll create a plan that gets you there</Text>
           </View>
 
           {/* Goal Input Section */}
           <View style={styles.inputSection}>
             <View style={styles.inputHeader}>
               <IconSymbol name="pencil.and.outline" size={16} color={colors.primary} />
-              <Text style={styles.inputLabel}>Your fitness goal</Text>
+              <Text style={styles.inputLabel}>Your training goal</Text>
             </View>
             <View style={styles.inputWrapper}>
               <TextInput
@@ -64,7 +64,7 @@ export const GoalDescriptionStep: React.FC<GoalDescriptionStepProps> = ({
                 ]}
                 value={localGoal}
                 onChangeText={handleGoalChange}
-                placeholder="Tell us about your fitness journey... What do you want to achieve?"
+                placeholder="Tell us about your training journey... What do you want to achieve?"
                 placeholderTextColor={colors.muted}
                 multiline
                 numberOfLines={4}
@@ -109,10 +109,10 @@ export const GoalDescriptionStep: React.FC<GoalDescriptionStepProps> = ({
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.suggestionChip}
-                onPress={() => handleGoalChange("I want to improve my cardiovascular fitness and endurance")}
+                onPress={() => handleGoalChange("I want to improve my cardiovascular training and endurance")}
               >
                 <IconSymbol name="heart.fill" size={14} color={colors.primary} />
-                <Text style={styles.suggestionText}>Cardio Fitness</Text>
+                <Text style={styles.suggestionText}>Cardio training</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.suggestionChip}

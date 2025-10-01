@@ -9,7 +9,7 @@ import { QuestionsStep } from '../../screens/onboarding/QuestionsStep';
 import { TrainingPlanOutlineStep } from '../../screens/onboarding';
 import { PlanGenerationStep } from '../../screens/onboarding/PlanGenerationStep';
 import { ErrorDisplay } from '../ui/ErrorDisplay';
-import { FitnessService } from '../../services/onboardingService';
+import { trainingService } from '../../services/onboardingService';
 import { 
   OnboardingState, 
   PersonalInfo, 
@@ -22,7 +22,7 @@ import { UserService } from '../../services/userService';
 import { cleanUserProfileForResume, isValidFormattedResponse, isValidPlanOutline } from '../../utils/validation';
 
 interface ConversationalOnboardingProps {
-  onComplete: (workoutPlan: any) => Promise<void>;
+  onComplete: (trainingPlan: any) => Promise<void>;
   onError: (error: string) => void;
   startFromStep?: 'welcome' | 'initial' | 'followup' | 'outline' | 'generation';
 }
@@ -46,15 +46,18 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     initialResponses: new Map(),
     initialQuestionsLoading: false,
     currentInitialQuestionIndex: 0,
+    initialAiMessage: undefined,
     followUpQuestions: [],
     followUpResponses: new Map(),
     followUpQuestionsLoading: false,
     currentFollowUpQuestionIndex: 0,
+    followUpAiMessage: undefined,
     trainingPlanOutline: null,
     outlineFeedback: '',
     outlineLoading: false,
+    outlineAiMessage: undefined,
     planGenerationLoading: false,
-    workoutPlan: null,
+    trainingPlan: null,
     error: null,
     aiHasQuestions: false,
     aiAnalysisPhase: null,
@@ -207,12 +210,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     if (currentStep === 'generation' && 
         state.personalInfo && 
         !state.planGenerationLoading && 
-        !state.workoutPlan && 
+        !state.trainingPlan && 
         !state.error) {
       console.log('🚀 Auto-triggering plan generation with complete state');
       handlePlanGeneration();
     }
-  }, [currentStep, state.personalInfo, state.planGenerationLoading, state.workoutPlan, state.error, handlePlanGeneration]);
+  }, [currentStep, state.personalInfo, state.planGenerationLoading, state.trainingPlan, state.error, handlePlanGeneration]);
 
   // Handle plan generation (extracted from handleOutlineNext)
   const handlePlanGeneration = useCallback(async () => {
@@ -242,7 +245,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           const jwtToken = session?.access_token;
           
           if (!jwtToken) {
-            throw new Error('JWT token is missing - cannot generate workout plan');
+            throw new Error('JWT token is missing - cannot generate training plan');
           }
           
           // Get raw responses - backend will handle formatting
@@ -252,7 +255,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           // Use stored plan outline if available, otherwise use current state
           const planOutline = authState.userProfile?.plan_outline || state.trainingPlanOutline;
           
-          const response = await FitnessService.generateWorkoutPlan(
+          const response = await trainingService.generateTrainingPlan(
             state.personalInfo!,
             initialResponses,
             followUpResponses,
@@ -267,16 +270,16 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           console.log('📋 Plan generation response:', { success: response.success, hasData: !!response.data, message: response.message });
           
           if (response.success && response.data) {
-            console.log('✅ Workout plan generated successfully');
+            console.log('✅ Training plan generated successfully');
             
-            // Update auth context with the new workout plan
-            if (authState.setWorkoutPlan) {
-              authState.setWorkoutPlan(response.data);
+            // Update auth context with the new training plan
+            if (authState.setTrainingPlan) {
+              authState.setTrainingPlan(response.data);
             }
             
             setState(prev => ({
               ...prev,
-              workoutPlan: response.data,
+              trainingPlan: response.data,
               planGenerationLoading: false,
             }));
             
@@ -285,11 +288,11 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             onComplete(response.data);
           } else {
             console.error('❌ Plan generation failed:', response.message);
-            throw new Error(response.message || 'Failed to generate workout plan');
+            throw new Error(response.message || 'Failed to generate training plan');
           }
         } catch (error) {
-          console.error('❌ Error generating workout plan:', error);
-          const errorMessage = error instanceof Error ? error.message : 'Failed to generate workout plan';
+          console.error('❌ Error generating training plan:', error);
+          const errorMessage = error instanceof Error ? error.message : 'Failed to generate training plan';
           setState(prev => ({
             ...prev,
             planGenerationLoading: false,
@@ -301,7 +304,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }, AI_DELAYS.planGeneration);
     } catch (error) {
       console.error('❌ Error in plan generation setup:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to generate workout plan';
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate training plan';
       setState(prev => ({
         ...prev,
         planGenerationLoading: false,
@@ -367,7 +370,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   const handleGoalDescriptionNext = useCallback(() => {
     if (!state.goalDescriptionValid) {
-      Alert.alert('Error', 'Please describe your fitness goal (at least 10 characters)');
+      Alert.alert('Error', 'Please describe your training goal (at least 10 characters)');
       return;
     }
     setCurrentStep('experience');
@@ -410,7 +413,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       const { data: { session } } = await supabase.auth.getSession();
       const jwtToken = session?.access_token;
       
-      const response = await FitnessService.getInitialQuestions(
+      const response = await trainingService.getInitialQuestions(
         fullPersonalInfo,
         authState.userProfile?.id,
         jwtToken
@@ -422,6 +425,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         initialQuestionsLoading: false,
         currentInitialQuestionIndex: 0,
         aiHasQuestions: true,
+        initialAiMessage: response.ai_message,
       }));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load questions';
@@ -449,7 +453,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       const { data: { session } } = await supabase.auth.getSession();
       const jwtToken = session?.access_token;
       
-      const response = await FitnessService.getFollowUpQuestions(
+      const response = await trainingService.getFollowUpQuestions(
         state.personalInfo, 
         responsesObject,
         state.initialQuestions,
@@ -463,6 +467,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         followUpQuestionsLoading: false,
         currentFollowUpQuestionIndex: 0,
         aiHasQuestions: true,
+        followUpAiMessage: response.ai_message,
       }));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load follow-up questions';
@@ -491,7 +496,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       const { data: { session } } = await supabase.auth.getSession();
       const jwtToken = session?.access_token;
       
-      const response = await FitnessService.generateTrainingPlanOutline(
+      const response = await trainingService.generateTrainingPlanOutline(
         state.personalInfo,
         initialResponses,
         followUpResponses,
@@ -511,6 +516,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         trainingPlanOutline: response.data?.outline || null,
         outlineLoading: false,
         aiHasQuestions: true,
+        outlineAiMessage: response.data?.outline?.ai_message,
       }));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate plan outline';
@@ -591,7 +597,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           const { data: { session } } = await supabase.auth.getSession();
           const jwtToken = session?.access_token;
           
-          const response = await FitnessService.getFollowUpQuestions(
+          const response = await trainingService.getFollowUpQuestions(
             state.personalInfo!, 
             responsesObject, // Send raw responses - backend will format them
             state.initialQuestions, // Send initial questions
@@ -606,6 +612,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             planGenerationLoading: false,
             currentFollowUpQuestionIndex: 0,
             aiHasQuestions: true,
+            followUpAiMessage: response.ai_message,
           }));
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to load follow-up questions';
@@ -662,14 +669,14 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           const jwtToken = session?.access_token;
           
           if (!jwtToken) {
-            throw new Error('JWT token is missing - cannot generate workout plan');
+            throw new Error('JWT token is missing - cannot generate training plan');
           }
           
           // Get raw responses - backend will handle formatting
           const initialResponses = Object.fromEntries(state.initialResponses);
           const followUpResponses = Object.fromEntries(state.followUpResponses);
           
-          const response = await FitnessService.generateTrainingPlanOutline(
+          const response = await trainingService.generateTrainingPlanOutline(
             state.personalInfo!,
             initialResponses,  // Send raw responses
             followUpResponses,  // Send raw responses
@@ -687,6 +694,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
               initialQuestions: response.data?.initial_questions || prev.initialQuestions, // Use returned questions
               followUpQuestions: response.data?.follow_up_questions || prev.followUpQuestions, // Use returned questions
               aiHasQuestions: true, // Show continue button to go to outline
+              outlineAiMessage: response.data?.outline?.ai_message,
             }));
           } else {
             console.error('❌ FRONTEND: Training plan outline generation failed:', response.message);
@@ -763,7 +771,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         'initial': 'initial questions',
         'followup': 'follow-up questions', 
         'outline': 'plan outline',
-        'generation': 'workout plan generation'
+        'generation': 'training plan generation'
       };
       
       // Set error state instead of showing alert
@@ -908,6 +916,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             error={state.error || undefined}
             stepTitle="Initial Questions"
             username={state.username}
+            aiMessage={state.initialAiMessage}
           />
         );
       
@@ -926,6 +935,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             error={state.error || undefined}
             stepTitle="Follow-up Questions"
             username={state.username}
+            aiMessage={state.followUpAiMessage}
           />
         );
       

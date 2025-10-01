@@ -7,17 +7,17 @@ import ProgressRing from './ProgressRing';
 import { TrainingHeaderProps } from '../../types/training';
 
 const TrainingHeader: React.FC<TrainingHeaderProps> = ({
-  workoutPlan,
+  trainingPlan,
   progressRing,
   currentWeek,
-  completedWorkoutsThisWeek,
-  totalWorkoutsThisWeek
+  completedTrainingsThisWeek,
+  totalTrainingsThisWeek
 }) => {
-  if (!workoutPlan) {
+  if (!trainingPlan) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>No Workout Plan</Text>
-        <Text style={styles.subtitle}>Create a workout plan to get started</Text>
+        <Text style={styles.title}>No Training Plan</Text>
+        <Text style={styles.subtitle}>Create a training plan to get started</Text>
       </View>
     );
   }
@@ -26,8 +26,8 @@ const TrainingHeader: React.FC<TrainingHeaderProps> = ({
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <View style={styles.titleContainer}>
-          <Text style={styles.title}>{workoutPlan.title}</Text>
-          <Text style={styles.subtitle}>{workoutPlan.description}</Text>
+          <Text style={styles.title}>{trainingPlan.title}</Text>
+          <Text style={styles.subtitle}>{trainingPlan.description}</Text>
         </View>
         
         <View style={styles.rightContainer}>
@@ -53,10 +53,10 @@ const TrainingHeader: React.FC<TrainingHeaderProps> = ({
       {/* Week progress summary - horizontal layout */}
       <View style={styles.weekInfo}>
         <Text style={styles.weekText}>
-          Week {currentWeek} of {workoutPlan.totalWeeks}
+          Week {currentWeek} of {trainingPlan.totalWeeks}
         </Text>
-        <Text style={styles.workoutsText}>
-          {completedWorkoutsThisWeek}/{totalWorkoutsThisWeek} workouts
+        <Text style={styles.trainingsText}>
+          {completedTrainingsThisWeek}/{totalTrainingsThisWeek} trainings
         </Text>
       </View>
     </View>
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontWeight: '500'
   },
-  workoutsText: {
+  trainingsText: {
     fontSize: 14,
     color: colors.muted
   }

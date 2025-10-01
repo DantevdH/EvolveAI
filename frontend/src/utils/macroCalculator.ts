@@ -1,6 +1,6 @@
 /**
  * Macro Calculator - Calculate TDEE, calories, and macros
- * Based on user profile data and fitness goals
+ * Based on user profile data and training goals
  */
 
 export interface MacroCalculationParams {
@@ -9,8 +9,8 @@ export interface MacroCalculationParams {
   height: number; // in cm
   age: number; // in years
   baseActivity: "sedentary" | "light" | "moderate" | "high"; // non-exercise PAL
-  workoutsPerWeek: number;
-  workoutIntensity: "low" | "medium" | "high";
+  trainingsPerWeek: number;
+  trainingIntensity: "low" | "medium" | "high";
   targetWeight?: number; // goal weight in kg
   timeframeWeeks?: number; // weeks to reach goal
 }
@@ -36,8 +36,8 @@ export function calculateMacros({
   height,
   age,
   baseActivity,
-  workoutsPerWeek,
-  workoutIntensity,
+  trainingsPerWeek,
+  trainingIntensity,
   targetWeight,
   timeframeWeeks,
 }: MacroCalculationParams): MacroCalculationResult {
@@ -54,15 +54,15 @@ export function calculateMacros({
   };
   let pal = basePALMap[baseActivity] || 1.2;
 
-  // --- Step 3: Add workout PAL boost ---
+  // --- Step 3: Add training PAL boost ---
   const intensityFactor = {
     low: 0.05,
     medium: 0.075,
     high: 0.1,
   };
-  let workoutBoost =
-    (workoutsPerWeek / 7) * (intensityFactor[workoutIntensity] || 0.075);
-  pal += workoutBoost;
+  let trainingBoost =
+    (trainingsPerWeek / 7) * (intensityFactor[trainingIntensity] || 0.075);
+  pal += trainingBoost;
 
   // --- Step 4: TDEE ---
   let tdee = bmr * pal;
@@ -106,7 +106,7 @@ export const BASE_ACTIVITY_LEVELS = {
 } as const;
 
 /**
- * Workout intensity levels
+ * Training intensity levels
  */
 export const WORKOUT_INTENSITY = {
   low: "low" as const,
@@ -119,7 +119,7 @@ export const WORKOUT_INTENSITY = {
  * This is a simplified estimation - ideally would come from onboarding
  */
 export function estimateBaseActivityFromProfile(daysPerWeek: number, minutesPerSession: number): "sedentary" | "light" | "moderate" | "high" {
-  // For now, we'll make assumptions based on workout frequency
+  // For now, we'll make assumptions based on training frequency
   // In the future, this should come from onboarding questions about job type, daily steps, etc.
   
   if (daysPerWeek <= 2) {
@@ -134,13 +134,13 @@ export function estimateBaseActivityFromProfile(daysPerWeek: number, minutesPerS
 }
 
 /**
- * Helper function to estimate workout intensity from user profile
+ * Helper function to estimate training intensity from user profile
  */
-export function estimateWorkoutIntensity(daysPerWeek: number, minutesPerSession: number): "low" | "medium" | "high" {
+export function estimateTrainingIntensity(daysPerWeek: number, minutesPerSession: number): "low" | "medium" | "high" {
   const totalMinutesPerWeek = daysPerWeek * minutesPerSession;
   
   if (totalMinutesPerWeek <= 200) {
-    return "low"; // Light workouts
+    return "low"; // Light trainings
   } else if (totalMinutesPerWeek <= 400) {
     return "medium"; // Moderate intensity
   } else {
@@ -154,7 +154,7 @@ export function estimateWorkoutIntensity(daysPerWeek: number, minutesPerSession:
 export function estimateWeightGoalFromProfile(primaryGoal: string, currentWeight: number): { targetWeight?: number; timeframeWeeks?: number } {
   const goal = primaryGoal.toLowerCase();
   
-  // Default timeframe based on workout plan (assuming 4-8 week plans)
+  // Default timeframe based on training plan (assuming 4-8 week plans)
   const defaultTimeframe = 6; // weeks
   
   if (goal.includes('weight loss') || goal.includes('lose') || goal.includes('cut')) {

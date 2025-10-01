@@ -48,6 +48,7 @@ export interface AIQuestionResponse {
   estimated_time_minutes: number;
   categories: QuestionCategory[];
   initial_questions?: AIQuestion[]; // For follow-up questions response
+  ai_message?: string; // Personalized AI coach message for this phase
 }
 
 export interface PersonalInfo {
@@ -113,21 +114,24 @@ export interface OnboardingState {
   initialResponses: Map<string, any>;
   initialQuestionsLoading: boolean;
   currentInitialQuestionIndex: number;
+  initialAiMessage?: string; // AI message for initial questions
   
   // Step 6: Follow-up Questions
   followUpQuestions: AIQuestion[];
   followUpResponses: Map<string, any>;
   followUpQuestionsLoading: boolean;
   currentFollowUpQuestionIndex: number;
+  followUpAiMessage?: string; // AI message for follow-up questions
   
   // Step 7: Training Plan Outline
   trainingPlanOutline: TrainingPlanOutline | null;
   outlineFeedback: string;
   outlineLoading: boolean;
+  outlineAiMessage?: string; // AI message for plan outline
   
   // Step 8: Plan Generation
   planGenerationLoading: boolean;
-  workoutPlan: any | null; // WorkoutPlan type
+  trainingPlan: any | null; // TrainingPlan type
   error: string | null;
   aiHasQuestions: boolean;
   aiAnalysisPhase: 'initial' | 'followup' | 'outline' | 'generation' | null;
@@ -183,9 +187,9 @@ export interface OnboardingApiResponse<T> {
   error?: string;
 }
 
-export interface DailyWorkout {
+export interface DailyTraining {
   day: number;
-  workout_name: string; // Name of the workout (e.g., 'Upper Body Strength', 'Easy Cardio')
+  training_name: string; // Name of the training (e.g., 'Upper Body Strength', 'Easy Cardio')
   description: string;
   tags: string[];
 }
@@ -194,7 +198,7 @@ export interface TrainingPeriod {
   period_name: string;
   duration_weeks: number;
   explanation: string;
-  daily_workouts: DailyWorkout[];
+  daily_trainings: DailyTraining[];
 }
 
 export interface TrainingPlanOutline {
@@ -202,6 +206,7 @@ export interface TrainingPlanOutline {
   duration_weeks: number;
   explanation: string;
   training_periods: TrainingPeriod[];
+  ai_message?: string; // Personalized AI coach message for this phase
 }
 
 // Component Props
@@ -249,6 +254,7 @@ export interface QuestionsStepProps extends OnboardingStepProps {
   isLoading: boolean;
   stepTitle: string;
   username?: string;
+  aiMessage?: string; // AI message from backend
 }
 
 export interface PlanGenerationStepProps {

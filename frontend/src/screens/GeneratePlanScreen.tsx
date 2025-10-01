@@ -23,8 +23,8 @@ export const GeneratePlanScreen: React.FC = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleComplete = async (workoutPlan: any) => {
-    console.log('✅ Workout plan generated and saved to database');
+  const handleComplete = async (trainingPlan: any) => {
+    console.log('✅ Training plan generated and saved to database');
     
     // Refresh user profile to get updated data
     await refreshUserProfile();
@@ -38,7 +38,7 @@ export const GeneratePlanScreen: React.FC = () => {
     
     Alert.alert(
       'Plan Generation Error',
-      `Failed to generate workout plan: ${error}\n\nThis step creates your final personalized workout plan.`,
+      `Failed to generate training plan: ${error}\n\nThis step creates your final personalized training plan.`,
       [
         {
           text: 'Try Again',
@@ -62,7 +62,7 @@ export const GeneratePlanScreen: React.FC = () => {
 
   if (isLoading) {
     return (
-      <LoadingScreen message="Preparing your personalized workout plan..." />
+      <LoadingScreen message="Preparing your personalized training plan..." />
     );
   }
 

@@ -1,6 +1,6 @@
 import TrainingScreen from '@/src/screens/TrainingScreen';
 
-export default function Workout() {
+export default function Training() {
   return <TrainingScreen />;
 }
 

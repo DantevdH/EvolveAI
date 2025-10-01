@@ -62,12 +62,12 @@ class TestRAGTool:
         
         # Create a mock agent
         mock_agent = MagicMock()
-        mock_agent.topic = "fitness"
+        mock_agent.topic = "training"
         
         # This should not raise an exception
         rag_tool = RAGTool(mock_agent)
         assert rag_tool.base_agent == mock_agent
-        assert rag_tool.base_agent.topic == "fitness"
+        assert rag_tool.base_agent.topic == "training"
 
 class TestConcreteImplementations:
     """Test concrete implementations of abstract classes."""
@@ -78,7 +78,7 @@ class TestConcreteImplementations:
         class ConcreteAgent:
             def __init__(self):
                 self.agent_name = "Test Agent"
-                self.topic = "fitness"
+                self.topic = "training"
                 self.agent_description = "A test agent"
             
             def _get_capabilities(self):
@@ -90,7 +90,7 @@ class TestConcreteImplementations:
         # This should work
         agent = ConcreteAgent()
         assert agent.agent_name == "Test Agent"
-        assert agent.topic == "fitness"
+        assert agent.topic == "training"
         assert agent.process_request("hello") == "Processed: hello"
 
     def test_concrete_coordinator_implementation(self):
@@ -134,7 +134,7 @@ class TestIntegration:
         class TestAgent:
             def __init__(self):
                 self.agent_name = "Test Agent"
-                self.topic = "fitness"
+                self.topic = "training"
                 self.agent_description = "A test agent"
                 self.supabase = mock_supabase
                 self.openai_client = mock_openai_instance

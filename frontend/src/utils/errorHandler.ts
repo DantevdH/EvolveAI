@@ -151,9 +151,9 @@ export class ErrorHandler {
   /**
    * Handle specific error scenarios with custom messages
    */
-  static showWorkoutPlanError(error: any, onRetry?: () => void) {
+  static showTrainingPlanError(error: any, onRetry?: () => void) {
     const title = 'Plan Generation Failed';
-    const message = 'We couldn\'t generate your workout plan. Please try again.';
+    const message = 'We couldn\'t generate your training plan. Please try again.';
     
     Alert.alert(
       title,
@@ -247,8 +247,8 @@ export class ErrorHandler {
 export const handleError = (error: any, context?: string) => 
   ErrorHandler.handleError(error, context);
 
-export const showWorkoutPlanError = (error: any, onRetry?: () => void) =>
-  ErrorHandler.showWorkoutPlanError(error, onRetry);
+export const showTrainingPlanError = (error: any, onRetry?: () => void) =>
+  ErrorHandler.showTrainingPlanError(error, onRetry);
 
 export const showOnboardingError = (error: any, onRetry?: () => void) =>
   ErrorHandler.showOnboardingError(error, onRetry);

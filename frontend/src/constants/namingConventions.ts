@@ -14,14 +14,14 @@
 
 /**
  * Database naming conventions:
- * - Tables: snake_case (e.g., user_profiles, workout_plans)
+ * - Tables: snake_case (e.g., user_profiles, training_plans)
  * - Columns: snake_case (e.g., user_id, created_at)
  * - Foreign keys: {table_name}_id (e.g., user_profile_id)
  */
 
 /**
  * API naming conventions:
- * - Endpoints: kebab-case (e.g., /api/workout-plan/generate/)
+ * - Endpoints: kebab-case (e.g., /api/training-plan/generate/)
  * - Request/Response fields: camelCase for frontend, snake_case for backend
  * - HTTP methods: standard REST conventions
  */

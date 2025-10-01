@@ -2,16 +2,16 @@
  * Integration tests for HomeScreen
  */
 
-import { mockAuthState } from '../fixtures/mockWorkoutData';
+import { mockAuthState } from '../fixtures/mockTrainingData';
 
 describe('HomeScreen Integration', () => {
   describe('Component Logic', () => {
     it('should handle loading state correctly', () => {
       const loadingData = {
         streak: 0,
-        weeklyWorkouts: 0,
+        weeklyTrainings: 0,
         goalProgress: 0,
-        todaysWorkout: null,
+        todaysTraining: null,
         recentActivity: [],
         isLoading: true,
         error: null
@@ -20,21 +20,21 @@ describe('HomeScreen Integration', () => {
       expect(loadingData.isLoading).toBe(true);
       expect(loadingData.error).toBeNull();
       expect(loadingData.streak).toBe(0);
-      expect(loadingData.weeklyWorkouts).toBe(0);
+      expect(loadingData.weeklyTrainings).toBe(0);
       expect(loadingData.goalProgress).toBe(0);
-      expect(loadingData.todaysWorkout).toBeNull();
+      expect(loadingData.todaysTraining).toBeNull();
       expect(loadingData.recentActivity).toEqual([]);
     });
 
     it('should handle loaded state with data', () => {
       const loadedData = {
         streak: 5,
-        weeklyWorkouts: 3,
+        weeklyTrainings: 3,
         goalProgress: 75,
-        todaysWorkout: { id: 1, name: 'Monday Workout', exercises: [] },
+        todaysTraining: { id: 1, name: 'Monday Training', exercises: [] },
         recentActivity: [
-          { id: '1', type: 'workout', title: 'Monday Workout' },
-          { id: '2', type: 'workout', title: 'Wednesday Workout' }
+          { id: '1', type: 'training', title: 'Monday Training' },
+          { id: '2', type: 'training', title: 'Wednesday Training' }
         ],
         isLoading: false,
         error: null
@@ -43,18 +43,18 @@ describe('HomeScreen Integration', () => {
       expect(loadedData.isLoading).toBe(false);
       expect(loadedData.error).toBeNull();
       expect(loadedData.streak).toBe(5);
-      expect(loadedData.weeklyWorkouts).toBe(3);
+      expect(loadedData.weeklyTrainings).toBe(3);
       expect(loadedData.goalProgress).toBe(75);
-      expect(loadedData.todaysWorkout).toBeDefined();
+      expect(loadedData.todaysTraining).toBeDefined();
       expect(loadedData.recentActivity).toHaveLength(2);
     });
 
     it('should handle error state', () => {
       const errorData = {
         streak: 0,
-        weeklyWorkouts: 0,
+        weeklyTrainings: 0,
         goalProgress: 0,
-        todaysWorkout: null,
+        todaysTraining: null,
         recentActivity: [],
         isLoading: false,
         error: 'Failed to load data'
@@ -63,68 +63,68 @@ describe('HomeScreen Integration', () => {
       expect(errorData.isLoading).toBe(false);
       expect(errorData.error).toBe('Failed to load data');
       expect(errorData.streak).toBe(0);
-      expect(errorData.weeklyWorkouts).toBe(0);
+      expect(errorData.weeklyTrainings).toBe(0);
       expect(errorData.goalProgress).toBe(0);
-      expect(errorData.todaysWorkout).toBeNull();
+      expect(errorData.todaysTraining).toBeNull();
       expect(errorData.recentActivity).toEqual([]);
     });
 
-    it('should handle empty workout plan scenario', () => {
+    it('should handle empty training plan scenario', () => {
       const authStateWithNoPlan = {
         ...mockAuthState,
-        workoutPlan: null
+        trainingPlan: null
       };
 
-      expect(authStateWithNoPlan.workoutPlan).toBeNull();
+      expect(authStateWithNoPlan.trainingPlan).toBeNull();
       expect(authStateWithNoPlan.userProfile).toBeDefined();
       expect(authStateWithNoPlan.userProfile?.id).toBe(1);
 
-      // Test fallback behavior when no workout plan exists
+      // Test fallback behavior when no training plan exists
       const fallbackData = {
         streak: 0,
-        weeklyWorkouts: 0,
+        weeklyTrainings: 0,
         goalProgress: 0,
-        todaysWorkout: null,
+        todaysTraining: null,
         recentActivity: [],
         isLoading: false,
         error: null
       };
 
       expect(fallbackData.streak).toBe(0);
-      expect(fallbackData.weeklyWorkouts).toBe(0);
+      expect(fallbackData.weeklyTrainings).toBe(0);
       expect(fallbackData.goalProgress).toBe(0);
-      expect(fallbackData.todaysWorkout).toBeNull();
+      expect(fallbackData.todaysTraining).toBeNull();
       expect(fallbackData.recentActivity).toEqual([]);
     });
 
     it('should handle rest day scenario', () => {
       const restDayData = {
         streak: 3,
-        weeklyWorkouts: 2,
+        weeklyTrainings: 2,
         goalProgress: 50,
-        todaysWorkout: { id: 1, name: 'Rest Day', isRestDay: true, exercises: [] },
+        todaysTraining: { id: 1, name: 'Rest Day', isRestDay: true, exercises: [] },
         recentActivity: [
-          { id: '1', type: 'workout', title: 'Monday Workout' }
+          { id: '1', type: 'training', title: 'Monday Training' }
         ],
         isLoading: false,
         error: null
       };
 
-      expect(restDayData.todaysWorkout?.isRestDay).toBe(true);
-      expect(restDayData.todaysWorkout?.exercises).toEqual([]);
+      expect(restDayData.todaysTraining?.isRestDay).toBe(true);
+      expect(restDayData.todaysTraining?.exercises).toEqual([]);
       expect(restDayData.streak).toBe(3);
-      expect(restDayData.weeklyWorkouts).toBe(2);
+      expect(restDayData.weeklyTrainings).toBe(2);
       expect(restDayData.goalProgress).toBe(50);
     });
 
-    it('should handle workout day scenario', () => {
-      const workoutDayData = {
+    it('should handle training day scenario', () => {
+      const trainingDayData = {
         streak: 4,
-        weeklyWorkouts: 3,
+        weeklyTrainings: 3,
         goalProgress: 75,
-        todaysWorkout: {
+        todaysTraining: {
           id: 1,
-          name: 'Monday Workout',
+          name: 'Monday Training',
           isRestDay: false,
           exercises: [
             { id: '1', name: 'Push-ups', completed: false },
@@ -132,20 +132,20 @@ describe('HomeScreen Integration', () => {
           ]
         },
         recentActivity: [
-          { id: '1', type: 'workout', title: 'Friday Workout' },
-          { id: '2', type: 'workout', title: 'Wednesday Workout' }
+          { id: '1', type: 'training', title: 'Friday Training' },
+          { id: '2', type: 'training', title: 'Wednesday Training' }
         ],
         isLoading: false,
         error: null
       };
 
-      expect(workoutDayData.todaysWorkout?.isRestDay).toBe(false);
-      expect(workoutDayData.todaysWorkout?.exercises).toHaveLength(2);
-      expect(workoutDayData.todaysWorkout?.exercises[0].name).toBe('Push-ups');
-      expect(workoutDayData.todaysWorkout?.exercises[1].name).toBe('Squats');
-      expect(workoutDayData.streak).toBe(4);
-      expect(workoutDayData.weeklyWorkouts).toBe(3);
-      expect(workoutDayData.goalProgress).toBe(75);
+      expect(trainingDayData.todaysTraining?.isRestDay).toBe(false);
+      expect(trainingDayData.todaysTraining?.exercises).toHaveLength(2);
+      expect(trainingDayData.todaysTraining?.exercises[0].name).toBe('Push-ups');
+      expect(trainingDayData.todaysTraining?.exercises[1].name).toBe('Squats');
+      expect(trainingDayData.streak).toBe(4);
+      expect(trainingDayData.weeklyTrainings).toBe(3);
+      expect(trainingDayData.goalProgress).toBe(75);
     });
 
     it('should handle missing username gracefully', () => {
@@ -161,24 +161,24 @@ describe('HomeScreen Integration', () => {
       // Test fallback behavior when no user profile exists
       const fallbackData = {
         streak: 0,
-        weeklyWorkouts: 0,
+        weeklyTrainings: 0,
         goalProgress: 0,
-        todaysWorkout: null,
+        todaysTraining: null,
         recentActivity: [],
         isLoading: false,
         error: null
       };
 
       expect(fallbackData.streak).toBe(0);
-      expect(fallbackData.weeklyWorkouts).toBe(0);
+      expect(fallbackData.weeklyTrainings).toBe(0);
       expect(fallbackData.goalProgress).toBe(0);
-      expect(fallbackData.todaysWorkout).toBeNull();
+      expect(fallbackData.todaysTraining).toBeNull();
       expect(fallbackData.recentActivity).toEqual([]);
     });
 
     it('should handle navigation scenarios', () => {
       const navigationScenarios = [
-        { route: 'workout', expected: 'Navigate to workout screen' },
+        { route: 'training', expected: 'Navigate to training screen' },
         { route: 'insights', expected: 'Navigate to insights screen' },
         { route: 'profile', expected: 'Navigate to profile screen' }
       ];
@@ -226,7 +226,7 @@ describe('HomeScreen Integration', () => {
       });
     });
 
-    it('should validate weekly workout count', () => {
+    it('should validate weekly training count', () => {
       const validCounts = [0, 1, 3, 5, 7];
       const invalidCounts = [-1, 8, 'invalid', null, undefined];
 
@@ -266,14 +266,14 @@ describe('HomeScreen Integration', () => {
 
     it('should validate recent activity data', () => {
       const validActivity = [
-        { id: '1', type: 'workout', title: 'Monday Workout' },
-        { id: '2', type: 'workout', title: 'Wednesday Workout' }
+        { id: '1', type: 'training', title: 'Monday Training' },
+        { id: '2', type: 'training', title: 'Wednesday Training' }
       ];
 
       const invalidActivity = [
         { id: '1', type: 'invalid' },
         { id: '2', title: 'Missing type' },
-        { type: 'workout', title: 'Missing id' }
+        { type: 'training', title: 'Missing id' }
       ];
 
       validActivity.forEach(activity => {
@@ -298,45 +298,45 @@ describe('HomeScreen Integration', () => {
     it('should handle maximum values', () => {
       const maxData = {
         streak: 999,
-        weeklyWorkouts: 7,
+        weeklyTrainings: 7,
         goalProgress: 100,
-        todaysWorkout: { id: 1, name: 'Max Workout', exercises: Array(50).fill({ id: '1', name: 'Exercise' }) },
-        recentActivity: Array(10).fill({ id: '1', type: 'workout', title: 'Activity' }),
+        todaysTraining: { id: 1, name: 'Max Training', exercises: Array(50).fill({ id: '1', name: 'Exercise' }) },
+        recentActivity: Array(10).fill({ id: '1', type: 'training', title: 'Activity' }),
         isLoading: false,
         error: null
       };
 
       expect(maxData.streak).toBe(999);
-      expect(maxData.weeklyWorkouts).toBe(7);
+      expect(maxData.weeklyTrainings).toBe(7);
       expect(maxData.goalProgress).toBe(100);
-      expect(maxData.todaysWorkout?.exercises).toHaveLength(50);
+      expect(maxData.todaysTraining?.exercises).toHaveLength(50);
       expect(maxData.recentActivity).toHaveLength(10);
     });
 
     it('should handle minimum values', () => {
       const minData = {
         streak: 0,
-        weeklyWorkouts: 0,
+        weeklyTrainings: 0,
         goalProgress: 0,
-        todaysWorkout: null,
+        todaysTraining: null,
         recentActivity: [],
         isLoading: false,
         error: null
       };
 
       expect(minData.streak).toBe(0);
-      expect(minData.weeklyWorkouts).toBe(0);
+      expect(minData.weeklyTrainings).toBe(0);
       expect(minData.goalProgress).toBe(0);
-      expect(minData.todaysWorkout).toBeNull();
+      expect(minData.todaysTraining).toBeNull();
       expect(minData.recentActivity).toEqual([]);
     });
 
     it('should handle undefined and null values', () => {
       const undefinedData = {
         streak: undefined as any,
-        weeklyWorkouts: null as any,
+        weeklyTrainings: null as any,
         goalProgress: undefined as any,
-        todaysWorkout: null,
+        todaysTraining: null,
         recentActivity: undefined as any,
         isLoading: false,
         error: null
@@ -345,16 +345,16 @@ describe('HomeScreen Integration', () => {
       // Test fallback handling
       const processedData = {
         streak: undefinedData.streak || 0,
-        weeklyWorkouts: undefinedData.weeklyWorkouts || 0,
+        weeklyTrainings: undefinedData.weeklyTrainings || 0,
         goalProgress: undefinedData.goalProgress || 0,
-        todaysWorkout: undefinedData.todaysWorkout || null,
+        todaysTraining: undefinedData.todaysTraining || null,
         recentActivity: undefinedData.recentActivity || []
       };
 
       expect(processedData.streak).toBe(0);
-      expect(processedData.weeklyWorkouts).toBe(0);
+      expect(processedData.weeklyTrainings).toBe(0);
       expect(processedData.goalProgress).toBe(0);
-      expect(processedData.todaysWorkout).toBeNull();
+      expect(processedData.todaysTraining).toBeNull();
       expect(processedData.recentActivity).toEqual([]);
     });
   });

@@ -10,8 +10,8 @@ interface TopPerformingExercise {
   currentVolume: number;
   improvementRate: number;
   trend: 'increasing' | 'decreasing' | 'stable';
-  lastWorkout: string;
-  totalWorkouts: number;
+  lastTraining: string;
+  totalTrainings: number;
   insights: any;
 }
 
@@ -181,7 +181,7 @@ export const TopPerformingExercises: React.FC<TopPerformingExercisesProps> = ({
                 </View>
                 
                 <View style={styles.metricItem}>
-                  <Ionicons name="fitness" size={12} color={colors.muted} />
+                  <Ionicons name="training" size={12} color={colors.muted} />
                   <Text style={styles.metricValue}>
                     {formatVolume(exercise.currentVolume)}
                   </Text>
@@ -190,7 +190,7 @@ export const TopPerformingExercises: React.FC<TopPerformingExercisesProps> = ({
                 <View style={styles.metricItem}>
                   <Ionicons name="calendar" size={12} color={colors.muted} />
                   <Text style={styles.metricValue}>
-                    {exercise.totalWorkouts}
+                    {exercise.totalTrainings}
                   </Text>
                 </View>
               </View>

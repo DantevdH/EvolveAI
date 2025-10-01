@@ -142,7 +142,7 @@ export const MainTabNavigator: React.FC = () => {
       <Tab.Screen 
         name="TrainingTab" 
         component={TrainingStackNavigator}
-        options={{ title: 'Workouts' }}
+        options={{ title: 'Trainings' }}
       />
       <Tab.Screen 
         name="NutritionTab" 

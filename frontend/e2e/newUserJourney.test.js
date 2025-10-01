@@ -83,9 +83,9 @@ describe('New User Journey', () => {
     await element(by.id('gender-male')).tap();
     await element(by.id('next-button')).tap();
 
-    // Fitness Goals Screen
+    // training Goals Screen
     await expect(element(by.id('goal-description-input'))).toBeVisible();
-    await element(by.id('goal-description-input')).typeText('I want to lose weight and build muscle through a balanced workout routine');
+    await element(by.id('goal-description-input')).typeText('I want to lose weight and build muscle through a balanced training routine');
     await element(by.id('next-button')).tap();
 
     // Time Availability Screen

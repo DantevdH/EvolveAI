@@ -35,12 +35,12 @@ export const isValidUserProfile = (profile: any): boolean => {
 };
 
 /**
- * Validates if a value is a valid workout plan
+ * Validates if a value is a valid training plan
  */
-export const isValidWorkoutPlan = (plan: any): boolean => {
+export const isValidTrainingPlan = (plan: any): boolean => {
   return plan && 
          typeof plan === 'object' &&
-         (plan.weekly_schedules || plan.workout_plan_id);
+         (plan.weekly_schedules || plan.training_plan_id);
 };
 
 /**

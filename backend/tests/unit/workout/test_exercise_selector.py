@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 # Add the backend directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from core.fitness.helpers.exercise_selector import ExerciseSelector
+from core.training.helpers.exercise_selector import ExerciseSelector
 
 # Load environment variables
 load_dotenv()
@@ -578,7 +578,7 @@ if __name__ == "__main__":
     print("🚀 Enhanced Equipment Mapping Test Suite")
     print("=" * 60)
     print("Now covers: Equipment mapping, variety selection, duplicate removal,")
-    print("workout types, error handling, and edge cases!")
+    print("training types, error handling, and edge cases!")
     print("=" * 60)
     
     # Run with pytest

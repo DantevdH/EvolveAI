@@ -119,7 +119,7 @@ export default function InsightsScreen() {
           <Ionicons name="analytics" size={64} color={colors.muted} />
           <Text style={styles.emptyTitle}>No Data Yet</Text>
           <Text style={styles.emptyText}>
-            Complete some workouts to unlock your personalized insights and analytics dashboard.
+            Complete some trainings to unlock your personalized insights and analytics dashboard.
           </Text>
           <View style={styles.emptyActions}>
             <Text style={styles.emptyActionText}>
@@ -148,7 +148,7 @@ export default function InsightsScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Insights Dashboard</Text>
-          <Text style={styles.subtitle}>Advanced fitness analytics and predictions</Text>
+          <Text style={styles.subtitle}>Advanced training analytics and predictions</Text>
         </View>
 
         {/* Volume Trend Chart */}

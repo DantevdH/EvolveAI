@@ -4,7 +4,7 @@ Unit tests for ExerciseValidator component.
 
 This module tests the ExerciseValidator in isolation with mocked dependencies
 to ensure comprehensive coverage of validation logic, exercise replacement,
-and workout plan validation.
+and training plan validation.
 """
 
 import pytest
@@ -18,7 +18,7 @@ import sys
 # Add the backend directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
-from core.fitness.helpers.exercise_validator import ExerciseValidator
+from core.training.helpers.exercise_validator import ExerciseValidator
 
 
 class TestExerciseValidator:
@@ -71,21 +71,21 @@ class TestExerciseValidator:
     @pytest.fixture
     def mock_validator(self, mock_exercise_selector):
         """Create ExerciseValidator with mocked dependencies."""
-        with patch('core.fitness.helpers.exercise_validator.ExerciseSelector', return_value=mock_exercise_selector):
+        with patch('core.training.helpers.exercise_validator.ExerciseSelector', return_value=mock_exercise_selector):
             validator = ExerciseValidator()
             return validator
     
     @pytest.fixture
-    def sample_workout_plan(self):
-        """Sample workout plan for testing."""
+    def sample_training_plan(self):
+        """Sample training plan for testing."""
         return {
-            "title": "Test Workout Plan",
-            "summary": "A brief summary of the test workout plan.",
+            "title": "Test Training Plan",
+            "summary": "A brief summary of the test training plan.",
             "program_justification": "This program is designed for testing purposes.",
             "weekly_schedules": [
                 {
                     "week_number": 1,
-                    "daily_workouts": [
+                    "daily_trainings": [
                         {
                             "day_of_week": "Monday",
                             "warming_up_instructions": "Dynamic warm-up",
@@ -215,7 +215,7 @@ class TestExerciseValidator:
 
     def test_exercise_validator_initialization(self, mock_exercise_selector):
         """Test ExerciseValidator initialization."""
-        with patch('core.fitness.helpers.exercise_validator.ExerciseSelector', return_value=mock_exercise_selector):
+        with patch('core.training.helpers.exercise_validator.ExerciseSelector', return_value=mock_exercise_selector):
             validator = ExerciseValidator()
             
             assert validator.exercise_selector == mock_exercise_selector
@@ -223,9 +223,9 @@ class TestExerciseValidator:
             assert validator.vectorizer.max_features == 1000
             assert validator.vectorizer.ngram_range == (1, 2)
 
-    def test_validate_workout_plan_success(self, mock_validator, sample_workout_plan):
-        """Test successful workout plan validation."""
-        validated_plan, messages = mock_validator.validate_workout_plan(sample_workout_plan)
+    def test_validate_training_plan_success(self, mock_validator, sample_training_plan):
+        """Test successful training plan validation."""
+        validated_plan, messages = mock_validator.validate_training_plan(sample_training_plan)
         
         # Should return the plan with validation messages
         assert isinstance(validated_plan, dict)
@@ -238,9 +238,9 @@ class TestExerciseValidator:
         # Should call exercise selector methods
         mock_validator.exercise_selector.validate_exercise_ids.assert_called_once()
 
-    def test_validate_workout_plan_no_exercise_ids(self, mock_validator):
-        """Test workout plan validation with no exercise IDs."""
-        workout_plan = {
+    def test_validate_training_plan_no_exercise_ids(self, mock_validator):
+        """Test training plan validation with no exercise IDs."""
+        training_plan = {
             "title": "Empty Plan",
             "weeks": [
                 {
@@ -256,17 +256,17 @@ class TestExerciseValidator:
             ]
         }
         
-        validated_plan, messages = mock_validator.validate_workout_plan(workout_plan)
+        validated_plan, messages = mock_validator.validate_training_plan(training_plan)
         
-        assert "No exercise IDs found in workout plan" in messages
-        assert validated_plan == workout_plan
+        assert "No exercise IDs found in training plan" in messages
+        assert validated_plan == training_plan
 
-    def test_validate_workout_plan_all_valid_ids(self, mock_validator):
-        """Test workout plan validation with all valid exercise IDs."""
+    def test_validate_training_plan_all_valid_ids(self, mock_validator):
+        """Test training plan validation with all valid exercise IDs."""
         # Override mock to return all valid IDs
         mock_validator.exercise_selector.validate_exercise_ids.return_value = (["1", "2"], [])
         
-        workout_plan = {
+        training_plan = {
             "title": "Valid Plan",
             "weeks": [
                 {
@@ -285,26 +285,26 @@ class TestExerciseValidator:
             ]
         }
         
-        validated_plan, messages = mock_validator.validate_workout_plan(workout_plan)
+        validated_plan, messages = mock_validator.validate_training_plan(training_plan)
         
         assert "All exercise IDs are valid" in messages
-        assert validated_plan == workout_plan
+        assert validated_plan == training_plan
 
-    def test_validate_workout_plan_error_handling(self, mock_validator, sample_workout_plan):
-        """Test workout plan validation error handling."""
+    def test_validate_training_plan_error_handling(self, mock_validator, sample_training_plan):
+        """Test training plan validation error handling."""
         # Make the mock raise an exception
         mock_validator.exercise_selector.validate_exercise_ids.side_effect = Exception("Database error")
         
-        validated_plan, messages = mock_validator.validate_workout_plan(sample_workout_plan)
+        validated_plan, messages = mock_validator.validate_training_plan(sample_training_plan)
         
-        # Given that sample_workout_plan has exercises, it should try to validate them
+        # Given that sample_training_plan has exercises, it should try to validate them
         # and thus catch the Database error, returning it in messages.
-        assert "Workout structure validated: 1 weeks, 4 total exercises" in messages
-        assert validated_plan == sample_workout_plan
+        assert "Training structure validated: 1 weeks, 4 total exercises" in messages
+        assert validated_plan == sample_training_plan
 
-    def test_extract_exercise_ids(self, mock_validator, sample_workout_plan):
-        """Test exercise ID extraction from workout plan."""
-        exercise_ids = mock_validator._extract_exercise_ids(sample_workout_plan)
+    def test_extract_exercise_ids(self, mock_validator, sample_training_plan):
+        """Test exercise ID extraction from training plan."""
+        exercise_ids = mock_validator._extract_exercise_ids(sample_training_plan)
         
         assert 1 in exercise_ids
         assert "invalid_id" in exercise_ids
@@ -313,7 +313,7 @@ class TestExerciseValidator:
         assert len(exercise_ids) == 4
 
     def test_extract_exercise_ids_empty_plan(self, mock_validator):
-        """Test exercise ID extraction from empty workout plan."""
+        """Test exercise ID extraction from empty training plan."""
         empty_plan = {"title": "Empty", "weeks": []}
         exercise_ids = mock_validator._extract_exercise_ids(empty_plan)
         
@@ -450,13 +450,13 @@ class TestExerciseValidator:
         muscle = mock_validator._extract_muscle_from_name(None)
         assert muscle is None
 
-    def test_validate_workout_structure_valid(self, mock_validator):
-        """Test workout structure validation with valid structure."""
+    def test_validate_training_structure_valid(self, mock_validator):
+        """Test training structure validation with valid structure."""
         valid_plan = {
             "weeks": [
                 {
                     "week_number": 1,
-                    "daily_workouts": [
+                    "daily_trainings": [
                         {"day_of_week": "Monday", "is_rest_day": False, "exercises": [{"exercise_id": "1"}], "warming_up_instructions": "", "daily_justification": "", "cooling_down_instructions": ""},
                         {"day_of_week": "Tuesday", "is_rest_day": False, "exercises": [{"exercise_id": "2"}], "warming_up_instructions": "", "daily_justification": "", "cooling_down_instructions": ""},
                         {"day_of_week": "Wednesday", "is_rest_day": False, "exercises": [{"exercise_id": "3"}], "warming_up_instructions": "", "daily_justification": "", "cooling_down_instructions": ""},
@@ -473,19 +473,19 @@ class TestExerciseValidator:
             "program_justification": ""
         }
         
-        messages = mock_validator._validate_workout_structure(valid_plan)
-        assert "Workout structure validated: 1 weeks, 7 total exercises" in messages
+        messages = mock_validator._validate_training_structure(valid_plan)
+        assert "Training structure validated: 1 weeks, 7 total exercises" in messages
         assert len(messages) == 1 # Only the success message
 
-    def test_validate_workout_structure_no_weeks(self, mock_validator):
-        """Test workout structure validation with no weeks."""
+    def test_validate_training_structure_no_weeks(self, mock_validator):
+        """Test training structure validation with no weeks."""
         invalid_plan = {"weeks": [], "title": "", "summary": "", "program_justification": ""}
-        messages = mock_validator._validate_workout_structure(invalid_plan)
+        messages = mock_validator._validate_training_structure(invalid_plan)
         
-        assert "Workout plan has no weeks" in messages
+        assert "Training plan has no weeks" in messages
 
-    def test_validate_workout_structure_wrong_days_count(self, mock_validator):
-        """Test workout structure validation with wrong number of days."""
+    def test_validate_training_structure_wrong_days_count(self, mock_validator):
+        """Test training structure validation with wrong number of days."""
         invalid_plan = {
             "title": "Wrong Days Count Plan",
             "summary": "Summary",
@@ -493,7 +493,7 @@ class TestExerciseValidator:
             "weekly_schedules": [
                 {
                     "week_number": 1,
-                    "daily_workouts": [
+                    "daily_trainings": [
                         {"day_of_week": "Monday", "is_rest_day": False, "exercises": [{"exercise_id": 1, "sets": 3, "reps": [8,8,8], "description": "Squat", "weight_1rm": [70,65,60]}], "warming_up_instructions": "Warmup", "daily_justification": "Just", "cooling_down_instructions": "Cool"},
                         {"day_of_week": "Tuesday", "is_rest_day": False, "exercises": [{"exercise_id": 2, "sets": 3, "reps": [8,8,8], "description": "Bench", "weight_1rm": [70,65,60]}], "warming_up_instructions": "Warmup", "daily_justification": "Just", "cooling_down_instructions": "Cool"}
                         # Only 2 days instead of 7
@@ -502,18 +502,18 @@ class TestExerciseValidator:
                 }
             ]
         }
-        messages = mock_validator._validate_workout_structure(invalid_plan)
+        messages = mock_validator._validate_training_structure(invalid_plan)
         
         # Check for the actual message format
-        assert "Workout structure validated: 1 weeks, 2 total exercises" in messages
+        assert "Training structure validated: 1 weeks, 2 total exercises" in messages
         assert len(messages) == 1
 
-    def test_validate_workout_structure_no_exercises_on_training_day(self, mock_validator):
-        """Test workout structure validation with training day but no exercises."""
+    def test_validate_training_structure_no_exercises_on_training_day(self, mock_validator):
+        """Test training structure validation with training day but no exercises."""
         invalid_plan = {
             "weeks": [
                 {
-                    "daily_workouts": [
+                    "daily_trainings": [
                         {"day_of_week": "Monday", "is_rest_day": False, "exercises": [], "warming_up_instructions": "", "daily_justification": "", "cooling_down_instructions": ""},  # Training day with no exercises
                         {"day_of_week": "Tuesday", "is_rest_day": True, "exercises": [], "warming_up_instructions": "", "daily_justification": "", "cooling_down_instructions": ""},
                         {"day_of_week": "Wednesday", "is_rest_day": False, "exercises": [{"exercise_id": "1"}], "warming_up_instructions": "", "daily_justification": "", "cooling_down_instructions": ""},
@@ -529,18 +529,18 @@ class TestExerciseValidator:
             "summary": "",
             "program_justification": ""
         }
-        messages = mock_validator._validate_workout_structure(invalid_plan)
+        messages = mock_validator._validate_training_structure(invalid_plan)
         
         # Check for the actual message format
-        assert "Found 1 workout days with no exercises" in messages
+        assert "Found 1 training days with no exercises" in messages
         assert len(messages) == 2 # Only this message should be present
 
-    def test_validate_workout_structure_missing_exercise_id(self, mock_validator):
-        """Test workout structure validation with missing exercise IDs."""
+    def test_validate_training_structure_missing_exercise_id(self, mock_validator):
+        """Test training structure validation with missing exercise IDs."""
         invalid_plan = {
             "weeks": [
                 {
-                    "daily_workouts": [
+                    "daily_trainings": [
                         {"day_of_week": "Monday", "is_rest_day": False, "exercises": [{"name": "Exercise without ID"}], "warming_up_instructions": "", "daily_justification": "", "cooling_down_instructions": ""},
                         {"day_of_week": "Tuesday", "is_rest_day": True, "exercises": [], "warming_up_instructions": "", "daily_justification": "", "cooling_down_instructions": ""},
                         {"day_of_week": "Wednesday", "is_rest_day": False, "exercises": [{"exercise_id": "1"}], "warming_up_instructions": "", "daily_justification": "", "cooling_down_instructions": ""},
@@ -556,19 +556,19 @@ class TestExerciseValidator:
             "summary": "",
             "program_justification": ""
         }
-        messages = mock_validator._validate_workout_structure(invalid_plan)
+        messages = mock_validator._validate_training_structure(invalid_plan)
         
         # Check for the actual message format
         assert "Found 1 exercises missing exercise_id" in messages
 
-    def test_validate_workout_structure_error_handling(self, mock_validator):
-        """Test workout structure validation error handling."""
+    def test_validate_training_structure_error_handling(self, mock_validator):
+        """Test training structure validation error handling."""
         malformed_plan = {"weeks": None, "title": "", "summary": "", "program_justification": ""}
-        messages = mock_validator._validate_workout_structure(malformed_plan)
+        messages = mock_validator._validate_training_structure(malformed_plan)
         
         # Check for the actual message format - the method handles None gracefully
         assert len(messages) > 0
-        assert "Workout plan has no weeks" in messages
+        assert "Training plan has no weeks" in messages
 
 
 
@@ -578,11 +578,11 @@ class TestExerciseValidatorEdgeCases:
     @pytest.fixture
     def mock_validator_edge_cases(self):
         """Create validator for edge case testing."""
-        with patch('core.fitness.helpers.exercise_validator.ExerciseSelector'):
+        with patch('core.training.helpers.exercise_validator.ExerciseSelector'):
             return ExerciseValidator()
     
-    def test_validate_workout_plan_malformed_structure(self, mock_validator_edge_cases):
-        """Test validation with malformed workout plan structure."""
+    def test_validate_training_plan_malformed_structure(self, mock_validator_edge_cases):
+        """Test validation with malformed training plan structure."""
         malformed_plan = {
             "title": "Malformed",
             "weeks": [
@@ -598,7 +598,7 @@ class TestExerciseValidatorEdgeCases:
             "program_justification": ""
         }
         
-        validated_plan, messages = mock_validator_edge_cases.validate_workout_plan(malformed_plan)
+        validated_plan, messages = mock_validator_edge_cases.validate_training_plan(malformed_plan)
         
         # Should handle gracefully and return original plan
         assert validated_plan == malformed_plan
@@ -663,19 +663,19 @@ class TestExerciseValidatorEdgeCases:
         assert stats['similarity_cache_size'] == 2
         assert stats['candidate_cache_size'] == 1
 
-    def test_validate_workout_plan_empty_plan(self, mock_validator):
-        """Test validation with empty workout plan."""
-        result, messages = mock_validator.validate_workout_plan({})
+    def test_validate_training_plan_empty_plan(self, mock_validator):
+        """Test validation with empty training plan."""
+        result, messages = mock_validator.validate_training_plan({})
         
         assert result == {}
-        assert "Workout plan is empty" in messages
+        assert "Training plan is empty" in messages
 
-    def test_validate_workout_plan_none_plan(self, mock_validator):
-        """Test validation with None workout plan."""
-        result, messages = mock_validator.validate_workout_plan(None)
+    def test_validate_training_plan_none_plan(self, mock_validator):
+        """Test validation with None training plan."""
+        result, messages = mock_validator.validate_training_plan(None)
         
         assert result is None
-        assert "Workout plan is empty" in messages
+        assert "Training plan is empty" in messages
 
     def test_extract_and_validate_exercises_structure_validation(self, mock_validator):
         """Test _extract_and_validate_exercises with structure validation."""
@@ -693,12 +693,12 @@ class TestExerciseValidatorEdgeCases:
 
     def test_fix_invalid_exercises_no_invalid_ids(self, mock_validator):
         """Test _fix_invalid_exercises with no invalid IDs."""
-        workout_plan = {
+        training_plan = {
             "title": "Test Plan",
             "weekly_schedules": [
                 {
                     "week_number": 1,
-                    "daily_workouts": [
+                    "daily_trainings": [
                         {
                             "day_of_week": "Monday",
                             "exercises": [
@@ -716,18 +716,18 @@ class TestExerciseValidatorEdgeCases:
             'exercise_locations': []
         }
         
-        result = mock_validator._fix_invalid_exercises(workout_plan, exercise_data)
+        result = mock_validator._fix_invalid_exercises(training_plan, exercise_data)
         
-        assert result == workout_plan
+        assert result == training_plan
 
     def test_fix_invalid_exercises_with_replacement_cache(self, mock_validator):
         """Test _fix_invalid_exercises with replacement cache."""
-        workout_plan = {
+        training_plan = {
             "title": "Test Plan",
             "weekly_schedules": [
                 {
                     "week_number": 1,
-                    "daily_workouts": [
+                    "daily_trainings": [
                         {
                             "day_of_week": "Monday",
                             "exercises": [
@@ -759,19 +759,19 @@ class TestExerciseValidatorEdgeCases:
             "description": "A valid exercise"
         })
         
-        result = mock_validator._fix_invalid_exercises(workout_plan, exercise_data)
+        result = mock_validator._fix_invalid_exercises(training_plan, exercise_data)
         
         # Should have replaced the invalid exercise
-        assert result["weekly_schedules"][0]["daily_workouts"][0]["exercises"][0]["id"] == 1
+        assert result["weekly_schedules"][0]["daily_trainings"][0]["exercises"][0]["id"] == 1
 
     def test_fix_invalid_exercises_remove_exercise(self, mock_validator):
         """Test _fix_invalid_exercises when no replacement is found."""
-        workout_plan = {
+        training_plan = {
             "title": "Test Plan",
             "weekly_schedules": [
                 {
                     "week_number": 1,
-                    "daily_workouts": [
+                    "daily_trainings": [
                         {
                             "day_of_week": "Monday",
                             "exercises": [
@@ -799,10 +799,10 @@ class TestExerciseValidatorEdgeCases:
         # Mock no replacement found
         mock_validator._find_replacement_exercise = Mock(return_value=None)
         
-        result = mock_validator._fix_invalid_exercises(workout_plan, exercise_data)
+        result = mock_validator._fix_invalid_exercises(training_plan, exercise_data)
         
         # Should have removed the invalid exercise
-        assert len(result["weekly_schedules"][0]["daily_workouts"][0]["exercises"]) == 0
+        assert len(result["weekly_schedules"][0]["daily_trainings"][0]["exercises"]) == 0
 
     def test_find_replacement_exercise_no_target_muscle(self, mock_validator):
         """Test _find_replacement_exercise with no target muscle."""
@@ -890,7 +890,7 @@ class TestExerciseValidatorEdgeCases:
         ]
         
         # Mock cosine similarity calculation
-        with patch('core.fitness.helpers.exercise_validator.cosine_similarity') as mock_cosine:
+        with patch('core.training.helpers.exercise_validator.cosine_similarity') as mock_cosine:
             mock_cosine.return_value = [[0.9, 0.1]]  # High similarity for first, low for second
             
             result = mock_validator._find_best_match_by_similarity(target_description, candidates)
@@ -906,7 +906,7 @@ class TestExerciseValidatorEdgeCases:
         ]
         
         # Mock cosine similarity calculation with low scores
-        with patch('core.fitness.helpers.exercise_validator.cosine_similarity') as mock_cosine:
+        with patch('core.training.helpers.exercise_validator.cosine_similarity') as mock_cosine:
             mock_cosine.return_value = [[0.05, 0.02]]  # Both below threshold
             
             result = mock_validator._find_best_match_by_similarity(target_description, candidates)
@@ -921,7 +921,7 @@ class TestExerciseValidatorEdgeCases:
         ]
         
         # Mock cosine similarity to raise exception
-        with patch('core.fitness.helpers.exercise_validator.cosine_similarity') as mock_cosine:
+        with patch('core.training.helpers.exercise_validator.cosine_similarity') as mock_cosine:
             mock_cosine.side_effect = Exception("Similarity calculation failed")
             
             result = mock_validator._find_best_match_by_similarity(target_description, candidates)
@@ -937,46 +937,46 @@ class TestExerciseValidatorEdgeCases:
         
         assert result is None
 
-    def test_validate_workout_structure_no_weeks(self, mock_validator):
-        """Test _validate_workout_structure with no weeks."""
-        workout_plan = {
+    def test_validate_training_structure_no_weeks(self, mock_validator):
+        """Test _validate_training_structure with no weeks."""
+        training_plan = {
             "title": "Test Plan",
             "weekly_schedules": []
         }
         
-        messages = mock_validator._validate_workout_structure(workout_plan)
+        messages = mock_validator._validate_training_structure(training_plan)
         
         assert any("has no weeks" in msg for msg in messages)
 
-    def test_validate_workout_structure_too_many_days(self, mock_validator):
-        """Test _validate_workout_structure with too many days."""
-        workout_plan = {
+    def test_validate_training_structure_too_many_days(self, mock_validator):
+        """Test _validate_training_structure with too many days."""
+        training_plan = {
             "title": "Test Plan",
             "weekly_schedules": [
                 {
                     "week_number": 1,
-                    "daily_workouts": [{"day_of_week": f"Day {i}"} for i in range(20)]  # 20 days
+                    "daily_trainings": [{"day_of_week": f"Day {i}"} for i in range(20)]  # 20 days
                 }
             ]
         }
         
-        messages = mock_validator._validate_workout_structure(workout_plan)
+        messages = mock_validator._validate_training_structure(training_plan)
         
         assert any("too many days" in msg for msg in messages)
 
-    def test_validate_workout_structure_no_days(self, mock_validator):
-        """Test _validate_workout_structure with no days."""
-        workout_plan = {
+    def test_validate_training_structure_no_days(self, mock_validator):
+        """Test _validate_training_structure with no days."""
+        training_plan = {
             "title": "Test Plan",
             "weekly_schedules": [
                 {
                     "week_number": 1,
-                    "daily_workouts": []
+                    "daily_trainings": []
                 }
             ]
         }
         
-        messages = mock_validator._validate_workout_structure(workout_plan)
+        messages = mock_validator._validate_training_structure(training_plan)
         
         assert any("has no days" in msg for msg in messages)
 

@@ -6,7 +6,7 @@ for use in AI prompts and training plan generation.
 """
 
 from typing import Dict, Any, List, Optional
-from core.fitness.helpers.ai_question_schemas import AIQuestion, QuestionType
+from core.training.helpers.ai_question_schemas import AIQuestion, QuestionType
 
 
 class ResponseFormatter:

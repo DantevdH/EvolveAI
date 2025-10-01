@@ -17,13 +17,13 @@ interface StatData {
 
 interface ProgressSummaryProps {
   streak?: number;
-  weeklyWorkouts?: number;
+  weeklyTrainings?: number;
   goalProgress?: number;
 }
 
 export const ProgressSummary: React.FC<ProgressSummaryProps> = ({
   streak = 0,
-  weeklyWorkouts = 0,
+  weeklyTrainings = 0,
   goalProgress = 0,
 }) => {
   const stats: StatData[] = [
@@ -36,8 +36,8 @@ export const ProgressSummary: React.FC<ProgressSummaryProps> = ({
     },
     {
       title: 'This Week',
-      value: weeklyWorkouts.toString(),
-      subtitle: 'workouts',
+      value: weeklyTrainings.toString(),
+      subtitle: 'trainings',
       color: colors.tertiary,
       icon: 'calendar',
     },

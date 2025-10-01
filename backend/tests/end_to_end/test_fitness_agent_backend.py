@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Fitness Agent Backend End-to-End Tests
+training Agent Backend End-to-End Tests
 
 This module contains 10 strategic integration and end-to-end tests that provide
-full assurance of a working fitness agent backend. These tests cover:
+full assurance of a working training agent backend. These tests cover:
 
-1. Complete workout generation workflow
+1. Complete training generation workflow
 2. Exercise validation and replacement
 3. Profile-based exercise selection
 4. Knowledge base integration
@@ -30,11 +30,12 @@ import numpy as np
 # Add the backend directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
-from core.fitness.fitness_coach import FitnessCoach
-from core.fitness.helpers.schemas import UserProfileSchema, WorkoutPlanSchema
-from core.fitness.helpers.exercise_selector import ExerciseSelector
-from core.fitness.helpers.exercise_validator import ExerciseValidator
-# WorkoutPromptGenerator is now integrated into FitnessCoach
+from core.training.training_coach import TrainingCoach
+from core.training.helpers.schemas import UserProfileSchema
+from core.training.helpers.training_schemas import TrainingPlan
+from core.training.helpers.exercise_selector import ExerciseSelector
+from core.training.helpers.exercise_validator import ExerciseValidator
+# TrainingPromptGenerator is now integrated into TrainingCoach
 
 # Load environment variables
 load_dotenv()
@@ -59,7 +60,7 @@ def sample_user_profiles():
             gender="Male",
             has_limitations=False,
             limitations_description="",
-            final_chat_notes="New to fitness, wants to start with basics"
+            final_chat_notes="New to training, wants to start with basics"
         ),
         "intermediate_bodybuilding": UserProfileSchema(
             primary_goal="Bodybuilding",
@@ -103,18 +104,18 @@ def mock_openai_client():
     """Fixture providing a mocked OpenAI client for testing."""
     mock_client = MagicMock()
     
-    # Mock successful workout plan generation
+    # Mock successful training plan generation
     mock_response = MagicMock()
     mock_response.choices = [MagicMock()]
     mock_response.choices[0].message.content = json.dumps({
-        "title": "Test Workout Plan",
-        "summary": "A comprehensive test workout plan",
+        "title": "Test Training Plan",
+        "summary": "A comprehensive test training plan",
         "program_justification": "Overall program design and periodization justification",
         "weekly_schedules": [
             {
                 "week_number": 1,
                 "weekly_justification": "Weekly structure justification",
-                "daily_workouts": [
+                "daily_trainings": [
                     {
                         "day_of_week": "Monday",
                         "warming_up_instructions": "5-10 minutes dynamic warm-up",
@@ -215,60 +216,60 @@ def mock_openai_client():
     return mock_client
 
 
-class TestFitnessAgentBackendEndToEnd:
-    """Comprehensive end-to-end tests for the fitness agent backend."""
+class TesttrainingAgentBackendEndToEnd:
+    """Comprehensive end-to-end tests for the training agent backend."""
     
-    def test_1_complete_workout_generation_workflow(self, sample_user_profiles, mock_openai_client):
+    def test_1_complete_training_generation_workflow(self, sample_user_profiles, mock_openai_client):
         """
-        Test 1: Complete workout generation workflow from profile to validated plan.
+        Test 1: Complete training generation workflow from profile to validated plan.
         
         This test ensures the entire pipeline works:
         1. User profile processing
         2. Exercise candidate selection
-        3. OpenAI workout generation
+        3. OpenAI training generation
         4. Exercise validation and replacement
-        5. Final workout plan creation
+        5. Final training plan creation
         """
-        print("\n🚀 Test 1: Complete Workout Generation Workflow")
+        print("\n🚀 Test 1: Complete Training Generation Workflow")
         print("=" * 60)
         
         # Initialize components
-        fitness_coach = FitnessCoach()
+        training_coach = TrainingCoach()
         
         # Test with intermediate bodybuilding profile
         user_profile = sample_user_profiles["intermediate_bodybuilding"]
         
-        # Step 1: Generate workout plan
-        print("1️⃣ Generating workout plan...")
+        # Step 1: Generate training plan
+        print("1️⃣ Generating training plan...")
         user_profile_dict = user_profile.model_dump() if hasattr(user_profile, 'model_dump') else user_profile.__dict__
         user_responses = {
             "primary_goal": "bodybuilding",
             "experience_level": "intermediate",
             "equipment": "full gym"
         }
-        result = fitness_coach.generate_training_plan(user_profile_dict, user_responses)
+        result = training_coach.generate_training_plan(user_profile_dict, user_responses)
         
-        # Extract workout plan from result
+        # Extract training plan from result
         assert result["success"], f"Training plan generation failed: {result.get('error', 'Unknown error')}"
-        workout_plan_dict = result["workout_plan"]
-        workout_plan = WorkoutPlanSchema(**workout_plan_dict)
+        training_plan_dict = result["training_plan"]
+        training_plan = TrainingPlan(**training_plan_dict)
         
         # Step 2: Validate the generated plan
-        assert isinstance(workout_plan, WorkoutPlanSchema)
-        assert workout_plan.title is not None  # Should have a title
-        assert len(workout_plan.weekly_schedules) > 0  # Should have at least one week
+        assert isinstance(training_plan, TrainingPlan)
+        assert training_plan.title is not None  # Should have a title
+        assert len(training_plan.weekly_schedules) > 0  # Should have at least one week
         
-        weekly_schedule = workout_plan.weekly_schedules[0]
+        weekly_schedule = training_plan.weekly_schedules[0]
         assert weekly_schedule.week_number == 1
-        assert len(weekly_schedule.daily_workouts) == 7
+        assert len(weekly_schedule.daily_trainings) == 7
         
         # Step 3: Verify exercise structure
-        monday_workout = weekly_schedule.daily_workouts[0]
-        assert not monday_workout.is_rest_day
-        assert len(monday_workout.exercises) > 0  # Should have at least one exercise
+        monday_training = weekly_schedule.daily_trainings[0]
+        assert not monday_training.is_rest_day
+        assert len(monday_training.exercises) > 0  # Should have at least one exercise
         
         # Verify exercise data integrity
-        first_exercise = monday_workout.exercises[0]
+        first_exercise = monday_training.exercises[0]
         assert hasattr(first_exercise, 'exercise_id')
         assert hasattr(first_exercise, 'sets')
         assert hasattr(first_exercise, 'reps')
@@ -295,14 +296,14 @@ class TestFitnessAgentBackendEndToEnd:
         exercise_validator = ExerciseValidator()
         exercise_selector = ExerciseSelector()
         
-        # Create a workout plan with some invalid exercises
-        workout_with_invalid_exercises = {
+        # Create a training plan with some invalid exercises
+        training_with_invalid_exercises = {
             "title": "Test Plan with Invalid Exercises",
             "summary": "Testing exercise validation",
             "weekly_schedules": [
                 {
                     "week_number": 1,
-                    "daily_workouts": [
+                    "daily_trainings": [
                         {
                             "day_of_week": "Monday",
                             "is_rest_day": False,
@@ -331,16 +332,16 @@ class TestFitnessAgentBackendEndToEnd:
         # Step 1: Extract and validate exercises
         print("1️⃣ Validating exercises...")
         exercises = []
-        for week in workout_with_invalid_exercises['weekly_schedules']:
-            for day in week['daily_workouts']:
+        for week in training_with_invalid_exercises['weekly_schedules']:
+            for day in week['daily_trainings']:
                 for exercise in day['exercises']:
                     exercises.append({
                         "id": exercise['exercise_id'],
                         "name": f"Exercise {exercise['exercise_id']}"
                     })
         
-        # Use the actual validate_workout_plan method
-        validated_plan, validation_messages = exercise_validator.validate_workout_plan(workout_with_invalid_exercises)
+        # Use the actual validate_training_plan method
+        validated_plan, validation_messages = exercise_validator.validate_training_plan(training_with_invalid_exercises)
         result = {"warnings": validation_messages}
         
         # Step 2: Verify validation results
@@ -348,8 +349,8 @@ class TestFitnessAgentBackendEndToEnd:
         assert isinstance(validation_messages, list)
         # Note: validation_messages may be empty if all exercises are valid
         
-        # Step 3: Check that the workout plan structure is maintained
-        monday_exercises = validated_plan["weekly_schedules"][0]["daily_workouts"][0]["exercises"]
+        # Step 3: Check that the training plan structure is maintained
+        monday_exercises = validated_plan["weekly_schedules"][0]["daily_trainings"][0]["exercises"]
         assert len(monday_exercises) == 1
         
         # Check that exercises have the required structure
@@ -377,7 +378,7 @@ class TestFitnessAgentBackendEndToEnd:
         print("=" * 60)
         
         # Initialize components
-        fitness_coach = FitnessCoach()
+        training_coach = TrainingCoach()
         
         # Test with different profile types
         profiles_to_test = [
@@ -393,7 +394,7 @@ class TestFitnessAgentBackendEndToEnd:
             # Step 1: Get exercise candidates
             user_profile_dict = user_profile.model_dump() if hasattr(user_profile, 'model_dump') else user_profile.__dict__
             # Use the actual get_exercise_candidates method
-            candidates = fitness_coach.exercise_selector.get_exercise_candidates(
+            candidates = training_coach.exercise_selector.get_exercise_candidates(
                 max_exercises=20,
                 difficulty=expected_level
             )
@@ -431,7 +432,7 @@ class TestFitnessAgentBackendEndToEnd:
         print("=" * 60)
         
         # Initialize components
-        fitness_coach = FitnessCoach()
+        training_coach = TrainingCoach()
         
         # Test with a specific profile
         user_profile = sample_user_profiles["intermediate_bodybuilding"]
@@ -439,7 +440,7 @@ class TestFitnessAgentBackendEndToEnd:
         # Step 1: Test initial questions generation
         print("1️⃣ Testing initial questions generation...")
         user_profile_dict = user_profile.model_dump() if hasattr(user_profile, 'model_dump') else user_profile.__dict__
-        initial_result = fitness_coach.generate_initial_questions(user_profile_dict)
+        initial_result = training_coach.generate_initial_questions(user_profile_dict)
         
         # Should generate questions
         assert hasattr(initial_result, 'questions')
@@ -453,7 +454,7 @@ class TestFitnessAgentBackendEndToEnd:
             "experience_level": "intermediate",
             "equipment": "full gym"
         }
-        follow_up_result = fitness_coach.generate_follow_up_questions(user_profile_dict, follow_up_responses)
+        follow_up_result = training_coach.generate_follow_up_questions(user_profile_dict, follow_up_responses)
         
         # Should generate follow-up questions
         assert hasattr(follow_up_result, 'questions')
@@ -461,11 +462,11 @@ class TestFitnessAgentBackendEndToEnd:
         
         # Step 3: Test training plan generation
         print("3️⃣ Testing training plan generation...")
-        training_result = fitness_coach.generate_training_plan(user_profile_dict, follow_up_responses)
+        training_result = training_coach.generate_training_plan(user_profile_dict, follow_up_responses)
         
         assert isinstance(training_result, dict)
         assert "success" in training_result
-        assert "workout_plan" in training_result
+        assert "training_plan" in training_result
         
         print("✅ Knowledge base integration test passed!")
     
@@ -483,7 +484,7 @@ class TestFitnessAgentBackendEndToEnd:
         print("=" * 60)
         
         # Initialize components
-        fitness_coach = FitnessCoach()
+        training_coach = TrainingCoach()
         user_profile = sample_user_profiles["beginner_strength"]
         
         # Step 1: Test with invalid equipment (should handle gracefully)
@@ -495,7 +496,7 @@ class TestFitnessAgentBackendEndToEnd:
             
             user_profile_dict = user_profile.model_dump() if hasattr(user_profile, 'model_dump') else user_profile.__dict__
             # Use the actual get_exercise_candidates method
-            candidates = fitness_coach.exercise_selector.get_exercise_candidates(
+            candidates = training_coach.exercise_selector.get_exercise_candidates(
                 max_exercises=20,
                 difficulty="Beginner"
             )
@@ -518,7 +519,7 @@ class TestFitnessAgentBackendEndToEnd:
         }
         
         try:
-            result = fitness_coach.generate_training_plan(user_profile_dict, user_responses)
+            result = training_coach.generate_training_plan(user_profile_dict, user_responses)
             # Should handle gracefully even if there are issues
             assert isinstance(result, dict)
             assert "success" in result
@@ -549,7 +550,7 @@ class TestFitnessAgentBackendEndToEnd:
         # Should not crash with minimal profile
         incomplete_profile_dict = incomplete_profile.model_dump() if hasattr(incomplete_profile, 'model_dump') else incomplete_profile.__dict__
         # Use the actual get_exercise_candidates method
-        candidates = fitness_coach.exercise_selector.get_exercise_candidates(
+        candidates = training_coach.exercise_selector.get_exercise_candidates(
             max_exercises=20,
             difficulty="Beginner"
         )
@@ -564,7 +565,7 @@ class TestFitnessAgentBackendEndToEnd:
         
         This test ensures:
         1. System handles multiple concurrent requests
-        2. Large workout plans are processed efficiently
+        2. Large training plans are processed efficiently
         3. Memory usage remains reasonable
         4. Response times are acceptable
         """
@@ -574,9 +575,9 @@ class TestFitnessAgentBackendEndToEnd:
         # Initialize components
         exercise_validator = ExerciseValidator()
         
-        # Step 1: Test large workout plan validation
-        print("1️⃣ Testing large workout plan validation...")
-        large_plan = self._create_large_workout_plan()
+        # Step 1: Test large training plan validation
+        print("1️⃣ Testing large training plan validation...")
+        large_plan = self._create_large_training_plan()
         
         import time
         start_time = time.time()
@@ -584,15 +585,15 @@ class TestFitnessAgentBackendEndToEnd:
         # Extract exercises from large plan for validation
         exercises = []
         for week in large_plan['weekly_schedules']:
-            for day in week['daily_workouts']:
+            for day in week['daily_trainings']:
                 for exercise in day['exercises']:
                     exercises.append({
                         "id": exercise['exercise_id'],
                         "name": f"Exercise {exercise['exercise_id']}"
                     })
         
-        # Use the actual validate_workout_plan method
-        validated_plan, validation_messages = exercise_validator.validate_workout_plan(large_plan)
+        # Use the actual validate_training_plan method
+        validated_plan, validation_messages = exercise_validator.validate_training_plan(large_plan)
         
         end_time = time.time()
         processing_time = end_time - start_time
@@ -607,7 +608,7 @@ class TestFitnessAgentBackendEndToEnd:
         total_exercises = sum(
             len(day["exercises"]) 
             for week in validated_plan["weekly_schedules"] 
-            for day in week["daily_workouts"] 
+            for day in week["daily_trainings"] 
             if not day["is_rest_day"]
         )
         
@@ -630,29 +631,29 @@ class TestFitnessAgentBackendEndToEnd:
         print("=" * 60)
         
         # Initialize components
-        fitness_coach = FitnessCoach()
+        training_coach = TrainingCoach()
         exercise_validator = ExerciseValidator()
         user_profile = sample_user_profiles["intermediate_bodybuilding"]
         
-        # Step 1: Generate workout plan
-        print("1️⃣ Generating workout plan...")
+        # Step 1: Generate training plan
+        print("1️⃣ Generating training plan...")
         user_profile_dict = user_profile.model_dump() if hasattr(user_profile, 'model_dump') else user_profile.__dict__
         user_responses = {
             "primary_goal": "bodybuilding",
             "experience_level": "intermediate",
             "equipment": "full gym"
         }
-        result = fitness_coach.generate_training_plan(user_profile_dict, user_responses)
+        result = training_coach.generate_training_plan(user_profile_dict, user_responses)
         
         assert result["success"], f"Training plan generation failed: {result.get('error', 'Unknown error')}"
-        workout_plan_dict = result["workout_plan"]
-        workout_plan = WorkoutPlanSchema(**workout_plan_dict)
+        training_plan_dict = result["training_plan"]
+        training_plan = TrainingPlan(**training_plan_dict)
         
         # Step 2: Extract exercise data for consistency checking
         print("2️⃣ Checking data consistency...")
         all_exercises = []
-        for week in workout_plan.weekly_schedules:
-            for day in week.daily_workouts:
+        for week in training_plan.weekly_schedules:
+            for day in week.daily_trainings:
                 if not day.is_rest_day:
                     all_exercises.extend(day.exercises)
         
@@ -709,18 +710,18 @@ class TestFitnessAgentBackendEndToEnd:
         except Exception as e:
             pytest.fail(f"Valid profile validation failed: {e}")
         
-        # Test workout plan schema validation
-        print("2️⃣ Testing workout plan schema validation...")
+        # Test training plan schema validation
+        print("2️⃣ Testing training plan schema validation...")
         try:
-            # Create a minimal valid workout plan with proper day names
-            valid_workout_plan = {
+            # Create a minimal valid training plan with proper day names
+            valid_training_plan = {
                 "title": "Test Plan",
                 "summary": "Test summary",
                 "weekly_schedules": [
                     {
                         "week_number": 1,
                         "weekly_justification": "Weekly structure justification",
-                        "daily_workouts": [
+                        "daily_trainings": [
                             {
                                 "day_of_week": "Monday",
                                 "warming_up_instructions": "5 minutes dynamic warm-up",
@@ -793,14 +794,14 @@ class TestFitnessAgentBackendEndToEnd:
             }
             
             # Should validate successfully
-            workout_plan = WorkoutPlanSchema(**valid_workout_plan)
-            assert isinstance(workout_plan, WorkoutPlanSchema)
-            assert workout_plan.title == "Test Plan"
+            training_plan = TrainingPlan(**valid_training_plan)
+            assert isinstance(training_plan, TrainingPlan)
+            assert training_plan.title == "Test Plan"
             
-            print("   ✅ Valid workout plan schema validation passed")
+            print("   ✅ Valid training plan schema validation passed")
             
         except Exception as e:
-            pytest.fail(f"Valid workout plan validation failed: {e}")
+            pytest.fail(f"Valid training plan validation failed: {e}")
         
         print("✅ API contract compliance test passed!")
     
@@ -819,7 +820,7 @@ class TestFitnessAgentBackendEndToEnd:
         print("=" * 60)
         
         # Initialize components
-        fitness_coach = FitnessCoach()
+        training_coach = TrainingCoach()
         user_profile = sample_user_profiles["beginner_strength"]
         
         # Test 1: Exercise selector fallback
@@ -828,7 +829,7 @@ class TestFitnessAgentBackendEndToEnd:
             # This should work even if database is slow
             user_profile_dict = user_profile.model_dump() if hasattr(user_profile, 'model_dump') else user_profile.__dict__
             # Use the actual get_exercise_candidates method
-            candidates = fitness_coach.exercise_selector.get_exercise_candidates(
+            candidates = training_coach.exercise_selector.get_exercise_candidates(
                 max_exercises=20,
                 difficulty="Beginner"
             )
@@ -843,7 +844,7 @@ class TestFitnessAgentBackendEndToEnd:
         try:
             # Should handle questions generation gracefully
             user_profile_dict = user_profile.model_dump() if hasattr(user_profile, 'model_dump') else user_profile.__dict__
-            docs = fitness_coach.generate_initial_questions(user_profile_dict)
+            docs = training_coach.generate_initial_questions(user_profile_dict)
             assert hasattr(docs, 'questions')
             assert isinstance(docs.questions, list)
             print(f"   ✅ Questions generation resilient: {len(docs.questions)} questions")
@@ -856,7 +857,7 @@ class TestFitnessAgentBackendEndToEnd:
             # Should handle various profile configurations
             user_profile_dict = user_profile.model_dump() if hasattr(user_profile, 'model_dump') else user_profile.__dict__
             # Use the actual get_exercise_candidates method
-            candidates = fitness_coach.exercise_selector.get_exercise_candidates(
+            candidates = training_coach.exercise_selector.get_exercise_candidates(
                 max_exercises=20,
                 difficulty="Beginner"
             )
@@ -868,11 +869,11 @@ class TestFitnessAgentBackendEndToEnd:
         
         print("✅ System resilience and recovery test passed!")
     
-    def _create_large_workout_plan(self):
-        """Helper method to create a large workout plan for performance testing."""
+    def _create_large_training_plan(self):
+        """Helper method to create a large training plan for performance testing."""
         large_plan = {
-            "title": "Large Test Workout Plan",
-            "summary": "A comprehensive test workout plan with many exercises",
+            "title": "Large Test Training Plan",
+            "summary": "A comprehensive test training plan with many exercises",
             "weekly_schedules": []
         }
         
@@ -880,7 +881,7 @@ class TestFitnessAgentBackendEndToEnd:
         for week_num in range(1, 5):
             week = {
                 "week_number": week_num,
-                "daily_workouts": []
+                "daily_trainings": []
             }
             
             for day_num in range(7):
@@ -908,7 +909,7 @@ class TestFitnessAgentBackendEndToEnd:
                         "exercises": exercises
                     }
                 
-                week["daily_workouts"].append(day)
+                week["daily_trainings"].append(day)
             
             large_plan["weekly_schedules"].append(week)
         

@@ -1,22 +1,22 @@
 /**
- * Workout Navigator - Handles workout-specific flows
+ * Training Navigator - Handles training-specific flows
  */
 
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
-import { WorkoutScreen } from '../screens/WorkoutScreen';
+import { TrainingScreen } from '../screens/TrainingScreen';
 
-export type WorkoutStackParamList = {
-  WorkoutList: undefined;
-  WorkoutDetail: { workoutId: string };
-  ActiveWorkout: { workoutId: string };
-  WorkoutHistory: undefined;
+export type TrainingStackParamList = {
+  TrainingList: undefined;
+  TrainingDetail: { trainingId: string };
+  ActiveTraining: { trainingId: string };
+  TrainingHistory: undefined;
   ExerciseDetail: { exerciseId: string };
 };
 
-const Stack = createStackNavigator<WorkoutStackParamList>();
+const Stack = createStackNavigator<TrainingStackParamList>();
 
-export const WorkoutNavigator: React.FC = () => {
+export const TrainingNavigator: React.FC = () => {
   return (
     <Stack.Navigator
       screenOptions={{
@@ -38,8 +38,8 @@ export const WorkoutNavigator: React.FC = () => {
         },
       }}
     >
-      <Stack.Screen name="WorkoutList" component={WorkoutScreen} />
-      {/* Add more workout screens as they are implemented */}
+      <Stack.Screen name="TrainingList" component={TrainingScreen} />
+      {/* Add more training screens as they are implemented */}
     </Stack.Navigator>
   );
 };

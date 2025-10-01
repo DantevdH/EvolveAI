@@ -2,7 +2,7 @@
 Exercise Selection Service for EvolveAI
 
 This service handles smart exercise filtering and selection from the database
-to provide relevant exercise candidates for workout generation while minimizing
+to provide relevant exercise candidates for training generation while minimizing
 token usage and ensuring exercise authenticity.
 """
 
@@ -10,16 +10,17 @@ import os
 from typing import List, Dict, Any, Optional, Tuple
 from dotenv import load_dotenv
 from supabase import create_client, Client
-import logging
+from logging_config import get_logger
 
 # Load environment variables
 load_dotenv()
 
-logger = logging.getLogger(__name__)
+# Initialize logger
+logger = get_logger(__name__)
 
 
 class ExerciseSelector:
-    """Smart exercise selection service for workout generation."""
+    """Smart exercise selection service for training generation."""
 
     def __init__(self):
         """Initialize the exercise selector."""
@@ -77,7 +78,7 @@ class ExerciseSelector:
         Returns:
             List of exercise candidates with popularity_score <= 2, grouped by main_muscles
         """
-        print(f"🔍 Finding exercises for difficulty: {difficulty} with popularity_score <= 2")
+        logger.info(f"Finding exercises for difficulty: {difficulty} with popularity_score <= 2")
 
         try:
             # Get all exercises with popularity_score <= 2
@@ -85,22 +86,22 @@ class ExerciseSelector:
                 difficulty, max_popularity=2
             )
             
-            print(f"✅ Found {len(all_exercises)} exercises with popularity_score <= 2")
+            logger.info(f"Found {len(all_exercises)} exercises with popularity_score <= 2")
             
             if not all_exercises:
-                print("⚠️  No exercises found matching the criteria")
+                logger.warning("No exercises found matching the criteria")
                 return []
             
             # Group exercises by main_muscles (using first item in the list)
             grouped_exercises = self._group_exercises_by_main_muscles(all_exercises)
             
-            print(f"📊 Grouped exercises into {len(grouped_exercises)} muscle groups")
+            logger.info(f"Grouped exercises into {len(grouped_exercises)} muscle groups")
             
             return grouped_exercises
 
         except Exception as e:
-            print(f"❌ Error finding exercises: {e}")
-            print("💡 Check your database connection and exercise data")
+            logger.error(f"Error finding exercises: {e}")
+            logger.error("Check your database connection and exercise data")
             return []
 
     def get_formatted_exercises_for_ai(
@@ -131,7 +132,7 @@ class ExerciseSelector:
             return formatted_exercises
 
         except Exception as e:
-            print(f"❌ Error formatting exercises for AI: {e}")
+            logger.error(f"Error formatting exercises for AI: {e}")
             return "No exercises available"
     
     def get_exercise_by_id(self, exercise_id: str) -> Optional[Dict[str, Any]]:
@@ -216,7 +217,7 @@ class ExerciseSelector:
             List of exercises with popularity_score <= max_popularity
         """
         try:
-            print(f"      🎯 Searching for exercises with popularity_score <= {max_popularity}")
+            logger.debug(f"Searching for exercises with popularity_score <= {max_popularity}")
             
             # Build query for popularity and difficulty
             query = self.supabase.table("exercises").select("*")
@@ -240,7 +241,7 @@ class ExerciseSelector:
             
             result = query.execute()
             
-            print(f"      ✅ Found {len(result.data) if result.data else 0} exercises with popularity_score <= {max_popularity}")
+            logger.debug(f"Found {len(result.data) if result.data else 0} exercises with popularity_score <= {max_popularity}")
             
             if not result.data:
                 return []
@@ -250,7 +251,7 @@ class ExerciseSelector:
             return cleaned_exercises
             
         except Exception as e:
-            print(f"❌ Error getting exercises by popularity: {e}")
+            logger.error(f"Error getting exercises by popularity: {e}")
             return []
 
     def _group_exercises_by_main_muscles(self, exercises: List[Dict]) -> List[Dict]:
@@ -282,11 +283,11 @@ class ExerciseSelector:
                 exercise_copy['main_muscle_group'] = primary_muscle
                 grouped_exercises.append(exercise_copy)
             
-            print(f"      📊 Grouped {len(exercises)} exercises by main_muscle_group")
+            logger.debug(f"Grouped {len(exercises)} exercises by main_muscle_group")
             return grouped_exercises
             
         except Exception as e:
-            print(f"❌ Error grouping exercises by main_muscles: {e}")
+            logger.error(f"Error grouping exercises by main_muscles: {e}")
             return exercises
 
     def _format_exercises_for_ai(self, exercises: List[Dict]) -> str:

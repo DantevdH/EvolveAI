@@ -19,7 +19,7 @@ export default function InitialQuestionsStep() {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleComplete = async (workoutPlan: any) => {
+  const handleComplete = async (trainingPlan: any) => {
     console.log('✅ Initial questions completed successfully');
     
     // Refresh user profile to get updated data
@@ -34,7 +34,7 @@ export default function InitialQuestionsStep() {
     
     Alert.alert(
       'Initial Questions Error',
-      `Failed to load initial questions: ${error}\n\nThis step helps us understand your fitness goals and preferences.`,
+      `Failed to load initial questions: ${error}\n\nThis step helps us understand your training goals and preferences.`,
       [
         {
           text: 'Try Again',

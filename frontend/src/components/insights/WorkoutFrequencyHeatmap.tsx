@@ -2,10 +2,10 @@ import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { colors } from '@/src/constants/colors';
 
-interface WorkoutFrequencyHeatmapProps {
+interface TrainingFrequencyHeatmapProps {
   data: Array<{
     date: string;
-    hasWorkout: boolean;
+    hasTraining: boolean;
     intensity: number; // 0-1
   }>;
 }
@@ -14,13 +14,13 @@ const { width: screenWidth } = Dimensions.get('window');
 const cellSize = 12;
 const cellSpacing = 2;
 
-export const WorkoutFrequencyHeatmap: React.FC<WorkoutFrequencyHeatmapProps> = ({ data }) => {
+export const TrainingFrequencyHeatmap: React.FC<TrainingFrequencyHeatmapProps> = ({ data }) => {
   if (!data || data.length === 0) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Workout Frequency</Text>
+        <Text style={styles.title}>Training Frequency</Text>
         <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>No workout data available</Text>
+          <Text style={styles.emptyText}>No training data available</Text>
         </View>
       </View>
     );
@@ -43,11 +43,11 @@ export const WorkoutFrequencyHeatmap: React.FC<WorkoutFrequencyHeatmapProps> = (
         date.setDate(weekStart.getDate() + day);
         const dateString = date.toISOString().split('T')[0];
         
-        const workoutData = data.find(d => d.date === dateString);
+        const trainingData = data.find(d => d.date === dateString);
         weekData.push({
           date: dateString,
-          hasWorkout: workoutData?.hasWorkout || false,
-          intensity: workoutData?.intensity || 0
+          hasTraining: trainingData?.hasTraining || false,
+          intensity: trainingData?.intensity || 0
         });
       }
       
@@ -63,8 +63,8 @@ export const WorkoutFrequencyHeatmap: React.FC<WorkoutFrequencyHeatmapProps> = (
   const heatmapData = generateHeatmapData();
 
   // Get intensity color
-  const getIntensityColor = (intensity: number, hasWorkout: boolean) => {
-    if (!hasWorkout) return colors.background;
+  const getIntensityColor = (intensity: number, hasTraining: boolean) => {
+    if (!hasTraining) return colors.background;
     
     if (intensity >= 0.8) return colors.error; // High intensity
     if (intensity >= 0.6) return colors.warning; // Medium-high intensity
@@ -74,9 +74,9 @@ export const WorkoutFrequencyHeatmap: React.FC<WorkoutFrequencyHeatmapProps> = (
   };
 
   // Calculate statistics
-  const totalWorkouts = data.filter(d => d.hasWorkout).length;
+  const totalTrainings = data.filter(d => d.hasTraining).length;
   const totalDays = heatmapData.length * 7;
-  const consistency = Math.round((totalWorkouts / totalDays) * 100);
+  const consistency = Math.round((totalTrainings / totalDays) * 100);
   
   // Find current streak
   const today = new Date().toISOString().split('T')[0];
@@ -85,7 +85,7 @@ export const WorkoutFrequencyHeatmap: React.FC<WorkoutFrequencyHeatmapProps> = (
   let tempStreak = 0;
   
   for (let i = data.length - 1; i >= 0; i--) {
-    if (data[i].hasWorkout) {
+    if (data[i].hasTraining) {
       tempStreak++;
       maxStreak = Math.max(maxStreak, tempStreak);
       if (data[i].date === today || currentStreak > 0) {
@@ -106,7 +106,7 @@ export const WorkoutFrequencyHeatmap: React.FC<WorkoutFrequencyHeatmapProps> = (
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Workout Frequency</Text>
+        <Text style={styles.title}>Training Frequency</Text>
         <Text style={styles.period}>Last 12 weeks</Text>
       </View>
       
@@ -130,7 +130,7 @@ export const WorkoutFrequencyHeatmap: React.FC<WorkoutFrequencyHeatmapProps> = (
                   style={[
                     styles.cell,
                     {
-                      backgroundColor: getIntensityColor(day.intensity, day.hasWorkout),
+                      backgroundColor: getIntensityColor(day.intensity, day.hasTraining),
                     }
                   ]}
                 />
@@ -177,8 +177,8 @@ export const WorkoutFrequencyHeatmap: React.FC<WorkoutFrequencyHeatmapProps> = (
           <Text style={styles.statLabel}>Best Streak</Text>
         </View>
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{totalWorkouts}</Text>
-          <Text style={styles.statLabel}>Total Workouts</Text>
+          <Text style={styles.statValue}>{totalTrainings}</Text>
+          <Text style={styles.statLabel}>Total Trainings</Text>
         </View>
       </View>
     </View>

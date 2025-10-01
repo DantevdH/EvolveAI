@@ -62,7 +62,7 @@ describe('Existing User Scenarios', () => {
 
   describe('User with Profile but No Plan (→ Generate Plan)', () => {
     it('should redirect to generate plan screen after login when profile exists but no plan', async () => {
-      // Step 1: Login with user who has profile but no workout plan
+      // Step 1: Login with user who has profile but no training plan
       await expect(element(by.id('email-input'))).toBeVisible();
       await element(by.id('email-input')).typeText('profileuser@example.com');
       await element(by.id('password-input')).typeText('Password123!');
@@ -77,7 +77,7 @@ describe('Existing User Scenarios', () => {
         .withTimeout(10000);
 
       // Step 3: Verify generate plan screen elements
-      await expect(element(by.text('AI is creating your personalized workout plan'))).toBeVisible();
+      await expect(element(by.text('AI is creating your personalized training plan'))).toBeVisible();
       await expect(element(by.id('animated-spinner'))).toBeVisible();
       
       // Step 4: Wait for plan generation to complete
@@ -114,7 +114,7 @@ describe('Existing User Scenarios', () => {
 
   describe('User with Complete Profile and Plan (→ Main App Home)', () => {
     it('should redirect to main app home screen after login when user has complete profile and plan', async () => {
-      // Step 1: Login with user who has complete profile and workout plan
+      // Step 1: Login with user who has complete profile and training plan
       await expect(element(by.id('email-input'))).toBeVisible();
       await element(by.id('email-input')).typeText('completeuser@example.com');
       await element(by.id('password-input')).typeText('Password123!');
@@ -130,17 +130,17 @@ describe('Existing User Scenarios', () => {
 
       // Step 3: Verify home screen elements
       await expect(element(by.text('Welcome back'))).toBeVisible();
-      await expect(element(by.text('Your Workout Plan'))).toBeVisible();
-      await expect(element(by.text('Today\'s Workout'))).toBeVisible();
+      await expect(element(by.text('Your Training Plan'))).toBeVisible();
+      await expect(element(by.text('Today\'s Training'))).toBeVisible();
       
       // Step 4: Verify main navigation is available
       await expect(element(by.text('Home'))).toBeVisible();
-      await expect(element(by.text('Workouts'))).toBeVisible();
+      await expect(element(by.text('Trainings'))).toBeVisible();
       await expect(element(by.text('Profile'))).toBeVisible();
       await expect(element(by.text('Settings'))).toBeVisible();
     });
 
-    it('should display user\'s workout plan and progress', async () => {
+    it('should display user\'s training plan and progress', async () => {
       // Login and navigate to home
       await element(by.id('email-input')).typeText('completeuser@example.com');
       await element(by.id('password-input')).typeText('Password123!');
@@ -150,7 +150,7 @@ describe('Existing User Scenarios', () => {
         .toBeVisible()
         .withTimeout(10000);
 
-      // Verify workout plan details are displayed
+      // Verify training plan details are displayed
       await expect(element(by.text('Week 1'))).toBeVisible();
       await expect(element(by.text('Day 1'))).toBeVisible();
       await expect(element(by.text('Progress'))).toBeVisible();
@@ -170,10 +170,10 @@ describe('Existing User Scenarios', () => {
         .toBeVisible()
         .withTimeout(10000);
 
-      // Test navigation to Workouts section
-      await element(by.text('Workouts')).tap();
-      await expect(element(by.text('Workout Library'))).toBeVisible();
-      await expect(element(by.text('My Workouts'))).toBeVisible();
+      // Test navigation to Trainings section
+      await element(by.text('Trainings')).tap();
+      await expect(element(by.text('Training Library'))).toBeVisible();
+      await expect(element(by.text('My Trainings'))).toBeVisible();
 
       // Test navigation to Profile section
       await element(by.text('Profile')).tap();
@@ -254,7 +254,7 @@ describe('Existing User Scenarios', () => {
     await element(by.id('gender-male')).tap();
     await element(by.id('next-button')).tap();
 
-    // Fitness Goals Screen
+    // training Goals Screen
     await element(by.id('goal-description-input')).typeText('I want to lose weight and build muscle');
     await element(by.id('next-button')).tap();
 

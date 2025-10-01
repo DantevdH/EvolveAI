@@ -1,8 +1,8 @@
 /**
- * Mock workout data for testing
+ * Mock training data for testing
  */
 
-export const mockWorkoutPlanData = {
+export const mockTrainingPlanData = {
   id: 1,
   user_profile_id: 1,
   title: "Beginner Strength Program",
@@ -11,7 +11,7 @@ export const mockWorkoutPlanData = {
     weekly_schedules: [
       {
         week_number: 1,
-        daily_workouts: [
+        daily_trainings: [
           {
             id: 1,
             day_of_week: "Monday",
@@ -99,7 +99,7 @@ export const mockWorkoutPlanData = {
   }
 };
 
-export const mockEmptyWorkoutPlan = {
+export const mockEmptyTrainingPlan = {
   id: 1,
   user_profile_id: 1,
   title: "Empty Plan",
@@ -109,7 +109,7 @@ export const mockEmptyWorkoutPlan = {
   }
 };
 
-export const mockPartialWorkoutPlan = {
+export const mockPartialTrainingPlan = {
   id: 1,
   user_profile_id: 1,
   title: "Partial Plan",
@@ -118,7 +118,7 @@ export const mockPartialWorkoutPlan = {
     weekly_schedules: [
       {
         week_number: 1,
-        daily_workouts: [
+        daily_trainings: [
           {
             id: 1,
             day_of_week: "Monday",
@@ -170,14 +170,14 @@ export const mockAuthState = {
     email: "test@example.com"
   },
   userProfile: mockUserProfile,
-  workoutPlan: {
+  trainingPlan: {
     id: 1,
     userProfileId: 1,
     title: "Beginner Strength Program",
     summary: "A comprehensive 4-week strength training program",
     createdAt: new Date("2024-01-01"),
     updatedAt: new Date("2024-01-01"),
-    planData: mockWorkoutPlanData.plan_data
+    planData: mockTrainingPlanData.plan_data
   },
   isLoading: false,
   error: null,

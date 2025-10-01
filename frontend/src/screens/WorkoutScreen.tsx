@@ -1,13 +1,13 @@
 import React from 'react';
 import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
-export const WorkoutScreen: React.FC = () => {
+export const TrainingScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>Workouts</Text>
+        <Text style={styles.title}>Trainings</Text>
         <Text style={styles.subtitle}>
-          Your personalized workout plans will appear here
+          Your personalized training plans will appear here
         </Text>
       </View>
     </SafeAreaView>

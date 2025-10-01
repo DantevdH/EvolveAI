@@ -32,25 +32,25 @@ const SettingsScreen: React.FC = () => {
     enableNotifications,
     disableNotifications,
     setReminderTime,
-    scheduleWorkoutReminder,
-    cancelWorkoutReminder,
+    scheduleTrainingReminder,
+    cancelTrainingReminder,
   } = useNotifications();
 
   // Get units from userProfile
   const units = state.userProfile?.weightUnit === 'lbs' ? 'imperial' : 'metric';
 
-  // Schedule workout reminder when notifications are enabled
+  // Schedule training reminder when notifications are enabled
   useEffect(() => {
-    if (notificationsEnabled && state.workoutPlan) {
-      scheduleWorkoutReminder(state.workoutPlan);
+    if (notificationsEnabled && state.trainingPlan) {
+      scheduleTrainingReminder(state.trainingPlan);
     }
-  }, [notificationsEnabled, state.workoutPlan]);
+  }, [notificationsEnabled, state.trainingPlan]);
 
   // Clear error when notifications are disabled
   useEffect(() => {
     if (!notificationsEnabled) {
       // Clear any existing error when notifications are disabled
-      // This prevents showing "No workout scheduled for today" when user disables notifications
+      // This prevents showing "No training scheduled for today" when user disables notifications
     }
   }, [notificationsEnabled]);
 
@@ -163,7 +163,7 @@ const SettingsScreen: React.FC = () => {
   const handleAbout = () => {
     Alert.alert(
       'About EvolveAI',
-      'Version 1.0.0\n\nEvolveAI - Your personal fitness companion powered by AI.',
+      'Version 1.0.0\n\nEvolveAI - Your personal training companion powered by AI.',
       [{ text: 'OK' }]
     );
   };
@@ -171,8 +171,8 @@ const SettingsScreen: React.FC = () => {
   const handleNotificationToggle = async (enabled: boolean) => {
     if (enabled) {
       const granted = await enableNotifications();
-      if (granted && state.workoutPlan) {
-        await scheduleWorkoutReminder(state.workoutPlan);
+      if (granted && state.trainingPlan) {
+        await scheduleTrainingReminder(state.trainingPlan);
       }
     } else {
       await disableNotifications();
@@ -181,8 +181,8 @@ const SettingsScreen: React.FC = () => {
 
   const handleReminderTimeChange = (hour: number) => {
     setReminderTime(hour);
-    if (notificationsEnabled && state.workoutPlan) {
-      scheduleWorkoutReminder(state.workoutPlan);
+    if (notificationsEnabled && state.trainingPlan) {
+      scheduleTrainingReminder(state.trainingPlan);
     }
   };
 
@@ -201,7 +201,7 @@ const SettingsScreen: React.FC = () => {
 
     Alert.alert(
       'Select Reminder Time',
-      'Choose when you want to be reminded about your workout',
+      'Choose when you want to be reminded about your training',
       timeOptions
     );
   };
@@ -276,7 +276,7 @@ const SettingsScreen: React.FC = () => {
           <View style={styles.settingItem}>
             <View style={styles.settingLeft}>
               <Ionicons name="notifications-outline" size={20} color={colors.primary} />
-              <Text style={styles.settingText}>Workout Reminders</Text>
+              <Text style={styles.settingText}>Training Reminders</Text>
             </View>
             <Switch
               value={notificationsEnabled}

@@ -9,9 +9,9 @@ describe('ProgressSummary Component - Simple Tests', () => {
       // Test that component can be called with default props
       expect(() => {
         // This tests the component structure without rendering
-        const props = { streak: 0, weeklyWorkouts: 0, goalProgress: 0 };
+        const props = { streak: 0, weeklyTrainings: 0, goalProgress: 0 };
         expect(props.streak).toBe(0);
-        expect(props.weeklyWorkouts).toBe(0);
+        expect(props.weeklyTrainings).toBe(0);
         expect(props.goalProgress).toBe(0);
       }).not.toThrow();
     });
@@ -19,15 +19,15 @@ describe('ProgressSummary Component - Simple Tests', () => {
     it('should validate component props interface', () => {
       const props = { 
         streak: 7, 
-        weeklyWorkouts: 4, 
+        weeklyTrainings: 4, 
         goalProgress: 75 
       };
       
       expect(typeof props.streak).toBe('number');
-      expect(typeof props.weeklyWorkouts).toBe('number');
+      expect(typeof props.weeklyTrainings).toBe('number');
       expect(typeof props.goalProgress).toBe('number');
       expect(props.streak).toBeGreaterThanOrEqual(0);
-      expect(props.weeklyWorkouts).toBeGreaterThanOrEqual(0);
+      expect(props.weeklyTrainings).toBeGreaterThanOrEqual(0);
       expect(props.goalProgress).toBeGreaterThanOrEqual(0);
       expect(props.goalProgress).toBeLessThanOrEqual(100);
     });
@@ -35,24 +35,24 @@ describe('ProgressSummary Component - Simple Tests', () => {
 
   describe('Data Processing Logic', () => {
     it('should handle streak data correctly', () => {
-      const testData = { streak: 7, weeklyWorkouts: 4, goalProgress: 75 };
+      const testData = { streak: 7, weeklyTrainings: 4, goalProgress: 75 };
       
       expect(testData.streak).toBe(7);
       expect(typeof testData.streak).toBe('number');
       expect(testData.streak).toBeGreaterThanOrEqual(0);
     });
 
-    it('should handle weekly workouts data correctly', () => {
-      const testData = { streak: 7, weeklyWorkouts: 4, goalProgress: 75 };
+    it('should handle weekly trainings data correctly', () => {
+      const testData = { streak: 7, weeklyTrainings: 4, goalProgress: 75 };
       
-      expect(testData.weeklyWorkouts).toBe(4);
-      expect(typeof testData.weeklyWorkouts).toBe('number');
-      expect(testData.weeklyWorkouts).toBeGreaterThanOrEqual(0);
-      expect(testData.weeklyWorkouts).toBeLessThanOrEqual(7);
+      expect(testData.weeklyTrainings).toBe(4);
+      expect(typeof testData.weeklyTrainings).toBe('number');
+      expect(testData.weeklyTrainings).toBeGreaterThanOrEqual(0);
+      expect(testData.weeklyTrainings).toBeLessThanOrEqual(7);
     });
 
     it('should handle goal progress data correctly', () => {
-      const testData = { streak: 7, weeklyWorkouts: 4, goalProgress: 75 };
+      const testData = { streak: 7, weeklyTrainings: 4, goalProgress: 75 };
       
       expect(testData.goalProgress).toBe(75);
       expect(typeof testData.goalProgress).toBe('number');
@@ -61,18 +61,18 @@ describe('ProgressSummary Component - Simple Tests', () => {
     });
 
     it('should handle large numbers correctly', () => {
-      const testData = { streak: 100, weeklyWorkouts: 7, goalProgress: 100 };
+      const testData = { streak: 100, weeklyTrainings: 7, goalProgress: 100 };
       
       expect(testData.streak).toBe(100);
-      expect(testData.weeklyWorkouts).toBe(7);
+      expect(testData.weeklyTrainings).toBe(7);
       expect(testData.goalProgress).toBe(100);
     });
 
     it('should handle zero values correctly', () => {
-      const testData = { streak: 0, weeklyWorkouts: 0, goalProgress: 0 };
+      const testData = { streak: 0, weeklyTrainings: 0, goalProgress: 0 };
       
       expect(testData.streak).toBe(0);
-      expect(testData.weeklyWorkouts).toBe(0);
+      expect(testData.weeklyTrainings).toBe(0);
       expect(testData.goalProgress).toBe(0);
     });
   });
@@ -116,7 +116,7 @@ describe('ProgressSummary Component - Simple Tests', () => {
         {
           title: 'This Week',
           value: '4',
-          subtitle: 'workouts',
+          subtitle: 'trainings',
           color: 'tertiary',
           icon: 'calendar'
         },
@@ -156,49 +156,49 @@ describe('ProgressSummary Component - Simple Tests', () => {
     it('should handle undefined props gracefully', () => {
       const defaultProps = {
         streak: undefined,
-        weeklyWorkouts: undefined,
+        weeklyTrainings: undefined,
         goalProgress: undefined
       };
 
       // Test default value assignment
       const processedProps = {
         streak: defaultProps.streak || 0,
-        weeklyWorkouts: defaultProps.weeklyWorkouts || 0,
+        weeklyTrainings: defaultProps.weeklyTrainings || 0,
         goalProgress: defaultProps.goalProgress || 0
       };
 
       expect(processedProps.streak).toBe(0);
-      expect(processedProps.weeklyWorkouts).toBe(0);
+      expect(processedProps.weeklyTrainings).toBe(0);
       expect(processedProps.goalProgress).toBe(0);
     });
 
     it('should handle negative values gracefully', () => {
-      const testData = { streak: -1, weeklyWorkouts: -2, goalProgress: -5 };
+      const testData = { streak: -1, weeklyTrainings: -2, goalProgress: -5 };
       
       // Test that negative values are handled (should be clamped to 0)
       const clampedData = {
         streak: Math.max(0, testData.streak),
-        weeklyWorkouts: Math.max(0, testData.weeklyWorkouts),
+        weeklyTrainings: Math.max(0, testData.weeklyTrainings),
         goalProgress: Math.max(0, testData.goalProgress)
       };
 
       expect(clampedData.streak).toBe(0);
-      expect(clampedData.weeklyWorkouts).toBe(0);
+      expect(clampedData.weeklyTrainings).toBe(0);
       expect(clampedData.goalProgress).toBe(0);
     });
 
     it('should handle very large values gracefully', () => {
-      const testData = { streak: 999, weeklyWorkouts: 10, goalProgress: 150 };
+      const testData = { streak: 999, weeklyTrainings: 10, goalProgress: 150 };
       
       // Test that large values are handled appropriately
       const processedData = {
         streak: Math.min(999, testData.streak),
-        weeklyWorkouts: Math.min(7, testData.weeklyWorkouts),
+        weeklyTrainings: Math.min(7, testData.weeklyTrainings),
         goalProgress: Math.min(100, testData.goalProgress)
       };
 
       expect(processedData.streak).toBe(999);
-      expect(processedData.weeklyWorkouts).toBe(7);
+      expect(processedData.weeklyTrainings).toBe(7);
       expect(processedData.goalProgress).toBe(100);
     });
   });

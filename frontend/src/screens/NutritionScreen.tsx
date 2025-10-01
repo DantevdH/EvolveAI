@@ -16,7 +16,7 @@ import { colors } from '../constants/colors';
 import {
   calculateMacros,
   estimateBaseActivityFromProfile,
-  estimateWorkoutIntensity,
+  estimateTrainingIntensity,
   estimateWeightGoalFromProfile,
   convertWeightToKg,
   convertHeightToCm,
@@ -82,7 +82,7 @@ export const NutritionScreen: React.FC = () => {
         userProfile.daysPerWeek,
         userProfile.minutesPerSession
       );
-      const workoutIntensity = estimateWorkoutIntensity(
+      const trainingIntensity = estimateTrainingIntensity(
         userProfile.daysPerWeek,
         userProfile.minutesPerSession
       );
@@ -100,8 +100,8 @@ export const NutritionScreen: React.FC = () => {
         height: heightCm,
         age: userProfile.age,
         baseActivity,
-        workoutsPerWeek: userProfile.daysPerWeek,
-        workoutIntensity,
+        trainingsPerWeek: userProfile.daysPerWeek,
+        trainingIntensity,
         targetWeight: weightGoal.targetWeight,
         timeframeWeeks: weightGoal.timeframeWeeks,
       });

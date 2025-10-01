@@ -78,9 +78,9 @@ export const useUser = () => {
   }, [updateUserProfile]);
 
   /**
-   * Update user's workout preferences
+   * Update user's training preferences
    */
-  const updateWorkoutPreferences = useCallback(async (
+  const updateTrainingPreferences = useCallback(async (
     daysPerWeek: number,
     minutesPerSession: number,
     equipment: string
@@ -150,9 +150,9 @@ export const useUser = () => {
   }, [state.userProfile]);
 
   /**
-   * Get user's workout frequency
+   * Get user's training frequency
    */
-  const getWorkoutFrequency = useCallback((): { daysPerWeek: number; minutesPerSession: number } => {
+  const getTrainingFrequency = useCallback((): { daysPerWeek: number; minutesPerSession: number } => {
     return {
       daysPerWeek: state.userProfile?.daysPerWeek || 3,
       minutesPerSession: state.userProfile?.minutesPerSession || 60,
@@ -266,7 +266,7 @@ export const useUser = () => {
     updateProfileField,
     updatePrimaryGoal,
     updateExperienceLevel,
-    updateWorkoutPreferences,
+    updateTrainingPreferences,
     updatePhysicalInfo,
     updateLimitations,
     updateFinalChatNotes,
@@ -274,7 +274,7 @@ export const useUser = () => {
     // Getter methods
     getPrimaryGoal,
     getExperienceLevel,
-    getWorkoutFrequency,
+    getTrainingFrequency,
     getEquipment,
     getPhysicalInfo,
     getLimitations,

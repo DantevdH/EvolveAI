@@ -86,9 +86,9 @@ const FullProfileScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Fitness Goals */}
+          {/* training Goals */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Fitness Goals</Text>
+            <Text style={styles.sectionTitle}>training Goals</Text>
             
             <View style={styles.profileItem}>
               <Text style={styles.profileLabel}>Primary Goal</Text>
@@ -106,9 +106,9 @@ const FullProfileScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Workout Preferences */}
+          {/* Training Preferences */}
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Workout Preferences</Text>
+            <Text style={styles.sectionTitle}>Training Preferences</Text>
             
             <View style={styles.profileItem}>
               <Text style={styles.profileLabel}>Days Per Week</Text>

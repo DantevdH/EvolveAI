@@ -7,7 +7,7 @@ import { ExerciseAnalyticsEngine } from '@/src/services/exerciseAnalyticsEngine'
 export interface WeeklyVolumeData {
   week: string;
   volume: number;
-  workouts: number;
+  trainings: number;
   exercises: number;
 }
 
@@ -25,8 +25,8 @@ export interface TopPerformingExercise {
   currentVolume: number;
   improvementRate: number;
   trend: 'increasing' | 'decreasing' | 'stable';
-  lastWorkout: string;
-  totalWorkouts: number;
+  lastTraining: string;
+  totalTrainings: number;
   insights: any; // Full insights from ExerciseAnalyticsEngine
 }
 
@@ -87,9 +87,9 @@ export interface MilestonePrediction {
   weeksToGoal: number;
 }
 
-export interface WorkoutFrequencyData {
+export interface TrainingFrequencyData {
   date: string;
-  hasWorkout: boolean;
+  hasTraining: boolean;
   intensity: number; // 0-1 based on volume
 }
 
@@ -112,26 +112,26 @@ export class InsightsAnalyticsService {
     }
 
     try {
-      // Get workout exercises for the last 52 weeks (1 year)
+      // Get training exercises for the last 52 weeks (1 year)
       const oneYearAgo = new Date();
       oneYearAgo.setDate(oneYearAgo.getDate() - 365); // 1 year
 
-      const { data: workoutExercises, error: exercisesError } = await supabase
-        .from('workout_exercises')
+      const { data: trainingExercises, error: exercisesError } = await supabase
+        .from('training_exercises')
         .select(`
           *,
           exercises!inner(name),
-          daily_workouts!inner(
+          daily_trainings!inner(
             *,
             weekly_schedules!inner(
-              workout_plans!inner(
+              training_plans!inner(
                 user_profile_id
               )
             )
           )
         `)
         .eq('completed', true)
-        .eq('daily_workouts.weekly_schedules.workout_plans.user_profile_id', userProfileId)
+        .eq('daily_trainings.weekly_schedules.training_plans.user_profile_id', userProfileId)
         .gte('updated_at', oneYearAgo.toISOString())
         .order('updated_at', { ascending: false });
 
@@ -139,15 +139,15 @@ export class InsightsAnalyticsService {
         return { success: false, error: exercisesError.message };
       }
 
-      if (!workoutExercises || workoutExercises.length === 0) {
+      if (!trainingExercises || trainingExercises.length === 0) {
         return { success: true, data: [] };
       }
 
       // Group by week
       const weeklyData: { [key: string]: WeeklyVolumeData } = {};
       
-      workoutExercises.forEach(workout => {
-        const date = new Date(workout.updated_at);
+      trainingExercises.forEach(training => {
+        const date = new Date(training.updated_at);
         const weekStart = new Date(date);
         weekStart.setDate(date.getDate() - date.getDay()); // Start of week (Sunday)
         const weekKey = weekStart.toISOString().split('T')[0];
@@ -156,21 +156,21 @@ export class InsightsAnalyticsService {
           weeklyData[weekKey] = {
             week: weekKey,
             volume: 0,
-            workouts: 0,
+            trainings: 0,
             exercises: 0
           };
         }
         
         // Calculate volume
-        const weights = Array.isArray(workout.weight) ? workout.weight : [];
-        const reps = Array.isArray(workout.reps) ? workout.reps : [];
+        const weights = Array.isArray(training.weight) ? training.weight : [];
+        const reps = Array.isArray(training.reps) ? training.reps : [];
         let volume = 0;
         for (let i = 0; i < Math.min(weights.length, reps.length); i++) {
           volume += (weights[i] || 0) * (reps[i] || 0);
         }
         
         weeklyData[weekKey].volume += volume;
-        weeklyData[weekKey].workouts += 1;
+        weeklyData[weekKey].trainings += 1;
         weeklyData[weekKey].exercises += 1;
       });
 
@@ -218,8 +218,8 @@ export class InsightsAnalyticsService {
         const week = weeklyData.data[i];
         const previousWeek = i > 0 ? weeklyData.data[i - 1] : null;
         
-        // Calculate consistency score (based on workout frequency)
-        const consistency = Math.min(100, (week.workouts / 7) * 100);
+        // Calculate consistency score (based on training frequency)
+        const consistency = Math.min(100, (week.trainings / 7) * 100);
         
         // Calculate improvement rate
         const improvement = previousWeek ? 
@@ -262,15 +262,15 @@ export class InsightsAnalyticsService {
     error?: string;
   }> {
     try {
-      // Get all exercises with recent workouts
+      // Get all exercises with recent trainings
       const { data: exercises, error } = await supabase
-        .from('workout_exercises')
+        .from('training_exercises')
         .select(`
           exercise_id,
           exercises!inner(name)
         `)
         .eq('completed', true)
-        .eq('daily_workouts.weekly_schedules.workout_plans.user_profile_id', userProfileId);
+        .eq('daily_trainings.weekly_schedules.training_plans.user_profile_id', userProfileId);
 
       if (error) {
         return { success: false, error: error.message };
@@ -285,7 +285,7 @@ export class InsightsAnalyticsService {
         uniqueExercises.map(async (exercise) => {
           try {
             const insights = await ExerciseAnalyticsEngine.generateInsights(
-              await this.getExerciseWorkoutHistory(exercise.id, userProfileId)
+              await this.getExerciseTrainingHistory(exercise.id, userProfileId)
             );
             
             return {
@@ -294,8 +294,8 @@ export class InsightsAnalyticsService {
               currentVolume: insights.volumeTrend.volatility,
               improvementRate: insights.strengthProgression.improvementRate,
               trend: insights.volumeTrend.trend,
-              lastWorkout: insights.strengthProgression.strengthGains[insights.strengthProgression.strengthGains.length - 1]?.date || '',
-              totalWorkouts: insights.strengthProgression.strengthGains.length,
+              lastTraining: insights.strengthProgression.strengthGains[insights.strengthProgression.strengthGains.length - 1]?.date || '',
+              totalTrainings: insights.strengthProgression.strengthGains.length,
               insights
             };
           } catch (error) {
@@ -331,13 +331,13 @@ export class InsightsAnalyticsService {
     try {
       // Get exercises with their primary muscles
       const { data: exercises, error } = await supabase
-        .from('workout_exercises')
+        .from('training_exercises')
         .select(`
           exercise_id,
           exercises!inner(name, primary_muscle)
         `)
         .eq('completed', true)
-        .eq('daily_workouts.weekly_schedules.workout_plans.user_profile_id', userProfileId);
+        .eq('daily_trainings.weekly_schedules.training_plans.user_profile_id', userProfileId);
 
       if (error) {
         return { success: false, error: error.message };
@@ -363,7 +363,7 @@ export class InsightsAnalyticsService {
       // Analyze each muscle group
       for (const [muscleGroup, exercises] of muscleGroups) {
         let totalVolume = 0;
-        let totalWorkouts = 0;
+        let totalTrainings = 0;
         let plateauCount = 0;
         let decliningCount = 0;
         let lowConsistencyCount = 0;
@@ -373,11 +373,11 @@ export class InsightsAnalyticsService {
         for (const exercise of exercises) {
           try {
             const insights = await ExerciseAnalyticsEngine.generateInsights(
-              await this.getExerciseWorkoutHistory(exercise.id, userProfileId)
+              await this.getExerciseTrainingHistory(exercise.id, userProfileId)
             );
 
             totalVolume += insights.volumeTrend.volatility;
-            totalWorkouts += insights.strengthProgression.strengthGains.length;
+            totalTrainings += insights.strengthProgression.strengthGains.length;
 
             // Check for issues
             if (insights.plateauDetection.isPlateaued) {
@@ -456,16 +456,16 @@ export class InsightsAnalyticsService {
         }
 
         // Check for low frequency (less than once per week average)
-        const weeksWithWorkouts = Math.max(1, Math.ceil(totalWorkouts / 4)); // Rough estimate
-        if (weeksWithWorkouts < 2) {
+        const weeksWithTrainings = Math.max(1, Math.ceil(totalTrainings / 4)); // Rough estimate
+        if (weeksWithTrainings < 2) {
           weakPoints.push({
             muscleGroup,
             affectedExercises: exercises.map(e => ({ id: e.id, name: e.name })),
             issue: 'low_frequency',
-            severity: weeksWithWorkouts < 1 ? 'high' : 'medium',
+            severity: weeksWithTrainings < 1 ? 'high' : 'medium',
             recommendation: 'Increase training frequency for this muscle group',
             metrics: {
-              current: weeksWithWorkouts,
+              current: weeksWithTrainings,
               previous: 0,
               change: 0
             }
@@ -656,32 +656,32 @@ export class InsightsAnalyticsService {
   }
 
   /**
-   * Get workout frequency data for heatmap
+   * Get training frequency data for heatmap
    */
-  static async getWorkoutFrequencyData(userProfileId: number): Promise<{
+  static async getTrainingFrequencyData(userProfileId: number): Promise<{
     success: boolean;
-    data?: WorkoutFrequencyData[];
+    data?: TrainingFrequencyData[];
     error?: string;
   }> {
     try {
       const twelveWeeksAgo = new Date();
       twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84);
 
-      const { data: workoutExercises, error } = await supabase
-        .from('workout_exercises')
+      const { data: trainingExercises, error } = await supabase
+        .from('training_exercises')
         .select(`
           *,
-          daily_workouts!inner(
+          daily_trainings!inner(
             *,
             weekly_schedules!inner(
-              workout_plans!inner(
+              training_plans!inner(
                 user_profile_id
               )
             )
           )
         `)
         .eq('completed', true)
-        .eq('daily_workouts.weekly_schedules.workout_plans.user_profile_id', userProfileId)
+        .eq('daily_trainings.weekly_schedules.training_plans.user_profile_id', userProfileId)
         .gte('updated_at', twelveWeeksAgo.toISOString());
 
       if (error) {
@@ -689,30 +689,30 @@ export class InsightsAnalyticsService {
       }
 
       // Group by date
-      const dailyData: { [key: string]: { volume: number; workouts: number } } = {};
+      const dailyData: { [key: string]: { volume: number; trainings: number } } = {};
       
-      workoutExercises?.forEach(workout => {
-        const date = new Date(workout.updated_at).toISOString().split('T')[0];
+      trainingExercises?.forEach(training => {
+        const date = new Date(training.updated_at).toISOString().split('T')[0];
         
         if (!dailyData[date]) {
-          dailyData[date] = { volume: 0, workouts: 0 };
+          dailyData[date] = { volume: 0, trainings: 0 };
         }
         
-        const weights = Array.isArray(workout.weight) ? workout.weight : [];
-        const reps = Array.isArray(workout.reps) ? workout.reps : [];
+        const weights = Array.isArray(training.weight) ? training.weight : [];
+        const reps = Array.isArray(training.reps) ? training.reps : [];
         let volume = 0;
         for (let i = 0; i < Math.min(weights.length, reps.length); i++) {
           volume += (weights[i] || 0) * (reps[i] || 0);
         }
         
         dailyData[date].volume += volume;
-        dailyData[date].workouts += 1;
+        dailyData[date].trainings += 1;
       });
 
       // Convert to array
       const result = Object.entries(dailyData).map(([date, data]) => ({
         date,
-        hasWorkout: true,
+        hasTraining: true,
         intensity: Math.min(1, data.volume / 5000) // Normalize intensity (0-1)
       }));
 
@@ -727,10 +727,10 @@ export class InsightsAnalyticsService {
   }
 
   /**
-   * Helper method to get exercise workout history
+   * Helper method to get exercise training history
    */
-  private static async getExerciseWorkoutHistory(exerciseId: number, userProfileId: number): Promise<any[]> {
-    // This would be similar to the existing fetchWorkoutHistory method
+  private static async getExerciseTrainingHistory(exerciseId: number, userProfileId: number): Promise<any[]> {
+    // This would be similar to the existing fetchTrainingHistory method
     // Simplified for now - in practice, you'd want to reuse the existing logic
     return [];
   }

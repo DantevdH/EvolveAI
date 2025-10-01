@@ -1,5 +1,5 @@
 /**
- * Today's Workout Component - Shows today's workout or rest day
+ * Today's Training Component - Shows today's training or rest day
  */
 
 import React from 'react';
@@ -13,38 +13,38 @@ interface Exercise {
   completed: boolean;
 }
 
-interface TodaysWorkoutProps {
-  workout?: {
+interface TodaysTrainingProps {
+  training?: {
     id: string | number;
     name: string;
     isRestDay?: boolean;
     exercises: Exercise[];
   } | null;
-  onStartWorkout?: () => void;
+  onStartTraining?: () => void;
 }
 
-export const TodaysWorkout: React.FC<TodaysWorkoutProps> = ({
-  workout,
-  onStartWorkout,
+export const TodaysTraining: React.FC<TodaysTrainingProps> = ({
+  training,
+  onStartTraining,
 }) => {
-  if (!workout || workout.isRestDay) {
+  if (!training || training.isRestDay) {
     return <RestDayCard />;
   }
 
-  const totalExercises = workout.exercises.length;
+  const totalExercises = training.exercises.length;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.title}>Today's Workout</Text>
+          <Text style={styles.title}>Today's Training</Text>
           <Text style={styles.exerciseCount}>
             {totalExercises} exercises
           </Text>
         </View>
         
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.playButton} onPress={onStartWorkout}>
+          <TouchableOpacity style={styles.playButton} onPress={onStartTraining}>
             <Ionicons name="play" size={18} color={colors.text} />
           </TouchableOpacity>
         </View>
@@ -56,7 +56,7 @@ export const TodaysWorkout: React.FC<TodaysWorkoutProps> = ({
         style={styles.exercisesScroll}
       >
         <View style={styles.exercisesContainer}>
-          {workout.exercises.slice(0, 5).map((exercise) => (
+          {training.exercises.slice(0, 5).map((exercise) => (
             <ExercisePreview
               key={exercise.id}
               name={exercise.name}
@@ -76,7 +76,7 @@ const RestDayCard: React.FC = () => {
         <Ionicons name="moon" size={48} color={colors.purple + '60'} />
         <Text style={styles.restDayTitle}>Rest Day</Text>
          <Text style={[styles.restDaySubtitle, { color: colors.purple + '60', fontStyle: 'italic' }]}>
-           Recharge and get ready for your next workout!
+           Recharge and get ready for your next training!
          </Text>
 
       </View>
@@ -93,7 +93,7 @@ const ExercisePreview: React.FC<ExercisePreviewProps> = ({ name, completed }) =>
   return (
     <View style={styles.exercisePreview}>
       <Ionicons
-        name="fitness"
+        name="training"
         size={24}
         color={completed ? colors.primary : colors.muted}
       />

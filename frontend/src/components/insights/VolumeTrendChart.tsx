@@ -7,7 +7,7 @@ interface VolumeTrendChartProps {
   data: Array<{
     week: string;
     volume: number;
-    workouts: number;
+    trainings: number;
     exercises: number;
   }>;
   height?: number;

@@ -9,7 +9,7 @@ const filesToClean = [
   'src/context/OnboardingContext.tsx',
   'src/services/authService.ts',
   'src/services/tokenManager.ts',
-  'src/services/workoutService.ts',
+  'src/services/trainingService.ts',
   'src/config/supabase.ts',
   'src/screens/auth/LoginScreen.tsx',
   'app/index.tsx',

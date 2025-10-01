@@ -10,8 +10,8 @@ import {
   AIQuestion,
 } from '../types/onboarding';
 
-export class FitnessService {
-  private static readonly BASE_URL = '/api/fitness';
+export class trainingService {
+  private static readonly BASE_URL = '/api/training';
   private static readonly BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
 
   /**
@@ -262,9 +262,9 @@ export class FitnessService {
   }
 
   /**
-   * Generate workout plan using all collected data
+   * Generate training plan using all collected data
    */
-  static async generateWorkoutPlan(
+  static async generateTrainingPlan(
     personalInfo: PersonalInfo,
     initialResponses: Record<string, any>,  // Raw responses from frontend
     followUpResponses: Record<string, any>,  // Raw responses from frontend
@@ -316,20 +316,20 @@ export class FitnessService {
       }
 
       if (!response.success) {
-        throw new Error(response.message || 'Failed to generate workout plan');
+        throw new Error(response.message || 'Failed to generate training plan');
       }
 
       if (!response.data) {
         throw new Error('Invalid response format: data field is missing');
       }
 
-      // Return the response data (now contains workout_plan_id and metadata, not the full workout plan)
-      console.log(`✅ FRONTEND: Workout plan generated and saved successfully (ID: ${(response.data as any)?.workout_plan_id})`);
+      // Return the response data (now contains training_plan_id and metadata, not the full training plan)
+      console.log(`✅ FRONTEND: Training plan generated and saved successfully (ID: ${(response.data as any)?.training_plan_id})`);
       
       return response;
     } catch (error) {
-      console.error('Error generating workout plan:', error);
-      throw new Error(error instanceof Error ? error.message : 'Failed to generate workout plan');
+      console.error('Error generating training plan:', error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to generate training plan');
     }
   }
 }
