@@ -181,7 +181,7 @@ export const TopPerformingExercises: React.FC<TopPerformingExercisesProps> = ({
                 </View>
                 
                 <View style={styles.metricItem}>
-                  <Ionicons name="training" size={12} color={colors.muted} />
+                  <Ionicons name="fitness" size={12} color={colors.muted} />
                   <Text style={styles.metricValue}>
                     {formatVolume(exercise.currentVolume)}
                   </Text>

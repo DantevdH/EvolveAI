@@ -70,5 +70,9 @@ export const cleanUserProfileForResume = (profile: any) => {
     plan_outline: isValidPlanOutline(profile.plan_outline) 
       ? profile.plan_outline 
       : null,
+    // AI messages from backend
+    initial_ai_message: profile.initial_ai_message || null,
+    follow_up_ai_message: profile.follow_up_ai_message || null,
+    outline_ai_message: profile.outline_ai_message || null,
   };
 };

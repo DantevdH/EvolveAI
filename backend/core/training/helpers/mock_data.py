@@ -7,15 +7,15 @@ and testing when DEBUG=true in your environment.
 
 from typing import Dict, Any, List
 from core.training.helpers.schemas import UserProfileSchema
-from core.training.helpers.training_schemas import TrainingPlan, DailyTraining, StrengthExercise, EnduranceSession, WeeklySchedule, DayOfWeek
+from core.training.helpers.training_schemas import TrainingPlan, DailyTraining as TrainingDailyTraining, StrengthExercise, EnduranceSession, WeeklySchedule, DayOfWeek
 from core.training.helpers.ai_question_schemas import (
     AIQuestionResponse,
     AIQuestion,
     QuestionOption,
     QuestionType,
-    QuestionCategory,
     TrainingPlanOutline,
-    TrainingPeriod
+    TrainingPeriod,
+    DailyTraining
 )
 
 # Mock user profile data
@@ -109,7 +109,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
         )
     ]
     
-    daily_trainings.append(DailyTraining(
+    daily_trainings.append(TrainingDailyTraining(
         weekly_schedule_id=0,
         day_of_week=DayOfWeek.MONDAY,
             is_rest_day=False,
@@ -119,7 +119,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
     ))
     
     # Tuesday - Rest Day
-    daily_trainings.append(DailyTraining(
+    daily_trainings.append(TrainingDailyTraining(
         weekly_schedule_id=0,
         day_of_week=DayOfWeek.TUESDAY,
             is_rest_day=True,
@@ -148,7 +148,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
         )
     ]
     
-    daily_trainings.append(DailyTraining(
+    daily_trainings.append(TrainingDailyTraining(
         weekly_schedule_id=0,
         day_of_week=DayOfWeek.WEDNESDAY,
             is_rest_day=False,
@@ -158,7 +158,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
     ))
     
     # Thursday - Rest Day
-    daily_trainings.append(DailyTraining(
+    daily_trainings.append(TrainingDailyTraining(
         weekly_schedule_id=0,
         day_of_week=DayOfWeek.THURSDAY,
             is_rest_day=True,
@@ -198,7 +198,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
         )
     ]
     
-    daily_trainings.append(DailyTraining(
+    daily_trainings.append(TrainingDailyTraining(
         weekly_schedule_id=0,
         day_of_week=DayOfWeek.FRIDAY,
         is_rest_day=False,
@@ -208,7 +208,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
     ))
     
     # Saturday - Rest Day
-    daily_trainings.append(DailyTraining(
+    daily_trainings.append(TrainingDailyTraining(
         weekly_schedule_id=0,
         day_of_week=DayOfWeek.SATURDAY,
         is_rest_day=True,
@@ -218,7 +218,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
     ))
     
     # Sunday - Rest Day
-    daily_trainings.append(DailyTraining(
+    daily_trainings.append(TrainingDailyTraining(
         weekly_schedule_id=0,
         day_of_week=DayOfWeek.SUNDAY,
         is_rest_day=True,
@@ -259,10 +259,9 @@ def create_mock_initial_questions() -> AIQuestionResponse:
                 QuestionOption(id="4", text="Daily", value="daily"),
             ],
             required=True,
-            category=QuestionCategory.TIME_COMMITMENT,
             help_text="This helps us understand your current training schedule."
         ),
-        
+
         # Dropdown (> 5 options)
         AIQuestion(
             id="equipment_access",
@@ -277,7 +276,6 @@ def create_mock_initial_questions() -> AIQuestionResponse:
                 QuestionOption(id="6", text="Limited equipment", value="limited"),
             ],
             required=True,
-            category=QuestionCategory.EQUIPMENT,
             help_text="Select the option that best describes your available equipment."
         ),
         
@@ -289,7 +287,6 @@ def create_mock_initial_questions() -> AIQuestionResponse:
             min_value=1,
             max_value=5,
             required=True,
-            category=QuestionCategory.EXPERIENCE,
             help_text="1 = Complete Beginner, 5 = Very Experienced"
         ),
         
@@ -303,7 +300,6 @@ def create_mock_initial_questions() -> AIQuestionResponse:
             step=15,
             unit="minutes",
             required=True,
-            category=QuestionCategory.TIME_COMMITMENT,
             help_text="Move the slider to select your available time per training session."
         ),
         
@@ -311,11 +307,10 @@ def create_mock_initial_questions() -> AIQuestionResponse:
         AIQuestion(
             id="specific_goals",
             text="What are your specific training goals?",
-            response_type=QuestionType.TEXT_INPUT,
+            response_type=QuestionType.FREE_TEXT,
             placeholder="E.g., lose 10kg, run a marathon, build muscle...",
             max_length=500,
             required=True,
-            category=QuestionCategory.GOALS_PREFERENCES,
             help_text="Be as specific as possible to help us create the perfect plan."
         ),
         
@@ -327,7 +322,6 @@ def create_mock_initial_questions() -> AIQuestionResponse:
             placeholder="Please describe your injuries or limitations in detail...",
             max_length=300,
             required=True,
-            category=QuestionCategory.HEALTH_SAFETY,
             help_text="This information is crucial for creating a safe training plan tailored to your needs."
         ),
     ]
@@ -336,13 +330,6 @@ def create_mock_initial_questions() -> AIQuestionResponse:
         questions=questions,
         total_questions=len(questions),
         estimated_time_minutes=5,
-        categories=[
-            QuestionCategory.TIME_COMMITMENT,
-            QuestionCategory.EQUIPMENT,
-            QuestionCategory.EXPERIENCE,
-            QuestionCategory.GOALS_PREFERENCES,
-            QuestionCategory.HEALTH_SAFETY
-        ],
         ai_message="👋 Hey there! I'm excited to help you build a personalized training plan. Let me ask you a few quick questions to understand your goals, experience, and what you have available. This will only take about 5 minutes!"
     )
 
@@ -359,8 +346,7 @@ def create_mock_follow_up_questions() -> AIQuestionResponse:
                 QuestionOption(id="3", text="Mixed approach", value="mixed"),
                 QuestionOption(id="4", text="Sport-specific", value="sport"),
             ],
-            required=True,
-            category=QuestionCategory.GOALS_PREFERENCES
+            required=True
         ),
         
         AIQuestion(
@@ -370,7 +356,6 @@ def create_mock_follow_up_questions() -> AIQuestionResponse:
             min_value=1,
             max_value=5,
             required=True,
-            category=QuestionCategory.HEALTH_SAFETY,
             help_text="1 = Not important, 5 = Very important"
         ),
         
@@ -380,8 +365,7 @@ def create_mock_follow_up_questions() -> AIQuestionResponse:
             response_type=QuestionType.CONDITIONAL_BOOLEAN,
             placeholder="Tell us about your current nutrition habits...",
             max_length=200,
-            required=True,
-            category=QuestionCategory.NUTRITION
+            required=True
         ),
     ]
     
@@ -389,11 +373,6 @@ def create_mock_follow_up_questions() -> AIQuestionResponse:
         questions=questions,
         total_questions=len(questions),
         estimated_time_minutes=3,
-        categories=[
-            QuestionCategory.GOALS_PREFERENCES,
-            QuestionCategory.HEALTH_SAFETY,
-            QuestionCategory.NUTRITION
-        ],
         ai_message="💪 Great! Based on your answers, I have a few more specific questions to fine-tune your plan. These will help me create the most effective training program for you!"
     )
 
@@ -402,80 +381,60 @@ def create_mock_training_plan_outline() -> TrainingPlanOutline:
     
     periods = [
         TrainingPeriod(
-            week_range="Weeks 1-4",
-            focus="Foundation Building",
-            description="Build a solid foundation with fundamental movement patterns and proper form",
-            training_days=3,
-            key_exercises=["Squats", "Bench Press", "Deadlifts", "Rows"],
-            intensity_level="Moderate"
+            period_name="Foundation Phase",
+            duration_weeks=4,
+            explanation="Build a solid foundation with fundamental movement patterns and proper form",
+            daily_trainings=[
+                DailyTraining(
+                    day=1,
+                    training_name="Upper Body Strength",
+                    description="Push focus: chest, shoulders, triceps - 60 min",
+                    tags=["strength", "upper-body", "push"]
+                ),
+                DailyTraining(
+                    day=3,
+                    training_name="Lower Body Strength", 
+                    description="Squats, deadlifts, lunges - 60 min",
+                    tags=["strength", "lower-body", "compound"]
+                ),
+                DailyTraining(
+                    day=5,
+                    training_name="Full Body Strength",
+                    description="Compound movements, core work - 45 min",
+                    tags=["strength", "full-body", "compound"]
+                )
+            ]
         ),
         TrainingPeriod(
-            week_range="Weeks 5-8",
-            focus="Progressive Overload",
-            description="Gradually increase weights and volume to stimulate muscle growth and strength gains",
-            training_days=4,
-            key_exercises=["Squats", "Bench Press", "Deadlifts", "Overhead Press", "Pull-ups"],
-            intensity_level="High"
+            period_name="Progressive Overload Phase",
+            duration_weeks=4,
+            explanation="Gradually increase weights and volume to stimulate muscle growth and strength gains",
+            daily_trainings=[
+                DailyTraining(
+                    day=1,
+                    training_name="Upper Body Power",
+                    description="Heavy compounds, accessory work - 75 min",
+                    tags=["strength", "upper-body", "power"]
+                ),
+                DailyTraining(
+                    day=3,
+                    training_name="Lower Body Strength",
+                    description="Progressive squats, deadlifts - 75 min", 
+                    tags=["strength", "lower-body", "progressive"]
+                ),
+                DailyTraining(
+                    day=5,
+                    training_name="Full Body Power",
+                    description="Heavy compounds, explosive movements - 60 min",
+                    tags=["strength", "full-body", "power"]
+                )
+            ]
         ),
     ]
-    
-    daily_schedule = [
-        DailyTraining(
-            day="Monday",
-            focus="Upper Body Push",
-            estimated_duration=60
-        ),
-        DailyTraining(
-            day="Tuesday",
-            focus="Rest & Recovery",
-            estimated_duration=0
-        ),
-        DailyTraining(
-            day="Wednesday",
-            focus="Lower Body",
-            estimated_duration=60
-        ),
-        DailyTraining(
-            day="Thursday",
-            focus="Rest & Recovery",
-            estimated_duration=0
-        ),
-        DailyTraining(
-            day="Friday",
-            focus="Upper Body Pull",
-            estimated_duration=60
-        ),
-        DailyTraining(
-            day="Saturday",
-            focus="Rest & Recovery",
-            estimated_duration=0
-        ),
-        DailyTraining(
-            day="Sunday",
-            focus="Rest & Recovery",
-            estimated_duration=0
-        ),
-    ]
-    
     return TrainingPlanOutline(
-        plan_title="Intermediate Strength Builder",
-        plan_summary="A structured 8-week program designed to build foundational strength and muscle mass",
-        total_weeks=8,
-        training_days_per_week=3,
+        title="Strength Builder Pro",
+        duration_weeks=8,
+        explanation="A comprehensive 8-week strength training program designed to build muscle mass and increase strength through progressive overload and proper periodization.",
         training_periods=periods,
-        typical_weekly_schedule=daily_schedule,
-        equipment_needed=["Barbell", "Dumbbells", "Bench", "Squat Rack"],
-        key_principles=[
-            "Progressive overload through gradual weight increases",
-            "Focus on compound movements for maximum efficiency",
-            "Adequate recovery between training sessions",
-            "Form-focused approach to prevent injuries"
-        ],
-        expected_outcomes=[
-            "Significant strength gains in major lifts",
-            "Improved muscle mass and definition",
-            "Better movement patterns and body awareness",
-            "Increased confidence in the gym"
-        ],
-        ai_message="🎯 Here's your personalized training plan outline! I've designed this program specifically for your goals and experience level. It focuses on progressive strength development with a balanced approach to training and recovery. Ready to get started?"
+        ai_message="🎯 Great news! I've analyzed your goals and created a personalized training plan outline that will help you build strength effectively! 💪 This program is designed specifically for your experience level and will progress you safely through foundation building to advanced strength gains. Ready to see your complete plan? 🚀"
     )

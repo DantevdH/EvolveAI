@@ -22,10 +22,7 @@ export default function Onboarding() {
   const handleComplete = async (trainingPlan: any) => {
     console.log('✅ Training plan generated successfully');
     
-    // Refresh user profile to get updated data
-    await refreshUserProfile();
-    
-    // Navigate to main app - let index.tsx handle the routing logic
+    // Navigate directly to main app - training plan generation is complete
     router.replace('/(tabs)');
   };
 

@@ -11,10 +11,39 @@ export interface UserServiceResponse<T> {
 }
 
 /**
+ * Extracts AI message from database format
+ */
+const extractAIMessage = (questionsData: any): string | null => {
+  if (!questionsData) {
+    console.log('📍 extractAIMessage: questionsData is null/undefined');
+    return null;
+  }
+  
+  // Handle new format: object with AImessage or ai_message
+  if (typeof questionsData === 'object' && !Array.isArray(questionsData)) {
+    const aiMessage = questionsData.AImessage || questionsData.ai_message || null;
+    console.log(`📍 extractAIMessage: Found AI message: ${aiMessage?.substring(0, 50) || 'NONE'}`);
+    return aiMessage;
+  }
+  
+  console.log('📍 extractAIMessage: questionsData is not an object or is an array');
+  return null;
+};
+
+/**
  * Converts dictionary objects to AIQuestion objects
  */
-const convertToAIQuestions = (questions: any[] | null): AIQuestion[] | null => {
-  if (!questions || !Array.isArray(questions)) {
+const convertToAIQuestions = (questionsData: any): AIQuestion[] | null => {
+  // Handle both old format (array) and new format (object with questions array)
+  let questions: any[] | null = null;
+  
+  if (Array.isArray(questionsData)) {
+    // Old format: direct array
+    questions = questionsData;
+  } else if (questionsData && questionsData.questions && Array.isArray(questionsData.questions)) {
+    // New format: object with questions array
+    questions = questionsData.questions;
+  } else {
     return null;
   }
   
@@ -207,6 +236,14 @@ export class UserService {
           follow_up_questions: convertToAIQuestions(rawProfile.follow_up_questions),
           initial_responses: rawProfile.initial_responses || null,
           follow_up_responses: rawProfile.follow_up_responses || null,
+          
+          // AI messages from database
+          initial_ai_message: (() => {
+            console.log('📍 userService: rawProfile.initial_questions:', typeof rawProfile.initial_questions, JSON.stringify(rawProfile.initial_questions)?.substring(0, 200));
+            return extractAIMessage(rawProfile.initial_questions);
+          })(),
+          follow_up_ai_message: extractAIMessage(rawProfile.follow_up_questions),
+          outline_ai_message: rawProfile.plan_outline?.ai_message || null,
           // Plan outline and feedback (separated)
           plan_outline: rawProfile.plan_outline || null,
           plan_outline_feedback: rawProfile.plan_outline_feedback || null,

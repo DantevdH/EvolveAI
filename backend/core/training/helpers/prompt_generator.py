@@ -354,7 +354,7 @@ class PromptGenerator:
         {combined_responses}
         {outline_context}
         
-        **AVAILABLE EXERCISES (use ONLY these IDs):**
+        **AVAILABLE STRENGTH EXERCISES (use ONLY these IDs):**
         {exercise_info}
         
         **TRAINING PLAN REQUIREMENTS:**
@@ -366,13 +366,33 @@ class PromptGenerator:
         6. **Realistic**: Achievable and sustainable
         7. **Motivating**: Incorporates their preferences and interests
         
+        **TRAINING TYPE GUIDANCE:**
+        You can create different types of training days:
+        - **Strength**: Focus on strength exercises only
+        - **Endurance**: Focus on endurance sessions only (running, cycling, swimming, etc.)
+        - **Mixed**: Combine both strength exercises and endurance sessions
+        - **Recovery**: Light activity or complete rest
+        
+        **STRENGTH EXERCISES:**
+        - Use ONLY the provided exercise IDs from the database
+        - Include sets, reps, and weight progressions
+        - Plan for proper rest between sets
+        
+        **ENDURANCE SESSIONS:**
+        - Create running, cycling, swimming, or other endurance activities
+        - Specify sport_type, training_volume (duration/distance), and unit
+        - Include heart rate zones when appropriate
+        - Can be combined with strength exercises on the same day
+        
         **TECHNICAL REQUIREMENTS:**
-        - Use ONLY the provided exercise IDs (no new exercises)
+        - Use ONLY the provided exercise IDs for strength exercises (no new exercises)
+        - You can create any endurance sessions as needed
         - Include proper warm-up and cool-down
         - Plan for 1-2 rest days per week
         - Include progression within each week and across weeks
         - Add notes for form cues and modifications
         - Consider their physical limitations and preferences
+        - Set training_type appropriately: "strength", "endurance", "mixed", or "recovery"
         
         **EXPECTED OUTPUT:**
         - Complete, detailed training plan with specific exercises and progressions
@@ -385,8 +405,14 @@ class PromptGenerator:
         Return in TrainingPlan format with:
         - Compelling title that reflects their goal
         - Clear summary of the program
-        - Weekly schedules with daily trainings
+        - Weekly schedules with daily trainings containing:
+          * Appropriate training_type for each day
+          * Strength exercises (if applicable) with sets, reps, weights
+          * Endurance sessions (if applicable) with sport_type, volume, unit
+          * Proper progression and periodization
         - Detailed program justification explaining the science behind the plan
+        
+        **IMPORTANT:** Each daily training must have a clear training_type and the appropriate exercises/sessions to match that type.
         """
 
     @staticmethod

@@ -9,17 +9,6 @@ export enum QuestionType {
   RATING = "rating",
 }
 
-export enum QuestionCategory {
-  TRAINING_EXPERIENCE = "training_experience",
-  GOALS_PREFERENCES = "goals_preferences",
-  EQUIPMENT_AVAILABILITY = "equipment_availability",
-  TIME_COMMITMENT = "time_commitment",
-  MEDICAL_HEALTH = "medical_health",
-  LIFESTYLE_RECOVERY = "lifestyle_recovery",
-  NUTRITION = "nutrition",
-  MOTIVATION_COMMITMENT = "motivation_commitment",
-}
-
 export interface QuestionOption {
   id: string;
   text: string;
@@ -32,7 +21,6 @@ export interface AIQuestion {
   response_type: QuestionType;
   options?: QuestionOption[];
   required: boolean;
-  category: QuestionCategory;
   min_value?: number;
   max_value?: number;
   step?: number;
@@ -46,7 +34,6 @@ export interface AIQuestionResponse {
   questions: AIQuestion[];
   total_questions: number;
   estimated_time_minutes: number;
-  categories: QuestionCategory[];
   initial_questions?: AIQuestion[]; // For follow-up questions response
   ai_message?: string; // Personalized AI coach message for this phase
 }

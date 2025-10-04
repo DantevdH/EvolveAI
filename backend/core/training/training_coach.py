@@ -21,7 +21,6 @@ from core.training.helpers.ai_question_schemas import (
     AIQuestionResponseWithFormatted,
     PersonalInfo,
     QuestionType,
-    QuestionCategory,
     AIQuestion,
     QuestionOption,
     TrainingPlanOutline,
@@ -136,7 +135,6 @@ class TrainingCoach(BaseAgent):
                         id="fallback_1",
                         text="What is your primary training goal?",
                         response_type=QuestionType.MULTIPLE_CHOICE,
-                        category=QuestionCategory.GOALS_PREFERENCES,
                         options=[
                             QuestionOption(id="goal_1", text="Build Muscle", value="build_muscle"),
                             QuestionOption(id="goal_2", text="Lose Weight", value="lose_weight"),
@@ -147,7 +145,7 @@ class TrainingCoach(BaseAgent):
                 ],
                 total_questions=1,
                 estimated_time_minutes=2,
-                categories=[QuestionCategory.GOALS_PREFERENCES]
+                ai_message="I'm here to help you create the perfect training plan! Let's start with understanding your goals. 💪"
             )
     
     def generate_follow_up_questions(self, personal_info: PersonalInfo, formatted_responses: str, initial_questions: List[AIQuestion] = None) -> AIQuestionResponseWithFormatted:
@@ -162,8 +160,8 @@ class TrainingCoach(BaseAgent):
                     questions=follow_up_questions.questions,
                     total_questions=follow_up_questions.total_questions,
                     estimated_time_minutes=follow_up_questions.estimated_time_minutes,
-                    categories=follow_up_questions.categories,
-                    formatted_responses=formatted_responses
+                    formatted_responses=formatted_responses,
+                    ai_message=follow_up_questions.ai_message
                 )
             
             # Create a comprehensive prompt for follow-up questions
@@ -180,30 +178,24 @@ class TrainingCoach(BaseAgent):
             # Get the parsed response
             question_response = completion.choices[0].message.parsed
             
-            # Format the responses for database storage
-            formatted_responses = ResponseFormatter.format_responses(responses, initial_questions)
-            
             # Return with formatted responses and AI message
             return AIQuestionResponseWithFormatted(
                 questions=question_response.questions,
                 total_questions=question_response.total_questions,
                 estimated_time_minutes=question_response.estimated_time_minutes,
-                categories=question_response.categories,
-                formatted_responses=formatted_responses,
+                formatted_responses=formatted_responses,  # Already formatted by API
                 ai_message=question_response.ai_message
             )
             
         except Exception as e:
             self.logger.error(f"Error generating follow-up questions: {e}")
             # Return a fallback response
-            formatted_responses = ResponseFormatter.format_responses(responses, initial_questions)
             return AIQuestionResponseWithFormatted(
                 questions=[
                     AIQuestion(
                         id="followup_1",
                         text="How many days per week can you commit to training?",
                         response_type=QuestionType.SLIDER,
-                        category=QuestionCategory.TIME_COMMITMENT,
                         min_value=1,
                         max_value=7,
                         step=1
@@ -211,8 +203,8 @@ class TrainingCoach(BaseAgent):
                 ],
                 total_questions=1,
                 estimated_time_minutes=1,
-                categories=[QuestionCategory.TIME_COMMITMENT],
-                formatted_responses=formatted_responses
+                formatted_responses=formatted_responses,  # Already formatted by API
+                ai_message="I need to ask a few more questions to create your perfect training plan. 💪"
             )
     
     def generate_training_plan_outline(self, personal_info: PersonalInfo, formatted_initial_responses: str, formatted_follow_up_responses: str, initial_questions: List[AIQuestion] = None, follow_up_questions: List[AIQuestion] = None) -> Dict[str, Any]:
@@ -222,9 +214,15 @@ class TrainingCoach(BaseAgent):
             if os.getenv("DEBUG", "false").lower() == "true":
                 self.logger.debug("DEBUG MODE: Using mock training plan outline")
                 outline = create_mock_training_plan_outline()
+                
+                # Extract ai_message from outline to prevent duplication
+                outline_dict = outline.model_dump()
+                ai_message = outline_dict.pop('ai_message', None)
+                
                 return {
                     'success': True,
-                    'outline': outline.model_dump(),
+                    'outline': outline_dict,
+                    'ai_message': ai_message,
                     'metadata': {
                         'generation_method': 'Mock Data (Debug Mode)',
                         'user_goals': personal_info.goal_description
@@ -249,10 +247,14 @@ class TrainingCoach(BaseAgent):
             # Parse the structured response
             outline = response.choices[0].message.parsed
             
+            # Extract ai_message from outline to prevent duplication
+            outline_dict = outline.model_dump()
+            ai_message = outline_dict.pop('ai_message', None)
+            
             return {
                 'success': True,
-                'outline': outline.model_dump(),
-                'ai_message': outline.ai_message,
+                'outline': outline_dict,
+                'ai_message': ai_message,
                 'metadata': {
                     'generation_method': 'AI Generated',
                     'user_goals': personal_info.goal_description,

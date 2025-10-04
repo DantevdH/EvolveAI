@@ -13,18 +13,6 @@ class QuestionType(str, Enum):
     RATING = "rating"
 
 
-class QuestionCategory(str, Enum):
-    """Categories for grouping questions."""
-    TRAINING_EXPERIENCE = "training_experience"
-    GOALS_PREFERENCES = "goals_preferences"
-    EQUIPMENT_AVAILABILITY = "equipment_availability"
-    TIME_COMMITMENT = "time_commitment"
-    MEDICAL_HEALTH = "medical_health"
-    LIFESTYLE_RECOVERY = "lifestyle_recovery"
-    NUTRITION = "nutrition"
-    MOTIVATION_COMMITMENT = "motivation_commitment"
-
-
 class QuestionOption(BaseModel):
     """Option for choice questions."""
     id: str = Field(..., description="Unique identifier for the option")
@@ -39,7 +27,6 @@ class AIQuestion(BaseModel):
     response_type: QuestionType = Field(..., description="Type of response expected")
     options: Optional[List[QuestionOption]] = Field(default=None, description="Options for choice questions")
     required: bool = Field(default=True, description="Whether this question is required")
-    category: QuestionCategory = Field(..., description="Category this question belongs to")
     min_value: Optional[float] = Field(default=None, description="Minimum value for slider questions")
     max_value: Optional[float] = Field(default=None, description="Maximum value for slider questions")
     step: Optional[float] = Field(default=1.0, description="Step size for slider questions")
@@ -54,7 +41,6 @@ class AIQuestionResponse(BaseModel):
     questions: List[AIQuestion] = Field(..., description="List of generated questions")
     total_questions: int = Field(..., description="Total number of questions")
     estimated_time_minutes: int = Field(..., description="Estimated time to complete in minutes")
-    categories: List[QuestionCategory] = Field(..., description="Categories covered in this question set")
     ai_message: Optional[str] = Field(default=None, description="Personalized AI coach message for this phase")
 
 
@@ -63,7 +49,6 @@ class AIQuestionResponseWithFormatted(BaseModel):
     questions: List[AIQuestion] = Field(..., description="List of generated questions")
     total_questions: int = Field(..., description="Total number of questions")
     estimated_time_minutes: int = Field(..., description="Estimated time to complete in minutes")
-    categories: List[QuestionCategory] = Field(..., description="Categories covered in this question set")
     formatted_responses: str = Field(..., description="Formatted responses for database storage")
     ai_message: Optional[str] = Field(default=None, description="Personalized AI coach message for this phase")
 

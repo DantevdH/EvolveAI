@@ -129,12 +129,13 @@ export class TrainingService {
           *,
           weekly_schedules (
             *,
-            daily_trainings (
+            daily_training (
               *,
-              training_exercises (
+              strength_exercise (
                 *,
                 exercises (*)
-              )
+              ),
+              endurance_session (*)
             )
           )
         `)
@@ -193,24 +194,26 @@ export class TrainingService {
         console.log('📅 TrainingService: First week data:', {
           week_id: firstWeek.id,
           week_number: firstWeek.week_number,
-          has_daily_trainings: !!firstWeek.daily_trainings,
-          daily_trainings_count: firstWeek.daily_trainings?.length || 0
+          has_daily_trainings: !!firstWeek.daily_training,
+          daily_trainings_count: firstWeek.daily_training?.length || 0
         });
 
-        if (firstWeek.daily_trainings && firstWeek.daily_trainings.length > 0) {
-          const firstDay = firstWeek.daily_trainings[0];
+        if (firstWeek.daily_training && firstWeek.daily_training.length > 0) {
+          const firstDay = firstWeek.daily_training[0];
           console.log('🏃 TrainingService: First day data:', {
             day_id: firstDay.id,
             day_of_week: firstDay.day_of_week,
             is_rest_day: firstDay.is_rest_day,
-            has_training_exercises: !!firstDay.training_exercises,
-            training_exercises_count: firstDay.training_exercises?.length || 0
+            has_strength_exercises: !!firstDay.strength_exercise,
+            strength_exercises_count: firstDay.strength_exercise?.length || 0,
+            has_endurance_sessions: !!firstDay.endurance_session,
+            endurance_sessions_count: firstDay.endurance_session?.length || 0
           });
 
-          if (firstDay.training_exercises && firstDay.training_exercises.length > 0) {
-            const firstExercise = firstDay.training_exercises[0];
+          if (firstDay.strength_exercise && firstDay.strength_exercise.length > 0) {
+            const firstExercise = firstDay.strength_exercise[0];
             console.log('💪 TrainingService: First exercise data:', {
-              training_exercise_id: firstExercise.id,
+              strength_exercise_id: firstExercise.id,
               exercise_id: firstExercise.exercise_id,
               has_exercises_data: !!firstExercise.exercises,
               exercise_name: firstExercise.exercises?.name || 'NO NAME',
@@ -231,7 +234,7 @@ export class TrainingService {
         weeklySchedules: data.weekly_schedules?.map((schedule: any) => {
           // Sort daily trainings by day order (Monday = 0, Tuesday = 1, etc.) - Monday-first week
           const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-          const sortedDailyTrainings = schedule.daily_trainings?.sort((a: any, b: any) => {
+          const sortedDailyTrainings = schedule.daily_training?.sort((a: any, b: any) => {
             const aIndex = dayOrder.indexOf(a.day_of_week);
             const bIndex = dayOrder.indexOf(b.day_of_week);
             return aIndex - bIndex;
@@ -240,40 +243,69 @@ export class TrainingService {
           return {
             id: schedule.id.toString(),
             weekNumber: schedule.week_number,
-            dailyTrainings: sortedDailyTrainings.map((daily: any) => ({
-                id: daily.id.toString(),
-                dayOfWeek: daily.day_of_week,
-                isRestDay: daily.is_rest_day,
-                exercises: daily.training_exercises?.map((we: any) => {
-                const mappedExercise = {
-                  id: we.id.toString(),
-                  exerciseId: we.exercise_id.toString(),
-                  exercise: we.exercises ? {
-                    id: we.exercises.id.toString(),
-                    name: we.exercises.name,
-                    force: we.exercises.force,
-                    instructions: we.exercises.instructions,
-                    equipment: we.exercises.equipment,
-                    target_area: we.exercises.target_area,
-                    secondary_muscles: we.exercises.secondary_muscles,
-                    main_muscles: we.exercises.main_muscles,
-                    difficulty: we.exercises.difficulty,
-                    exercise_tier: we.exercises.exercise_tier,
-                    imageUrl: we.exercises.image_url,
-                    videoUrl: we.exercises.video_url
+            dailyTrainings: sortedDailyTrainings.map((daily: any) => {
+                // Combine strength exercises and endurance sessions
+                const strengthExercises = daily.strength_exercise?.map((se: any) => ({
+                  id: se.id.toString(),
+                  exerciseId: se.exercise_id.toString(),
+                  exercise: se.exercises ? {
+                    id: se.exercises.id.toString(),
+                    name: se.exercises.name,
+                    force: se.exercises.force,
+                    instructions: se.exercises.instructions,
+                    equipment: se.exercises.equipment,
+                    target_area: se.exercises.target_area,
+                    secondary_muscles: se.exercises.secondary_muscles,
+                    main_muscles: se.exercises.main_muscles,
+                    difficulty: se.exercises.difficulty,
+                    exercise_tier: se.exercises.exercise_tier,
+                    imageUrl: se.exercises.image_url,
+                    videoUrl: se.exercises.video_url
                   } : null,
-                  sets: this.parseSets(we.sets, we.reps, we.weight),
-                  completed: we.completed,
-                  order: we.order || 0
+                  sets: this.parseSets(se.sets, se.reps, se.weight),
+                  completed: se.completed,
+                  order: se.order || 0
+                })) || [];
+
+                // Map endurance sessions to exercise format
+                const enduranceSessions = daily.endurance_session?.map((es: any, index: number) => ({
+                  id: es.id.toString(),
+                  exerciseId: `endurance_${es.id}`,
+                  exercise: {
+                    id: `endurance_${es.id}`,
+                    name: `${es.sport_type} - ${es.training_volume} ${es.unit}`,
+                    force: null,
+                    instructions: `${es.sport_type} session`,
+                    equipment: null,
+                    target_area: 'Endurance',
+                    secondary_muscles: [],
+                    main_muscles: [],
+                    difficulty: null,
+                    exercise_tier: null,
+                    imageUrl: null,
+                    videoUrl: null
+                  },
+                  sets: [],
+                  completed: es.completed || false,
+                  order: strengthExercises.length + index
+                })) || [];
+
+                const allExercises = [...strengthExercises, ...enduranceSessions];
+
+                return {
+                  id: daily.id.toString(),
+                  dayOfWeek: daily.day_of_week,
+                  isRestDay: daily.is_rest_day,
+                  exercises: allExercises,
+                  completed: allExercises.every((ex: any) => ex.completed) || daily.is_rest_day
                 };
-                
-                return mappedExercise;
-              }) || [],
-              completed: daily.training_exercises?.every((ex: any) => ex.completed) || false
-            })) || [],
-            completed: schedule.daily_trainings?.every((daily: any) => 
-              daily.training_exercises?.every((ex: any) => ex.completed)
-            ) || false,
+            }) || [],
+            completed: schedule.daily_training?.every((daily: any) => {
+              if (daily.is_rest_day) return true;
+              const strengthCompleted = daily.strength_exercise?.every((ex: any) => ex.completed) ?? true;
+              const enduranceCompleted = daily.endurance_session?.every((ex: any) => ex.completed) ?? true;
+              return strengthCompleted && enduranceCompleted;
+            }) || false,
             completedAt: schedule.completed_at ? new Date(schedule.completed_at) : undefined
           };
         }) || [],
@@ -340,28 +372,28 @@ export class TrainingService {
     weight: number
   ): Promise<UpdateSetResponse> {
     try {
-      // First, get the current training exercise data
-      const { data: trainingExercise, error: fetchError } = await supabase
-        .from('training_exercises')
+      // First, get the current strength exercise data
+      const { data: strengthExercise, error: fetchError } = await supabase
+        .from('strength_exercise')
         .select('*')
         .eq('id', exerciseId)
         .single();
 
       if (fetchError) {
-        console.error('Error fetching training exercise:', fetchError);
+        console.error('Error fetching strength exercise:', fetchError);
         return { success: false, error: fetchError.message };
       }
 
       // Update the reps and weight arrays
-      const updatedReps = [...trainingExercise.reps];
-      const updatedWeight = [...trainingExercise.weight];
+      const updatedReps = [...strengthExercise.reps];
+      const updatedWeight = [...strengthExercise.weight];
       
       updatedReps[setIndex] = reps;
       updatedWeight[setIndex] = weight;
 
       // Update the database
       const { data, error } = await supabase
-        .from('training_exercises')
+        .from('strength_exercise')
         .update({
           reps: updatedReps,
           weight: updatedWeight,
@@ -397,8 +429,9 @@ export class TrainingService {
    */
   static async updateExerciseCompletion(exerciseId: string, completed: boolean): Promise<{ success: boolean; error?: string }> {
     try {
-      const { data, error } = await supabase
-        .from('training_exercises')
+      // Try strength_exercise first
+      const { data: strengthData, error: strengthError } = await supabase
+        .from('strength_exercise')
         .update({
           completed: completed,
           updated_at: new Date().toISOString()
@@ -407,12 +440,28 @@ export class TrainingService {
         .select()
         .single();
 
-      if (error) {
-        console.error('Error updating exercise completion:', error);
-        return { success: false, error: error.message };
+      if (!strengthError && strengthData) {
+        console.log(`✅ Strength exercise ${exerciseId} completion updated to: ${completed}`);
+        return { success: true };
       }
 
-      console.log(`✅ Exercise ${exerciseId} completion updated to: ${completed}`);
+      // If not found in strength_exercise, try endurance_session
+      const { data: enduranceData, error: enduranceError } = await supabase
+        .from('endurance_session')
+        .update({
+          completed: completed,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', exerciseId)
+        .select()
+        .single();
+
+      if (enduranceError) {
+        console.error('Error updating exercise completion:', enduranceError);
+        return { success: false, error: enduranceError.message };
+      }
+
+      console.log(`✅ Endurance session ${exerciseId} completion updated to: ${completed}`);
       return { success: true };
     } catch (error) {
       console.error('Error in updateExerciseCompletion:', error);
@@ -438,7 +487,7 @@ export class TrainingService {
   ): Promise<CompleteTrainingResponse> {
     try {
       const { data, error } = await supabase
-        .from('daily_trainings')
+        .from('daily_training')
         .update({
           updated_at: new Date().toISOString()
         })
@@ -506,13 +555,14 @@ export class TrainingService {
   static async getTrainingHistory(userId: string, limit: number = 10): Promise<{ success: boolean; data?: DailyTraining[]; error?: string }> {
     try {
       const { data, error } = await supabase
-        .from('daily_trainings')
+        .from('daily_training')
         .select(`
           *,
-          training_exercises (
+          strength_exercise (
             *,
             exercises (*)
-          )
+          ),
+          endurance_session (*)
         `)
         .eq('completed', true)
         .order('completed_at', { ascending: false })
@@ -523,32 +573,56 @@ export class TrainingService {
         return { success: false, error: error.message };
       }
 
-      const history: DailyTraining[] = data.map((daily: any) => ({
-        id: daily.id.toString(),
-        dayOfWeek: daily.day_of_week,
-        isRestDay: daily.is_rest_day,
-        exercises: daily.training_exercises.map((we: any) => ({
-          id: we.id.toString(),
-          exerciseId: we.exercise_id.toString(),
+      const history: DailyTraining[] = data.map((daily: any) => {
+        const strengthExercises = daily.strength_exercise?.map((se: any) => ({
+          id: se.id.toString(),
+          exerciseId: se.exercise_id.toString(),
           exercise: {
-            id: we.exercises.id.toString(),
-            name: we.exercises.name,
-            force: we.exercises.force,
-            instructions: we.exercises.instructions,
-            equipment: we.exercises.equipment,
-            target_area: we.exercises.target_area,
-            secondary_muscles: we.exercises.secondary_muscles,
-            main_muscles: we.exercises.main_muscles,
-            difficulty: we.exercises.difficulty,
-            imageUrl: we.exercises.image_url,
-            videoUrl: we.exercises.video_url
+            id: se.exercises.id.toString(),
+            name: se.exercises.name,
+            force: se.exercises.force,
+            instructions: se.exercises.instructions,
+            equipment: se.exercises.equipment,
+            target_area: se.exercises.target_area,
+            secondary_muscles: se.exercises.secondary_muscles,
+            main_muscles: se.exercises.main_muscles,
+            difficulty: se.exercises.difficulty,
+            imageUrl: se.exercises.image_url,
+            videoUrl: se.exercises.video_url
           },
-          sets: this.parseSets(we.sets, we.reps, we.weight),
-          completed: we.completed,
-          order: we.order || 0
-        })),
+          sets: this.parseSets(se.sets, se.reps, se.weight),
+          completed: se.completed,
+          order: se.order || 0
+        })) || [];
 
-      }));
+        const enduranceSessions = daily.endurance_session?.map((es: any, index: number) => ({
+          id: es.id.toString(),
+          exerciseId: `endurance_${es.id}`,
+          exercise: {
+            id: `endurance_${es.id}`,
+            name: `${es.sport_type} - ${es.training_volume} ${es.unit}`,
+            force: null,
+            instructions: `${es.sport_type} session`,
+            equipment: null,
+            target_area: 'Endurance',
+            secondary_muscles: [],
+            main_muscles: [],
+            difficulty: null,
+            imageUrl: null,
+            videoUrl: null
+          },
+          sets: [],
+          completed: es.completed || false,
+          order: strengthExercises.length + index
+        })) || [];
+
+        return {
+          id: daily.id.toString(),
+          dayOfWeek: daily.day_of_week,
+          isRestDay: daily.is_rest_day,
+          exercises: [...strengthExercises, ...enduranceSessions],
+        };
+      });
 
       return { success: true, data: history };
     } catch (error) {
@@ -573,12 +647,13 @@ export class TrainingService {
           *,
           weekly_schedules (
             *,
-            daily_trainings (
+            daily_training (
               *,
-              training_exercises (
+              strength_exercise (
                 *,
                 exercises (*)
-              )
+              ),
+              endurance_session (*)
             )
           )
         `)
@@ -604,9 +679,9 @@ export class TrainingService {
       trainingPlan.weekly_schedules
         .sort((a: any, b: any) => b.week_number - a.week_number) // Most recent week first
         .forEach((week: any) => {
-          if (week.daily_trainings) {
+          if (week.daily_training) {
             // Sort daily trainings by day order (most recent first within each week)
-            const sortedDailyTrainings = week.daily_trainings.sort((a: any, b: any) => {
+            const sortedDailyTrainings = week.daily_training.sort((a: any, b: any) => {
               const aIndex = dayOrder.indexOf(a.day_of_week);
               const bIndex = dayOrder.indexOf(b.day_of_week);
               return bIndex - aIndex;
@@ -621,7 +696,9 @@ export class TrainingService {
         if (training.is_rest_day) continue; // Skip rest days
         
         // Check if all exercises in this training are completed
-        const allExercisesCompleted = training.training_exercises?.every((ex: any) => ex.completed);
+        const strengthCompleted = training.strength_exercise?.every((ex: any) => ex.completed) ?? true;
+        const enduranceCompleted = training.endurance_session?.every((ex: any) => ex.completed) ?? true;
+        const allExercisesCompleted = strengthCompleted && enduranceCompleted;
         
         if (allExercisesCompleted) {
           streak++;
@@ -649,12 +726,13 @@ export class TrainingService {
           *,
           weekly_schedules (
             *,
-            daily_trainings (
+            daily_training (
               *,
-              training_exercises (
+              strength_exercise (
                 *,
                 exercises (*)
-              )
+              ),
+              endurance_session (*)
             )
           )
         `)
@@ -671,12 +749,12 @@ export class TrainingService {
         week.week_number === targetWeek
       );
       
-      if (!currentWeek?.daily_trainings) {
+      if (!currentWeek?.daily_training) {
         return { success: true, data: 0 };
       }
 
       // Count all planned trainings in current week (non-rest days)
-      const totalTrainings = currentWeek.daily_trainings.filter((training: any) => !training.is_rest_day).length;
+      const totalTrainings = currentWeek.daily_training.filter((training: any) => !training.is_rest_day).length;
       return { success: true, data: totalTrainings };
     } catch (error) {
       console.error('💥 TrainingService: Error calculating weekly trainings:', error);
@@ -696,12 +774,13 @@ export class TrainingService {
           *,
           weekly_schedules (
             *,
-            daily_trainings (
+            daily_training (
               *,
-              training_exercises (
+              strength_exercise (
                 *,
                 exercises (*)
-              )
+              ),
+              endurance_session (*)
             )
           )
         `)
@@ -718,14 +797,16 @@ export class TrainingService {
         week.week_number === targetWeek
       );
       
-      if (!currentWeek?.daily_trainings) {
+      if (!currentWeek?.daily_training) {
         return { success: true, data: 0 };
       }
 
-      const totalTrainingDays = currentWeek.daily_trainings.filter((training: any) => !training.is_rest_day).length;
-      const completedTrainingDays = currentWeek.daily_trainings.filter((training: any) => {
+      const totalTrainingDays = currentWeek.daily_training.filter((training: any) => !training.is_rest_day).length;
+      const completedTrainingDays = currentWeek.daily_training.filter((training: any) => {
         if (training.is_rest_day) return false;
-        return training.training_exercises?.every((ex: any) => ex.completed);
+        const strengthCompleted = training.strength_exercise?.every((ex: any) => ex.completed) ?? true;
+        const enduranceCompleted = training.endurance_session?.every((ex: any) => ex.completed) ?? true;
+        return strengthCompleted && enduranceCompleted;
       }).length;
 
       const progress = totalTrainingDays > 0 ? Math.round((completedTrainingDays / totalTrainingDays) * 100) : 0;
@@ -752,12 +833,13 @@ export class TrainingService {
           *,
           weekly_schedules (
             *,
-            daily_trainings (
+            daily_training (
               *,
-              training_exercises (
+              strength_exercise (
                 *,
                 exercises (*)
-              )
+              ),
+              endurance_session (*)
             )
           )
         `)
@@ -776,13 +858,13 @@ export class TrainingService {
         week.week_number === targetWeek
       );
       
-      if (!currentWeek?.daily_trainings) {
+      if (!currentWeek?.daily_training) {
         console.log('❌ getTodaysTraining - No current week or daily trainings found');
         return { success: true, data: null };
       }
 
       // Find today's training
-      const todaysTraining = currentWeek.daily_trainings.find((training: any) => 
+      const todaysTraining = currentWeek.daily_training.find((training: any) => 
         training.day_of_week === todayName
       );
 
@@ -791,19 +873,31 @@ export class TrainingService {
       }
 
       // Transform the data to match component expectations
+      const strengthExercises = todaysTraining.strength_exercise?.map((se: any) => ({
+        id: se.id?.toString() || Math.random().toString(),
+        name: se.exercises?.name || 'Unknown Exercise',
+        completed: se.completed || false,
+        sets: se.sets || 1,
+        reps: se.reps || [10],
+        weight: se.weight || [null],
+        weight1rm: se.weight_1rm || [70],
+      })) || [];
+
+      const enduranceSessions = todaysTraining.endurance_session?.map((es: any) => ({
+        id: es.id?.toString() || Math.random().toString(),
+        name: `${es.sport_type} - ${es.training_volume} ${es.unit}`,
+        completed: es.completed || false,
+        sets: 1,
+        reps: [],
+        weight: [],
+        weight1rm: [],
+      })) || [];
+
       const transformedTraining = {
         id: todaysTraining.id || todayName,
         name: `${todayName} Training`,
         isRestDay: todaysTraining.is_rest_day,
-        exercises: todaysTraining.training_exercises?.map((trainingExercise: any) => ({
-          id: trainingExercise.id?.toString() || Math.random().toString(),
-          name: trainingExercise.exercises?.name || 'Unknown Exercise',
-          completed: trainingExercise.completed || false,
-          sets: trainingExercise.sets || 1,
-          reps: trainingExercise.reps || [10],
-          weight: trainingExercise.weight || [null],
-          weight1rm: trainingExercise.weight_1rm || [70],
-        })) || [],
+        exercises: [...strengthExercises, ...enduranceSessions],
       };
 
       return { success: true, data: transformedTraining };
@@ -825,12 +919,13 @@ export class TrainingService {
           *,
           weekly_schedules (
             *,
-            daily_trainings (
+            daily_training (
               *,
-              training_exercises (
+              strength_exercise (
                 *,
                 exercises (*)
-              )
+              ),
+              endurance_session (*)
             )
           )
         `)
@@ -847,20 +942,22 @@ export class TrainingService {
         week.week_number === targetWeek
       );
       
-      if (!currentWeek?.daily_trainings) {
+      if (!currentWeek?.daily_training) {
         return { success: true, data: [] };
       }
 
       // Filter and transform completed trainings (only where ALL exercises are completed)
       const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
       
-      const recentActivities = currentWeek.daily_trainings
+      const recentActivities = currentWeek.daily_training
         .filter((training: any) => {
           // Only get training days, not rest days
           if (training.is_rest_day) return false;
           
           // Check if all exercises in this training are completed
-          return training.training_exercises?.every((ex: any) => ex.completed);
+          const strengthCompleted = training.strength_exercise?.every((ex: any) => ex.completed) ?? true;
+          const enduranceCompleted = training.endurance_session?.every((ex: any) => ex.completed) ?? true;
+          return strengthCompleted && enduranceCompleted;
         })
         .sort((a: any, b: any) => {
           // Sort by day order (most recent first)
@@ -869,15 +966,18 @@ export class TrainingService {
           return bIndex - aIndex;
         })
         .slice(0, 3) // Take only last 3 completed trainings
-        .map((training: any, index: number) => ({
-          id: training.id?.toString() || training.day_of_week,
-          type: 'training' as const,
-          title: `${training.day_of_week} Training`,
-          subtitle: `${training.training_exercises?.length || 0} exercises • 45 minutes • 320 calories`, // Dummy data as requested
-          date: index === 0 ? 'Yesterday' : index === 1 ? '2 days ago' : '3 days ago',
-          duration: '45 min',
-          calories: 320,
-        }));
+        .map((training: any, index: number) => {
+          const exerciseCount = (training.strength_exercise?.length || 0) + (training.endurance_session?.length || 0);
+          return {
+            id: training.id?.toString() || training.day_of_week,
+            type: 'training' as const,
+            title: `${training.day_of_week} Training`,
+            subtitle: `${exerciseCount} exercises • 45 minutes • 320 calories`, // Dummy data as requested
+            date: index === 0 ? 'Yesterday' : index === 1 ? '2 days ago' : '3 days ago',
+            duration: '45 min',
+            calories: 320,
+          };
+        });
 
       return { success: true, data: recentActivities };
     } catch (error) {
@@ -960,12 +1060,12 @@ export const getExerciseHistory = async (exerciseId: number, userProfileId: numb
   try {
     console.log(`📊 Fetching exercise history for exercise ${exerciseId}, user ${userProfileId}`);
     
-    // Get all COMPLETED training exercises for this specific exercise and user
+    // Get all COMPLETED strength exercises for this specific exercise and user
     const { data, error } = await supabase
-      .from('training_exercises')
+      .from('strength_exercise')
       .select(`
         *,
-        daily_trainings!inner(
+        daily_training!inner(
           *,
           weekly_schedules!inner(
             training_plans!inner(
@@ -976,7 +1076,7 @@ export const getExerciseHistory = async (exerciseId: number, userProfileId: numb
       `)
       .eq('exercise_id', exerciseId)
       .eq('completed', true)
-      .eq('daily_trainings.weekly_schedules.training_plans.user_profile_id', userProfileId)
+      .eq('daily_training.weekly_schedules.training_plans.user_profile_id', userProfileId)
       .order('updated_at', { ascending: false });
 
     if (error) {

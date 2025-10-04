@@ -38,7 +38,7 @@ export const RecentActivity: React.FC<RecentActivityProps> = ({
           ))
         ) : (
           <View style={styles.emptyState}>
-            <Ionicons name="training" size={32} color={colors.muted} />
+            <Ionicons name="fitness" size={32} color={colors.muted} />
             <Text style={styles.emptyText}>No completed trainings yet</Text>
             <Text style={styles.emptySubtext}>Complete your first training to see it here!</Text>
           </View>
@@ -56,7 +56,7 @@ const ActivityItem: React.FC<ActivityItemProps> = ({ activity }) => {
   const getActivityIcon = () => {
     switch (activity.type) {
       case 'training':
-        return 'training';
+        return 'fitness';
       case 'rest':
         return 'moon';
       case 'achievement':

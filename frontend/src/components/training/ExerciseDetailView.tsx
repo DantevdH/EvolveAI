@@ -212,7 +212,7 @@ const GeneralInfoTab: React.FC<{ exercise: Exercise; difficultyColor: (difficult
       {/* Muscles Worked */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="training" size={20} color={colors.primary} />
+          <Ionicons name="fitness" size={20} color={colors.primary} />
           <Text style={styles.sectionTitle}>Muscles Worked</Text>
         </View>
 

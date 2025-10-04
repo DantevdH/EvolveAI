@@ -93,7 +93,7 @@ const ExercisePreview: React.FC<ExercisePreviewProps> = ({ name, completed }) =>
   return (
     <View style={styles.exercisePreview}>
       <Ionicons
-        name="training"
+        name="fitness"
         size={24}
         color={completed ? colors.primary : colors.muted}
       />

@@ -20,13 +20,9 @@ export default function FollowUpQuestionsStep() {
   }, []);
 
   const handleComplete = async (trainingPlan: any) => {
-    console.log('✅ Follow-up questions completed successfully');
-    
-    // Refresh user profile to get updated data
-    await refreshUserProfile();
-    
-    // Navigate to next step - let index.tsx handle the routing logic
-    router.replace('/');
+    // Navigate directly to main app - training plan is complete
+    // Auth context will be updated by ConversationalOnboarding before this is called
+    router.replace('/(tabs)');
   };
 
   const handleError = (error: string) => {

@@ -36,7 +36,7 @@ export const PerformanceExplanation: React.FC = () => {
               <Text style={styles.sectionTitle}>AI Performance Analysis:</Text>
               
               <View style={styles.componentItem}>
-                <Ionicons name="training" size={18} color={colors.primary} />
+                <Ionicons name="fitness" size={18} color={colors.primary} />
                 <View style={styles.componentText}>
                   <Text style={styles.componentTitle}>Training Volume</Text>
                   <Text style={styles.componentDescription}>

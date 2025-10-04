@@ -27,52 +27,21 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
   const mountedRef = useRef(true);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  const getMessageContent = () => {
-    switch (analysisPhase) {
-      case 'initial':
-        return {
-          greeting: `Hi ${username}! 👋`,
-          analysis: "I'm excited to help you on your training journey! I've analyzed your personal profile and can see your starting point, plus I love your training goals and ambition!",
-          conclusion: "To create the perfect plan for YOU, I need to understand you better. Ready to answer some quick questions? 🚀"
-        };
-      case 'followup':
-        return {
-          greeting: `Hi ${username}! 💪`,
-          analysis: "Great answers! I'm getting a clearer picture of your training journey, including your preferences, lifestyle patterns, and the specific challenges and motivations that drive you.",
-          conclusion: "Just a few more questions to fine-tune your personalized plan. We're almost there! ✨"
-        };
-      case 'outline':
-        return {
-          greeting: `Hi ${username}! 📋`,
-          analysis: "Excellent! I've analyzed all your responses and I'm now crafting a comprehensive training plan outline tailored specifically to your goals, experience level, and lifestyle.",
-          conclusion: "Your personalized training plan outline is being created. This will be the foundation of your training journey! 💪"
-        };
-      case 'generation':
-        return {
-          greeting: `Hi ${username}! 🎉`,
-          analysis: "Fantastic! I've completed my analysis and I'm thrilled with what I've learned about your complete training profile - you're going to love this personalized training plan that I've crafted just for you!",
-          conclusion: "Your custom training plan is ready! Let's create something amazing together! 🔥"
-        };
-      default:
-        return {
-          greeting: `Hi ${username}! 👋`,
-          analysis: "I've analyzed your information:",
-          conclusion: "I have some questions for you."
-        };
-    }
-  };
-
-  const content = useMemo(() => getMessageContent(), [username, analysisPhase]);
+  // Get the message to display - prioritize dynamic messages from backend
   const fullMessage = useMemo(() => {
-    // Priority: customMessage > aiMessage (from backend) > hardcoded content
+    // Priority 1: Custom message (for special cases)
     if (customMessage) {
       return customMessage;
     }
+    
+    // Priority 2: AI-generated message from backend (MAIN USE CASE)
     if (aiMessage) {
       return aiMessage;
     }
-    return `${content.greeting}\n\n${content.analysis}\n\n${content.conclusion}`;
-  }, [customMessage, aiMessage, content]);
+    
+    // Priority 3: Fallback message (only shown if backend fails)
+    return `Hi ${username}! 👋\n\nI'm preparing your personalized training journey. Let's get started! 🚀`;
+  }, [customMessage, aiMessage, username]);
 
   // Memoize the typing complete callback to prevent dependency issues
   const memoizedOnTypingComplete = useCallback(() => {

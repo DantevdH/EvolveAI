@@ -47,8 +47,7 @@ export class trainingService {
     jwtToken?: string
   ): Promise<AIQuestionResponse> {
     try {
-      console.log('🚀 Starting initial questions request...');
-      console.log('📋 Personal info:', JSON.stringify(personalInfo, null, 2));
+      console.log('📍 Onboarding Service: Generating initial questions');
       
       const request: InitialQuestionsRequest = {
         personal_info: personalInfo,
@@ -56,15 +55,12 @@ export class trainingService {
         jwt_token: jwtToken,
       };
 
-      console.log('📤 Request payload:', JSON.stringify(request, null, 2));
-      console.log('🌐 Making API call to:', `${this.BASE_URL}/initial-questions`);
+      // Making API call to backend
 
       const response = await apiClient.post<OnboardingApiResponse<AIQuestionResponse>>(
         `${this.BASE_URL}/initial-questions`,
         request
       );
-
-      console.log('📥 API response received:', JSON.stringify(response, null, 2));
 
       // Validate response format
       if (typeof response !== 'object' || response === null) {
@@ -90,20 +86,11 @@ export class trainingService {
 
       const responseData = (response.data as any) as AIQuestionResponse;
       
-      console.log('✅ Initial questions retrieved successfully:', {
-        questionCount: responseData.questions?.length || 0,
-        estimatedTime: responseData.estimated_time_minutes
-      });
+      console.log(`📍 Onboarding Service: Initial questions generated (${responseData.questions?.length || 0} questions)`);
 
       return responseData;
     } catch (error) {
-      console.error('❌ Error getting initial questions:', {
-        error: error,
-        errorType: typeof error,
-        errorName: error instanceof Error ? error.name : 'Unknown',
-        errorMessage: error instanceof Error ? error.message : 'Unknown error',
-        errorStack: error instanceof Error ? error.stack : undefined
-      });
+      console.error(`❌ Onboarding Service: Initial questions failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw new Error(error instanceof Error ? error.message : 'Failed to get initial questions');
     }
   }
@@ -119,9 +106,7 @@ export class trainingService {
     jwtToken?: string
   ): Promise<AIQuestionResponse> {
     try {
-      console.log('🚀 Starting follow-up questions request...');
-      console.log('📋 Personal info:', JSON.stringify(personalInfo, null, 2));
-      console.log('📋 Initial responses:', initialResponses);
+      console.log('📍 Onboarding Service: Generating follow-up questions');
       
       const request: FollowUpQuestionsRequest = {
         personal_info: personalInfo,
@@ -131,15 +116,14 @@ export class trainingService {
         jwt_token: jwtToken,
       };
 
-      console.log('📤 Request payload:', JSON.stringify(request, null, 2));
-      console.log('🌐 Making API call to:', `${this.BASE_URL}/follow-up-questions`);
+      // Making API call to backend
 
       const response = await apiClient.post<OnboardingApiResponse<AIQuestionResponse>>(
         `${this.BASE_URL}/follow-up-questions`,
         request
       );
 
-      console.log('📥 API response received:', JSON.stringify(response, null, 2));
+      // API response received
 
       // Validate response format
       if (typeof response !== 'object' || response === null) {
@@ -165,22 +149,11 @@ export class trainingService {
 
       const responseData = (response.data as any) as AIQuestionResponse;
       
-      console.log('✅ Follow-up questions retrieved successfully:', {
-        questionCount: responseData.questions?.length || 0,
-        estimatedTime: responseData.estimated_time_minutes,
-        questions: responseData.questions,
-        totalQuestions: responseData.total_questions
-      });
+      console.log(`📍 Onboarding Service: Follow-up questions generated (${responseData.questions?.length || 0} questions)`);
 
       return responseData;
     } catch (error) {
-      console.error('❌ Error getting follow-up questions:', {
-        error: error,
-        errorType: typeof error,
-        errorName: error instanceof Error ? error.name : 'Unknown',
-        errorMessage: error instanceof Error ? error.message : 'Unknown error',
-        errorStack: error instanceof Error ? error.stack : undefined
-      });
+      console.error(`❌ Onboarding Service: Follow-up questions failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw new Error(error instanceof Error ? error.message : 'Failed to get follow-up questions');
     }
   }
@@ -197,7 +170,7 @@ export class trainingService {
     jwtToken?: string
   ): Promise<{ success: boolean; data?: any; message?: string }> {
     try {
-      console.log('📋 Generating training plan outline...');
+      console.log('📍 Onboarding Service: Generating training plan outline');
 
       const request: TrainingPlanOutlineRequest = {
         personal_info: personalInfo,
@@ -208,15 +181,14 @@ export class trainingService {
         jwt_token: jwtToken || '',
       };
 
-      console.log('📤 Outline request payload:', JSON.stringify(request, null, 2));
-      console.log('🌐 Making API call to:', `${this.BASE_URL}/training-plan-outline`);
+      // Making API call to backend
 
       const response = await apiClient.post<OnboardingApiResponse<any>>(
         `${this.BASE_URL}/training-plan-outline`,
         request
       );
 
-      console.log('📥 Outline API response received:', JSON.stringify(response, null, 2));
+      // API response received
 
       // Validate response format
       if (typeof response !== 'object' || response === null) {
@@ -242,10 +214,7 @@ export class trainingService {
 
       const responseData = (response.data as any);
       
-      console.log('✅ Training plan outline generated successfully:', {
-        hasOutline: !!responseData.outline,
-        outlineKeys: responseData.outline ? Object.keys(responseData.outline) : []
-      });
+      console.log(`📍 Onboarding Service: Training plan outline generated successfully`);
 
       return {
         success: true,
@@ -253,10 +222,7 @@ export class trainingService {
         message: response.message
       };
     } catch (error) {
-      console.error('❌ Error generating training plan outline:', {
-        error: error,
-        message: error instanceof Error ? error.message : 'Unknown error'
-      });
+      console.error(`❌ Onboarding Service: Plan outline failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw error;
     }
   }
@@ -288,23 +254,14 @@ export class trainingService {
         jwt_token: jwtToken,
       };
 
-      console.log('🔍 DEBUG: Sending request to backend:', {
-        url: `${this.BASE_URL}/generate-plan`,
-        hasJwtToken: !!jwtToken,
-        requestKeys: Object.keys(request)
-      });
+      console.log('📍 Onboarding Service: Generating training plan');
 
       const response = await apiClient.post<OnboardingApiResponse<any>>(
         `${this.BASE_URL}/generate-plan`,
         request
       );
 
-      console.log('🔍 DEBUG: Backend response received:', {
-        success: response.success,
-        message: response.message,
-        hasData: !!response.data,
-        dataKeys: response.data ? Object.keys(response.data) : []
-      });
+      // API response received
 
       // Validate response format
       if (typeof response !== 'object' || response === null) {
@@ -324,11 +281,11 @@ export class trainingService {
       }
 
       // Return the response data (now contains training_plan_id and metadata, not the full training plan)
-      console.log(`✅ FRONTEND: Training plan generated and saved successfully (ID: ${(response.data as any)?.training_plan_id})`);
+      console.log(`📍 Onboarding Service: Training plan generated successfully`);
       
       return response;
     } catch (error) {
-      console.error('Error generating training plan:', error);
+      console.error(`❌ Onboarding Service: Training plan generation failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw new Error(error instanceof Error ? error.message : 'Failed to generate training plan');
     }
   }

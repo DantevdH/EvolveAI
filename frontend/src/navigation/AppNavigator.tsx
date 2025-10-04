@@ -8,14 +8,12 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { useAuth } from '../context/AuthContext';
 import { AuthNavigator } from './AuthNavigator';
 import { OnboardingNavigator } from './OnboardingNavigator';
-import { MainTabNavigator } from './MainTabNavigator';
 import { LoadingScreen } from '../components/shared/LoadingScreen';
 
 export type RootStackParamList = {
   Loading: undefined;
   Auth: undefined;
   Onboarding: undefined;
-  Main: undefined;
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -44,11 +42,8 @@ export const AppNavigator: React.FC = () => {
       return 'Onboarding';
     }
     
-    if (!state.trainingPlan) {
-      return 'Onboarding'; // Will redirect to generate plan
-    }
-    
-    return 'Main';
+    // If user is authenticated and has profile, let Expo Router handle main navigation
+    return 'Auth'; // This will redirect to tabs via Expo Router
   };
 
   return (
@@ -60,7 +55,6 @@ export const AppNavigator: React.FC = () => {
         <Stack.Screen name="Loading" component={LoadingScreen} />
         <Stack.Screen name="Auth" component={AuthNavigator} />
         <Stack.Screen name="Onboarding" component={OnboardingNavigator} />
-        <Stack.Screen name="Main" component={MainTabNavigator} />
       </Stack.Navigator>
     </NavigationContainer>
   );

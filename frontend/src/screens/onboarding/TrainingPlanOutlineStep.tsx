@@ -16,6 +16,7 @@ interface TrainingPlanOutlineStepProps {
   isLoading: boolean;
   error?: string;
   username?: string;
+  aiMessage?: string;
 }
 
 export const TrainingPlanOutlineStep: React.FC<TrainingPlanOutlineStepProps> = ({
@@ -27,6 +28,7 @@ export const TrainingPlanOutlineStep: React.FC<TrainingPlanOutlineStepProps> = (
   isLoading,
   error,
   username,
+  aiMessage,
 }) => {
   const [viewMode, setViewMode] = useState<'overview' | 'week'>('overview');
   const [currentWeekIndex, setCurrentWeekIndex] = useState(0);
@@ -44,6 +46,7 @@ export const TrainingPlanOutlineStep: React.FC<TrainingPlanOutlineStepProps> = (
       <AILoadingScreen 
         username={username}
         analysisPhase="outline"
+        aiMessage={aiMessage}
       />
     );
   }
@@ -72,6 +75,7 @@ export const TrainingPlanOutlineStep: React.FC<TrainingPlanOutlineStepProps> = (
       <AILoadingScreen 
         username={username}
         analysisPhase="outline"
+        aiMessage={aiMessage}
         showContinueButton={true}
         onContinue={() => setShowAIIntro(false)}
       />

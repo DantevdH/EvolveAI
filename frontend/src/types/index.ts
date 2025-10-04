@@ -59,6 +59,11 @@ export interface UserProfile {
   initial_responses?: Record<string, any> | null;
   follow_up_responses?: Record<string, any> | null;
   
+  // AI messages from database
+  initial_ai_message?: string | null;
+  follow_up_ai_message?: string | null;
+  outline_ai_message?: string | null;
+  
   // Plan outline and feedback (separated)
   plan_outline?: PlanOutline | null;
   plan_outline_feedback?: string | null;

@@ -20,12 +20,7 @@ export default function PlanOutlineStep() {
   }, []);
 
   const handleComplete = async (trainingPlan: any) => {
-    console.log('✅ Plan outline completed successfully');
-    
-    // Refresh user profile to get updated data
-    await refreshUserProfile();
-    
-    // Navigate to next step - let index.tsx handle the routing logic
+    // Navigate to root to continue onboarding flow
     router.replace('/');
   };
 

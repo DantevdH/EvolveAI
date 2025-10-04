@@ -29,14 +29,8 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
   const [showAnswerInterface, setShowAnswerInterface] = useState(false);
   const [showAIIntro, setShowAIIntro] = useState(true); // Show AI intro when questions first load
    
-  // Debug logging
-  console.log('🔍 QuestionsStep received:', {
-    questionsCount: questions?.length || 0,
-    questions: questions,
-    currentIndex,
-    totalQuestions,
-    isLoading,
-  });
+  // Essential onboarding flow logging
+  console.log(`📍 Onboarding Stage: ${stepTitle || 'Unknown'} - Questions: ${questions?.length || 0}, Loading: ${isLoading}, AI Message: ${aiMessage?.substring(0, 50) || 'NONE'}`);
   
   // Initialize answered questions based on existing responses
   const [answeredQuestions, setAnsweredQuestions] = useState(() => {
@@ -221,7 +215,7 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
         </View>
 
         <View style={styles.contentArea}>
-          {/* AI Chat Message with Question */}
+          {/* AI Chat Message with Current Question Text */}
           <View style={styles.chatContainer}>
             <AIChatMessage
               customMessage={currentQuestion.text}
@@ -233,13 +227,13 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
           {/* Answer Interface - shown after typing is complete */}
           {showAnswerInterface && (
             <View style={styles.answerContainer}>
-                 <QuestionRenderer
-                   question={currentQuestion}
-                   value={currentResponse}
-                   onChange={handleResponseChange}
-                   error={error}
-                   noBackground={true}
-                 />
+              <QuestionRenderer
+                question={currentQuestion}
+                value={currentResponse}
+                onChange={handleResponseChange}
+                error={error}
+                noBackground={true}
+              />
             </View>
           )}
         </View>

@@ -3,8 +3,9 @@
  * Extracts complex routing logic from index.tsx for better maintainability
  */
 
-import { useMemo } from 'react';
+import { useMemo, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { logDebug } from '../utils/logger';
 
 export interface AppRoutingState {
   targetRoute: string | null;
@@ -15,15 +16,16 @@ export interface AppRoutingState {
 
 export const useAppRouting = (): AppRoutingState => {
   const { state } = useAuth();
+  const lastResultRef = useRef<string>('');
 
-  return useMemo(() => {
+  const result = useMemo(() => {
     // If we're loading, don't navigate at all - stay on current page
     if (state.isLoading || state.trainingPlanLoading) {
       return {
         targetRoute: null,
         isLoading: true,
         hasError: false,
-        routingReason: 'Loading in progress'
+        routingReason: 'Loading'
       };
     }
 
@@ -33,7 +35,7 @@ export const useAppRouting = (): AppRoutingState => {
         targetRoute: null,
         isLoading: false,
         hasError: true,
-        routingReason: 'Error state - user should see error'
+        routingReason: 'Error'
       };
     }
 
@@ -43,7 +45,7 @@ export const useAppRouting = (): AppRoutingState => {
         targetRoute: '/login',
         isLoading: false,
         hasError: false,
-        routingReason: 'No user - redirect to login'
+        routingReason: 'Login'
       };
     }
 
@@ -53,7 +55,7 @@ export const useAppRouting = (): AppRoutingState => {
         targetRoute: '/email-verification',
         isLoading: false,
         hasError: false,
-        routingReason: 'OAuth user needs email verification'
+        routingReason: 'Email Verification'
       };
     }
 
@@ -63,7 +65,7 @@ export const useAppRouting = (): AppRoutingState => {
         targetRoute: '/onboarding',
         isLoading: false,
         hasError: false,
-        routingReason: 'No user profile - start onboarding from beginning'
+        routingReason: 'Onboarding Start'
       };
     }
 
@@ -75,22 +77,13 @@ export const useAppRouting = (): AppRoutingState => {
     const hasPlanOutline = !!state.userProfile.plan_outline;
     const hasTrainingPlan = !!state.trainingPlan;
 
-    console.log('🔍 Checking onboarding progress:', {
-      hasInitialQuestions,
-      hasInitialResponses,
-      hasFollowUpQuestions,
-      hasFollowUpResponses,
-      hasPlanOutline,
-      hasTrainingPlan,
-    });
-
     // Granular routing based on what's missing
     if (!hasInitialQuestions || !hasInitialResponses) {
       return {
         targetRoute: '/onboarding/initial-questions',
         isLoading: false,
         hasError: false,
-        routingReason: 'Missing initial questions or responses → /onboarding/initial-questions'
+        routingReason: 'Initial Questions'
       };
     }
 
@@ -99,7 +92,7 @@ export const useAppRouting = (): AppRoutingState => {
         targetRoute: '/onboarding/follow-up-questions',
         isLoading: false,
         hasError: false,
-        routingReason: 'Missing follow-up questions or responses → /onboarding/follow-up-questions'
+        routingReason: 'Follow-up Questions'
       };
     }
 
@@ -108,7 +101,7 @@ export const useAppRouting = (): AppRoutingState => {
         targetRoute: '/onboarding/plan-outline',
         isLoading: false,
         hasError: false,
-        routingReason: 'Missing plan outline → /onboarding/plan-outline'
+        routingReason: 'Plan Outline'
       };
     }
 
@@ -117,7 +110,7 @@ export const useAppRouting = (): AppRoutingState => {
         targetRoute: '/generate-plan',
         isLoading: false,
         hasError: false,
-        routingReason: 'Missing training plan → /generate-plan'
+        routingReason: 'Generate Plan'
       };
     }
 
@@ -126,7 +119,7 @@ export const useAppRouting = (): AppRoutingState => {
       targetRoute: '/(tabs)',
       isLoading: false,
       hasError: false,
-      routingReason: 'Onboarding complete - go to main app'
+      routingReason: 'Main App'
     };
   }, [
     state.isLoading,
@@ -136,4 +129,15 @@ export const useAppRouting = (): AppRoutingState => {
     state.trainingPlan,
     state.error
   ]);
+
+  // Only log when result actually changes (debug level only)
+  useEffect(() => {
+    const resultKey = `${result.targetRoute}-${result.routingReason}`;
+    if (resultKey !== lastResultRef.current) {
+      lastResultRef.current = resultKey;
+      logDebug(`Routing: ${result.routingReason} → ${result.targetRoute || 'none'}`);
+    }
+  }, [result]);
+
+  return result;
 };

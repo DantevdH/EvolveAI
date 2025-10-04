@@ -146,7 +146,7 @@ const TrainingScreen: React.FC = () => {
   }
 
   // Calculate current week stats
-  const currentWeek = trainingPlan.weeklySchedules.find(
+  const currentWeek = trainingPlan?.weeklySchedules?.find(
     week => week.weekNumber === trainingState.currentWeekSelected
   );
   
@@ -158,7 +158,7 @@ const TrainingScreen: React.FC = () => {
     training => !training.isRestDay
   ).length || 0;
 
-  const isPastWeek = trainingState.currentWeekSelected < trainingPlan.currentWeek;
+  const isPastWeek = trainingState.currentWeekSelected < (trainingPlan?.currentWeek || 1);
 
   return (
     <SafeAreaView style={styles.container}>

@@ -30,7 +30,6 @@ from core.training.helpers.ai_question_schemas import (
     PersonalInfo,
     AIQuestion,
     QuestionType,
-    QuestionCategory,
     QuestionOption
 )
 from core.training.helpers.training_schemas import TrainingPlan, DailyTraining, StrengthExercise, EnduranceSession, WeeklySchedule, DayOfWeek
@@ -64,7 +63,6 @@ class TestTrainingFlowIntegration:
                 id="q1",
                 text="What is your primary training goal?",
                 response_type=QuestionType.MULTIPLE_CHOICE,
-                category=QuestionCategory.GOALS_PREFERENCES,
                 options=[
                     QuestionOption(id="opt1", text="Build Muscle", value="muscle_building"),
                     QuestionOption(id="opt2", text="Lose Weight", value="weight_loss"),
@@ -75,7 +73,6 @@ class TestTrainingFlowIntegration:
                 id="q2",
                 text="How many days per week can you train?",
                 response_type=QuestionType.SLIDER,
-                category=QuestionCategory.TIME_COMMITMENT,
                 min_value=1,
                 max_value=7,
                 step=1,
@@ -99,7 +96,6 @@ class TestTrainingFlowIntegration:
                 id="fq1",
                 text="What equipment do you have access to?",
                 response_type=QuestionType.MULTIPLE_CHOICE,
-                category=QuestionCategory.EQUIPMENT_AVAILABILITY,
                 options=[
                     QuestionOption(id="eq1", text="Full Gym", value="full_gym"),
                     QuestionOption(id="eq2", text="Home Weights", value="home_weights"),
@@ -171,7 +167,6 @@ class TestTrainingFlowIntegration:
                     id="q1",
                     text="What is your primary training goal?",
                     response_type=QuestionType.MULTIPLE_CHOICE,
-                    category=QuestionCategory.GOALS_PREFERENCES,
                     options=[
                         QuestionOption(id="opt1", text="Build Muscle", value="muscle_building")
                     ]
@@ -179,7 +174,6 @@ class TestTrainingFlowIntegration:
             ],
             total_questions=1,
             estimated_time_minutes=5,
-            categories=[QuestionCategory.GOALS_PREFERENCES],
             ai_message="Welcome to your personalized training assessment! 🏋️‍♂️"
         )
         
@@ -189,8 +183,6 @@ class TestTrainingFlowIntegration:
                 AIQuestion(
                     id="fq1",
                     text="What equipment do you have?",
-                    response_type=QuestionType.MULTIPLE_CHOICE,
-                    category=QuestionCategory.EQUIPMENT_AVAILABILITY,
                     options=[
                         QuestionOption(id="eq1", text="Full Gym", value="full_gym")
                     ]
@@ -198,7 +190,6 @@ class TestTrainingFlowIntegration:
             ],
             total_questions=1,
             estimated_time_minutes=3,
-            categories=[QuestionCategory.EQUIPMENT_AVAILABILITY],
             ai_message="Great responses! Let's dive deeper. 💪"
         )
         
@@ -468,8 +459,7 @@ class TestTrainingFlowIntegration:
         question = AIQuestion(
             id="test",
             text="Test question",
-            response_type=QuestionType.MULTIPLE_CHOICE,
-            category=QuestionCategory.GOALS_PREFERENCES
+            response_type=QuestionType.MULTIPLE_CHOICE
         )
         
         # Should use model_dump() not dict()

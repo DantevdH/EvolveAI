@@ -15,7 +15,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
 
 from core.training.helpers.response_formatter import ResponseFormatter
-from core.training.helpers.ai_question_schemas import AIQuestion, QuestionType, QuestionOption, QuestionCategory
+from core.training.helpers.ai_question_schemas import AIQuestion, QuestionType, QuestionOption
 
 
 class TestResponseFormatter:
@@ -29,7 +29,6 @@ class TestResponseFormatter:
                 id="training_frequency",
                 text="How many days per week do you train?",
                 response_type=QuestionType.MULTIPLE_CHOICE,
-                category=QuestionCategory.TIME_COMMITMENT,
                 options=[
                     QuestionOption(id="1", text="Daily", value="daily"),
                     QuestionOption(id="2", text="3-4 times per week", value="3-4"),
@@ -39,20 +38,17 @@ class TestResponseFormatter:
             AIQuestion(
                 id="favorite_exercise_type",
                 text="What's your favorite exercise type?",
-                response_type=QuestionType.DROPDOWN,
-                category=QuestionCategory.GOALS_PREFERENCES
+                response_type=QuestionType.DROPDOWN
             ),
             AIQuestion(
                 id="specific_goals",
                 text="Do you have any specific training goals?",
-                response_type=QuestionType.FREE_TEXT,
-                category=QuestionCategory.GOALS_PREFERENCES
+                response_type=QuestionType.FREE_TEXT
             ),
             AIQuestion(
                 id="session_duration",
                 text="How long are your training sessions?",
                 response_type=QuestionType.SLIDER,
-                category=QuestionCategory.TIME_COMMITMENT,
                 min_value=15,
                 max_value=120,
                 unit="minutes"
@@ -61,7 +57,6 @@ class TestResponseFormatter:
                 id="current_weight",
                 text="What's your current weight?",
                 response_type=QuestionType.SLIDER,
-                category=QuestionCategory.MEDICAL_HEALTH,
                 min_value=40,
                 max_value=200,
                 unit="kg"
@@ -70,19 +65,16 @@ class TestResponseFormatter:
                 id="has_equipment",
                 text="Do you have access to gym equipment?",
                 response_type=QuestionType.CONDITIONAL_BOOLEAN,
-                category=QuestionCategory.EQUIPMENT_AVAILABILITY
             ),
             AIQuestion(
                 id="has_injuries",
                 text="Do you have any injuries or limitations?",
                 response_type=QuestionType.CONDITIONAL_BOOLEAN,
-                category=QuestionCategory.MEDICAL_HEALTH
             ),
             AIQuestion(
                 id="motivation_level",
                 text="How motivated are you to achieve your goals?",
                 response_type=QuestionType.RATING,
-                category=QuestionCategory.MOTIVATION_COMMITMENT,
                 min_value=1,
                 max_value=5,
                 help_text="1=Not motivated, 5=Very motivated"
@@ -91,7 +83,6 @@ class TestResponseFormatter:
                 id="satisfaction_rating",
                 text="Rate your current training level",
                 response_type=QuestionType.RATING,
-                category=QuestionCategory.TRAINING_EXPERIENCE,
                 min_value=1,
                 max_value=10,
                 help_text="1=Beginner, 10=Expert"
@@ -222,7 +213,6 @@ class TestResponseFormatter:
             id="test",
             text="Test question",
             response_type=QuestionType.SLIDER,
-            category=QuestionCategory.TIME_COMMITMENT
         )
         result = ResponseFormatter._format_single_response(response, question_no_unit)
         assert result == "45"
@@ -239,7 +229,6 @@ class TestResponseFormatter:
             id="test",
             text="Test question",
             response_type=QuestionType.RATING,
-            category=QuestionCategory.TRAINING_EXPERIENCE,
             min_value=1,
             max_value=10
         )
@@ -252,7 +241,6 @@ class TestResponseFormatter:
             id="test",
             text="Test question",
             response_type=QuestionType.RATING,
-            category=QuestionCategory.TRAINING_EXPERIENCE,
             min_value=1,
             max_value=5
         )
@@ -366,7 +354,6 @@ class TestResponseFormatter:
             id="test",
             text="Test question",
             response_type=QuestionType.RATING,
-            category=QuestionCategory.TRAINING_EXPERIENCE,
             min_value=0,
             max_value=100
         )
@@ -379,7 +366,6 @@ class TestResponseFormatter:
             id="test",
             text="Test question",
             response_type=QuestionType.SLIDER,
-            category=QuestionCategory.MEDICAL_HEALTH,
             unit="kg"
         )
         response = 0

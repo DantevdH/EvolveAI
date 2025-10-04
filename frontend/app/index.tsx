@@ -3,6 +3,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useAppRouting } from '@/src/hooks/useAppRouting';
 import { useEffect, useRef } from 'react';
 import { LoadingScreen } from '@/src/components/shared/LoadingScreen';
+import { logNavigation, logWarn } from '@/src/utils/logger';
 
 export default function Index() {
   const { state } = useAuth();
@@ -36,49 +37,42 @@ export default function Index() {
 
     // Use centralized routing logic
     const { targetRoute, routingReason } = routingState;
-    
-    console.log(`🎯 Routing decision: ${routingReason} -> ${targetRoute || 'no navigation'}`);
 
     // Only navigate if we have a target route and it's different from the last navigation
     if (targetRoute && targetRoute !== lastNavigationRef.current) {
       // Prevent duplicate navigation if already navigating
       if (isNavigatingRef.current) {
-        console.log('🚫 Navigation blocked - already navigating');
+        logWarn('Navigation blocked - already in progress');
         return;
       }
       
-      // Additional check: if we're already on the target route, don't navigate
-      if (targetRoute === '/generate-plan' && lastNavigationRef.current === '/generate-plan') {
-        console.log('🚫 Navigation blocked - already on target route');
-        return;
-      }
+      // Log the navigation
+      const fromRoute = lastNavigationRef.current || 'Root';
+      logNavigation(fromRoute, targetRoute, routingReason);
       
-      console.log(`🔄 Navigating from ${lastNavigationRef.current} to ${targetRoute}`);
       lastNavigationRef.current = targetRoute;
       isNavigatingRef.current = true;
       
-      // Add a delay to prevent rapid navigation calls and allow state to stabilize
+      // Add a small delay to prevent rapid navigation calls and allow state to stabilize
       navigationTimeoutRef.current = setTimeout(() => {
         try {
-          console.log(`✅ Executing navigation to ${targetRoute}`);
           router.push(targetRoute as any);
         } catch (error) {
-          console.error('❌ Navigation error:', error);
+          logWarn('Navigation failed, trying replace', error);
           try {
             router.replace(targetRoute as any);
           } catch (replaceError) {
-            console.error('❌ Replace navigation also failed:', replaceError);
+            logWarn('Replace navigation also failed', replaceError);
           }
         } finally {
           // Reset navigation state after a delay to prevent rapid re-navigation
           setTimeout(() => {
             isNavigatingRef.current = false;
-            console.log('🔄 Navigation state reset');
-          }, 300); // Reduced delay for better responsiveness
+          }, 300);
         }
-      }, 50); // Reduced delay for better responsiveness
+      }, 50);
     }
-  }, [state.isLoading, state.trainingPlanLoading, state.user, state.userProfile, state.trainingPlan, state.error, router]);
+  }, [state.isLoading, state.trainingPlanLoading, state.user, state.userProfile, state.trainingPlan, state.error, router, routingState]);
 
   // Cleanup timeout on unmount and state changes
   useEffect(() => {

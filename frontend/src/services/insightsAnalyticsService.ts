@@ -112,16 +112,16 @@ export class InsightsAnalyticsService {
     }
 
     try {
-      // Get training exercises for the last 52 weeks (1 year)
+      // Get strength exercises for the last 52 weeks (1 year)
       const oneYearAgo = new Date();
       oneYearAgo.setDate(oneYearAgo.getDate() - 365); // 1 year
 
-      const { data: trainingExercises, error: exercisesError } = await supabase
-        .from('training_exercises')
+      const { data: strengthExercises, error: exercisesError } = await supabase
+        .from('strength_exercise')
         .select(`
           *,
           exercises!inner(name),
-          daily_trainings!inner(
+          daily_training!inner(
             *,
             weekly_schedules!inner(
               training_plans!inner(
@@ -131,7 +131,7 @@ export class InsightsAnalyticsService {
           )
         `)
         .eq('completed', true)
-        .eq('daily_trainings.weekly_schedules.training_plans.user_profile_id', userProfileId)
+        .eq('daily_training.weekly_schedules.training_plans.user_profile_id', userProfileId)
         .gte('updated_at', oneYearAgo.toISOString())
         .order('updated_at', { ascending: false });
 
@@ -139,14 +139,14 @@ export class InsightsAnalyticsService {
         return { success: false, error: exercisesError.message };
       }
 
-      if (!trainingExercises || trainingExercises.length === 0) {
+      if (!strengthExercises || strengthExercises.length === 0) {
         return { success: true, data: [] };
       }
 
       // Group by week
       const weeklyData: { [key: string]: WeeklyVolumeData } = {};
       
-      trainingExercises.forEach(training => {
+      strengthExercises.forEach(training => {
         const date = new Date(training.updated_at);
         const weekStart = new Date(date);
         weekStart.setDate(date.getDate() - date.getDay()); // Start of week (Sunday)
@@ -264,13 +264,13 @@ export class InsightsAnalyticsService {
     try {
       // Get all exercises with recent trainings
       const { data: exercises, error } = await supabase
-        .from('training_exercises')
+        .from('strength_exercise')
         .select(`
           exercise_id,
           exercises!inner(name)
         `)
         .eq('completed', true)
-        .eq('daily_trainings.weekly_schedules.training_plans.user_profile_id', userProfileId);
+        .eq('daily_training.weekly_schedules.training_plans.user_profile_id', userProfileId);
 
       if (error) {
         return { success: false, error: error.message };
@@ -331,13 +331,13 @@ export class InsightsAnalyticsService {
     try {
       // Get exercises with their primary muscles
       const { data: exercises, error } = await supabase
-        .from('training_exercises')
+        .from('strength_exercise')
         .select(`
           exercise_id,
           exercises!inner(name, primary_muscle)
         `)
         .eq('completed', true)
-        .eq('daily_trainings.weekly_schedules.training_plans.user_profile_id', userProfileId);
+        .eq('daily_training.weekly_schedules.training_plans.user_profile_id', userProfileId);
 
       if (error) {
         return { success: false, error: error.message };
@@ -667,11 +667,11 @@ export class InsightsAnalyticsService {
       const twelveWeeksAgo = new Date();
       twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84);
 
-      const { data: trainingExercises, error } = await supabase
-        .from('training_exercises')
+      const { data: strengthExercises, error } = await supabase
+        .from('strength_exercise')
         .select(`
           *,
-          daily_trainings!inner(
+          daily_training!inner(
             *,
             weekly_schedules!inner(
               training_plans!inner(
@@ -681,7 +681,7 @@ export class InsightsAnalyticsService {
           )
         `)
         .eq('completed', true)
-        .eq('daily_trainings.weekly_schedules.training_plans.user_profile_id', userProfileId)
+        .eq('daily_training.weekly_schedules.training_plans.user_profile_id', userProfileId)
         .gte('updated_at', twelveWeeksAgo.toISOString());
 
       if (error) {
@@ -691,7 +691,7 @@ export class InsightsAnalyticsService {
       // Group by date
       const dailyData: { [key: string]: { volume: number; trainings: number } } = {};
       
-      trainingExercises?.forEach(training => {
+      strengthExercises?.forEach(training => {
         const date = new Date(training.updated_at).toISOString().split('T')[0];
         
         if (!dailyData[date]) {

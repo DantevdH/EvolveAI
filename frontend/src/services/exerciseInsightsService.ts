@@ -78,30 +78,30 @@ export class ExerciseInsightsService {
     userProfileId: number
   ): Promise<{ success: boolean; data?: RawTrainingData[]; error?: string }> {
     try {
-      // Get all COMPLETED training exercises for this specific exercise and user
-      // First, get the training exercises
-      const { data: trainingExercises, error: exercisesError } = await supabase
-        .from('training_exercises')
+      // Get all COMPLETED strength exercises for this specific exercise and user
+      // First, get the strength exercises
+      const { data: strengthExercises, error: exercisesError } = await supabase
+        .from('strength_exercise')
         .select('*')
         .eq('exercise_id', exerciseId)
         .eq('completed', true)
         .order('updated_at', { ascending: false });
 
       if (exercisesError) {
-        console.error('Error fetching training exercises:', exercisesError);
+        console.error('Error fetching strength exercises:', exercisesError);
         return { success: false, error: exercisesError.message };
       }
 
-      if (!trainingExercises || trainingExercises.length === 0) {
+      if (!strengthExercises || strengthExercises.length === 0) {
         return { success: true, data: [] };
       }
 
       // Get the daily training IDs
-      const dailyTrainingIds = [...new Set(trainingExercises.map(we => we.daily_training_id))];
+      const dailyTrainingIds = [...new Set(strengthExercises.map(we => we.daily_training_id))];
       
       // Get daily trainings with their related data
       const { data: dailyTrainings, error: dailyError } = await supabase
-        .from('daily_trainings')
+        .from('daily_training')
         .select(`
           *,
           weekly_schedules!inner(
@@ -118,9 +118,9 @@ export class ExerciseInsightsService {
         return { success: false, error: dailyError.message };
       }
 
-      // Filter training exercises to only include those from valid daily trainings
+      // Filter strength exercises to only include those from valid daily trainings
       const validDailyTrainingIds = new Set(dailyTrainings?.map(dw => dw.id) || []);
-      const data = trainingExercises.filter(we => validDailyTrainingIds.has(we.daily_training_id));
+      const data = strengthExercises.filter(we => validDailyTrainingIds.has(we.daily_training_id));
 
       if (!data || data.length === 0) {
         return { 

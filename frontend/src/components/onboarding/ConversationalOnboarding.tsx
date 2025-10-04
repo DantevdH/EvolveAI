@@ -13,13 +13,105 @@ import { trainingService } from '../../services/onboardingService';
 import { 
   OnboardingState, 
   PersonalInfo, 
-  AIQuestion, 
-  QuestionCategory 
+  AIQuestion,
 } from '../../types/onboarding';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../config/supabase';
 import { UserService } from '../../services/userService';
 import { cleanUserProfileForResume, isValidFormattedResponse, isValidPlanOutline } from '../../utils/validation';
+import { logStep, logData, logError, logNavigation } from '../../utils/logger';
+
+// Transform backend data structure to frontend format
+const transformBackendToFrontend = (backendData: any) => {
+  if (!backendData) return null;
+  
+  return {
+    id: backendData.id?.toString(),
+    title: backendData.title,
+    description: backendData.summary,
+    totalWeeks: backendData.weekly_schedules?.length || 1,
+    currentWeek: 1, // Default to week 1
+    weeklySchedules: backendData.weekly_schedules?.map((schedule: any) => {
+      // Sort daily trainings by day order (Monday = 0, Tuesday = 1, etc.)
+      const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      const sortedDailyTrainings = schedule.daily_training?.sort((a: any, b: any) => {
+        const aIndex = dayOrder.indexOf(a.day_of_week);
+        const bIndex = dayOrder.indexOf(b.day_of_week);
+        return aIndex - bIndex;
+      }) || [];
+
+      return {
+        id: schedule.id?.toString(),
+        weekNumber: schedule.week_number,
+        dailyTrainings: sortedDailyTrainings.map((daily: any) => {
+          // Combine strength exercises and endurance sessions into exercises array
+          const exercises: any[] = [];
+          
+          // Add strength exercises
+          if (daily.strength_exercise && daily.strength_exercise.length > 0) {
+            daily.strength_exercise.forEach((se: any) => {
+              exercises.push({
+                id: se.id?.toString(),
+                exerciseId: se.exercise_id?.toString(),
+                exercise: se.exercise || null,
+                sets: Array.from({ length: se.sets || 0 }, (_, index) => ({
+                  id: `set-${index}`,
+                  reps: se.reps?.[index] || 0,
+                  weight: se.weight?.[index] || 0,
+                  completed: false,
+                  restTime: 60
+                })),
+                completed: se.completed || false,
+                order: exercises.length
+              });
+            });
+          }
+          
+          // Add endurance sessions
+          if (daily.endurance_session && daily.endurance_session.length > 0) {
+            daily.endurance_session.forEach((es: any) => {
+              exercises.push({
+                id: es.id?.toString(),
+                exerciseId: `endurance_${es.id}`,
+                exercise: {
+                  id: `endurance_${es.id}`,
+                  name: `${es.sport_type} - ${es.training_volume} ${es.unit}`,
+                  instructions: `${es.sport_type} session`,
+                  target_area: 'Endurance',
+                  force: null,
+                  equipment: null,
+                  secondary_muscles: [],
+                  main_muscles: [],
+                  difficulty: null,
+                  exercise_tier: null,
+                  imageUrl: null,
+                  videoUrl: null
+                },
+                sets: [],
+                completed: es.completed || false,
+                order: exercises.length
+              });
+            });
+          }
+
+          return {
+            id: daily.id?.toString(),
+            dayOfWeek: daily.day_of_week,
+            isRestDay: daily.is_rest_day || false,
+            exercises,
+            completed: daily.completed || false
+          };
+        }),
+        completed: false,
+        completedAt: undefined
+      };
+    }) || [],
+    createdAt: backendData.created_at ? new Date(backendData.created_at) : new Date(),
+    updatedAt: backendData.updated_at ? new Date(backendData.updated_at) : new Date(),
+    completed: false,
+    completedAt: undefined
+  };
+};
 
 interface ConversationalOnboardingProps {
   onComplete: (trainingPlan: any) => Promise<void>;
@@ -32,7 +124,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   onError,
   startFromStep = 'welcome',
 }) => {
-  const { state: authState, refreshUserProfile } = useAuth();
+  const { state: authState, refreshUserProfile, setTrainingPlan } = useAuth();
   const [state, setState] = useState<OnboardingState>({
     username: '',
     usernameValid: false,
@@ -80,9 +172,19 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   const initialStep = startFromStep || 'welcome';
   const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial' | 'followup' | 'outline' | 'generation'>(initialStep);
 
+  // Track if we've initialized from profile (run only once per component mount)
+  const hasInitializedFromProfileRef = useRef(false);
+
   // Initialize state based on existing user profile when starting from specific steps
   useEffect(() => {
+    // Only run once per component mount
+    if (hasInitializedFromProfileRef.current) {
+      return;
+    }
+
     if (authState.userProfile && startFromStep !== 'welcome') {
+      hasInitializedFromProfileRef.current = true;
+      
       // Clean and validate user profile data
       const cleanedProfile = cleanUserProfileForResume(authState.userProfile);
       
@@ -130,25 +232,14 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         followUpQuestions: cleanedProfile.follow_up_questions || [],
         initialResponses: cleanedProfile.initial_responses ? new Map(Object.entries(cleanedProfile.initial_responses)) : new Map(),
         followUpResponses: cleanedProfile.follow_up_responses ? new Map(Object.entries(cleanedProfile.follow_up_responses)) : new Map(),
+        
+        // Load AI messages from database
+        initialAiMessage: cleanedProfile.initial_ai_message,
+        followUpAiMessage: cleanedProfile.follow_up_ai_message,
+        outlineAiMessage: cleanedProfile.outline_ai_message,
       }));
       
-      console.log(`✅ Resume flow initialized for step: ${startFromStep}`, {
-        hasInitialQuestions: !!cleanedProfile.initial_questions,
-        hasFollowUpQuestions: !!cleanedProfile.follow_up_questions,
-        hasPlanOutline: !!cleanedProfile.plan_outline,
-        hasPersonalInfo: !!cleanedProfile.username,
-        personalInfo: {
-          username: cleanedProfile.username,
-          age: cleanedProfile.age,
-          weight: cleanedProfile.weight,
-          height: cleanedProfile.height,
-        },
-        initialQuestionsCount: cleanedProfile.initial_questions?.length || 0,
-        initialQuestionsSample: cleanedProfile.initial_questions?.[0] || null,
-        hasInitialResponses: !!cleanedProfile.initial_responses,
-        initialResponsesCount: Object.keys(cleanedProfile.initial_responses || {}).length,
-        initialResponsesSample: cleanedProfile.initial_responses,
-      });
+      console.log(`📍 Onboarding Resume: Starting from ${startFromStep} - Initial: ${cleanedProfile.initial_questions?.length || 0} questions, Follow-up: ${cleanedProfile.follow_up_questions?.length || 0} questions, Initial AI Message: ${cleanedProfile.initial_ai_message?.substring(0, 50) || 'NONE'}`);
     }
   }, [authState.userProfile, startFromStep, onError]);
 
@@ -156,6 +247,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   const hasTriggeredInitialQuestionsRef = useRef(false);
   const hasTriggeredFollowUpQuestionsRef = useRef(false);
   const hasTriggeredPlanOutlineRef = useRef(false);
+  const hasTriggeredPlanGenerationRef = useRef(false);
   const previousStepRef = useRef<string | null>(null);
 
   // Reset trigger flags ONLY when step changes (not on every render)
@@ -167,6 +259,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         hasTriggeredFollowUpQuestionsRef.current = false;
       } else if (currentStep === 'outline') {
         hasTriggeredPlanOutlineRef.current = false;
+      } else if (currentStep === 'generation') {
+        hasTriggeredPlanGenerationRef.current = false;
       }
       previousStepRef.current = currentStep;
     }
@@ -211,25 +305,23 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         state.personalInfo && 
         !state.planGenerationLoading && 
         !state.trainingPlan && 
-        !state.error) {
+        !state.error &&
+        !hasTriggeredPlanGenerationRef.current) {
       console.log('🚀 Auto-triggering plan generation with complete state');
+      hasTriggeredPlanGenerationRef.current = true;
       handlePlanGeneration();
     }
-  }, [currentStep, state.personalInfo, state.planGenerationLoading, state.trainingPlan, state.error, handlePlanGeneration]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, state.personalInfo, state.planGenerationLoading, state.trainingPlan, state.error]);
 
   // Handle plan generation (extracted from handleOutlineNext)
   const handlePlanGeneration = useCallback(async () => {
-    console.log('🔥 handlePlanGeneration called', { 
-      hasPersonalInfo: !!state.personalInfo,
-      personalInfo: state.personalInfo 
-    });
+    logStep('Plan Generation', 'started');
     
     if (!state.personalInfo) {
-      console.log('❌ No personalInfo, returning early');
+      logError('Plan Generation: Missing personal info');
       return;
     }
-
-    console.log('✅ Setting loading state...');
     setState(prev => ({ 
       ...prev, 
       planGenerationLoading: true,
@@ -267,31 +359,34 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             jwtToken
           );
           
-          console.log('📋 Plan generation response:', { success: response.success, hasData: !!response.data, message: response.message });
+          logData('Generate Plan', response.success ? 'success' : 'error');
           
           if (response.success && response.data) {
-            console.log('✅ Training plan generated successfully');
+            // Backend now returns the complete formatted training plan
+            logStep('Plan Generation', 'completed', 'Training plan received from backend');
             
-            // Update auth context with the new training plan
-            if (authState.setTrainingPlan) {
-              authState.setTrainingPlan(response.data);
+            // Transform backend data to frontend format before setting
+            const transformedPlan = transformBackendToFrontend(response.data);
+            if (transformedPlan) {
+              setTrainingPlan(transformedPlan);
+            } else {
+              throw new Error('Failed to transform training plan data');
             }
             
             setState(prev => ({
               ...prev,
-              trainingPlan: response.data,
+              trainingPlan: transformedPlan,
               planGenerationLoading: false,
             }));
             
-            // Immediately navigate to main app
-            console.log('🚀 Navigating to main app...');
-            onComplete(response.data);
+            // Navigate to main app with the transformed plan
+            onComplete(transformedPlan!);
           } else {
-            console.error('❌ Plan generation failed:', response.message);
+            logError('Plan generation failed', response.message);
             throw new Error(response.message || 'Failed to generate training plan');
           }
         } catch (error) {
-          console.error('❌ Error generating training plan:', error);
+          logError('Plan generation error', error);
           const errorMessage = error instanceof Error ? error.message : 'Failed to generate training plan';
           setState(prev => ({
             ...prev,
@@ -303,7 +398,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         }
       }, AI_DELAYS.planGeneration);
     } catch (error) {
-      console.error('❌ Error in plan generation setup:', error);
+      logError('Error in plan generation setup', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate training plan';
       setState(prev => ({
         ...prev,
@@ -419,6 +514,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         jwtToken
       );
       
+      console.log(`📍 Onboarding Stage: Initial Questions - AI Message: ${response.ai_message?.substring(0, 50)}...`);
+      
       setState(prev => ({
         ...prev,
         initialQuestions: response.questions,
@@ -516,7 +613,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         trainingPlanOutline: response.data?.outline || null,
         outlineLoading: false,
         aiHasQuestions: true,
-        outlineAiMessage: response.data?.outline?.ai_message,
+        outlineAiMessage: response.data?.ai_message,
       }));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to generate plan outline';
@@ -587,11 +684,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         try {
           const responsesObject = Object.fromEntries(state.initialResponses);
           
-          console.log('🔍 Sending follow-up questions request:', {
-            initialResponsesCount: state.initialResponses.size,
-            responsesObject,
-            initialQuestionsCount: state.initialQuestions.length,
-          });
+          console.log(`📍 Onboarding Stage: Follow-up Questions - Generating ${state.initialQuestions.length} follow-up questions`);
           
           // Get JWT token from Supabase session
           const { data: { session } } = await supabase.auth.getSession();
@@ -686,7 +779,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           );
           
           if (response.success) {
-            console.log(`✅ FRONTEND: Training plan outline generated successfully!`);
+            console.log(`📍 Onboarding Stage: Plan Outline - Generated successfully`);
             setState(prev => ({
               ...prev,
               planGenerationLoading: false,
@@ -694,10 +787,10 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
               initialQuestions: response.data?.initial_questions || prev.initialQuestions, // Use returned questions
               followUpQuestions: response.data?.follow_up_questions || prev.followUpQuestions, // Use returned questions
               aiHasQuestions: true, // Show continue button to go to outline
-              outlineAiMessage: response.data?.outline?.ai_message,
+              outlineAiMessage: response.data?.ai_message,
             }));
           } else {
-            console.error('❌ FRONTEND: Training plan outline generation failed:', response.message);
+            console.error(`❌ Onboarding Failed: Plan outline generation failed - ${response.message}`);
             throw new Error(response.message || 'Failed to generate training plan outline');
           }
         } catch (error) {
@@ -788,7 +881,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     
     // Retry based on the step that failed
     const stepToRetry = retryStep || currentStep;
-    console.log(`🔄 Retrying ${stepToRetry} (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+    console.log(`📍 Onboarding Retry: ${stepToRetry} (attempt ${retryCount + 1}/${MAX_RETRIES})`);
     
     switch (stepToRetry) {
       case 'welcome':
@@ -828,7 +921,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
 
   const renderCurrentStep = () => {
-    console.log('🔍 renderCurrentStep called with currentStep:', currentStep);
+    // Essential onboarding flow logging - render step
     
     // Show custom error display for max retries or other global errors
     if (state.error && retryCount >= MAX_RETRIES) {
@@ -950,6 +1043,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             isLoading={state.outlineLoading}
             error={state.error || undefined}
             username={state.username}
+            aiMessage={state.outlineAiMessage}
           />
         );
       

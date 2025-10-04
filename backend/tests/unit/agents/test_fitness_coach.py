@@ -394,7 +394,7 @@ class TestTrainingCoach:
             ],
             "total_questions": 1,
             "estimated_time_minutes": 2,
-            "categories": ["time_commitment"]
+            "ai_message": "Test AI message"
         }
         mock_choice.message = mock_message
         mock_completion.choices = [mock_choice]
@@ -645,7 +645,7 @@ class TestTrainingCoachEdgeCases:
             ],
             "total_questions": 1,
             "estimated_time_minutes": 2,
-            "categories": ["time_commitment"]
+            "ai_message": "Test AI message"
         }
         mock_choice.message = mock_message
         mock_completion.choices = [mock_choice]
@@ -734,7 +734,7 @@ class TestTrainingCoachEdgeCases:
             ],
             "total_questions": 1,
             "estimated_time_minutes": 1,
-            "categories": ["preferences"]
+            "ai_message": "Test AI message"
         }
         mock_choice.message = mock_message
         mock_completion.choices = [mock_choice]
