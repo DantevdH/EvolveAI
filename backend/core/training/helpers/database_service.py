@@ -230,11 +230,13 @@ class DatabaseService:
                 "user_profile_id": user_profile_id,
                 "title": plan_dict.get("title", "Personalized Training Plan"),
                 "summary": plan_dict.get("summary", ""),
+                "motivation": plan_dict.get("motivation", ""),
                 "created_at": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat()
             }
             
             # Insert the training plan
+            self.logger.debug(f"Saving training plan with motivation: {plan_record.get('motivation', 'No motivation provided')[:100]}...")
             plan_result = supabase_client.table("training_plans").insert(plan_record).execute()
             
             if not plan_result.data:
@@ -256,10 +258,12 @@ class DatabaseService:
                 weekly_schedule_record = {
                     "training_plan_id": training_plan_id,
                     "week_number": week_number,
+                    "motivation": week_data.get("motivation", ""),
                     "created_at": datetime.utcnow().isoformat(),
                     "updated_at": datetime.utcnow().isoformat()
                 }
                 
+                self.logger.debug(f"Saving weekly schedule {week_number} with motivation: {weekly_schedule_record.get('motivation', 'No motivation provided')[:100]}...")
                 weekly_result = supabase_client.table("weekly_schedules").insert(weekly_schedule_record).execute()
                 
                 if not weekly_result.data:
@@ -280,10 +284,12 @@ class DatabaseService:
                         "day_of_week": day_of_week,
                         "is_rest_day": is_rest_day,
                         "training_type": daily_data.get("training_type", "recovery" if is_rest_day else "strength"),
+                        "motivation": daily_data.get("motivation", ""),
                         "created_at": datetime.utcnow().isoformat(),
                         "updated_at": datetime.utcnow().isoformat()
                     }
                     
+                    self.logger.debug(f"Saving daily training {day_of_week} with motivation: {daily_training_record.get('motivation', 'No motivation provided')[:100]}...")
                     daily_result = supabase_client.table("daily_training").insert(daily_training_record).execute()
                     
                     if not daily_result.data:
@@ -321,6 +327,7 @@ class DatabaseService:
                         endurance_sessions = daily_data.get("endurance_sessions", [])
                         
                         for session_index, session_data in enumerate(endurance_sessions):
+                            name = session_data.get("name", "Endurance Session")
                             sport_type = session_data.get("sport_type", "running")
                             training_volume = session_data.get("training_volume", 30.0)
                             unit = session_data.get("unit", "minutes")
@@ -329,6 +336,8 @@ class DatabaseService:
                             # Create endurance session record
                             endurance_session_record = {
                                 "daily_training_id": daily_training_id,
+                                "name": name,
+                                "description": description,
                                 "sport_type": sport_type,
                                 "training_volume": training_volume,
                                 "unit": unit,
@@ -347,7 +356,8 @@ class DatabaseService:
                 "data": {
                     "training_plan_id": training_plan_id,
                     "title": plan_record["title"],
-                    "summary": plan_record["summary"]
+                    "summary": plan_record["summary"],
+                    "motivation": plan_record["motivation"]
                 },
                 "message": "Training plan saved successfully"
             }

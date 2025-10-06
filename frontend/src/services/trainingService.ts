@@ -248,6 +248,8 @@ export class TrainingService {
                 const strengthExercises = daily.strength_exercise?.map((se: any) => ({
                   id: se.id.toString(),
                   exerciseId: se.exercise_id.toString(),
+                  completed: se.completed,
+                  order: se.order || 0,
                   exercise: se.exercises ? {
                     id: se.exercises.id.toString(),
                     name: se.exercises.name,
@@ -259,36 +261,34 @@ export class TrainingService {
                     main_muscles: se.exercises.main_muscles,
                     difficulty: se.exercises.difficulty,
                     exercise_tier: se.exercises.exercise_tier,
-                    imageUrl: se.exercises.image_url,
-                    videoUrl: se.exercises.video_url
+                    preparation: se.exercises.preparation,
+                    execution: se.exercises.execution,
+                    tips: se.exercises.tips
                   } : null,
                   sets: this.parseSets(se.sets, se.reps, se.weight),
-                  completed: se.completed,
-                  order: se.order || 0
+                  weight1RM: se.weight_1rm
                 })) || [];
 
-                // Map endurance sessions to exercise format
-                const enduranceSessions = daily.endurance_session?.map((es: any, index: number) => ({
-                  id: es.id.toString(),
-                  exerciseId: `endurance_${es.id}`,
-                  exercise: {
-                    id: `endurance_${es.id}`,
-                    name: `${es.sport_type} - ${es.training_volume} ${es.unit}`,
-                    force: null,
-                    instructions: `${es.sport_type} session`,
-                    equipment: null,
-                    target_area: 'Endurance',
-                    secondary_muscles: [],
-                    main_muscles: [],
-                    difficulty: null,
-                    exercise_tier: null,
-                    imageUrl: null,
-                    videoUrl: null
-                  },
-                  sets: [],
-                  completed: es.completed || false,
-                  order: strengthExercises.length + index
-                })) || [];
+                // Map endurance sessions to proper format
+                const enduranceSessions = daily.endurance_session?.map((es: any, index: number) => {
+                  return {
+                    id: es.id.toString(),
+                    exerciseId: `endurance_${es.id}`,
+                    completed: es.completed || false,
+                    order: strengthExercises.length + index,
+                    enduranceSession: {
+                      id: es.id.toString(),
+                      name: es.name || `${es.sport_type} - ${es.training_volume} ${es.unit}`,
+                      description: es.description || `${es.sport_type} session`,
+                      sportType: es.sport_type,
+                      trainingVolume: es.training_volume,
+                      unit: es.unit,
+                      heartRateZone: es.heart_rate_zone,
+                      intensity: es.intensity,
+                      completed: es.completed || false
+                    }
+                  };
+                }) || [];
 
                 const allExercises = [...strengthExercises, ...enduranceSessions];
 
@@ -425,6 +425,34 @@ export class TrainingService {
   }
 
   /**
+   * Update endurance session intensity in database
+   */
+  static async updateEnduranceIntensity(exerciseId: string, intensity: number): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { data, error } = await supabase
+        .from('endurance_session')
+        .update({
+          intensity: intensity,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', exerciseId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating endurance intensity:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log(`✅ Endurance session ${exerciseId} intensity updated to: ${intensity}`);
+      return { success: true };
+    } catch (error) {
+      console.error('Error in updateEnduranceIntensity:', error);
+      return { success: false, error: 'Failed to update endurance intensity' };
+    }
+  }
+
+  /**
    * Update exercise completion status in database
    */
   static async updateExerciseCompletion(exerciseId: string, completed: boolean): Promise<{ success: boolean; error?: string }> {
@@ -538,8 +566,10 @@ export class TrainingService {
         secondary_muscles: data.secondary_muscles,
         main_muscles: data.main_muscles,
         difficulty: data.difficulty,
-        imageUrl: data.image_url,
-        videoUrl: data.video_url
+        exercise_tier: data.tier,
+        preparation: data.preparation,
+        execution: data.execution,
+        tips: data.tips
       };
 
       return { success: true, data: [exercise] };
@@ -587,8 +617,10 @@ export class TrainingService {
             secondary_muscles: se.exercises.secondary_muscles,
             main_muscles: se.exercises.main_muscles,
             difficulty: se.exercises.difficulty,
-            imageUrl: se.exercises.image_url,
-            videoUrl: se.exercises.video_url
+            exercise_tier: se.exercises.exercise_tier,
+            preparation: se.exercises.preparation,
+            execution: se.exercises.execution,
+            tips: se.exercises.tips
           },
           sets: this.parseSets(se.sets, se.reps, se.weight),
           completed: se.completed,
@@ -600,9 +632,9 @@ export class TrainingService {
           exerciseId: `endurance_${es.id}`,
           exercise: {
             id: `endurance_${es.id}`,
-            name: `${es.sport_type} - ${es.training_volume} ${es.unit}`,
+            name: es.name || `${es.sport_type} - ${es.training_volume} ${es.unit}`,
             force: null,
-            instructions: `${es.sport_type} session`,
+            instructions: es.description || `${es.sport_type} session`,
             equipment: null,
             target_area: 'Endurance',
             secondary_muscles: [],
@@ -611,6 +643,7 @@ export class TrainingService {
             imageUrl: null,
             videoUrl: null
           },
+          intensity: es.intensity || null,
           sets: [],
           completed: es.completed || false,
           order: strengthExercises.length + index
@@ -885,7 +918,7 @@ export class TrainingService {
 
       const enduranceSessions = todaysTraining.endurance_session?.map((es: any) => ({
         id: es.id?.toString() || Math.random().toString(),
-        name: `${es.sport_type} - ${es.training_volume} ${es.unit}`,
+        name: es.name || `${es.sport_type} - ${es.training_volume} ${es.unit}`,
         completed: es.completed || false,
         sets: 1,
         reps: [],

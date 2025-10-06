@@ -25,6 +25,9 @@ export interface Exercise {
   exercise_tier?: string;
   imageUrl?: string;
   videoUrl?: string;
+  preparation?: string;
+  execution?: string;
+  tips?: string;
 }
 
 export interface TrainingSet {
@@ -35,14 +38,29 @@ export interface TrainingSet {
   restTime?: number; // in seconds
 }
 
+export interface EnduranceSession {
+  id: string;
+  name?: string;
+  description?: string;
+  sportType: string;
+  trainingVolume: number;
+  unit: string;
+  heartRateZone?: number;
+  intensity?: number;
+  completed: boolean;
+}
+
 export interface TrainingExercise {
   id: string;
   exerciseId: string;
-  exercise: Exercise;
-  sets: TrainingSet[];
   completed: boolean;
   order: number;
+  // For strength exercises
+  exercise?: Exercise;
+  sets?: TrainingSet[];
   weight1RM?: number[]; // Weight as percentage of 1RM for each set (e.g., [80, 75, 70])
+  // For endurance sessions
+  enduranceSession?: EnduranceSession;
 }
 
 export interface DailyTraining {
@@ -174,6 +192,7 @@ export interface UseTrainingReturn {
   selectDay: (dayIndex: number) => void;
   toggleExerciseCompletion: (exerciseId: string) => void;
   updateSetDetails: (exerciseId: string, setIndex: number, reps: number, weight: number) => Promise<void>;
+  updateIntensity: (exerciseId: string, intensity: number) => Promise<void>;
   showExerciseDetail: (exercise: Exercise) => void;
   hideExerciseDetail: () => void;
   switchExerciseDetailTab: (tab: keyof ExerciseDetailTabs) => void;
@@ -238,6 +257,7 @@ export interface DailyTrainingDetailProps {
   onOneRMCalculator: (exerciseName: string) => void;
   onSwapExercise?: (exercise: Exercise) => void;
   onReopenTraining?: () => void;
+  onIntensityUpdate?: (exerciseId: string, intensity: number) => void;
 }
 
 export interface ExerciseRowProps {
@@ -247,6 +267,7 @@ export interface ExerciseRowProps {
   onShowDetail: () => void;
   onOneRMCalculator: (exerciseName: string) => void;
   onSwapExercise?: () => void;
+  onIntensityUpdate?: (exerciseId: string, intensity: number) => void;
   isLocked?: boolean;
 }
 

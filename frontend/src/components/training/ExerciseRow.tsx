@@ -1,9 +1,10 @@
 // Exercise Row Component - Individual exercise with sets/reps tracking
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { ExerciseRowProps } from '../../types/training';
+
 
 const ExerciseRow: React.FC<ExerciseRowProps> = ({
   exercise,
@@ -12,9 +13,22 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
   onShowDetail,
   onOneRMCalculator,
   onSwapExercise,
+  onIntensityUpdate,
   isLocked = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [localIntensity, setLocalIntensity] = useState(exercise.enduranceSession?.intensity || 3);
+  
+  // Use local state for immediate UI updates, sync with prop changes
+  const currentIntensity = localIntensity;
+
+  // Sync local state with prop changes (only on mount or when prop actually changes)
+  useEffect(() => {
+    const propIntensity = exercise.enduranceSession?.intensity || 3;
+    if (propIntensity !== localIntensity) {
+      setLocalIntensity(propIntensity);
+    }
+  }, [exercise.enduranceSession?.intensity]);
 
 
   const handleSetUpdate = async (setIndex: number, reps: number, weight: number) => {
@@ -52,11 +66,18 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
 
         <View style={styles.exerciseInfo}>
           <View style={styles.exerciseHeader}>
-            <Text style={styles.exerciseName}>{exercise.exercise?.name || 'Exercise'}</Text>
+            <Text style={styles.exerciseName}>
+              {exercise.exerciseId?.startsWith('endurance_') 
+                ? (exercise.enduranceSession?.name || 'Endurance Session')
+                : (exercise.exercise?.name || 'Exercise')
+              }
+            </Text>
           </View>
           
           <View style={styles.exerciseDetails}>
-            <Text style={styles.setsText}>{exercise.sets.length} sets</Text>
+            <Text style={styles.setsText}>
+              {exercise.exerciseId?.startsWith('endurance_') ? 'Endurance' : `${exercise.sets?.length || 0} sets`}
+            </Text>
             
             <TouchableOpacity
               style={[styles.expandButton, isLocked && styles.expandButtonLocked]}
@@ -73,8 +94,8 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
         </View>
 
         <View style={styles.actionButtons}>
-          {/* Swap Exercise Button */}
-          {onSwapExercise && (
+          {/* Swap Exercise Button - only for strength exercises */}
+          {onSwapExercise && !exercise.exerciseId?.startsWith('endurance_') && (
             <TouchableOpacity
               style={[styles.swapButton, isLocked && styles.swapButtonLocked]}
               onPress={isLocked ? undefined : onSwapExercise}
@@ -84,19 +105,20 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
             </TouchableOpacity>
           )}
 
-          {/* 1RM Calculator Button */}
-          <TouchableOpacity
-            style={[styles.calculatorButton, isLocked && styles.calculatorButtonLocked]}
-            onPress={isLocked ? undefined : () => onOneRMCalculator(exercise.exercise.name)}
-            disabled={isLocked}
-          >
-            <Ionicons name="calculator-outline" size={20} color={isLocked ? colors.muted : colors.primary} />
-          </TouchableOpacity>
+          {/* 1RM Calculator Button - only for strength exercises */}
+          {!exercise.exerciseId?.startsWith('endurance_') && (
+            <TouchableOpacity
+              style={[styles.calculatorButton, isLocked && styles.calculatorButtonLocked]}
+              onPress={isLocked ? undefined : () => onOneRMCalculator(exercise.exercise?.name || '')}
+              disabled={isLocked}
+            >
+              <Ionicons name="calculator-outline" size={20} color={isLocked ? colors.muted : colors.primary} />
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={styles.detailButton}
             onPress={() => {
-              console.log('🔍 ExerciseRow: Info button pressed for exercise:', exercise.exercise?.name);
               onShowDetail();
             }}
           >
@@ -105,46 +127,147 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
         </View>
       </View>
 
-      {/* Expanded sets detail */}
+      {/* Expanded detail - strength exercises show sets, endurance shows intensity slider */}
       {isExpanded && (
         <View style={styles.setsContainer}>
-          <View style={styles.setsHeader}>
-            <Text style={styles.setsTitle}>Sets</Text>
-            
-            {/* Add/Remove set buttons */}
-            <View style={styles.setControls}>
-              <TouchableOpacity
-                style={styles.setButton}
-                onPress={() => onSetUpdate(-1, 0, 0)} // -1 indicates add set
-              >
-                <Ionicons name="add-circle" size={20} color={colors.primary} />
-              </TouchableOpacity>
+          {exercise.exerciseId?.startsWith('endurance_') ? (
+            // Endurance session details
+            <View style={styles.enduranceContainer}>
+              <View style={styles.enduranceDetails}>
+                {/* Type */}
+                <View style={styles.enduranceDetailItemVertical}>
+                  <Text style={styles.enduranceDetailLabelSmall}>TYPE</Text>
+                  <Text style={styles.enduranceDetailValueSmall}>
+                    {exercise.enduranceSession?.sportType || 'N/A'}
+                  </Text>
+                </View>
+                
+                {/* Volume */}
+                <View style={styles.enduranceDetailItemVertical}>
+                  <Text style={styles.enduranceDetailLabelSmall}>VOLUME</Text>
+                  <Text style={styles.enduranceDetailValueSmall}>
+                    {exercise.enduranceSession?.trainingVolume || 'N/A'} {exercise.enduranceSession?.unit || ''}
+                  </Text>
+                </View>
+                
+                {/* Heart Zone */}
+                {exercise.enduranceSession?.heartRateZone && (
+                  <View style={styles.enduranceDetailItemVertical}>
+                    <Text style={styles.enduranceDetailLabelSmall}>HEART ZONE</Text>
+                    <Text style={styles.enduranceDetailValueSmall}>
+                      Zone {exercise.enduranceSession.heartRateZone}
+                    </Text>
+                  </View>
+                )}
+              </View>
               
-              <TouchableOpacity
-                style={styles.setButton}
-                onPress={() => onSetUpdate(-2, 0, 0)} // -2 indicates remove set
-                disabled={exercise.sets.length <= 1}
-              >
-                <Ionicons 
-                  name="remove-circle" 
-                  size={20} 
-                  color={exercise.sets.length <= 1 ? colors.border : colors.primary} 
-                />
-              </TouchableOpacity>
+              {/* Intensity Slider */}
+              <View style={styles.setsHeader}>
+                <Text style={styles.setsTitle}>Session Intensity</Text>
+              </View>
+              <IntensitySlider 
+                exerciseId={exercise.id}
+                currentIntensity={currentIntensity}
+                onIntensityChange={(intensity) => {
+                  setLocalIntensity(intensity); // Update local state immediately for UI
+                  onIntensityUpdate?.(exercise.id, intensity); // Update parent state
+                }}
+                disabled={isLocked}
+              />
             </View>
-          </View>
-          
-          {exercise.sets.map((set, index) => (
-            <SetRow
-              key={set.id}
-              set={set}
-              setIndex={index}
-              onUpdate={(reps, weight) => handleSetUpdate(index, reps, weight)}
-              weight1RMPercentages={exercise.weight1RM}
-            />
-          ))}
+          ) : (
+            // Strength exercise sets
+            <>
+              <View style={styles.setsHeader}>
+                <Text style={styles.setsTitle}>Sets</Text>
+                
+                {/* Add/Remove set buttons */}
+                <View style={styles.setControls}>
+                  <TouchableOpacity
+                    style={styles.setButton}
+                    onPress={() => onSetUpdate(-1, 0, 0)} // -1 indicates add set
+                  >
+                    <Ionicons name="add-circle" size={20} color={colors.primary} />
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={styles.setButton}
+                    onPress={() => onSetUpdate(-2, 0, 0)} // -2 indicates remove set
+                    disabled={(exercise.sets?.length || 0) <= 1}
+                  >
+                    <Ionicons 
+                      name="remove-circle" 
+                      size={20} 
+                      color={(exercise.sets?.length || 0) <= 1 ? colors.border : colors.primary} 
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              
+              {(exercise.sets || []).map((set, index) => (
+                <SetRow
+                  key={set.id}
+                  set={set}
+                  setIndex={index}
+                  onUpdate={(reps, weight) => handleSetUpdate(index, reps, weight)}
+                  weight1RMPercentages={exercise.weight1RM}
+                />
+              ))}
+            </>
+          )}
         </View>
       )}
+    </View>
+  );
+};
+
+// Intensity Slider Component for Endurance Sessions
+interface IntensitySliderProps {
+  exerciseId: string;
+  currentIntensity: number;
+  onIntensityChange: (intensity: number) => void;
+  disabled?: boolean;
+}
+
+const IntensitySlider: React.FC<IntensitySliderProps> = ({
+  exerciseId,
+  currentIntensity,
+  onIntensityChange,
+  disabled = false
+}) => {
+  const intensityLabels = ['Very Easy', 'Easy', 'Moderate', 'Hard', 'Very Hard'];
+  
+  return (
+    <View style={styles.intensityContainer}>
+      <View style={styles.intensitySlider}>
+        {[1, 2, 3, 4, 5].map((intensity) => (
+          <TouchableOpacity
+            key={intensity}
+            style={[
+              styles.intensityButton,
+              currentIntensity === intensity && styles.intensityButtonActive,
+              disabled && styles.intensityButtonDisabled
+            ]}
+            onPress={() => {
+              if (!disabled) {
+                onIntensityChange(intensity);
+              }
+            }}
+            disabled={disabled}
+          >
+            <Text style={[
+              styles.intensityNumber,
+              currentIntensity === intensity && styles.intensityNumberActive,
+              disabled && styles.intensityNumberDisabled
+            ]}>
+              {intensity}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text style={[styles.intensityLabel, disabled && styles.intensityLabelDisabled]}>
+        {intensityLabels[currentIntensity - 1]}
+      </Text>
     </View>
   );
 };
@@ -388,6 +511,90 @@ const styles = StyleSheet.create({
   },
   kgText: {
     fontSize: 12,
+    color: colors.muted
+  },
+  // Endurance session styles
+  enduranceContainer: {
+    paddingVertical: 8,
+    gap: 16
+  },
+  enduranceDetails: {
+    gap: 8
+  },
+  enduranceDetailItem: {
+    alignItems: 'center',
+    gap: 4
+  },
+  enduranceDetailItemVertical: {
+    gap: 4
+  },
+  enduranceDetailLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.muted,
+    textTransform: 'uppercase'
+  },
+  enduranceDetailValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text
+  },
+  enduranceDetailLabelSmall: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: colors.muted,
+    textTransform: 'uppercase'
+  },
+  enduranceDetailValueSmall: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text
+  },
+  intensityContainer: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    gap: 6
+  },
+  intensitySlider: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  intensityButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.inputBackground,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  intensityButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary
+  },
+  intensityButtonDisabled: {
+    opacity: 0.5
+  },
+  intensityNumber: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text
+  },
+  intensityNumberActive: {
+    color: colors.text
+  },
+  intensityNumberDisabled: {
+    color: colors.muted
+  },
+  intensityLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.text,
+    textAlign: 'center'
+  },
+  intensityLabelDisabled: {
     color: colors.muted
   }
 });

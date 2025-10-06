@@ -267,17 +267,14 @@ const InstructionsTab: React.FC<{ exercise: Exercise }> = ({ exercise }) => {
           <Text style={styles.sectionTitle}>Step-by-Step Instructions</Text>
         </View>
 
-        {/* Setup Section */}
+        {/* Preparation Section */}
         <View style={styles.instructionSection}>
-          <Text style={styles.instructionSectionTitle}>Setup</Text>
+          <Text style={styles.instructionSectionTitle}>Preparation</Text>
           <View style={styles.instructionsList}>
-            {exercise.instructions ? (
-              <Text style={styles.instructionStep}>{exercise.instructions}</Text>
+            {exercise.preparation ? (
+              <Text style={styles.instructionStep}>{exercise.preparation}</Text>
             ) : (
-              <>
-                <Text style={styles.instructionStep}>1. Start in a standing position with feet shoulder-width apart</Text>
-                <Text style={styles.instructionStep}>2. Hold the weight at chest level with both hands</Text>
-              </>
+              <Text style={styles.instructionStep}>No preparation instructions available for this exercise.</Text>
             )}
           </View>
         </View>
@@ -286,17 +283,23 @@ const InstructionsTab: React.FC<{ exercise: Exercise }> = ({ exercise }) => {
         <View style={styles.instructionSection}>
           <Text style={styles.instructionSectionTitle}>Execution</Text>
           <View style={styles.instructionsList}>
-            {exercise.instructions ? (
-              <Text style={styles.instructionStep}>{exercise.instructions}</Text>
+            {exercise.execution ? (
+              <Text style={styles.instructionStep}>{exercise.execution}</Text>
             ) : (
-              <>
-                <Text style={styles.instructionStep}>1. Lower your body by bending at the knees and hips</Text>
-                <Text style={styles.instructionStep}>2. Keep your back straight and chest up throughout the movement</Text>
-                <Text style={styles.instructionStep}>3. Return to the starting position by pushing through your heels</Text>
-              </>
+              <Text style={styles.instructionStep}>No execution instructions available for this exercise.</Text>
             )}
           </View>
         </View>
+
+        {/* Tips Section */}
+        {exercise.tips && (
+          <View style={styles.instructionSection}>
+            <Text style={styles.instructionSectionTitle}>Tips</Text>
+            <View style={styles.instructionsList}>
+              <Text style={styles.instructionStep}>{exercise.tips}</Text>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* Video Guide - Commented out for now */}

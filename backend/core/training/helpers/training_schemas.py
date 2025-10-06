@@ -25,11 +25,12 @@ class EnduranceSession(BaseModel):
     """Schema for individual endurance training sessions."""
     
     id: Optional[int] = Field(default=None, description="Database ID")
-    daily_training_id: int = Field(..., description="ID of the daily training session")
+    name: str = Field(..., description="Concise name of the endurance session")
     sport_type: str = Field(..., description="Sport type: running, cycling, swimming, etc.")
     training_volume: float = Field(..., description="Duration (minutes) or distance (km/miles)")
     unit: str = Field(..., description="Unit for training_volume: minutes, km, miles, meters")
     heart_rate_zone: Optional[int] = Field(default=None, description="Target heart rate zone (1-5)")
+    description: Optional[str] = Field(default=None, description="Description of the context of the endurance session")
     completed: bool = Field(default=False, description="Whether the session was completed")
     created_at: Optional[datetime] = Field(default=None, description="Creation timestamp")
     updated_at: Optional[datetime] = Field(default=None, description="Last update timestamp")
@@ -60,6 +61,7 @@ class DailyTraining(BaseModel):
     training_type: str = Field(..., description="Type: strength, endurance, mixed, recovery")
     strength_exercises: List[StrengthExercise] = Field(default=[], description="Strength exercises for this day")
     endurance_sessions: List[EnduranceSession] = Field(default=[], description="Endurance sessions for this day")
+    motivation: str = Field(..., description="AI-generated motivation explaining the training choices for this day")
     created_at: Optional[datetime] = Field(default=None, description="Creation timestamp")
     updated_at: Optional[datetime] = Field(default=None, description="Last update timestamp")
 
@@ -71,6 +73,7 @@ class WeeklySchedule(BaseModel):
     training_plan_id: int = Field(..., description="ID of the training plan")
     week_number: int = Field(..., description="Week number in the plan")
     daily_trainings: List[DailyTraining] = Field(default=[], description="Daily training sessions")
+    motivation: str = Field(..., description="AI-generated motivation explaining the weekly training strategy and progression")
     created_at: Optional[datetime] = Field(default=None, description="Creation timestamp")
     updated_at: Optional[datetime] = Field(default=None, description="Last update timestamp")
 
@@ -83,6 +86,7 @@ class TrainingPlan(BaseModel):
     title: str = Field(..., description="Title of the training plan")
     summary: str = Field(..., description="Summary of the training plan")
     weekly_schedules: List[WeeklySchedule] = Field(default=[], description="Weekly schedules")
+    motivation: str = Field(..., description="AI-generated motivation explaining the overall training philosophy and approach")
     created_at: Optional[datetime] = Field(default=None, description="Creation timestamp")
     updated_at: Optional[datetime] = Field(default=None, description="Last update timestamp")
 

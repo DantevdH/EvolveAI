@@ -112,20 +112,22 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
     daily_trainings.append(TrainingDailyTraining(
         weekly_schedule_id=0,
         day_of_week=DayOfWeek.MONDAY,
-            is_rest_day=False,
+        is_rest_day=False,
         training_type="strength",
         strength_exercises=monday_exercises,
-        endurance_sessions=[]
+        endurance_sessions=[],
+        motivation="Today we're focusing on upper body strength with bench press and bent-over rows. These compound movements will build the foundation for your strength goals, targeting your chest, back, and arms while engaging your core for stability. Perfect start to your week!"
     ))
     
     # Tuesday - Rest Day
     daily_trainings.append(TrainingDailyTraining(
         weekly_schedule_id=0,
         day_of_week=DayOfWeek.TUESDAY,
-            is_rest_day=True,
+        is_rest_day=True,
         training_type="recovery",
         strength_exercises=[],
-        endurance_sessions=[]
+        endurance_sessions=[],
+        motivation="Rest day! Your muscles need time to recover and grow stronger from yesterday's upper body session. Use this day for light stretching, walking, or complete rest. Recovery is just as important as training for building strength!"
     ))
     
     # Wednesday - Lower Body Strength
@@ -151,20 +153,22 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
     daily_trainings.append(TrainingDailyTraining(
         weekly_schedule_id=0,
         day_of_week=DayOfWeek.WEDNESDAY,
-            is_rest_day=False,
+        is_rest_day=False,
         training_type="strength",
         strength_exercises=wednesday_exercises,
-        endurance_sessions=[]
+        endurance_sessions=[],
+        motivation="Lower body power day! We're hitting squats and deadlifts - the king and queen of strength exercises. These movements will build incredible lower body strength and power while engaging your entire posterior chain. Time to get strong!"
     ))
     
     # Thursday - Rest Day
     daily_trainings.append(TrainingDailyTraining(
         weekly_schedule_id=0,
         day_of_week=DayOfWeek.THURSDAY,
-            is_rest_day=True,
+        is_rest_day=True,
         training_type="recovery",
         strength_exercises=[],
-        endurance_sessions=[]
+        endurance_sessions=[],
+        motivation="Another recovery day to let your lower body muscles repair and grow stronger. Your legs did serious work yesterday! Focus on hydration, good nutrition, and light movement to keep blood flowing."
     ))
     
     # Friday - Full Body
@@ -190,7 +194,8 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
     # Add endurance session for Friday
     friday_endurance = [
         EnduranceSession(
-            daily_training_id=0,
+            name="Cardio Finisher",
+            description="A 20-minute run to finish off your full body strength session. This will help you build endurance and improve your overall fitness.",
             sport_type="running",
             training_volume=20.0,
             unit="minutes",
@@ -204,7 +209,8 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
         is_rest_day=False,
         training_type="mixed",
         strength_exercises=friday_exercises,
-        endurance_sessions=friday_endurance
+        endurance_sessions=friday_endurance,
+        motivation="Full body power day! We're combining overhead press and squats for total body strength, then finishing with cardio to boost your endurance. This session hits everything and sets you up perfectly for the weekend!"
     ))
     
     # Saturday - Rest Day
@@ -214,7 +220,8 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
         is_rest_day=True,
         training_type="recovery",
         strength_exercises=[],
-        endurance_sessions=[]
+        endurance_sessions=[],
+        motivation="Weekend recovery! You've put in three solid training days this week. Use this time to relax, enjoy some light activities, and let your body fully recover. You've earned this rest!"
     ))
     
     # Sunday - Rest Day
@@ -224,14 +231,16 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
         is_rest_day=True,
         training_type="recovery",
         strength_exercises=[],
-        endurance_sessions=[]
+        endurance_sessions=[],
+        motivation="Final rest day of the week! Use this time to prepare mentally and physically for next week's training. Plan your meals, get good sleep, and get ready to come back stronger than ever!"
     ))
     
     # Create weekly schedule
     weekly_schedule = WeeklySchedule(
         training_plan_id=0,  # Will be set when saved to database
         week_number=1,
-        daily_trainings=daily_trainings
+        daily_trainings=daily_trainings,
+        motivation="Welcome to Week 1 of your strength journey! This week focuses on building a solid foundation with compound movements. We're alternating between upper and lower body training with strategic rest days to maximize recovery and strength gains. Each workout is designed to progressively challenge you while maintaining proper form and technique."
     )
     
     # Create the training plan using the new schema structure
@@ -239,7 +248,8 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
         user_profile_id=1,  # Mock user profile ID
         title="Strength Builder Pro",
         summary="A comprehensive 3-day strength training program designed for intermediate lifters focusing on compound movements and progressive overload",
-        weekly_schedules=[weekly_schedule]
+        weekly_schedules=[weekly_schedule],
+        motivation="This program is specifically designed for your strength goals and intermediate experience level. We're using proven compound movements like squats, deadlifts, bench press, and overhead press to build maximum strength and muscle mass. The 3-day split with strategic rest days ensures optimal recovery while progressive overload will continuously challenge your muscles. Each exercise is chosen for its effectiveness in building raw power and strength. You're ready to get stronger than ever!"
     )
     
     return training_plan

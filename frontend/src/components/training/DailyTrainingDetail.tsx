@@ -15,7 +15,8 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
   onExerciseDetail,
   onOneRMCalculator,
   onSwapExercise,
-  onReopenTraining
+  onReopenTraining,
+  onIntensityUpdate
 }) => {
   if (!dailyTraining) {
     return (
@@ -91,6 +92,10 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
                 }}
                 onOneRMCalculator={onOneRMCalculator}
                 onSwapExercise={onSwapExercise ? () => onSwapExercise(exercise.exercise) : undefined}
+                onIntensityUpdate={(exerciseId, intensity) => {
+                  console.log('🎯 DailyTrainingDetail: onIntensityUpdate called with exerciseId:', exerciseId, 'intensity:', intensity);
+                  onIntensityUpdate?.(exerciseId, intensity);
+                }}
                 isLocked={dailyTraining.completed}
               />
             ))}

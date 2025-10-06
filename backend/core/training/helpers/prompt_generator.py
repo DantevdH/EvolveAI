@@ -380,6 +380,7 @@ class PromptGenerator:
         
         **ENDURANCE SESSIONS:**
         - Create running, cycling, swimming, or other endurance activities
+        - Specify a name that is concise and descriptive of the endurance session
         - Specify sport_type, training_volume (duration/distance), and unit
         - Include heart rate zones when appropriate
         - Can be combined with strength exercises on the same day
@@ -388,11 +389,29 @@ class PromptGenerator:
         - Use ONLY the provided exercise IDs for strength exercises (no new exercises)
         - You can create any endurance sessions as needed
         - Include proper warm-up and cool-down
-        - Plan for 1-2 rest days per week
+        - Schedule rest days strategically throughout the week to ensure optimal recovery and training balance. Distribute rest days evenly across the week (e.g., if 2 rest days per week, space them 2-3 days apart) to prevent consecutive training days from causing excessive fatigue while maintaining consistent training momentum. 
+          Consider the user's schedule preferences and training intensity when placing rest days.
         - Include progression within each week and across weeks
         - Add notes for form cues and modifications
         - Consider their physical limitations and preferences
         - Set training_type appropriately: "strength", "endurance", "mixed", or "recovery"
+        
+        **MOTIVATION REQUIREMENTS:**
+        - **Daily Training Motivation**: For each daily training, provide a motivational explanation (2-3 sentences) that:
+          * Explains WHY this specific training was chosen for this day
+          * Connects the training to their overall goal and progress
+          * Provides encouragement and context for the workout
+          * Uses their name and references their specific situation
+        - **Weekly Schedule Motivation**: For each weekly schedule, provide a motivational explanation (3-4 sentences) that:
+          * Explains the weekly training strategy and progression
+          * Highlights how this week builds on previous weeks
+          * Connects the week's focus to their overall goal
+          * Provides encouragement for the week ahead
+        - **Training Plan Motivation**: For the overall training plan, provide a motivational explanation (4-5 sentences) that:
+          * Explains the training philosophy and approach
+          * Connects the plan directly to their specific goal and situation
+          * Highlights the science and reasoning behind the program design
+          * Provides inspiration and confidence for their journey
         
         **EXPECTED OUTPUT:**
         - Complete, detailed training plan with specific exercises and progressions
@@ -405,11 +424,14 @@ class PromptGenerator:
         Return in TrainingPlan format with:
         - Compelling title that reflects their goal
         - Clear summary of the program
+        - Overall training plan motivation explaining the philosophy and approach
         - Weekly schedules with daily trainings containing:
           * Appropriate training_type for each day
           * Strength exercises (if applicable) with sets, reps, weights
           * Endurance sessions (if applicable) with sport_type, volume, unit
           * Proper progression and periodization
+          * Daily motivation explaining the training choices for each day
+          * Weekly motivation explaining the strategy and progression for each week
         - Detailed program justification explaining the science behind the plan
         
         **IMPORTANT:** Each daily training must have a clear training_type and the appropriate exercises/sessions to match that type.

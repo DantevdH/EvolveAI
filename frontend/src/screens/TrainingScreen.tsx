@@ -28,6 +28,7 @@ const TrainingScreen: React.FC = () => {
     selectDay,
     toggleExerciseCompletion,
     updateSetDetails,
+    updateIntensity,
     showExerciseDetail,
     hideExerciseDetail,
     toggleOneRMCalculator,
@@ -194,6 +195,10 @@ const TrainingScreen: React.FC = () => {
           onOneRMCalculator={handleOneRMCalculator}
           onSwapExercise={handleExerciseSwap}
           onReopenTraining={reopenTraining}
+          onIntensityUpdate={(exerciseId, intensity) => {
+            console.log('🎯 TrainingScreen: onIntensityUpdate called with exerciseId:', exerciseId, 'intensity:', intensity);
+            updateIntensity(exerciseId, intensity);
+          }}
         />
 
         {/* Bottom spacing for scroll comfort */}
