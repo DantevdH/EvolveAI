@@ -6,7 +6,7 @@ questions, training plan outlines, and training plans.
 """
 
 from typing import List
-from core.training.helpers.ai_question_schemas import PersonalInfo, AIQuestion
+from core.training.schemas.question_schemas import PersonalInfo, AIQuestion
 
 
 class PromptGenerator:
@@ -21,16 +21,16 @@ class PromptGenerator:
         
         **Your Goal:** Collect specific data needed to create a detailed, actionable training plan tailored to their goal.
         
-        **Training Plan Components You May Need to Design (depending on their goal):**
+        **Training Plan Components You WILL Design (depending on their goal):**
         
         1. **Training Activities** - Which activities are relevant (strength exercises, running, cycling, swimming, sport-specific drills, etc.)
         2. **Training Structure** - How to organize training across the week (split, frequency, combination of activities)
         3. **Training Frequency** - How many sessions per week and which days
-        4. **Intensity & Volume** - Appropriate levels (sets/reps, distance/time, zones, pace, etc.). Do NOT ask for currently lifted weights as this will be determined after the plan is generated.
-        5. **Periodization** - How to increase difficulty over time (weekly increments, phase changes)
-        6. **Recovery** - When and how to schedule rest/recovery
-        7. **Equipment & Resources** - What's available and needed for their activities
-        8. **Limitations** - Physical constraints, injuries, or preferences to work around
+        4. **Periodization** - How to increase difficulty over time (weekly increments, phase changes)
+        5. **Recovery** - When and how to schedule rest/recovery
+        6. **Equipment & Resources** - What's available and needed for their activities
+        7. **Limitations** - Physical constraints, injuries, or preferences to work around
+        8. **Current Abilities** - Starting point for their goal-relevant activities (e.g., can run 5km, can do 10 push-ups)
         
         **Question Focus:** 
         - Analyze their goal to determine which components are relevant
@@ -38,6 +38,13 @@ class PromptGenerator:
         - Adapt your questions to match their training context (strength, endurance, mixed, sport-specific, etc.)
         - Adapt question complexity and terminology to their experience level (simpler for beginners, you are allowed to go more technical for advanced)
         - Every question must help you make concrete decisions about their training plan
+
+        **DO NOT ASK ABOUT (Coach will determine based on goal & experience):**
+        - ❌ Intensity levels (sets/reps, HR zones, pace targets)
+        - ❌ Volume prescriptions (total sets, weekly mileage)
+        - ❌ Currently lifted weights (will be determined after plan generation)
+        - ❌ Specific rep ranges or load percentages
+
         """
 
     @staticmethod
@@ -54,6 +61,119 @@ class PromptGenerator:
         - Primary Goal: {personal_info.goal_description}
         - Measurement System: {personal_info.measurement_system}
         """
+
+    @staticmethod
+    def format_playbook_lessons(
+        playbook, personal_info: PersonalInfo, context: str = "training"
+    ) -> str:
+        """
+        Format playbook lessons for inclusion in prompts.
+
+        Args:
+            playbook: UserPlaybook object or list of lesson dicts
+            personal_info: PersonalInfo object for personalization
+            context: Context for the prompt ("outline" or "training")
+
+        Returns:
+            Formatted playbook context string
+        """
+        if not playbook:
+            return ""
+
+        # Handle both UserPlaybook objects and list of dicts
+        if hasattr(playbook, "lessons"):
+            lessons = playbook.lessons
+        elif isinstance(playbook, list):
+            lessons = playbook
+        else:
+            return ""
+
+        if not lessons or len(lessons) == 0:
+            return ""
+
+        # Choose header based on context
+        if context == "outline":
+            header = f"""
+        **🧠 PERSONALIZED CONSTRAINTS & PREFERENCES:**
+        
+        Based on {personal_info.username}'s onboarding responses, these are the key constraints and preferences to follow:
+        
+"""
+            footer = f"""
+        **IMPORTANT:** These are fundamental constraints extracted from the onboarding assessment.
+        The outline MUST respect these limitations and preferences.
+"""
+        else:  # context == "training"
+            header = f"""
+        **🧠 PERSONALIZED PLAYBOOK - LESSONS FROM {personal_info.username.upper()}'S TRAINING HISTORY:**
+        
+        These are proven insights from {personal_info.username}'s previous training outcomes. 
+        YOU MUST follow these lessons when creating this plan:
+        
+"""
+            footer = f"""
+        **CRITICAL:** These lessons are based on real outcomes from {personal_info.username}'s training.
+        Ignoring them may lead to poor adherence, injury, or failure to achieve goals.
+"""
+
+        # Separate positive lessons and warnings
+        positive_lessons = [
+            l
+            for l in lessons
+            if (l.positive if hasattr(l, "positive") else l.get("positive", True))
+        ]
+        warning_lessons = [
+            l
+            for l in lessons
+            if not (l.positive if hasattr(l, "positive") else l.get("positive", True))
+        ]
+
+        # Build the content
+        content = ""
+
+        if positive_lessons:
+            if context == "outline":
+                content += f"        ✅ **Capabilities & Preferences:**\n"
+            else:
+                content += f"        ✅ **What Works for {personal_info.username}:**\n"
+
+            for lesson in positive_lessons:
+                if hasattr(lesson, "text"):
+                    text = lesson.text
+                    confidence = lesson.confidence
+                    helpful = lesson.helpful_count
+                else:
+                    text = lesson.get("text", "")
+                    confidence = lesson.get("confidence", 0.5)
+                    helpful = lesson.get("helpful_count", 0)
+
+                if context == "outline":
+                    content += f"        - {text}\n"
+                else:
+                    content += f"        - {text} (confidence: {confidence:.0%}, proven {helpful}x)\n"
+
+        if warning_lessons:
+            if context == "outline":
+                content += f"\n        ⚠️  **Constraints & Limitations:**\n"
+            else:
+                content += f"\n        ⚠️  **What to Avoid:**\n"
+
+            for lesson in warning_lessons:
+                if hasattr(lesson, "text"):
+                    text = lesson.text
+                    confidence = lesson.confidence
+                    harmful = lesson.harmful_count
+                else:
+                    text = lesson.get("text", "")
+                    confidence = lesson.get("confidence", 0.5)
+                    harmful = lesson.get("harmful_count", 0)
+
+                if context == "outline":
+                    content += f"        - {text}\n"
+                else:
+                    content += f"        - {text} (confidence: {confidence:.0%}, learned from {harmful} negative outcome(s))\n"
+
+        return header + content + footer
 
     @staticmethod
     def get_question_generation_instructions() -> str:
@@ -279,10 +399,16 @@ class PromptGenerator:
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
         formatted_follow_up_responses: str,
+        playbook=None,
     ) -> str:
         """Generate the complete prompt for training plan outline."""
         combined_responses = (
             f"{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
+        )
+
+        # Format playbook context using helper function
+        playbook_context = PromptGenerator.format_playbook_lessons(
+            playbook, personal_info, context="outline"
         )
 
         return f"""
@@ -298,8 +424,13 @@ class PromptGenerator:
         ✅ **COMPLETED:** Follow-up Questions Phase
         - Filled critical gaps for training plan design
         
+        ✅ **COMPLETED:** Initial Lesson Extraction
+        - Analyzed responses to extract constraints, preferences, and context
+        - Created personalized playbook foundation
+        
         **COMPLETE TRAINING DATA TO USE:**
         {combined_responses}
+        {playbook_context}
 
         🎯 **CURRENT STEP:** Training Plan Outline Phase
         - Create a training plan outline based on the SPECIFIC data gathered
@@ -316,15 +447,19 @@ class PromptGenerator:
            - Based on preferences → Which days are strength, endurance, mixed, or recovery?
            - Based on goal → What's the primary focus (strength vs. endurance ratio)?
         
-        2. **Exercise & Session Selection**:
-           - Based on equipment → Which exercise categories are available?
-           - Based on goal & preferences → Push/pull/legs? Full body? Endurance sport type?
-           - Based on limitations → Any exercises or movements to avoid?
+        2. **Training Activities Design**:
+           - Based on goal → Which training modalities are needed?
+             * Strength goals: Exercise selection and movement patterns
+             * Endurance goals: Sport selection and session types
+             * Mixed goals: Integration strategy for concurrent training
+             * Sport-specific: Skills practice and physical preparation balance
+           - Based on equipment → What's available for their chosen activities?
+           - Based on limitations → Any activities or movements to avoid?
         
-        3. **Intensity & Volume Approach**:
-           - Based on experience level → Starting intensity and volume
-           - Based on goal → Higher volume or higher intensity focus?
-           - Based on time availability → Session duration and density
+        3. **Training Load Strategy** (Coach Determines):
+           - Based on experience level → Appropriate starting point and progression rate
+           - Based on goal → Training emphasis and distribution across modalities
+           - Based on time availability → Session structure and density
         
         4. **Periodization**:
            - Based on timeline → How many weeks and training periods?
@@ -384,9 +519,10 @@ class PromptGenerator:
         formatted_follow_up_responses: str,
         plan_outline: dict = None,
         exercise_info: str = "",
+        playbook_lessons: List = None,
     ) -> str:
         """Generate the complete prompt for training plan generation."""
-        
+
         # Build outline context
         outline_context = ""
 
@@ -401,15 +537,20 @@ class PromptGenerator:
 
             Training Periods:"""
             for period in plan_outline.get("training_periods", []):
-               outline_context += f"\n\n{period.get('period_name', 'N/A')} ({period.get('duration_weeks', 'N/A')} weeks):"
-               outline_context += f"\n  {period.get('explanation', 'N/A')}"
-               
-               # Add daily trainings pattern for this period
-               daily_trainings = period.get('daily_trainings', [])
-               if daily_trainings:
-                  outline_context += "\n  Weekly Pattern:"
-                  for training in daily_trainings:
+                outline_context += f"\n\n{period.get('period_name', 'N/A')} ({period.get('duration_weeks', 'N/A')} weeks):"
+                outline_context += f"\n  {period.get('explanation', 'N/A')}"
+
+                # Add daily trainings pattern for this period
+                daily_trainings = period.get("daily_trainings", [])
+                if daily_trainings:
+                    outline_context += "\n  Weekly Pattern:"
+                    for training in daily_trainings:
                         outline_context += f"\n    Day {training.get('day', 'N/A')}: {training.get('training_name', 'N/A')} - {training.get('description', 'N/A')}"
+
+        # Format playbook context using helper function
+        playbook_context = PromptGenerator.format_playbook_lessons(
+            playbook_lessons, personal_info, context="training"
+        )
 
         # Build the complete prompt
         prompt = f"""
@@ -419,6 +560,7 @@ class PromptGenerator:
             **LEVEL:** {personal_info.experience_level}
 
             {outline_context}
+            {playbook_context}
 
             **AVAILABLE EXERCISES:**
             {exercise_info}
@@ -427,25 +569,45 @@ class PromptGenerator:
              1. Use the EXACT outline structure (same title, duration, periods)
              2. For each period, create weekly schedules with 7 daily trainings (Mon-Sun)
              3. Set training_type: "strength", "endurance", "mixed", or "recovery"
-             4. For STRENGTH: Add 3-5 exercises max with sets, reps, weight_1rm (include compound movements)
-             5. For ENDURANCE: Create sessions with name, description (20 words max), sport_type, training_volume, unit, heart_rate_zone
-             6. For MIXED: Include 2-3 strength exercises AND 1 endurance session max
-             7. For RECOVERY: Set is_rest_day=true, empty arrays
+             
+             4. For STRENGTH days: Add 3-5 exercises with sets, reps, weight_1rm
+                - Select movements appropriate for their goal, equipment, and experience
+                - Balance movement patterns for comprehensive development
+             
+             5. For ENDURANCE days: Create sessions with name, description (20 words max), sport_type, training_volume, unit
+                - Design sessions appropriate for their goal, sport, and experience
+                - Vary session types for optimal adaptation (easy/base, tempo, intervals, recovery)
+                - Heart_rate_zone is optional (many users don't track HR)
+             
+             6. For MIXED days: Include 2-3 strength exercises AND 1 endurance session
+                - Balance both modalities without interference
+                - Consider recovery needs when combining
+             
+             7. For RECOVERY days: Set is_rest_day=true, empty arrays for exercises/sessions
+             
              8. Keep motivation concise:
                 - Daily training: 1-2 sentences max
                 - Weekly schedule: 2-3 sentences max
                 - Overall plan: 3-4 sentences max
 
+             **TRAINING QUALITY PRINCIPLES (Apply to ALL modalities):**
+             - Progressive Overload: Gradually increase difficulty over time
+             - Variety: Prevent adaptation plateaus and maintain engagement
+             - Specificity: Training matches goal requirements
+             - Recovery: Adequate rest between hard sessions
+             - Individualization: Respects user's constraints and preferences
+
              **CRITICAL:**
-             - Match {personal_info.experience_level} complexity
-             - Support goal: "{personal_info.goal_description}"
-             - Increase difficulty across weeks and periods (periodization)
+             - Match {personal_info.experience_level} complexity appropriately
+             - Support goal: "{personal_info.goal_description}" - this is the primary driver
+             - Apply periodization appropriate for their goal (strength: load/volume waves, endurance: base/build/peak, etc.)
              - VARIETY IS KEY: Vary activities week-to-week to prevent plateaus
              - STAY CONCISE: Keep descriptions brief to avoid exceeding token limits
+             - **APPLY ALL PLAYBOOK LESSONS**: The personalized playbook above contains proven lessons - you MUST incorporate them into this plan
 
             Return in TrainingPlan schema format.
          """
-        
+
         return prompt
 
     @staticmethod

@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 app = FastAPI(
     title="EvolveAI Training Plan Generator",
     description="FastAPI backend for generating personalized training plans using enhanced AI training Coach",
-    version="2.0.0"
+    version="2.0.0",
 )
 
 # CORS middleware
@@ -38,12 +38,10 @@ async def root():
 @app.get("/api/health/")
 async def health_check():
     """Detailed health check endpoint."""
-    return {
-        "status": "healthy",
-        "version": "2.0.0"
-    }
+    return {"status": "healthy", "version": "2.0.0"}
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True) 
+
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
