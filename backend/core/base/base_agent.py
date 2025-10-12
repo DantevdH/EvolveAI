@@ -27,9 +27,9 @@ class BaseAgent(ABC):
         Initialize the base agent.
         
         Args:
-            agent_name: Name of the agent (e.g., "Fitness Coach")
+            agent_name: Name of the agent (e.g., "training Coach")
             agent_description: Description of the agent's expertise
-            topic: Topic this agent specializes in (e.g., "fitness", "nutrition")
+            topic: Topic this agent specializes in (e.g., "training", "nutrition")
         """
         self.agent_name = agent_name
         self.agent_description = agent_description
@@ -103,7 +103,7 @@ IMPORTANT: Always use your knowledge base to provide responses. Do not make up i
                 'id, title, content, topic, keywords'
             ).eq('topic', self.topic)
             
-            # Skip metadata/keyword filtering - only filter by topic for fitness agent
+            # Skip metadata/keyword filtering - only filter by topic for training agent
             
             # Execute documents query
             docs_response = docs_response = docs_query.execute()

@@ -108,7 +108,7 @@ class RAGTool:
             'weight_loss': ['weight loss', 'fat loss', 'burn calories', 'slim down'],
             'muscle_gain': ['muscle gain', 'bulk up', 'build muscle', 'size'],
             'strength': ['strength', 'power', 'lift more', 'stronger'],
-            'endurance': ['endurance', 'stamina', 'last longer', 'cardio fitness']
+            'endurance': ['endurance', 'stamina', 'last longer', 'cardio training']
         }
         
         for goal, patterns in goal_patterns.items():

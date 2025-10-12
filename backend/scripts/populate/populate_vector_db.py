@@ -302,8 +302,8 @@ class PDFVectorDBPopulator:
         
         # Enhanced topic keywords with weighted scoring
         topic_keywords = {
-            'fitness': [
-                'workout', 'exercise', 'training', 'fitness', 'strength', 'muscle', 'cardio',
+            'training': [
+                'training', 'exercise', 'training', 'training', 'strength', 'muscle', 'cardio',
                 'gym', 'lifting', 'squat', 'bench', 'deadlift', 'push-up', 'pull-up',
                 'reps', 'sets', 'routine', 'program', 'plan', 'bodybuilding', 'powerlifting'
             ],

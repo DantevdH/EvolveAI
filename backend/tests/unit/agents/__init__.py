@@ -2,7 +2,7 @@
 Unit tests for agent components.
 
 This package contains isolated, component-level tests for:
-- FitnessCoach
+- TrainingCoach
 - BaseAgent
 - AgentCoordinator
 - RAG tools

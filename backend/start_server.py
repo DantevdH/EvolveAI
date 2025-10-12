@@ -28,5 +28,6 @@ if __name__ == "__main__":
         host=host,
         port=port,
         reload=reload,
-        log_level="info"
+        log_level="info",
+        access_log=True
     ) 

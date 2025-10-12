@@ -10,12 +10,11 @@ backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
 import pytest
-from utils.mock_data import (
+from core.training.helpers.mock_data import (
     create_mock_user_profile,
-    create_mock_workout_plan,
-    get_mock_data_summary,
+    create_mock_training_plan,
     MOCK_USER_PROFILE_DATA,
-    MOCK_EXERCISES
+    MOCK_STRENGTH_EXERCISES
 )
 
 
@@ -32,82 +31,75 @@ class TestMockData:
         assert user_profile.days_per_week == 3
         assert user_profile.equipment == "Full Gym"
 
-    def test_mock_workout_plan_creation(self):
-        """Test that mock workout plan can be created."""
-        workout_plan = create_mock_workout_plan()
+    def test_mock_training_plan_creation(self):
+        """Test that mock training plan can be created."""
+        training_plan = create_mock_training_plan()
         
-        assert workout_plan is not None
-        assert workout_plan.title == "Strength Builder Pro"
-        assert len(workout_plan.weekly_schedules) == 1
+        assert training_plan is not None
+        assert training_plan.title == "Strength Builder Pro"
+        assert len(training_plan.weekly_schedules) == 1
         
         # Check weekly schedule
-        weekly_schedule = workout_plan.weekly_schedules[0]
+        weekly_schedule = training_plan.weekly_schedules[0]
         assert weekly_schedule.week_number == 1
-        assert len(weekly_schedule.daily_workouts) == 7
+        assert len(weekly_schedule.daily_trainings) == 7
         
-        # Check daily workouts
-        monday_workout = weekly_schedule.daily_workouts[0]
-        assert monday_workout.day_of_week == "Monday"
-        assert not monday_workout.is_rest_day
-        assert len(monday_workout.exercises) == 3
+        # Check daily trainings
+        monday_training = weekly_schedule.daily_trainings[0]
+        assert monday_training.day_of_week == "Monday"
+        assert not monday_training.is_rest_day
+        assert len(monday_training.strength_exercises) == 2
         
-        tuesday_workout = weekly_schedule.daily_workouts[1]
-        assert tuesday_workout.day_of_week == "Tuesday"
-        assert tuesday_workout.is_rest_day
+        tuesday_training = weekly_schedule.daily_trainings[1]
+        assert tuesday_training.day_of_week == "Tuesday"
+        assert tuesday_training.is_rest_day
 
     def test_mock_exercises_data(self):
         """Test that mock exercise data is available."""
-        assert len(MOCK_EXERCISES) == 5
+        assert len(MOCK_STRENGTH_EXERCISES) == 5
         
         # Check specific exercises
-        assert "barbell_squat" in MOCK_EXERCISES
-        assert "bench_press" in MOCK_EXERCISES
-        assert "deadlift" in MOCK_EXERCISES
+        assert "barbell_squat" in MOCK_STRENGTH_EXERCISES
+        assert "bench_press" in MOCK_STRENGTH_EXERCISES
+        assert "deadlift" in MOCK_STRENGTH_EXERCISES
         
         # Check exercise details
-        squat = MOCK_EXERCISES["barbell_squat"]
-        assert squat["exercise_id"] == 1302
-        assert "quads" in squat["description"].lower()
+        squat = MOCK_STRENGTH_EXERCISES["barbell_squat"]
+        assert squat["exercise_id"] == 1
+        assert squat["sets"] == 4
 
-    def test_mock_data_summary(self):
-        """Test that mock data summary provides useful information."""
-        summary = get_mock_data_summary()
-        
-        assert "user_profile" in summary
-        assert "workout_plan" in summary
-        assert "exercises" in summary
-        assert "usage" in summary
-        assert "Compound lower body exercise" in summary["exercises"][0]["description"]
+    # Removed test_mock_data_summary as get_mock_data_summary() is no longer needed
 
-    def test_mock_workout_plan_with_custom_request(self):
-        """Test that mock workout plan can be created with custom request."""
+    def test_mock_training_plan_with_custom_request(self):
+        """Test that mock training plan can be created with custom request."""
         custom_request = {"primaryGoal": "Weight Loss"}
-        workout_plan = create_mock_workout_plan(custom_request)
+        training_plan = create_mock_training_plan(custom_request)
         
-        # Should still create a valid workout plan
-        assert workout_plan is not None
-        assert workout_plan.title == "Strength Builder Pro"
+        # Should still create a valid training plan
+        assert training_plan is not None
+        assert training_plan.title == "Strength Builder Pro"
 
 class TestMockDataIntegration:
     """Test mock data integration with schemas."""
 
     def test_mock_data_uses_correct_schemas(self):
         """Test that mock data uses the correct Pydantic schemas."""
-        from core.fitness.helpers.schemas import UserProfileSchema, WorkoutPlanSchema
+        from core.training.helpers.schemas import UserProfileSchema
+        from core.training.helpers.training_schemas import TrainingPlan
         
         # User profile should be valid
         user_profile = create_mock_user_profile()
         assert isinstance(user_profile, UserProfileSchema)
         
-        # Workout plan should be valid
-        workout_plan = create_mock_workout_plan()
-        assert isinstance(workout_plan, WorkoutPlanSchema)
+        # Training plan should be valid
+        training_plan = create_mock_training_plan()
+        assert isinstance(training_plan, TrainingPlan)
 
     def test_mock_data_validation(self):
         """Test that mock data passes Pydantic validation."""
         # This should not raise any validation errors
         user_profile = create_mock_user_profile()
-        workout_plan = create_mock_workout_plan()
+        training_plan = create_mock_training_plan()
         
         # If we get here, validation passed
         assert True

@@ -221,4 +221,5 @@ buck-out/
 # Specific files that need to be ignored
 *.pdf
 *.xlsx
-*.csv
+*.csv# Auto-generated frontend .env (synced from root .env)
+frontend/.env

@@ -117,12 +117,12 @@ class ExerciseFeaturesFiller:
             Formatted prompt string
         """
         prompt = f"""
-You are a fitness expert analyzing exercise categorization. Based on the following exercise information, determine the appropriate tier (1, 2, or 3).
+You are a training expert analyzing exercise categorization. Based on the following exercise information, determine the appropriate tier (1, 2, or 3).
 
 TIER SYSTEM:
-- Tier 1: Foundational - Basic, fundamental movements that form the foundation of fitness
-- Tier 2: Standard - Common exercises that are widely used in fitness programs
-- Tier 3: Variety - Specialized or advanced variations that add variety to workouts
+- Tier 1: Foundational - Basic, fundamental movements that form the foundation of training
+- Tier 2: Standard - Common exercises that are widely used in training programs
+- Tier 3: Variety - Specialized or advanced variations that add variety to trainings
 
 EXERCISE INFORMATION:
 {json.dumps(exercise_data, indent=2)}
@@ -143,12 +143,12 @@ Format: "[TIER NAME]"
             Formatted prompt string
         """
         prompt = f"""
-You are a fitness expert analyzing exercise popularity and common usage. Based on the following exercise information, determine the popularity score (0.0 to 1.0).
+You are a training expert analyzing exercise popularity and common usage. Based on the following exercise information, determine the popularity score (0.0 to 1.0).
 
 POPULARITY SCALE:
 - 0.0-0.3: Rarely used, specialized, niche exercises
 - 0.4-0.6: Moderately popular, used in some programs
-- 0.7-0.8: Popular, commonly included in workouts
+- 0.7-0.8: Popular, commonly included in trainings
 - 0.9-1.0: Very popular, widely used, staple exercises
 
 EXERCISE INFORMATION:
