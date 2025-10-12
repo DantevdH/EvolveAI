@@ -395,7 +395,6 @@ class TesttrainingAgentBackendEndToEnd:
             user_profile_dict = user_profile.model_dump() if hasattr(user_profile, 'model_dump') else user_profile.__dict__
             # Use the actual get_exercise_candidates method
             candidates = training_coach.exercise_selector.get_exercise_candidates(
-                max_exercises=20,
                 difficulty=expected_level
             )
             
@@ -497,7 +496,6 @@ class TesttrainingAgentBackendEndToEnd:
             user_profile_dict = user_profile.model_dump() if hasattr(user_profile, 'model_dump') else user_profile.__dict__
             # Use the actual get_exercise_candidates method
             candidates = training_coach.exercise_selector.get_exercise_candidates(
-                max_exercises=20,
                 difficulty="Beginner"
             )
             
@@ -551,7 +549,6 @@ class TesttrainingAgentBackendEndToEnd:
         incomplete_profile_dict = incomplete_profile.model_dump() if hasattr(incomplete_profile, 'model_dump') else incomplete_profile.__dict__
         # Use the actual get_exercise_candidates method
         candidates = training_coach.exercise_selector.get_exercise_candidates(
-            max_exercises=20,
             difficulty="Beginner"
         )
         
@@ -830,7 +827,6 @@ class TesttrainingAgentBackendEndToEnd:
             user_profile_dict = user_profile.model_dump() if hasattr(user_profile, 'model_dump') else user_profile.__dict__
             # Use the actual get_exercise_candidates method
             candidates = training_coach.exercise_selector.get_exercise_candidates(
-                max_exercises=20,
                 difficulty="Beginner"
             )
             
@@ -858,7 +854,6 @@ class TesttrainingAgentBackendEndToEnd:
             user_profile_dict = user_profile.model_dump() if hasattr(user_profile, 'model_dump') else user_profile.__dict__
             # Use the actual get_exercise_candidates method
             candidates = training_coach.exercise_selector.get_exercise_candidates(
-                max_exercises=20,
                 difficulty="Beginner"
             )
             

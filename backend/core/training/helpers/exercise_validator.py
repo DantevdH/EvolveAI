@@ -270,7 +270,6 @@ class ExerciseValidator:
             
             # Get replacement candidates using simplified exercise selector
             candidates = self.exercise_selector.get_exercise_candidates(
-                max_exercises=20,
                 difficulty=original_exercise.get('difficulty', 'Beginner')
             )
             
@@ -336,7 +335,6 @@ class ExerciseValidator:
             else:
                 # Get replacement candidates using simplified exercise selector
                 candidates = self.exercise_selector.get_exercise_candidates(
-                    max_exercises=20,
                     difficulty=difficulty
                 )
                 self._candidate_cache[candidate_key] = candidates

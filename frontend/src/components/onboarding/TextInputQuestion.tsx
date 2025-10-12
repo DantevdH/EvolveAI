@@ -26,8 +26,8 @@ export const TextInputQuestion: React.FC<TextInputQuestionProps> = ({
       <TextInput
         value={value}
         onChangeText={onChange}
-        placeholder={question.placeholder}
-        maxLength={question.max_length}
+        placeholder={question.placeholder || 'Enter your response...'}
+        maxLength={question.max_length || 500}
         minLength={20}
         disabled={disabled}
         error={error}

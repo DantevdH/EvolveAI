@@ -87,7 +87,7 @@ export const NutritionScreen: React.FC = () => {
         userProfile.minutesPerSession
       );
       const weightGoal = estimateWeightGoalFromProfile(
-        userProfile.primaryGoal,
+        userProfile.goalDescription || '',
         weightKg
       );
       
@@ -144,7 +144,7 @@ export const NutritionScreen: React.FC = () => {
     
     const weightChange = macroCalculation.calories - macroCalculation.tdee;
     const weightKg = convertWeightToKg(userProfile.weight, userProfile.weightUnit);
-    const weightGoal = estimateWeightGoalFromProfile(userProfile.primaryGoal, weightKg);
+    const weightGoal = estimateWeightGoalFromProfile(userProfile.goalDescription || '', weightKg);
     
     if (weightGoal.targetWeight && weightChange !== 0) {
       const weeklyChange = Math.abs(weightChange * 7 / 7700); // Convert daily kcal to weekly kg
@@ -224,7 +224,7 @@ export const NutritionScreen: React.FC = () => {
         <View style={styles.infoCard}>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Goal:</Text>
-            <Text style={styles.infoValue}>{userProfile.primaryGoal}</Text>
+            <Text style={styles.infoValue}>{userProfile.goalDescription}</Text>
           </View>
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Activity Level:</Text>

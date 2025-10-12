@@ -81,23 +81,18 @@ def mock_exercise_data():
 def test_exercise_selection_intermediate_difficulty(exercise_selector):
     """Test exercise selection for intermediate difficulty."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=5,
         difficulty='Intermediate'
     )
     
-    # Should return a formatted string
-    assert isinstance(result, str)
-    assert len(result) > 0, "Should return formatted exercise string"
+    # Should return a list of exercises
+    assert isinstance(result, list)
+    assert len(result) > 0, "Should return exercise list"
     
-    # String should contain relevant information
-    assert ":" in result or "Exercise" in result
-    
-    print(f"✅ Intermediate difficulty: Returned formatted string ({len(result)} characters)")
+    print(f"✅ Intermediate difficulty: Returned {len(result)} exercises")
 
 def test_exercise_selection_beginner_difficulty(exercise_selector):
     """Test exercise selection for beginner difficulty."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=5,
         difficulty='Beginner'
     )
     
@@ -113,7 +108,6 @@ def test_exercise_selection_beginner_difficulty(exercise_selector):
 def test_exercise_selection_advanced_difficulty(exercise_selector):
     """Test exercise selection for advanced difficulty."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=5,
         difficulty='Advanced'
     )
     
@@ -129,18 +123,14 @@ def test_exercise_selection_advanced_difficulty(exercise_selector):
 def test_exercise_selection_popularity_based_filtering(exercise_selector):
     """Test that exercises are filtered by popularity score <= 2."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=10,
         difficulty='Intermediate'
     )
     
-    # Should return a formatted string
-    assert isinstance(result, str)
-    assert len(result) > 0, "Should return formatted exercise string"
+    # Should return a list of exercises
+    assert isinstance(result, list)
+    assert len(result) > 0, "Should return exercise list"
     
-    # The string should contain exercises grouped by muscle groups
-    assert ":" in result
-    
-    print(f"✅ Popularity-based filtering: Returned grouped exercises ({len(result)} characters)")
+    print(f"✅ Popularity-based filtering: Returned {len(result)} exercises")
 
 @pytest.mark.parametrize("difficulty", [
     "Beginner",
@@ -150,23 +140,18 @@ def test_exercise_selection_popularity_based_filtering(exercise_selector):
 def test_difficulty_filtering_logic(exercise_selector, difficulty):
     """Test the difficulty filtering logic with different levels."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=3,
         difficulty=difficulty
     )
     
-    # Basic assertions - should return formatted string
-    assert isinstance(result, str)
-    assert len(result) > 0, f"Should return non-empty string for {difficulty}"
+    # Basic assertions - should return list of exercises
+    assert isinstance(result, list)
+    assert len(result) > 0, f"Should return non-empty list for {difficulty}"
     
-    # String should contain muscle group formatting
-    assert ":" in result
-    
-    print(f"✅ {difficulty}: Returned formatted string ({len(result)} characters)")
+    print(f"✅ {difficulty}: Returned {len(result)} exercises")
 
 def test_exercise_candidates_format_structure(exercise_selector):
     """Test that exercise candidates return properly formatted string structure."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=5,
         difficulty='Intermediate'
     )
     
@@ -185,12 +170,10 @@ def test_exercise_candidates_format_structure(exercise_selector):
 def test_max_exercises_parameter_handling(exercise_selector):
     """Test that max_exercises parameter is handled correctly."""
     result_small = exercise_selector.get_exercise_candidates(
-        max_exercises=2,
         difficulty='Intermediate'
     )
     
     result_large = exercise_selector.get_exercise_candidates(
-        max_exercises=20,
         difficulty='Intermediate'
     )
     
@@ -208,7 +191,6 @@ def test_max_exercises_parameter_handling(exercise_selector):
 def test_get_exercise_candidates_returns_list(exercise_selector):
     """Test that get_exercise_candidates returns a list of exercises."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=10,
         difficulty='Intermediate'
     )
 
@@ -227,7 +209,6 @@ def test_get_exercise_candidates_returns_list(exercise_selector):
 def test_get_formatted_exercises_for_ai_returns_string(exercise_selector):
     """Test that get_formatted_exercises_for_ai returns a formatted string for AI."""
     result = exercise_selector.get_formatted_exercises_for_ai(
-        max_exercises=10,
         difficulty='Intermediate'
     )
 
@@ -292,7 +273,6 @@ def test_validate_exercise_ids_functionality(exercise_selector):
 def test_edge_case_empty_difficulty(exercise_selector):
     """Test edge case with empty difficulty."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=5,
         difficulty=''
     )
     
@@ -305,7 +285,6 @@ def test_edge_case_empty_difficulty(exercise_selector):
 def test_edge_case_invalid_difficulty(exercise_selector):
     """Test edge case with invalid difficulty."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=5,
         difficulty='Invalid Difficulty'
     )
     
@@ -319,7 +298,6 @@ def test_edge_case_no_exercises_found(exercise_selector):
     """Test edge case when no exercises match criteria."""
     # Use very restrictive criteria that might not find exercises
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=5,
         difficulty='Expert'
     )
     
@@ -332,7 +310,6 @@ def test_edge_case_no_exercises_found(exercise_selector):
 def test_exercise_candidates_with_popularity_filter(exercise_selector):
     """Test that exercises are filtered by popularity score <= 2."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=20,
         difficulty='Intermediate'
     )
     
@@ -359,7 +336,6 @@ def test_error_handling_database_failure(exercise_selector):
         
         # This should not crash, should return empty string or error message
         result = exercise_selector.get_exercise_candidates(
-            max_exercises=5,
             difficulty='Intermediate'
         )
         
@@ -400,7 +376,6 @@ def test_environment_validation_error_handling():
 def test_exercise_candidates_with_single_difficulty(exercise_selector):
     """Test exercise candidates with single difficulty level."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=5,
         difficulty='Intermediate'
     )
     
@@ -412,7 +387,6 @@ def test_exercise_candidates_with_single_difficulty(exercise_selector):
 def test_exercise_candidates_with_very_small_max_exercises(exercise_selector):
     """Test exercise candidates with very small max_exercises (edge case)."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=1,  # Very small number
         difficulty='Intermediate'
     )
     
@@ -424,7 +398,6 @@ def test_exercise_candidates_with_very_small_max_exercises(exercise_selector):
 def test_exercise_candidates_with_none_difficulty(exercise_selector):
     """Test exercise candidates with None difficulty (edge case)."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=5,
         difficulty=None  # None difficulty
     )
     
@@ -436,7 +409,6 @@ def test_exercise_candidates_with_none_difficulty(exercise_selector):
 def test_exercise_candidates_with_empty_string_difficulty(exercise_selector):
     """Test exercise candidates with empty string difficulty (edge case)."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=5,
         difficulty=''  # Empty string difficulty
     )
     

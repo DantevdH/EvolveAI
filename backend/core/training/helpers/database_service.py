@@ -328,6 +328,7 @@ class DatabaseService:
                         
                         for session_index, session_data in enumerate(endurance_sessions):
                             name = session_data.get("name", "Endurance Session")
+                            description = session_data.get("description", "")
                             sport_type = session_data.get("sport_type", "running")
                             training_volume = session_data.get("training_volume", 30.0)
                             unit = session_data.get("unit", "minutes")

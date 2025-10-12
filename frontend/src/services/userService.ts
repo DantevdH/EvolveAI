@@ -47,6 +47,10 @@ const convertToAIQuestions = (questionsData: any): AIQuestion[] | null => {
     return null;
   }
   
+  if (!questions) {
+    return null;
+  }
+  
   return questions.map(question => ({
     id: question.id || '',
     text: question.text || '',
@@ -215,8 +219,7 @@ export class UserService {
           id: rawProfile.id,
           userId: rawProfile.user_id,
           username: rawProfile.username || '',
-          primaryGoal: rawProfile.primary_goal || '',
-          primaryGoalDescription: rawProfile.primary_goal_description || '',
+          goalDescription: rawProfile.goal_description || '',
           coachId: rawProfile.coach_id,
           experienceLevel: rawProfile.experience_level || '',
           daysPerWeek: rawProfile.days_per_week || 3,
@@ -279,8 +282,7 @@ export class UserService {
       
       // Map camelCase to snake_case for database
       if (updates.username !== undefined) updateData.username = updates.username;
-      if (updates.primaryGoal !== undefined) updateData.primary_goal = updates.primaryGoal;
-      if (updates.primaryGoalDescription !== undefined) updateData.primary_goal_description = updates.primaryGoalDescription;
+      if (updates.goalDescription !== undefined) updateData.goal_description = updates.goalDescription;
       if (updates.coachId !== undefined) updateData.coach_id = updates.coachId;
       if (updates.experienceLevel !== undefined) updateData.experience_level = updates.experienceLevel;
       if (updates.daysPerWeek !== undefined) updateData.days_per_week = updates.daysPerWeek;
@@ -315,8 +317,7 @@ export class UserService {
         id: data.id,
         userId: data.user_id,
         username: data.username || '',
-        primaryGoal: data.primary_goal || '',
-        primaryGoalDescription: data.primary_goal_description || '',
+        goalDescription: data.goal_description || '',
         coachId: data.coach_id,
         experienceLevel: data.experience_level || '',
         daysPerWeek: data.days_per_week || 3,

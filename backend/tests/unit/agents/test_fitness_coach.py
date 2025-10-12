@@ -448,13 +448,11 @@ class TestTrainingCoach:
     async def test_get_exercise_candidates(self, mock_training_coach):
         """Test exercise selection functionality."""
         result = mock_training_coach.exercise_selector.get_exercise_candidates(
-            max_exercises=20,
             difficulty="Intermediate"
         )
 
         # Should call exercise selector
         mock_training_coach.exercise_selector.get_exercise_candidates.assert_called_once_with(
-            max_exercises=20,
             difficulty="Intermediate"
         )
 

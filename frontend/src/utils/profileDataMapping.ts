@@ -4,7 +4,6 @@
 
 export interface OnboardingData {
   username?: string;
-  primaryGoal?: string;
   goalDescription?: string;
   experienceLevel?: string;
   daysPerWeek?: number;
@@ -25,8 +24,7 @@ export interface OnboardingData {
 export interface DatabaseProfileData {
   user_id: string;
   username: string;
-  primary_goal: string;
-  primary_goal_description: string;
+  goal_description: string;
   experience_level: string;
   days_per_week: number;
   minutes_per_session: number;
@@ -44,8 +42,7 @@ export interface DatabaseProfileData {
 }
 
 export interface BackendRequestData {
-  primaryGoal: string;
-  primaryGoalDescription: string;
+  goalDescription: string;
   experienceLevel: string;
   daysPerWeek: number;
   minutesPerSession: number;
@@ -73,8 +70,7 @@ export const mapOnboardingToDatabase = (
   return {
     user_id: userId,
     username: onboardingData.username || '',
-    primary_goal: onboardingData.primaryGoal || '',
-    primary_goal_description: onboardingData.goalDescription || '',
+    goal_description: onboardingData.goalDescription || '',
     experience_level: onboardingData.experienceLevel || '',
     days_per_week: onboardingData.daysPerWeek || 3,
     minutes_per_session: onboardingData.minutesPerSession || 45,
@@ -103,9 +99,8 @@ export const mapProfileToBackendRequest = (
   userProfileId: number
 ): BackendRequestData => {
   return {
-    primaryGoal: profileData.primary_goal || profileData.primaryGoal,
-    primaryGoalDescription: profileData.primary_goal_description || profileData.primaryGoalDescription || '',
-    experienceLevel: profileData.experience_level || profileData.experienceLevel,
+    goalDescription: profileData.goal_description || profileData.goalDescription || '',
+    experienceLevel: profileData.experience_level || profileData.experienceLevel || '',
     daysPerWeek: profileData.days_per_week || profileData.daysPerWeek,
     minutesPerSession: profileData.minutes_per_session || profileData.minutesPerSession,
     equipment: profileData.equipment,
@@ -135,8 +130,7 @@ export const mapDatabaseToNavigationParams = (
     id: profileId,
     user_id: userId,
     username: profileData.username || '',
-    primary_goal: profileData.primaryGoal || '',
-    primary_goal_description: profileData.goalDescription || '',
+    goal_description: profileData.goalDescription || '',
     experience_level: profileData.experienceLevel || '',
     days_per_week: profileData.daysPerWeek || 3,
     minutes_per_session: profileData.minutesPerSession || 45,

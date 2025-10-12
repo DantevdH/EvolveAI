@@ -368,7 +368,6 @@ class TestTrainingFlowIntegration:
             retrieve_exercises=True,
             difficulty="intermediate",
             equipment=["barbell", "dumbbell"],
-            max_exercises=10,
             reasoning="User wants strength training with gym equipment",
             alternative_approach=None
         )

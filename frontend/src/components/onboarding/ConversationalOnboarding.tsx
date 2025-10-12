@@ -347,8 +347,15 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           // Use stored plan outline if available, otherwise use current state
           const planOutline = authState.userProfile?.plan_outline || state.trainingPlanOutline;
           
+          const fullPersonalInfo = {
+            ...state.personalInfo!,
+            username: state.username,
+            goal_description: state.goalDescription,
+            experience_level: state.experienceLevel,
+          };
+          
           const response = await trainingService.generateTrainingPlan(
-            state.personalInfo!,
+            fullPersonalInfo,
             initialResponses,
             followUpResponses,
             planOutline,
@@ -408,7 +415,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }));
       onError(errorMessage);
     }
-  }, [state.personalInfo, state.initialResponses, state.followUpResponses, state.trainingPlanOutline, state.outlineFeedback, state.initialQuestions, state.followUpQuestions, authState.userProfile, onComplete, onError]);
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.followUpResponses, state.trainingPlanOutline, state.outlineFeedback, state.initialQuestions, state.followUpQuestions, authState.userProfile, onComplete, onError]);
 
   // Step 1: Username
   const handleUsernameChange = useCallback((username: string) => {
@@ -550,8 +557,15 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       const { data: { session } } = await supabase.auth.getSession();
       const jwtToken = session?.access_token;
       
+      const fullPersonalInfo = {
+        ...state.personalInfo,
+        username: state.username,
+        goal_description: state.goalDescription,
+        experience_level: state.experienceLevel,
+      };
+      
       const response = await trainingService.getFollowUpQuestions(
-        state.personalInfo, 
+        fullPersonalInfo, 
         responsesObject,
         state.initialQuestions,
         authState.userProfile?.id,
@@ -575,7 +589,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }));
       onError(errorMessage);
     }
-  }, [state.personalInfo, state.initialResponses, state.initialQuestions, authState.userProfile?.id, onError]);
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.initialQuestions, authState.userProfile?.id, onError]);
 
   // Simple function to generate plan outline
   const generatePlanOutline = useCallback(async () => {
@@ -593,8 +607,15 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       const { data: { session } } = await supabase.auth.getSession();
       const jwtToken = session?.access_token;
       
+      const fullPersonalInfo = {
+        ...state.personalInfo,
+        username: state.username,
+        goal_description: state.goalDescription,
+        experience_level: state.experienceLevel,
+      };
+      
       const response = await trainingService.generateTrainingPlanOutline(
-        state.personalInfo,
+        fullPersonalInfo,
         initialResponses,
         followUpResponses,
         state.initialQuestions,
@@ -624,7 +645,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }));
       onError(errorMessage);
     }
-  }, [state.personalInfo, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, onError]);
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, onError]);
 
   // Simple step progression functions
   const handleInitialQuestionsComplete = useCallback(() => {
@@ -690,8 +711,15 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           const { data: { session } } = await supabase.auth.getSession();
           const jwtToken = session?.access_token;
           
+          const fullPersonalInfo = {
+            ...state.personalInfo!,
+            username: state.username,
+            goal_description: state.goalDescription,
+            experience_level: state.experienceLevel,
+          };
+          
           const response = await trainingService.getFollowUpQuestions(
-            state.personalInfo!, 
+            fullPersonalInfo, 
             responsesObject, // Send raw responses - backend will format them
             state.initialQuestions, // Send initial questions
             authState.userProfile?.id,
@@ -729,7 +757,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }));
       onError(error instanceof Error ? error.message : 'Failed to start AI analysis');
     }
-  }, [state.personalInfo, state.initialResponses, state.initialQuestions, onError]);
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.initialQuestions, authState.userProfile?.id, onError]);
 
   // Step 3: Follow-up Questions
   const handleFollowUpResponseChange = useCallback((questionId: string, value: any) => {
@@ -769,8 +797,15 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           const initialResponses = Object.fromEntries(state.initialResponses);
           const followUpResponses = Object.fromEntries(state.followUpResponses);
           
+          const fullPersonalInfo = {
+            ...state.personalInfo!,
+            username: state.username,
+            goal_description: state.goalDescription,
+            experience_level: state.experienceLevel,
+          };
+          
           const response = await trainingService.generateTrainingPlanOutline(
-            state.personalInfo!,
+            fullPersonalInfo,
             initialResponses,  // Send raw responses
             followUpResponses,  // Send raw responses
             state.initialQuestions,  // Send initial questions
@@ -815,7 +850,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }));
       onError(error instanceof Error ? error.message : 'Failed to generate training plan outline');
     }
-  }, [state.personalInfo, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, onError, authState.userProfile?.id, startFromStep]);
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, onError, authState.userProfile?.id, startFromStep]);
 
   // Step 4: Training Plan Outline
   const handleOutlineFeedbackChange = useCallback((feedback: string) => {

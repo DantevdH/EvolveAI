@@ -21,6 +21,15 @@ class DayOfWeek(str, Enum):
     SUNDAY = "Sunday"
 
 
+class TrainingType(str, Enum):
+    """Enum for training types to ensure consistency with database constraints."""
+    
+    STRENGTH = "strength"
+    ENDURANCE = "endurance"
+    MIXED = "mixed"
+    RECOVERY = "recovery"
+
+
 class EnduranceSession(BaseModel):
     """Schema for individual endurance training sessions."""
     
@@ -58,7 +67,7 @@ class DailyTraining(BaseModel):
     weekly_schedule_id: int = Field(..., description="ID of the weekly schedule")
     day_of_week: DayOfWeek = Field(..., description="Day of the week")
     is_rest_day: bool = Field(default=False, description="Whether this is a rest day")
-    training_type: str = Field(..., description="Type: strength, endurance, mixed, recovery")
+    training_type: TrainingType = Field(..., description="Type of training: strength, endurance, mixed, or recovery")
     strength_exercises: List[StrengthExercise] = Field(default=[], description="Strength exercises for this day")
     endurance_sessions: List[EnduranceSession] = Field(default=[], description="Endurance sessions for this day")
     motivation: str = Field(..., description="AI-generated motivation explaining the training choices for this day")

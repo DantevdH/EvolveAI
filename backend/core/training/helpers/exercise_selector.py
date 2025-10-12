@@ -49,44 +49,41 @@ class ExerciseSelector:
 
     def get_exercise_candidates(
         self,
-        max_exercises: int,
-        difficulty: str
+        difficulty: str,
+        equipment: Optional[List[str]] = None
     ) -> List[Dict]:
         """
-        Get exercise candidates with popularity_score <= 2, grouped by main_muscles.
+        Get exercise candidates filtered by difficulty and equipment.
         
-        This method retrieves all exercises with a popularity score of 2 or less,
-        which represents well-known, effective exercises. The exercises are then
-        grouped by their main_muscles for better organization.
+        This method retrieves exercises based on difficulty level and optional equipment.
+        Popularity score range: 1 (high/most popular) to 3 (low/least popular).
+        Currently retrieves ALL exercises (popularity 1-3) to maximize selection.
         
         **Selection Strategy:**
-        - Retrieve ALL exercises with popularity_score <= 2
+        - Retrieve ALL exercises (no popularity filtering)
         - Filter by difficulty level (progressive inclusion)
-        - Group by main_muscles (using first item in the list)
+        - Filter by equipment types (if specified)
+        - Group by main_muscles for better organization
         - Present to AI for intelligent selection
         
         **Benefits:**
-        - **Quality**: Popularity score <= 2 ensures proven, effective exercises
-        - **Comprehensive**: Gets all suitable exercises, not just a subset
-        - **Organized**: Grouped by muscle groups for better AI understanding
+        - **Comprehensive**: Gets all available exercises
         - **Flexible**: AI can choose the best exercises for the specific user
+        - **Organized**: Grouped by target area for better AI understanding
+        - **Quality**: Database only contains vetted exercises
 
         Args:
-            max_exercises: Maximum number of exercises to return (not used in filtering)
             difficulty: Target difficulty level
+            equipment: Optional list of equipment types to filter by
 
         Returns:
-            List of exercise candidates with popularity_score <= 2, grouped by main_muscles
+            List of exercise candidates grouped by main_muscles
         """
-        logger.info(f"Finding exercises for difficulty: {difficulty} with popularity_score <= 2")
-
         try:
-            # Get all exercises with popularity_score <= 2
+            # Get exercises with popularity <= 2 (high and medium popularity)
             all_exercises = self._get_exercises_by_popularity(
-                difficulty, max_popularity=2
+                difficulty, equipment=equipment, max_popularity=2
             )
-            
-            logger.info(f"Found {len(all_exercises)} exercises with popularity_score <= 2")
             
             if not all_exercises:
                 logger.warning("No exercises found matching the criteria")
@@ -94,8 +91,6 @@ class ExerciseSelector:
             
             # Group exercises by main_muscles (using first item in the list)
             grouped_exercises = self._group_exercises_by_main_muscles(all_exercises)
-            
-            logger.info(f"Grouped exercises into {len(grouped_exercises)} muscle groups")
             
             return grouped_exercises
 
@@ -106,22 +101,22 @@ class ExerciseSelector:
 
     def get_formatted_exercises_for_ai(
         self,
-        max_exercises: int,
-        difficulty: str
+        difficulty: str,
+        equipment: Optional[List[str]] = None
     ) -> str:
         """
         Get exercise candidates formatted as a string for AI prompts.
         
         Args:
-            max_exercises: Maximum number of exercises to return (not used in filtering)
             difficulty: Target difficulty level
+            equipment: Optional list of equipment types to filter by
 
         Returns:
             Formatted string of exercise candidates for AI prompts
         """
         try:
             # Get grouped exercises
-            grouped_exercises = self.get_exercise_candidates(max_exercises, difficulty)
+            grouped_exercises = self.get_exercise_candidates(difficulty, equipment)
             
             if not grouped_exercises:
                 return "No exercises available"
@@ -204,25 +199,30 @@ class ExerciseSelector:
     def _get_exercises_by_popularity(
         self,
         difficulty: str,
-        max_popularity: float = 2.0
+        equipment: Optional[List[str]] = None,
+        max_popularity: int = 2
     ) -> List[Dict]:
         """
-        Get exercises with popularity_score <= max_popularity.
+        Get exercises filtered by difficulty and equipment.
+        
+        Popularity score: 1 (high/most popular) to 3 (low/least popular).
+        Default max_popularity=2 to get high and medium popularity exercises.
         
         Args:
             difficulty: Target difficulty level
-            max_popularity: Maximum popularity score (inclusive)
+            equipment: Optional list of equipment types to filter by
+            max_popularity: Maximum popularity score to include (default 2)
             
         Returns:
-            List of exercises with popularity_score <= max_popularity
+            List of exercises filtered by criteria
         """
         try:
-            logger.debug(f"Searching for exercises with popularity_score <= {max_popularity}")
+            logger.info(f"Retrieving exercises - difficulty: {difficulty}, equipment: {equipment}, max_popularity: {max_popularity}")
             
-            # Build query for popularity and difficulty
+            # Build query with filters
             query = self.supabase.table("exercises").select("*")
             
-            # Progressive difficulty inclusion: include exercises up to user's level
+            # Apply difficulty filter (progressive inclusion)
             if difficulty.lower() in ["novice", "beginner"]:
                 query = query.eq("difficulty", "Beginner")
             elif difficulty.lower() == "intermediate":
@@ -230,18 +230,21 @@ class ExerciseSelector:
             elif difficulty.lower() == "advanced":
                 query = query.in_("difficulty", ["Beginner", "Intermediate", "Advanced"])
             else:
-                # Default to exact match for unknown difficulty levels
                 query = query.eq("difficulty", difficulty)
             
-            # Filter by popularity score
+            # Apply equipment filter if specified
+            if equipment and len(equipment) > 0:
+                query = query.in_("equipment", equipment)
+            
+            # Apply popularity filter (score <= 2)
             query = query.lte("popularity_score", max_popularity)
             
-            # Order by popularity score for better quality selection
-            query = query.order("popularity_score", desc=False)  # Lower scores first
+            # Order by popularity score (1=high first, then 2)
+            query = query.order("popularity_score", desc=False)
             
             result = query.execute()
             
-            logger.debug(f"Found {len(result.data) if result.data else 0} exercises with popularity_score <= {max_popularity}")
+            logger.info(f"Retrieved {len(result.data) if result.data else 0} exercises")
             
             if not result.data:
                 return []
@@ -283,7 +286,6 @@ class ExerciseSelector:
                 exercise_copy['main_muscle_group'] = primary_muscle
                 grouped_exercises.append(exercise_copy)
             
-            logger.debug(f"Grouped {len(exercises)} exercises by main_muscle_group")
             return grouped_exercises
             
         except Exception as e:
@@ -292,31 +294,31 @@ class ExerciseSelector:
 
     def _format_exercises_for_ai(self, exercises: List[Dict]) -> str:
         """
-        Format exercises grouped by main_muscle_group for AI prompt.
+        Format exercises grouped by target_area for AI prompt.
         
         Args:
-            exercises: List of exercises with main_muscle_group field
+            exercises: List of exercises with target_area field
             
         Returns:
-            Formatted string for AI prompt
+            Formatted string for AI prompt, grouped by target_area
         """
         if not exercises:
             return "No exercises available"
         
-        # Group exercises by main_muscle_group
-        muscle_groups = {}
+        # Group exercises by target_area
+        target_areas = {}
         for exercise in exercises:
-            muscle_group = exercise.get('main_muscle_group', 'Unknown')
-            if muscle_group not in muscle_groups:
-                muscle_groups[muscle_group] = []
-            muscle_groups[muscle_group].append(exercise)
+            target_area = exercise.get('target_area', 'Unknown')
+            if target_area not in target_areas:
+                target_areas[target_area] = []
+            target_areas[target_area].append(exercise)
         
-        # Format each muscle group
+        # Format each target area
         formatted_groups = []
-        for muscle_group, group_exercises in muscle_groups.items():
-            group_info = [f"  {muscle_group}:"]
-            for exercise in group_exercises:
-                exercise_line = f"    - {exercise['name']} (ID: {exercise['id']}): {exercise.get('difficulty', 'Unknown')} - {exercise.get('equipment', 'Unknown equipment')}"
+        for target_area, area_exercises in target_areas.items():
+            group_info = [f"  {target_area}:"]
+            for exercise in area_exercises:
+                exercise_line = f"    - {exercise['name']} (ID: {exercise['id']}): Tier = {exercise.get('tier', 'Unknown')} - Main muscles = {exercise.get('main_muscles', 'Unknown')} - Equipment = {exercise.get('equipment', 'Unknown equipment')}"
                 group_info.append(exercise_line)
             formatted_groups.append("\n".join(group_info))
         

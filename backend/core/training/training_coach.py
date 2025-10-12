@@ -233,19 +233,18 @@ class TrainingCoach(BaseAgent):
             prompt = PromptGenerator.generate_training_plan_outline_prompt(personal_info, formatted_initial_responses, formatted_follow_up_responses)
             
             # Generate the outline using OpenAI with structured output
-            response = self.client.chat.completions.create(
-                model="gpt-4o",
+            completion = self.openai_client.chat.completions.parse(
+                model=os.getenv("OPENAI_MODEL", "gpt-4"),
                 messages=[
                     {"role": "system", "content": "You are an expert training coach creating training plan outlines. Provide structured, detailed outlines that give users a clear preview of their upcoming training plan."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.7,
-                max_tokens=2000,
-                response_format=TrainingPlanOutline
+                response_format=TrainingPlanOutline,
+                temperature=0.7
             )
             
             # Parse the structured response
-            outline = response.choices[0].message.parsed
+            outline = completion.choices[0].message.parsed
             
             # Extract ai_message from outline to prevent duplication
             outline_dict = outline.model_dump()
@@ -295,7 +294,8 @@ class TrainingCoach(BaseAgent):
             combined_responses = f"{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
             decision_prompt = PromptGenerator.generate_exercise_decision_prompt(
                 personal_info, 
-                combined_responses
+                combined_responses,
+                plan_outline
             )
             
             completion = self.openai_client.chat.completions.parse(
@@ -317,17 +317,18 @@ class TrainingCoach(BaseAgent):
             if decision.retrieve_exercises:
                 self.logger.info("Retrieving exercises with AI-decided parameters...")
                 self.logger.info(f"   - Difficulty: {decision.difficulty or personal_info.experience_level}")
-                self.logger.info(f"   - Equipment: {decision.equipment}")
-                self.logger.info(f"   - Max: {decision.max_exercises or 100}")
+                
+                # Extract equipment strings from enum values for SQL search
+                equipment_list = [eq.value for eq in decision.equipment] if decision.equipment else None
+                self.logger.info(f"   - Equipment: {equipment_list}")
                 
                 # Use AI-decided parameters or fallback to defaults
                 difficulty = decision.difficulty or personal_info.experience_level or "beginner"
-                max_exercises = decision.max_exercises or 100
                 
                 # Get exercises using existing exercise_selector
                 all_exercises = self.exercise_selector.get_exercise_candidates(
-                    max_exercises=max_exercises,
-                    difficulty=difficulty
+                    difficulty=difficulty,
+                    equipment=equipment_list
                 )
                 
                 exercises_retrieved = len(all_exercises)
@@ -337,13 +338,13 @@ class TrainingCoach(BaseAgent):
                 if not all_exercises:
                     return {
                         'success': False,
-                        'error': 'No exercises available for the specified difficulty level. Please try a different experience level.'
+                        'error': 'No exercises available for the specified difficulty level and equipment. Please try different parameters.'
                     }
                 
                 # Get formatted exercises for AI prompt
                 exercise_info = self.exercise_selector.get_formatted_exercises_for_ai(
-                    max_exercises=max_exercises,
-                    difficulty=difficulty
+                    difficulty=difficulty,
+                    equipment=equipment_list
                 )
                 
                 # Check if formatting was successful
@@ -368,10 +369,11 @@ class TrainingCoach(BaseAgent):
             # Step 4: Get the training plan
             self.logger.info("Generating training plan with AI...")
             completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
+                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
                 messages=[{"role": "system", "content": prompt}],
                 response_format=TrainingPlan,
-                temperature=0.7
+                temperature=0.7,
+                max_completion_tokens=15_500  # Leave buffer below 16,384 max to ensure completion
             )
             
             training_plan = completion.choices[0].message.parsed

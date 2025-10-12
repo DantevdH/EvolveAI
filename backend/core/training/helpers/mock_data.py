@@ -446,5 +446,6 @@ def create_mock_training_plan_outline() -> TrainingPlanOutline:
         duration_weeks=8,
         explanation="A comprehensive 8-week strength training program designed to build muscle mass and increase strength through progressive overload and proper periodization.",
         training_periods=periods,
+        user_observations="The user is a 27 year old male who weighs 95.0 kg and is 195.0 cm tall. They want to focus on building muscle and strength and have advanced experience level. Based on their responses, their training preferences are focused on strength training with compound movements, they have access to barbell, dumbbell, and machine equipment, can train 4 days per week, has 60-75 minutes per session availability, prefers strength training with some endurance work, has no major limitations or injuries, and is motivated by progressive strength gains and muscle development. Their current performance level is advanced with experience in compound movements and progressive overload training.",
         ai_message="🎯 Great news! I've analyzed your goals and created a personalized training plan outline that will help you build strength effectively! 💪 This program is designed specifically for your experience level and will progress you safely through foundation building to advanced strength gains. Ready to see your complete plan? 🚀"
     )

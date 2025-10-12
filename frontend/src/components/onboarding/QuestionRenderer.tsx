@@ -47,12 +47,12 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
       return (
         <CoolSlider
           title=""
-          value={value || question.min_value || 0}
+          value={value ?? question.min_value ?? 0}
           onValueChange={onChange}
-          min={question.min_value || 0}
-          max={question.max_value || 100}
-          step={question.step || 1}
-          unit={question.unit || ''}
+          min={question.min_value ?? 0}
+          max={question.max_value ?? 100}
+          step={question.step ?? 1}
+          unit={question.unit ?? ''}
           size="large"
           style={{ backgroundColor: 'transparent', borderWidth: 0, padding: 0 }}
         />

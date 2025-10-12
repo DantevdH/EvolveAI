@@ -15,7 +15,7 @@ export interface Option {
 
 interface OptionSelectorProps {
   options: Option[];
-  selectedValues: string[];
+  selectedValues?: string[];
   onSelectionChange: (values: string[]) => void;
   multiple?: boolean;
   columns?: number;
@@ -24,17 +24,20 @@ interface OptionSelectorProps {
 
 export const OptionSelector: React.FC<OptionSelectorProps> = memo(({
   options,
-  selectedValues,
+  selectedValues = [],
   onSelectionChange,
   multiple = false,
   columns = 2,
   style
 }) => {
+  // Ensure selectedValues is always an array
+  const safeSelectedValues = Array.isArray(selectedValues) ? selectedValues : [];
+  
   const handleOptionPress = (optionValue: string) => {
     if (multiple) {
-      const newSelection = selectedValues.includes(optionValue)
-        ? selectedValues.filter(value => value !== optionValue)
-        : [...selectedValues, optionValue];
+      const newSelection = safeSelectedValues.includes(optionValue)
+        ? safeSelectedValues.filter(value => value !== optionValue)
+        : [...safeSelectedValues, optionValue];
       onSelectionChange(newSelection);
     } else {
       onSelectionChange([optionValue]);
@@ -42,7 +45,7 @@ export const OptionSelector: React.FC<OptionSelectorProps> = memo(({
   };
 
   const isSelected = (optionValue: string) => {
-    return selectedValues.includes(optionValue);
+    return safeSelectedValues.includes(optionValue);
   };
 
   const renderOption = (option: Option) => {
@@ -137,7 +140,7 @@ export const SingleOptionSelector: React.FC<SingleOptionSelectorProps> = memo(({
 // List variant for single column
 interface OptionListProps {
   options: Option[];
-  selectedValues: string[];
+  selectedValues?: string[];
   onSelectionChange: (values: string[]) => void;
   multiple?: boolean;
   style?: any;
@@ -145,16 +148,19 @@ interface OptionListProps {
 
 export const OptionList: React.FC<OptionListProps> = ({
   options,
-  selectedValues,
+  selectedValues = [],
   onSelectionChange,
   multiple = false,
   style
 }) => {
+  // Ensure selectedValues is always an array
+  const safeSelectedValues = Array.isArray(selectedValues) ? selectedValues : [];
+  
   const handleOptionPress = (optionValue: string) => {
     if (multiple) {
-      const newSelection = selectedValues.includes(optionValue)
-        ? selectedValues.filter(value => value !== optionValue)
-        : [...selectedValues, optionValue];
+      const newSelection = safeSelectedValues.includes(optionValue)
+        ? safeSelectedValues.filter(value => value !== optionValue)
+        : [...safeSelectedValues, optionValue];
       onSelectionChange(newSelection);
     } else {
       onSelectionChange([optionValue]);
@@ -162,7 +168,7 @@ export const OptionList: React.FC<OptionListProps> = ({
   };
 
   const isSelected = (optionValue: string) => {
-    return selectedValues.includes(optionValue);
+    return safeSelectedValues.includes(optionValue);
   };
 
   return (

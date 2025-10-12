@@ -543,7 +543,12 @@ async def generate_training_plan(
         # Use questions and plan outline from frontend (not from database)
         initial_questions = request.initial_questions
         follow_up_questions = request.follow_up_questions
+        
+        # Normalize plan_outline structure - handle both wrapped and direct formats
         plan_outline = request.plan_outline
+        if plan_outline and isinstance(plan_outline, dict) and "outline" in plan_outline:
+            # If outline is wrapped (from onboarding flow), extract the actual outline
+            plan_outline = plan_outline["outline"]
         
         # Validate questions structure
         if not initial_questions or not isinstance(initial_questions, list):

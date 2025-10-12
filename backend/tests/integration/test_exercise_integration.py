@@ -173,7 +173,6 @@ def create_sample_user_profiles():
 def test_exercise_selector_intermediate_difficulty(exercise_selector):
     """Test exercise selection for intermediate difficulty."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=10,
         difficulty='Intermediate'
     )
     
@@ -190,7 +189,6 @@ def test_exercise_selector_intermediate_difficulty(exercise_selector):
 def test_exercise_selector_beginner_difficulty(exercise_selector):
     """Test exercise selection for beginner difficulty."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=15,
         difficulty='Beginner'
     )
     
@@ -212,7 +210,6 @@ def test_exercise_selector_beginner_difficulty(exercise_selector):
 def test_exercise_selector_parametrized(exercise_selector, difficulty):
     """Parametrized test for different difficulty levels."""
     result = exercise_selector.get_exercise_candidates(
-        max_exercises=5,
         difficulty=difficulty
     )
     
@@ -430,7 +427,6 @@ def test_training_coach_exercise_candidates(training_coach, sample_user_profiles
     
     # Test exercise selection through the selector
     result = training_coach.exercise_selector.get_exercise_candidates(
-        max_exercises=20,
         difficulty="Intermediate"
     )
     
@@ -453,7 +449,6 @@ def test_training_coach_target_muscle_groups(training_coach, sample_user_profile
         
         # Test exercise selection
         result = training_coach.exercise_selector.get_exercise_candidates(
-            max_exercises=10,
             difficulty=profile.experience_level
         )
         
@@ -503,7 +498,6 @@ def test_training_generation_with_exercise_candidates(training_coach, sample_use
     
     # Get exercise candidates
     exercise_result = training_coach.exercise_selector.get_exercise_candidates(
-        max_exercises=20,
         difficulty="Beginner"
     )
     
@@ -581,7 +575,6 @@ def test_complete_training_generation_workflow(training_coach, sample_user_profi
     # Step 2: Get exercise candidates
     print("2️⃣ Getting exercise candidates...")
     exercise_result = training_coach.exercise_selector.get_exercise_candidates(
-        max_exercises=20,
         difficulty="Intermediate"
     )
     assert isinstance(exercise_result, str)
@@ -627,7 +620,6 @@ def test_error_handling_integration(training_coach, sample_user_profiles):
         user_profile_dict["equipment"] = "Invalid Equipment Type"
         
         result = training_coach.exercise_selector.get_exercise_candidates(
-            max_exercises=20,
             difficulty="Beginner"
         )
         

@@ -220,6 +220,7 @@ export class TrainingService {
               exercise_data: firstExercise.exercises
             });
           }
+
         }
       }
 

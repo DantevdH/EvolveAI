@@ -37,8 +37,7 @@ export interface PlanOutline {
 export interface UserProfile {
   // User input fields (mutable for onboarding)
   username: string;
-  primaryGoal: string;
-  primaryGoalDescription: string;
+  goalDescription: string;
   experienceLevel: string;
   daysPerWeek: number;
   minutesPerSession: number;

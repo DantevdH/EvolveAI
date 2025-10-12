@@ -57,7 +57,7 @@ export const AILoadingScreen: React.FC<AILoadingScreenProps> = ({
       case 'initial':
         return "Our AI coach is reviewing your training goals and personal information...";
       case 'followup':
-        return "Our AI coach is analyzing your responses to create personalized follow-up questions...";
+        return "Our AI coach is analyzing your responses...";
       case 'outline':
         return "Our AI coach is crafting your personalized training plan outline...";
       case 'generation':

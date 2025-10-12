@@ -10,7 +10,7 @@ export const API_CONFIG = {
     USER_PROFILE: '/api/user/profile/',
     COACHES: '/api/coaches/',
   },
-  TIMEOUT: 30000, // 30 seconds
+  TIMEOUT: 600000, // 5 minutes
 } as const;
 
 // Validation Constants

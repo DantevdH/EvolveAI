@@ -30,6 +30,32 @@ export const RatingQuestion: React.FC<RatingQuestionProps> = ({
   };
 
   const getRatingDescription = (rating: number) => {
+    // If we have min/max descriptions, interpolate between them
+    if (question.min_description && question.max_description) {
+      if (rating === minValue) {
+        return question.min_description;
+      }
+      if (rating === maxValue) {
+        return question.max_description;
+      }
+      
+      // For middle values, create a simple interpolation
+      const totalRange = maxValue - minValue;
+      const position = (rating - minValue) / totalRange;
+      
+      // Simple interpolation between min and max descriptions
+      if (position <= 0.25) {
+        return question.min_description;
+      } else if (position <= 0.5) {
+        return `${question.min_description} to Moderate`;
+      } else if (position <= 0.75) {
+        return `Moderate to ${question.max_description}`;
+      } else {
+        return question.max_description;
+      }
+    }
+    
+    // Fallback to hardcoded descriptions for backward compatibility
     if (question.id.includes('pain')) {
       const descriptions = {
         1: 'No pain',

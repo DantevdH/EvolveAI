@@ -12,8 +12,7 @@ export interface ApiResponse<T = any> {
 
 // Training plan generation request
 export interface GenerateTrainingPlanRequest {
-  primaryGoal: string;
-  primaryGoalDescription: string;
+  goalDescription: string;
   experienceLevel: string;
   daysPerWeek: number;
   minutesPerSession: number;

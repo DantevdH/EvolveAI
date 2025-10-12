@@ -20,7 +20,6 @@ export interface AIQuestion {
   text: string;
   response_type: QuestionType;
   options?: QuestionOption[];
-  required: boolean;
   min_value?: number;
   max_value?: number;
   step?: number;
@@ -28,6 +27,8 @@ export interface AIQuestion {
   max_length?: number;
   placeholder?: string;
   help_text?: string;
+  min_description?: string;
+  max_description?: string;
 }
 
 export interface AIQuestionResponse {

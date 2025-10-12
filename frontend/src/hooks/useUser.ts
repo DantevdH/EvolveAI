@@ -59,12 +59,11 @@ export const useUser = () => {
   }, [updateUserProfile]);
 
   /**
-   * Update user's primary goal
+   * Update user's goal description
    */
-  const updatePrimaryGoal = useCallback(async (goal: string, description: string): Promise<boolean> => {
+  const updateGoalDescription = useCallback(async (description: string): Promise<boolean> => {
     return await updateUserProfile({
-      primaryGoal: goal,
-      primaryGoalDescription: description,
+      goalDescription: description,
     });
   }, [updateUserProfile]);
 
@@ -136,10 +135,10 @@ export const useUser = () => {
   }, [updateUserProfile]);
 
   /**
-   * Get user's primary goal
+   * Get user's goal description
    */
-  const getPrimaryGoal = useCallback((): string => {
-    return state.userProfile?.primaryGoal || '';
+  const getGoalDescription = useCallback((): string => {
+    return state.userProfile?.goalDescription || '';
   }, [state.userProfile]);
 
   /**
@@ -209,7 +208,7 @@ export const useUser = () => {
     const profile = state.userProfile;
     return !!(
       profile.username &&
-      profile.primaryGoal &&
+      profile.goalDescription &&
       profile.experienceLevel &&
       profile.daysPerWeek &&
       profile.minutesPerSession &&
@@ -230,7 +229,7 @@ export const useUser = () => {
     const profile = state.userProfile;
     const requiredFields = [
       'username',
-      'primaryGoal',
+      'goalDescription',
       'experienceLevel',
       'daysPerWeek',
       'minutesPerSession',
@@ -264,7 +263,7 @@ export const useUser = () => {
     
     // Update methods
     updateProfileField,
-    updatePrimaryGoal,
+    updateGoalDescription,
     updateExperienceLevel,
     updateTrainingPreferences,
     updatePhysicalInfo,
@@ -272,7 +271,7 @@ export const useUser = () => {
     updateFinalChatNotes,
     
     // Getter methods
-    getPrimaryGoal,
+    getGoalDescription,
     getExperienceLevel,
     getTrainingFrequency,
     getEquipment,
