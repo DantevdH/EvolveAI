@@ -321,7 +321,7 @@ Response:"""
 
             # Generate response using OpenAI
             response = self.openai_client.chat.completions.create(
-                model="gpt-4",
+                model=os.getenv("OPENAI_MODEL", "gpt-4"),
                 messages=[
                     {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": prompt},

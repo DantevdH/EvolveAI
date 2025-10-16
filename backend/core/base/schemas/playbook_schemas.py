@@ -43,6 +43,9 @@ class PlaybookLesson(BaseModel):
     harmful_count: int = Field(
         default=0, description="Number of times this lesson led to negative outcomes"
     )
+    times_applied: int = Field(
+        default=0, description="Number of times this lesson was used in plan generation"
+    )
     confidence: float = Field(default=0.5, description="Confidence score 0.0-1.0")
     positive: bool = Field(
         default=True,
@@ -87,7 +90,7 @@ class UserPlaybook(BaseModel):
 
 
 class TrainingOutcome(BaseModel):
-    """Signals and feedback from a completed training period."""
+    """Signals and feedback from a completed training period (DEPRECATED - use DailyTrainingOutcome)."""
 
     plan_id: str = Field(..., description="ID of the training plan being evaluated")
     user_id: str = Field(..., description="User identifier")
@@ -142,6 +145,74 @@ class TrainingOutcome(BaseModel):
     )
 
 
+class TrainingModification(BaseModel):
+    """Details about how the user modified their planned training."""
+
+    field: str = Field(..., description="Field that was modified (e.g., 'sets', 'reps', 'weight', 'distance')")
+    original_value: Any = Field(..., description="Originally planned value")
+    actual_value: Any = Field(..., description="What the user actually did")
+    exercise_name: Optional[str] = Field(None, description="Name of exercise/session that was modified")
+
+
+class DailyTrainingOutcome(BaseModel):
+    """Signals and feedback from a single completed training session (daily)."""
+
+    # Identifiers
+    plan_id: str = Field(..., description="ID of the training plan")
+    user_id: str = Field(..., description="User identifier")
+    daily_training_id: int = Field(..., description="ID of the specific daily training session")
+    week_number: int = Field(..., description="Which week of the plan")
+    day_of_week: str = Field(..., description="Day of week (Monday-Sunday)")
+    training_date: str = Field(..., description="Actual date of training (ISO format)")
+    
+    # Session details
+    training_type: str = Field(..., description="Type: strength, endurance, mixed, rest")
+    session_completed: bool = Field(..., description="Whether the session was fully completed")
+    completion_percentage: float = Field(default=1.0, ge=0.0, le=1.0, description="How much was completed (0.0-1.0)")
+    
+    # Training modifications (detected by comparing original vs actual)
+    was_modified: bool = Field(default=False, description="Whether user modified the planned training")
+    modifications: List[TrainingModification] = Field(
+        default_factory=list, 
+        description="List of all modifications made by user"
+    )
+    
+    # User feedback (can be skipped)
+    feedback_provided: bool = Field(default=False, description="Whether user provided feedback (or skipped)")
+    user_feedback: Optional[str] = Field(None, description="Free-text feedback from user")
+    user_rating: Optional[int] = Field(None, ge=1, le=5, description="Session rating 1-5 (how did it feel?)")
+    
+    # Physiological data (from wearables or manual entry)
+    avg_heart_rate: Optional[float] = Field(None, description="Average heart rate during session")
+    max_heart_rate: Optional[float] = Field(None, description="Maximum heart rate recorded")
+    target_heart_rate_zone: Optional[str] = Field(None, description="Target HR zone")
+    
+    # Immediate post-session signals
+    energy_level: Optional[int] = Field(None, ge=1, le=5, description="Energy level immediately after (1=exhausted, 5=energized)")
+    difficulty: Optional[int] = Field(None, ge=1, le=5, description="Difficulty rating (1=too easy, 5=too hard)")
+    enjoyment: Optional[int] = Field(None, ge=1, le=5, description="Enjoyment rating (1=hated it, 5=loved it)")
+    soreness_level: Optional[int] = Field(None, ge=1, le=5, description="Muscle soreness during/after (1=none, 5=severe)")
+    
+    # Safety signals
+    injury_reported: bool = Field(default=False, description="Whether user reported pain/injury during session")
+    injury_description: Optional[str] = Field(None, description="Description of injury/pain if reported")
+    pain_location: Optional[str] = Field(None, description="Where pain occurred (e.g., 'right knee', 'lower back')")
+    
+    # Performance data
+    performance_metrics: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Performance data (weights lifted, distance, pace, duration, etc.)",
+    )
+    
+    # Metadata
+    notes: Optional[str] = Field(None, description="Additional notes or context")
+    collected_at: str = Field(
+        default_factory=lambda: datetime.utcnow().isoformat(),
+        description="When feedback was collected",
+    )
+    feedback_skipped_at: Optional[str] = Field(None, description="When user skipped feedback (if applicable)")
+
+
 class ReflectorAnalysis(BaseModel):
     """Output from the Reflector analyzing training outcomes."""
 
@@ -162,6 +233,19 @@ class ReflectorAnalysis(BaseModel):
     priority: str = Field(
         default="medium",
         description="Priority level: 'low', 'medium', 'high', 'critical'",
+    )
+
+
+class LessonApplication(BaseModel):
+    """Record of a lesson being applied during plan generation."""
+
+    lesson_id: str = Field(..., description="ID of the lesson that was applied")
+    lesson_text: str = Field(..., description="Text of the lesson")
+    impact_description: str = Field(
+        ..., description="How this lesson influenced the plan"
+    )
+    was_helpful: bool = Field(
+        default=True, description="Whether the lesson was helpful in plan generation"
     )
 
 

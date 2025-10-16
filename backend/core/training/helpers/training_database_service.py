@@ -222,7 +222,7 @@ class TrainingDatabaseService:
     def _determine_training_type(self, day_data: Dict[str, Any]) -> str:
         """Determine the training type based on the day's content."""
         if day_data.get("is_rest_day", False):
-            return "recovery"
+            return "rest"
 
         has_exercises = bool(day_data.get("exercises", []))
         has_endurance = bool(day_data.get("endurance_sessions", []))
@@ -234,7 +234,7 @@ class TrainingDatabaseService:
         elif has_endurance:
             return "endurance"
         else:
-            return "recovery"
+            return "rest"  # Default to rest if no content
 
     async def get_training_plan(self, user_profile_id: int) -> Dict[str, Any]:
         """Get a training plan for a user."""

@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field, Tag
-from typing import List, Optional, Dict, Any, Union, Annotated
+from pydantic import BaseModel, Field, model_validator, ConfigDict
+from typing import List, Optional, Dict, Any
 from enum import Enum
 
 
@@ -47,113 +47,187 @@ class QuestionOption(BaseModel):
     value: str = Field(..., description="Value to be stored when selected")
 
 
-class BaseAIQuestion(BaseModel):
-    """Base question class with common fields."""
+class AIQuestion(BaseModel):
+    """
+    Unified question model for OpenAI structured output compatibility.
 
+    OpenAI's API does NOT support Union types, so we use a single flexible schema
+    with strict runtime validation to ensure type safety.
+    """
+
+    model_config = ConfigDict(extra="forbid")  # Reject unknown fields
+
+    # Common fields (required for all types)
     id: str = Field(..., description="Unique identifier for the question")
     text: str = Field(..., description="Question text")
-    help_text: str = Field(
-        default="", description="Additional help text for the question"
+    help_text: str = Field(default="", description="Additional help text")
+    response_type: QuestionType = Field(..., description="Type of question")
+
+    # Conditional fields (required based on response_type)
+    options: Optional[List[QuestionOption]] = Field(
+        default=None,
+        description="Options list - REQUIRED for multiple_choice and dropdown ONLY",
+    )
+    min_value: Optional[float] = Field(
+        default=None, description="Minimum value - REQUIRED for slider and rating ONLY"
+    )
+    max_value: Optional[float] = Field(
+        default=None, description="Maximum value - REQUIRED for slider and rating ONLY"
+    )
+    step: Optional[float] = Field(
+        default=None, description="Step increment - REQUIRED for slider ONLY"
+    )
+    unit: Optional[str] = Field(
+        default=None, description="Unit of measurement - REQUIRED for slider ONLY"
+    )
+    min_description: Optional[str] = Field(
+        default=None, description="Minimum value label - REQUIRED for rating ONLY"
+    )
+    max_description: Optional[str] = Field(
+        default=None, description="Maximum value label - REQUIRED for rating ONLY"
+    )
+    max_length: Optional[int] = Field(
+        default=None,
+        description="Maximum text length - REQUIRED for free_text and conditional_boolean ONLY",
+        ge=1,
+        le=5000,
+    )
+    placeholder: Optional[str] = Field(
+        default=None,
+        description="Placeholder text - REQUIRED for free_text and conditional_boolean ONLY",
     )
 
+    @model_validator(mode="after")
+    def validate_fields_by_type(self) -> "AIQuestion":
+        """
+        Strict validation: ensure required fields are present and forbidden fields are absent.
+        This makes the unified schema as safe as separate schemas would be.
+        """
+        rt = self.response_type
+        errors = []
 
-class MultipleChoiceQuestion(BaseAIQuestion):
-    """Question with multiple choice options."""
+        # Define field requirements per type
+        FIELD_RULES = {
+            QuestionType.MULTIPLE_CHOICE: {
+                "required": ["options"],
+                "forbidden": [
+                    "min_value",
+                    "max_value",
+                    "step",
+                    "unit",
+                    "min_description",
+                    "max_description",
+                    "max_length",
+                    "placeholder",
+                ],
+            },
+            QuestionType.DROPDOWN: {
+                "required": ["options"],
+                "forbidden": [
+                    "min_value",
+                    "max_value",
+                    "step",
+                    "unit",
+                    "min_description",
+                    "max_description",
+                    "max_length",
+                    "placeholder",
+                ],
+            },
+            QuestionType.SLIDER: {
+                "required": ["min_value", "max_value", "step", "unit"],
+                "forbidden": [
+                    "options",
+                    "min_description",
+                    "max_description",
+                    "max_length",
+                    "placeholder",
+                ],
+            },
+            QuestionType.RATING: {
+                "required": [
+                    "min_value",
+                    "max_value",
+                    "min_description",
+                    "max_description",
+                ],
+                "forbidden": ["options", "step", "unit", "max_length", "placeholder"],
+            },
+            QuestionType.FREE_TEXT: {
+                "required": ["max_length", "placeholder"],
+                "forbidden": [
+                    "options",
+                    "min_value",
+                    "max_value",
+                    "step",
+                    "unit",
+                    "min_description",
+                    "max_description",
+                ],
+            },
+            QuestionType.CONDITIONAL_BOOLEAN: {
+                "required": ["max_length", "placeholder"],
+                "forbidden": [
+                    "options",
+                    "min_value",
+                    "max_value",
+                    "step",
+                    "unit",
+                    "min_description",
+                    "max_description",
+                ],
+            },
+        }
 
-    response_type: QuestionType = Field(
-        default=QuestionType.MULTIPLE_CHOICE, description="Type of response expected"
-    )
-    options: List[QuestionOption] = Field(
-        ..., description="Options for choice questions"
-    )
+        rules = FIELD_RULES.get(rt)
+        if not rules:
+            raise ValueError(f"Unknown response_type: {rt}")
 
+        # Check required fields
+        for field_name in rules["required"]:
+            value = getattr(self, field_name)
+            if value is None:
+                errors.append(
+                    f"Missing required field '{field_name}' for {rt.value} question"
+                )
+            elif field_name == "options" and len(value) < 2:
+                errors.append(
+                    f"Field 'options' must have at least 2 items for {rt.value} question"
+                )
 
-class DropdownQuestion(BaseAIQuestion):
-    """Question with dropdown options."""
+        # Check forbidden fields (must be None)
+        for field_name in rules["forbidden"]:
+            value = getattr(self, field_name)
+            if value is not None:
+                errors.append(
+                    f"Field '{field_name}' must NOT be set for {rt.value} question (found: {value})"
+                )
 
-    response_type: QuestionType = Field(
-        default=QuestionType.DROPDOWN, description="Type of response expected"
-    )
-    options: List[QuestionOption] = Field(..., description="Options for dropdown")
+        # Additional validation for slider
+        if rt == QuestionType.SLIDER:
+            if self.min_value is not None and self.max_value is not None:
+                if self.min_value >= self.max_value:
+                    errors.append(
+                        f"min_value ({self.min_value}) must be less than max_value ({self.max_value})"
+                    )
+            if self.step is not None and self.step <= 0:
+                errors.append(f"step must be greater than 0 (found: {self.step})")
 
+        # Additional validation for rating
+        if rt == QuestionType.RATING:
+            if self.min_value is not None and self.min_value < 1:
+                errors.append(
+                    f"rating min_value must be at least 1 (found: {self.min_value})"
+                )
+            if self.max_value is not None and self.max_value > 10:
+                errors.append(
+                    f"rating max_value must be at most 10 (found: {self.max_value})"
+                )
 
-class FreeTextQuestion(BaseAIQuestion):
-    """Question with free text input."""
+        if errors:
+            raise ValueError(" | ".join(errors))
 
-    response_type: QuestionType = Field(
-        default=QuestionType.FREE_TEXT, description="Type of response expected"
-    )
-    max_length: int = Field(
-        default=500, description="Maximum length for text questions"
-    )
-    placeholder: str = Field(
-        default="Enter your response...",
-        description="Placeholder text for input fields",
-    )
-
-
-class SliderQuestion(BaseAIQuestion):
-    """Question with slider input."""
-
-    response_type: QuestionType = Field(
-        default=QuestionType.SLIDER, description="Type of response expected"
-    )
-    min_value: float = Field(
-        default=0, description="Minimum value for slider questions"
-    )
-    max_value: float = Field(
-        default=100, description="Maximum value for slider questions"
-    )
-    step: float = Field(default=1.0, description="Step size for slider questions")
-    unit: str = Field(
-        default="",
-        description="Unit of measurement for slider questions (e.g., kg, lbs, minutes)",
-    )
-
-
-class ConditionalBooleanQuestion(BaseAIQuestion):
-    """Question with conditional boolean input (yes/no)."""
-
-    response_type: QuestionType = Field(
-        default=QuestionType.CONDITIONAL_BOOLEAN,
-        description="Type of response expected",
-    )
-    placeholder: str = Field(
-        default="Please provide more details...",
-        description="Placeholder text for the conditional text input",
-    )
-    max_length: int = Field(
-        default=500, description="Maximum length for the conditional text input"
-    )
-
-
-class RatingQuestion(BaseAIQuestion):
-    """Question with rating input."""
-
-    response_type: QuestionType = Field(
-        default=QuestionType.RATING, description="Type of response expected"
-    )
-    min_value: int = Field(default=1, description="Minimum rating value")
-    max_value: int = Field(default=5, description="Maximum rating value")
-    min_description: str = Field(
-        default="Low",
-        description="Description for minimum value (e.g., 'Low', 'Never', 'Poor')",
-    )
-    max_description: str = Field(
-        default="High",
-        description="Description for maximum value (e.g., 'High', 'Always', 'Excellent')",
-    )
-
-
-# Union type for all question types
-AIQuestion = (
-    MultipleChoiceQuestion
-    | DropdownQuestion
-    | FreeTextQuestion
-    | SliderQuestion
-    | ConditionalBooleanQuestion
-    | RatingQuestion
-)
+        return self
 
 
 class AIQuestionResponse(BaseModel):
@@ -313,7 +387,7 @@ class DailyTraining(BaseModel):
     )
     tags: List[str] = Field(
         ...,
-        description="Tags for categorization (e.g., 'strength', 'cardio', 'recovery', 'high-intensity')",
+        description="Tags for categorization (e.g., 'strength', 'cardio')",
     )
 
 

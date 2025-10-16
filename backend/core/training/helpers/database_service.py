@@ -263,11 +263,11 @@ class DatabaseService:
                 "updated_at": datetime.utcnow().isoformat(),
             }
 
-            # Add user_playbook if provided (ACE pattern)
+            # Note: user_playbook is stored in user_profiles, not training_plans
+            # Plans reference the user's playbook via user_profile_id FK
             if user_playbook:
-                plan_record["user_playbook"] = json.dumps(user_playbook)
-                logger.info(
-                    f"📘 Including playbook with {len(user_playbook.get('lessons', []))} lessons"
+                self.logger.info(
+                    f"📘 User has playbook with {len(user_playbook.get('lessons', []))} lessons (stored in user_profiles)"
                 )
 
             # Insert the training plan
@@ -329,7 +329,7 @@ class DatabaseService:
                         "day_of_week": day_of_week,
                         "is_rest_day": is_rest_day,
                         "training_type": daily_data.get(
-                            "training_type", "recovery" if is_rest_day else "strength"
+                            "training_type", "rest" if is_rest_day else "strength"
                         ),
                         "motivation": daily_data.get("motivation", ""),
                         "created_at": datetime.utcnow().isoformat(),
@@ -626,16 +626,18 @@ class DatabaseService:
     # ACE PATTERN METHODS (Playbook Management)
     # ============================================================================
 
-    async def load_user_playbook(self, user_id: str, jwt_token: Optional[str] = None):
+    async def load_user_playbook(
+        self, user_profile_id: int, jwt_token: Optional[str] = None
+    ):
         """
-        Load a user's playbook from the database.
+        Load a user's playbook from their profile.
 
         Args:
-            user_id: The user's identifier
+            user_profile_id: The user profile identifier
             jwt_token: Optional JWT token for authentication
 
         Returns:
-            UserPlaybook object or None if not found
+            UserPlaybook object or empty playbook if not found
         """
         try:
             from core.base.schemas.playbook_schemas import UserPlaybook
@@ -650,13 +652,11 @@ class DatabaseService:
                     settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY,
                 )
 
-            # Get training plan for this user
+            # Get user_playbook from user_profiles table
             result = (
-                supabase_client.table("training_plans")
+                supabase_client.table("user_profiles")
                 .select("user_playbook")
-                .eq("user_profile_id", user_id)
-                .order("created_at", desc=True)
-                .limit(1)
+                .eq("id", user_profile_id)
                 .execute()
             )
 
@@ -671,30 +671,36 @@ class DatabaseService:
                     # Create UserPlaybook object
                     playbook = UserPlaybook(**playbook_data)
                     self.logger.info(
-                        f"Loaded playbook for user {user_id} with {len(playbook.lessons)} lessons"
+                        f"Loaded playbook for user_profile {user_profile_id} with {len(playbook.lessons)} lessons"
                     )
                     return playbook
 
             # No playbook found - create new empty one
-            self.logger.info(f"No playbook found for user {user_id}, creating new one")
-            return UserPlaybook(user_id=user_id, lessons=[], total_lessons=0)
+            self.logger.info(
+                f"No playbook found for user_profile {user_profile_id}, creating new one"
+            )
+            return UserPlaybook(
+                user_id=str(user_profile_id), lessons=[], total_lessons=0
+            )
 
         except Exception as e:
             self.logger.error(f"Error loading user playbook: {e}")
             # Return empty playbook on error
-            return UserPlaybook(user_id=user_id, lessons=[], total_lessons=0)
+            return UserPlaybook(
+                user_id=str(user_profile_id), lessons=[], total_lessons=0
+            )
 
     async def save_user_playbook(
         self,
-        plan_id: str,
+        user_profile_id: int,
         playbook_data: Dict[str, Any],
         jwt_token: Optional[str] = None,
     ) -> bool:
         """
-        Save a user's playbook to the database.
+        Save a user's playbook to their profile.
 
         Args:
-            plan_id: The training plan ID to update
+            user_profile_id: The user profile ID to update
             playbook_data: The UserPlaybook data as dictionary
             jwt_token: Optional JWT token for authentication
 
@@ -718,11 +724,11 @@ class DatabaseService:
             else:
                 playbook_json = playbook_data
 
-            # Update the training_plans table with playbook
+            # Update the user_profiles table with playbook
             result = (
-                supabase_client.table("training_plans")
+                supabase_client.table("user_profiles")
                 .update({"user_playbook": playbook_json})
-                .eq("id", plan_id)
+                .eq("id", user_profile_id)
                 .execute()
             )
 
@@ -732,7 +738,7 @@ class DatabaseService:
                 else 0
             )
             self.logger.info(
-                f"Saved playbook with {lessons_count} lessons to plan {plan_id}"
+                f"Saved playbook with {lessons_count} lessons to user_profile {user_profile_id}"
             )
 
             return True

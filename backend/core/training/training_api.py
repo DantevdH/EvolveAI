@@ -9,6 +9,7 @@ Handles the complete training workflow with a clean, unified interface:
 
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Dict, Any
+from datetime import datetime
 import logging
 import os
 import jwt
@@ -517,7 +518,7 @@ async def generate_training_plan_outline(
                         "ai_message": result.get("ai_message"),
                     },
                     "plan_outline_feedback": "",  # Initialize as empty string
-                    "initial_playbook": initial_playbook.model_dump(),  # Store playbook temporarily
+                    "user_playbook": initial_playbook.model_dump(),  # Store playbook in user_profiles
                 }
 
                 update_result = await db_service.update_user_profile(
@@ -708,7 +709,7 @@ async def generate_training_plan(
                 "📘 User provided outline feedback - extracting preference lesson..."
             )
 
-            outline_feedback_lesson = coach.extract_outline_feedback_lesson(
+            outline_feedback_lesson = coach.reflector.extract_outline_feedback_lesson(
                 personal_info=personal_info_with_user_id,
                 outline=plan_outline,
                 feedback=request.plan_outline_feedback,
@@ -723,17 +724,17 @@ async def generate_training_plan(
                 )
 
                 if user_profile.get("success") and user_profile.get("data"):
-                    initial_playbook_data = user_profile["data"].get("initial_playbook")
+                    user_playbook_data = user_profile["data"].get("user_playbook")
 
-                    if initial_playbook_data:
-                        playbook = UserPlaybook(**initial_playbook_data)
+                    if user_playbook_data:
+                        playbook = UserPlaybook(**user_playbook_data)
                         playbook.lessons.append(outline_feedback_lesson)
                         playbook.total_lessons = len(playbook.lessons)
 
                         # Update playbook in user_profile
                         await db_service.update_user_profile(
                             user_id=user_id,
-                            data={"initial_playbook": playbook.model_dump()},
+                            data={"user_playbook": playbook.model_dump()},
                             jwt_token=request.jwt_token,
                         )
 
@@ -742,7 +743,7 @@ async def generate_training_plan(
                         )
                     else:
                         logger.warning(
-                            "Could not find initial playbook to add outline feedback lesson"
+                            "Could not find user_playbook to add outline feedback lesson"
                         )
                 else:
                     logger.warning(
@@ -872,7 +873,12 @@ async def submit_training_feedback(
     request: Dict[str, Any], coach: TrainingCoach = Depends(get_training_coach)
 ):
     """
-    Submit training feedback to generate personalized lessons for future plans.
+    [DEPRECATED] Submit weekly training feedback to generate personalized lessons.
+    
+    ⚠️ THIS ENDPOINT IS DEPRECATED - Use POST /daily-training-feedback instead.
+    
+    Weekly feedback has been replaced with daily feedback for richer learning signals.
+    This endpoint is maintained for backward compatibility only.
 
     This endpoint processes user feedback (completion rate, HR data, soreness, etc.)
     and uses the Reflector/Curator pattern to learn from it.
@@ -983,6 +989,217 @@ async def submit_training_feedback(
         }
 
 
+@router.post("/daily-training-feedback")
+async def submit_daily_training_feedback(
+    request: dict, coach: TrainingCoach = Depends(get_training_coach)
+):
+    """
+    Submit daily training feedback with optional skip.
+    
+    This endpoint processes feedback for a single training session, detects user
+    modifications, and updates the ACE playbook in real-time.
+    
+    Request format:
+    {
+        "daily_training_id": 123,
+        "user_id": "user_abc",
+        "plan_id": "plan_xyz",
+        "week_number": 2,
+        "day_of_week": "Monday",
+        "training_date": "2025-10-16",
+        "training_type": "strength",
+        
+        # Original training from database
+        "original_training": {
+            "strength_exercises": [...],
+            "endurance_sessions": [...]
+        },
+        
+        # What user actually did
+        "actual_training": {
+            "strength_exercises": [...],  # May have modifications
+            "endurance_sessions": [...]
+        },
+        
+        # Session completion
+        "session_completed": true,
+        "completion_percentage": 1.0,
+        
+        # Optional feedback (can be skipped)
+        "feedback_provided": true,  # false if user clicked "Skip Feedback"
+        "user_rating": 4,  # 1-5 (optional)
+        "user_feedback": "Felt great!",  # text (optional)
+        "energy_level": 4,  # 1-5 (optional)
+        "difficulty": 3,  # 1-5 (optional)
+        "enjoyment": 5,  # 1-5 (optional)
+        "soreness_level": 2,  # 1-5 (optional)
+        
+        # Safety (always collected)
+        "injury_reported": false,
+        "injury_description": null,
+        "pain_location": null,
+        
+        # Optional performance data
+        "avg_heart_rate": 145,
+        "max_heart_rate": 165,
+        "performance_metrics": {},
+        
+        "personal_info": {...}
+    }
+    """
+    try:
+        # Extract user_id for authorization
+        user_id = request.get("user_id")
+        if not user_id:
+            return {
+                "success": False,
+                "data": None,
+                "message": "Missing required field: user_id",
+            }
+
+        # Verify JWT token
+        jwt_token = request.get("jwt_token")
+        if not jwt_token:
+            return {
+                "success": False,
+                "data": None,
+                "message": "Missing JWT token",
+            }
+
+        try:
+            token_user_id = extract_user_id_from_jwt(jwt_token)
+            if token_user_id != user_id:
+                return {
+                    "success": False,
+                    "data": None,
+                    "message": "Unauthorized: user_id mismatch",
+                }
+        except Exception as e:
+            logger.error(f"JWT verification failed: {str(e)}")
+            return {
+                "success": False,
+                "data": None,
+                "message": f"JWT verification failed: {str(e)}",
+            }
+
+        # Validate required fields
+        required_fields = [
+            "daily_training_id",
+            "plan_id",
+            "week_number",
+            "day_of_week",
+            "training_date",
+            "training_type",
+            "original_training",
+            "actual_training",
+            "personal_info",
+        ]
+        for field in required_fields:
+            if field not in request:
+                return {
+                    "success": False,
+                    "data": None,
+                    "message": f"Missing required field: {field}",
+                }
+
+        # Import schemas
+        from core.base.schemas.playbook_schemas import DailyTrainingOutcome
+        from core.training.schemas.question_schemas import PersonalInfo
+
+        # Build DailyTrainingOutcome object
+        outcome_data = {
+            "plan_id": request["plan_id"],
+            "user_id": user_id,
+            "daily_training_id": request["daily_training_id"],
+            "week_number": request["week_number"],
+            "day_of_week": request["day_of_week"],
+            "training_date": request["training_date"],
+            "training_type": request["training_type"],
+            "session_completed": request.get("session_completed", True),
+            "completion_percentage": request.get("completion_percentage", 1.0),
+            "was_modified": False,  # Will be set by comparison
+            "modifications": [],  # Will be populated by comparison
+            "feedback_provided": request.get("feedback_provided", False),
+            "user_feedback": request.get("user_feedback"),
+            "user_rating": request.get("user_rating"),
+            "avg_heart_rate": request.get("avg_heart_rate"),
+            "max_heart_rate": request.get("max_heart_rate"),
+            "target_heart_rate_zone": request.get("target_heart_rate_zone"),
+            "energy_level": request.get("energy_level"),
+            "difficulty": request.get("difficulty"),
+            "enjoyment": request.get("enjoyment"),
+            "soreness_level": request.get("soreness_level"),
+            "injury_reported": request.get("injury_reported", False),
+            "injury_description": request.get("injury_description"),
+            "pain_location": request.get("pain_location"),
+            "performance_metrics": request.get("performance_metrics", {}),
+            "notes": request.get("notes"),
+        }
+
+        # Handle skipped feedback
+        if not outcome_data["feedback_provided"]:
+            outcome_data["feedback_skipped_at"] = datetime.utcnow().isoformat()
+
+        outcome = DailyTrainingOutcome(**outcome_data)
+
+        # Build PersonalInfo object
+        personal_info = PersonalInfo(**request["personal_info"])
+
+        # Get original and actual training
+        original_training = request["original_training"]
+        actual_training = request["actual_training"]
+
+        # Build session context
+        session_context = f"{request['training_type'].capitalize()} training session on {request['day_of_week']}, Week {request['week_number']}"
+
+        logger.info(
+            f"Processing daily feedback for user {personal_info.username}, {request['day_of_week']}, Week {request['week_number']}"
+        )
+        logger.info(
+            f"Feedback provided: {outcome.feedback_provided}, Session completed: {outcome.session_completed}"
+        )
+
+        # Process feedback through ACE pattern (Reflector → Curator → Playbook)
+        result = await coach.process_daily_training_feedback(
+            outcome=outcome,
+            original_training=original_training,
+            actual_training=actual_training,
+            personal_info=personal_info,
+            session_context=session_context,
+        )
+
+        if result.get("success"):
+            logger.info(f"✅ Daily feedback processed: {result.get('message')}")
+            return {
+                "success": True,
+                "data": {
+                    "lessons_generated": result.get("lessons_generated"),
+                    "lessons_added": result.get("lessons_added"),
+                    "lessons_updated": result.get("lessons_updated"),
+                    "modifications_detected": result.get("modifications_detected"),
+                    "total_lessons": result.get("total_lessons_in_playbook"),
+                    "training_status_updated": result.get("training_status_updated"),
+                    "decisions": result.get("decisions", []),
+                },
+                "message": result.get("message"),
+            }
+        else:
+            logger.error(f"❌ Failed to process daily feedback: {result.get('error')}")
+            return {
+                "success": False,
+                "data": None,
+                "message": result.get("error", "Failed to process daily feedback"),
+            }
+
+    except Exception as e:
+        logger.error(f"Error submitting daily training feedback: {str(e)}")
+        return {
+            "success": False,
+            "data": None,
+            "message": f"Failed to submit daily feedback: {str(e)}",
+        }
+
+
 @router.get("/playbook/{user_id_param}")
 async def get_user_playbook(
     user_id_param: str,
@@ -1006,8 +1223,15 @@ async def get_user_playbook(
             logger.error(f"❌ JWT token error: {str(e)}")
             return {"success": False, "data": None, "message": str(e)}
 
-        # Load playbook
-        playbook = await db_service.load_user_playbook(user_id_param, jwt_token)
+        # Get user_profile_id from user_id
+        user_profile = await db_service.get_user_profile_by_user_id(user_id_param)
+        if not user_profile.get("success") or not user_profile.get("data"):
+            return {"success": False, "data": None, "message": "User profile not found"}
+
+        user_profile_id = user_profile["data"].get("id")
+
+        # Load playbook from user_profiles
+        playbook = await db_service.load_user_playbook(user_profile_id, jwt_token)
 
         if not playbook or len(playbook.lessons) == 0:
             return {

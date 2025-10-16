@@ -27,7 +27,7 @@ class TrainingType(str, Enum):
     STRENGTH = "strength"
     ENDURANCE = "endurance"
     MIXED = "mixed"
-    RECOVERY = "recovery"
+    REST = "rest"
 
 
 class EnduranceSession(BaseModel):
@@ -90,7 +90,7 @@ class DailyTraining(BaseModel):
     day_of_week: DayOfWeek = Field(..., description="Day of the week")
     is_rest_day: bool = Field(default=False, description="Whether this is a rest day")
     training_type: TrainingType = Field(
-        ..., description="Type of training: strength, endurance, mixed, or recovery"
+        ..., description="Type of training: strength, endurance, mixed, or rest"
     )
     strength_exercises: List[StrengthExercise] = Field(
         default=[], description="Strength exercises for this day"

@@ -6,7 +6,7 @@ and testing when DEBUG=true in your environment.
 """
 
 from typing import Dict, Any, List
-from core.training.schemas.schemas import UserProfileSchema
+from core.training.schemas.user_schemas import UserProfileSchema
 from core.training.schemas.training_schemas import (
     TrainingPlan,
     DailyTraining as TrainingDailyTraining,
@@ -136,7 +136,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
             weekly_schedule_id=0,
             day_of_week=DayOfWeek.TUESDAY,
             is_rest_day=True,
-            training_type="recovery",
+            training_type="rest",
             strength_exercises=[],
             endurance_sessions=[],
             motivation="Rest day! Your muscles need time to recover and grow stronger from yesterday's upper body session. Use this day for light stretching, walking, or complete rest. Recovery is just as important as training for building strength!",
@@ -181,7 +181,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
             weekly_schedule_id=0,
             day_of_week=DayOfWeek.THURSDAY,
             is_rest_day=True,
-            training_type="recovery",
+            training_type="rest",
             strength_exercises=[],
             endurance_sessions=[],
             motivation="Another recovery day to let your lower body muscles repair and grow stronger. Your legs did serious work yesterday! Focus on hydration, good nutrition, and light movement to keep blood flowing.",
@@ -238,7 +238,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
             weekly_schedule_id=0,
             day_of_week=DayOfWeek.SATURDAY,
             is_rest_day=True,
-            training_type="recovery",
+            training_type="rest",
             strength_exercises=[],
             endurance_sessions=[],
             motivation="Weekend recovery! You've put in three solid training days this week. Use this time to relax, enjoy some light activities, and let your body fully recover. You've earned this rest!",
@@ -251,7 +251,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
             weekly_schedule_id=0,
             day_of_week=DayOfWeek.SUNDAY,
             is_rest_day=True,
-            training_type="recovery",
+            training_type="rest",
             strength_exercises=[],
             endurance_sessions=[],
             motivation="Final rest day of the week! Use this time to prepare mentally and physically for next week's training. Plan your meals, get good sleep, and get ready to come back stronger than ever!",

@@ -1071,6 +1071,166 @@ export class TrainingService {
     const completedTrainings = dailyTrainings.filter(training => training.completed).length;
     return Math.round((completedTrainings / dailyTrainings.length) * 100);
   }
+
+  // ============================================================================
+  // DAILY FEEDBACK (ACE PATTERN)
+  // ============================================================================
+
+  /**
+   * Submit daily training feedback with optional skip
+   */
+  static async submitDailyFeedback(feedbackData: {
+    daily_training_id: number;
+    user_id: string;
+    plan_id: string;
+    week_number: number;
+    day_of_week: string;
+    training_date: string;
+    training_type: string;
+    original_training: any;
+    actual_training: any;
+    session_completed: boolean;
+    completion_percentage: number;
+    feedback_provided: boolean;
+    user_rating?: number;
+    user_feedback?: string;
+    energy_level?: number;
+    difficulty?: number;
+    enjoyment?: number;
+    soreness_level?: number;
+    injury_reported?: boolean;
+    injury_description?: string;
+    pain_location?: string;
+    avg_heart_rate?: number;
+    max_heart_rate?: number;
+    performance_metrics?: any;
+    personal_info: any;
+  }): Promise<TrainingServiceResponse<{
+    lessons_generated: number;
+    lessons_added: number;
+    lessons_updated: number;
+    modifications_detected: number;
+    total_lessons: number;
+    training_status_updated: boolean;
+  }>> {
+    try {
+      console.log('📝 Submitting daily training feedback...');
+
+      // Get JWT token from Supabase session
+      const { data: { session } } = await supabase.auth.getSession();
+      const authToken = session?.access_token;
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+
+      const apiUrl = `${API_CONFIG.BASE_URL}/training/daily-training-feedback`;
+
+      const requestBody = {
+        ...feedbackData,
+        jwt_token: authToken,
+      };
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Daily feedback API error:', response.status, response.statusText, errorText);
+        return {
+          success: false,
+          error: `API Error: ${response.status} ${response.statusText}`,
+        };
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        console.log('✅ Daily feedback submitted successfully');
+        console.log(`   • Lessons generated: ${result.data.lessons_generated}`);
+        console.log(`   • Lessons added: ${result.data.lessons_added}`);
+        console.log(`   • Modifications detected: ${result.data.modifications_detected}`);
+        console.log(`   • Total lessons in playbook: ${result.data.total_lessons}`);
+
+        return {
+          success: true,
+          data: result.data,
+        };
+      } else {
+        console.error('❌ Daily feedback submission failed:', result.message);
+        return {
+          success: false,
+          error: result.message || 'Failed to submit daily feedback',
+        };
+      }
+    } catch (error) {
+      console.error('💥 Daily feedback error:', error instanceof Error ? error.message : String(error));
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'An unexpected error occurred',
+      };
+    }
+  }
+
+  /**
+   * Compare original vs actual training to detect modifications
+   * This is a helper method for the frontend to prepare data for daily feedback
+   */
+  static detectTrainingModifications(
+    originalTraining: DailyTraining,
+    actualTraining: DailyTraining
+  ): any {
+    const modifications = {
+      strength_exercises: originalTraining.exercises
+        .filter(ex => ex.exercise && ex.sets)
+        .map(origEx => {
+          const actualEx = actualTraining.exercises.find(ae => ae.exerciseId === origEx.exerciseId);
+          
+          if (!actualEx) {
+            return null; // Exercise was removed
+          }
+
+          return {
+            exercise_id: parseInt(origEx.exerciseId),
+            exercise_name: origEx.exercise?.name,
+            sets: actualEx.sets?.length || 0,
+            reps: actualEx.sets?.map(s => s.reps) || [],
+            weight: actualEx.sets?.map(s => s.weight) || [],
+          };
+        })
+        .filter(Boolean),
+      endurance_sessions: originalTraining.exercises
+        .filter(ex => ex.enduranceSession)
+        .map(origEx => {
+          const actualEx = actualTraining.exercises.find(ae => ae.exerciseId === origEx.exerciseId);
+          
+          if (!actualEx || !actualEx.enduranceSession) {
+            return null;
+          }
+
+          return {
+            id: parseInt(actualEx.enduranceSession.id),
+            name: actualEx.enduranceSession.name,
+            sport_type: actualEx.enduranceSession.sportType,
+            training_volume: actualEx.enduranceSession.trainingVolume,
+            unit: actualEx.enduranceSession.unit,
+            heart_rate_zone: actualEx.enduranceSession.heartRateZone,
+            intensity: actualEx.enduranceSession.intensity,
+            completed: actualEx.enduranceSession.completed,
+          };
+        })
+        .filter(Boolean),
+    };
+
+    return modifications;
+  }
 }
 
 // Get historical training data for a specific exercise

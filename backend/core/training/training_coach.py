@@ -6,11 +6,13 @@ Includes ACE (Adaptive Context Engine) pattern for personalized learning
 import os
 import json
 import openai
+import time
 from typing import List, Dict, Any, Optional
 
 from core.base.base_agent import BaseAgent
 from logging_config import get_logger
 from core.base.rag_tool import RAGTool
+from core.base.ace_telemetry import ACETelemetry
 
 # Import schemas and services
 from core.training.schemas.training_schemas import (
@@ -47,6 +49,7 @@ from core.base.schemas.playbook_schemas import (
     TrainingOutcome,
     ReflectorAnalysis,
     PlaybookStats,
+    LessonApplication,
 )
 from core.base.reflector import Reflector, ReflectorAnalysisList
 from core.base.curator import Curator
@@ -144,17 +147,46 @@ class TrainingCoach(BaseAgent):
             # Create a comprehensive prompt for initial questions
             prompt = PromptGenerator.generate_initial_questions_prompt(personal_info)
 
-            # Generate questions using OpenAI
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages=[{"role": "system", "content": prompt}],
-                response_format=AIQuestionResponse,
-                temperature=0.7,
-            )
+            # Retry logic for validation errors
+            max_retries = 2
+            last_error = None
 
-            questions_response = completion.choices[0].message.parsed
+            for attempt in range(max_retries):
+                try:
+                    # Generate questions using OpenAI
+                    completion = self.openai_client.chat.completions.parse(
+                        model=os.getenv("OPENAI_MODEL", "gpt-4"),
+                        messages=[{"role": "system", "content": prompt}],
+                        response_format=AIQuestionResponse,
+                        temperature=0.7,
+                    )
 
-            return questions_response
+                    questions_response = completion.choices[0].message.parsed
+
+                    # If we get here, validation passed
+                    if attempt > 0:
+                        self.logger.info(
+                            f"Successfully generated questions after {attempt + 1} attempts"
+                        )
+
+                    return questions_response
+
+                except ValueError as ve:
+                    # Validation error from our custom validator
+                    last_error = ve
+                    self.logger.warning(
+                        f"Validation error on attempt {attempt + 1}/{max_retries}: {ve}"
+                    )
+
+                    if attempt < max_retries - 1:
+                        # Add error feedback to prompt for retry
+                        prompt += f"\n\n⚠️ PREVIOUS ATTEMPT FAILED: {str(ve)}\nPlease fix this error and try again."
+                    else:
+                        # Last attempt failed, will fall through to fallback
+                        self.logger.error(
+                            f"All {max_retries} attempts failed validation: {ve}"
+                        )
+                        raise
 
         except Exception as e:
             self.logger.error(f"Error generating initial questions: {e}")
@@ -221,25 +253,54 @@ class TrainingCoach(BaseAgent):
                 personal_info, formatted_responses
             )
 
-            # Generate questions using OpenAI
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages=[{"role": "system", "content": prompt}],
-                response_format=AIQuestionResponse,
-                temperature=0.7,
-            )
+            # Retry logic for validation errors
+            max_retries = 2
+            last_error = None
 
-            # Get the parsed response
-            question_response = completion.choices[0].message.parsed
+            for attempt in range(max_retries):
+                try:
+                    # Generate questions using OpenAI
+                    completion = self.openai_client.chat.completions.parse(
+                        model=os.getenv("OPENAI_MODEL", "gpt-4"),
+                        messages=[{"role": "system", "content": prompt}],
+                        response_format=AIQuestionResponse,
+                        temperature=0.7,
+                    )
 
-            # Return with formatted responses and AI message
-            return AIQuestionResponseWithFormatted(
-                questions=question_response.questions,
-                total_questions=question_response.total_questions,
-                estimated_time_minutes=question_response.estimated_time_minutes,
-                formatted_responses=formatted_responses,  # Already formatted by API
-                ai_message=question_response.ai_message,
-            )
+                    # Get the parsed response
+                    question_response = completion.choices[0].message.parsed
+
+                    # If we get here, validation passed
+                    if attempt > 0:
+                        self.logger.info(
+                            f"Successfully generated follow-up questions after {attempt + 1} attempts"
+                        )
+
+                    # Return with formatted responses and AI message
+                    return AIQuestionResponseWithFormatted(
+                        questions=question_response.questions,
+                        total_questions=question_response.total_questions,
+                        estimated_time_minutes=question_response.estimated_time_minutes,
+                        formatted_responses=formatted_responses,
+                        ai_message=question_response.ai_message,
+                    )
+
+                except ValueError as ve:
+                    # Validation error from our custom validator
+                    last_error = ve
+                    self.logger.warning(
+                        f"Validation error on attempt {attempt + 1}/{max_retries}: {ve}"
+                    )
+
+                    if attempt < max_retries - 1:
+                        # Add error feedback to prompt for retry
+                        prompt += f"\n\n⚠️ PREVIOUS ATTEMPT FAILED: {str(ve)}\nPlease fix this error and try again."
+                    else:
+                        # Last attempt failed, will fall through to fallback
+                        self.logger.error(
+                            f"All {max_retries} attempts failed validation: {ve}"
+                        )
+                        raise
 
         except Exception as e:
             self.logger.error(f"Error generating follow-up questions: {e}")
@@ -253,11 +314,12 @@ class TrainingCoach(BaseAgent):
                         min_value=1,
                         max_value=7,
                         step=1,
+                        unit="days",
                     )
                 ],
                 total_questions=1,
                 estimated_time_minutes=1,
-                formatted_responses=formatted_responses,  # Already formatted by API
+                formatted_responses=formatted_responses,
                 ai_message="I need to ask a few more questions to create your perfect training plan. 💪",
             )
 
@@ -453,34 +515,40 @@ class TrainingCoach(BaseAgent):
                 exercise_info = f"No exercises needed - {decision.alternative_approach or 'focus on sport-specific training sessions'}"
 
             # Step 3: Load user's playbook for personalized context
-            # First try to load from user_profile.initial_playbook (set during outline generation)
+            # First try to load from user_profile.user_playbook (set during outline generation)
             self.logger.info("Loading user playbook for personalized guidance...")
 
             # Try to get from user profile first (where we stored it during outline)
             user_profile = await db_service.get_user_profile_by_user_id(
                 personal_info.user_id
             )
-            initial_playbook_data = None
+            user_playbook_data = None
+            user_profile_id = None
 
             if user_profile.get("success") and user_profile.get("data"):
-                initial_playbook_data = user_profile["data"].get("initial_playbook")
+                user_profile_id = user_profile["data"].get("id")
+                user_playbook_data = user_profile["data"].get("user_playbook")
 
-            if initial_playbook_data:
-                # Use the playbook from outline generation
-                playbook = UserPlaybook(**initial_playbook_data)
+            if user_playbook_data:
+                # Use the playbook from user profile
+                playbook = UserPlaybook(**user_playbook_data)
                 self.logger.info(
-                    f"Loaded playbook from outline generation with {len(playbook.lessons)} lessons"
+                    f"Loaded playbook from user_profile with {len(playbook.lessons)} lessons"
                 )
             else:
-                # Fallback: try loading from training_plans table
-                playbook = await db_service.load_user_playbook(personal_info.user_id)
+                # Fallback: try loading from user_profiles table
+                playbook = (
+                    await db_service.load_user_playbook(user_profile_id)
+                    if user_profile_id
+                    else None
+                )
 
                 # Last resort: extract lessons now
                 if not playbook or len(playbook.lessons) == 0:
                     self.logger.warning(
                         "Playbook not found - extracting initial lessons now (should have been done during outline generation)"
                     )
-                    initial_lessons = self.extract_initial_lessons_from_onboarding(
+                    initial_lessons = self.reflector.extract_initial_lessons(
                         personal_info,
                         formatted_initial_responses,
                         formatted_follow_up_responses,
@@ -564,11 +632,34 @@ class TrainingCoach(BaseAgent):
                 self.logger.info("Skipping exercise validation (no exercises used)")
                 validated_training = training_dict
 
+            # Step 6: Identify which lessons were applied & update playbook
+            applied_lesson_ids = []
+            if playbook_lessons_dict and len(playbook_lessons_dict) > 0:
+                self.logger.info(
+                    "Identifying which lessons were applied in the plan..."
+                )
+                applied_lesson_ids = self.reflector.identify_applied_lessons(
+                    training_plan=validated_training,
+                    playbook_lessons=playbook_lessons_dict,
+                    personal_info=personal_info,
+                )
+
+                # Update playbook with application counts
+                if applied_lesson_ids and playbook:
+                    playbook = self.curator.mark_lessons_as_applied(
+                        playbook, applied_lesson_ids
+                    )
+                    self.logger.info(
+                        f"Updated playbook: {len(applied_lesson_ids)} lessons marked as applied [[memory:8636680]]"
+                    )
+
             # Save playbook to the training plan (will be saved when plan is saved to DB)
             result_dict = {
                 "success": True,
                 "training_plan": validated_training,
-                "user_playbook": playbook.model_dump(),  # Include playbook for saving
+                "user_playbook": (
+                    playbook.model_dump() if playbook else None
+                ),  # Include playbook for saving
                 "metadata": {
                     "exercises_candidates": exercises_retrieved,
                     "validation_messages": validation_messages,
@@ -586,6 +677,8 @@ class TrainingCoach(BaseAgent):
                     "playbook_initialized": (
                         len(playbook.lessons) > 0 if playbook else False
                     ),
+                    "lessons_applied_count": len(applied_lesson_ids),
+                    "lessons_applied_ids": applied_lesson_ids,
                 },
             }
 
@@ -612,279 +705,39 @@ class TrainingCoach(BaseAgent):
 
     def _generate_fallback_response(self, user_request: str) -> str:
         """Generate a fallback response when no relevant documents are found."""
-        return f"""I understand you're asking about: "{user_request}"
+        return f"""
+            I understand you're asking about: "{user_request}"
 
-While I don't have specific information about this in my knowledge base yet, I can provide general training guidance based on best practices.
+            While I don't have specific information about this in my knowledge base yet, I can provide general training guidance based on best practices.
 
-For more personalized advice, please try:
-- Being more specific about your goals
-- Mentioning your experience level
-- Specifying available equipment
+            For more personalized advice, please try:
+            - Being more specific about your goals
+            - Mentioning your experience level
+            - Specifying available equipment
 
-Would you like me to create a general training plan or recommend some basic exercises?"""
+            Would you like me to create a general training plan or recommend some basic exercises?
+        """
 
     def _generate_error_response(self, user_request: str) -> str:
         """Generate an error response when processing fails."""
-        return f"""I apologize, but I encountered an error while processing your request: "{user_request}"
+        return f"""
+            I apologize, but I encountered an error while processing your request: "{user_request}"
 
-This might be due to:
-- Temporary system issues
-- Knowledge base access problems
-- Complex request format
+            This might be due to:
+            - Temporary system issues
+            - Knowledge base access problems
+            - Complex request format
 
-Please try rephrasing your request or contact support if the issue persists."""
-
-    # ============================================================================
-    # ACE PATTERN METHODS (Adaptive Context Engine)
-    # ============================================================================
-
-    def extract_initial_lessons_from_onboarding(
-        self,
-        personal_info: PersonalInfo,
-        formatted_initial_responses: str,
-        formatted_follow_up_responses: str,
-    ) -> List[PlaybookLesson]:
+            Please try rephrasing your request or contact support if the issue persists.
         """
-        Extract initial lessons from onboarding Q&A before any training begins.
-
-        This creates the "seed" playbook with constraints, preferences, and context
-        that we learned during onboarding (injuries, equipment, schedule, etc.)
-
-        Args:
-            personal_info: User's personal information
-            formatted_initial_responses: Formatted responses from initial questions
-            formatted_follow_up_responses: Formatted responses from follow-up questions
-
-        Returns:
-            List of PlaybookLesson objects representing initial constraints/preferences
-        """
-        try:
-            self.logger.info("Extracting initial lessons from onboarding responses...")
-
-            combined_responses = (
-                f"{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
-            )
-
-            prompt = f"""
-You are analyzing a user's onboarding responses to extract actionable lessons for their training plan.
-
-**USER PROFILE:**
-- Name: {personal_info.username}
-- Age: {personal_info.age}
-- Goal: {personal_info.goal_description}
-- Experience: {personal_info.experience_level}
-
-**COMPLETE ONBOARDING RESPONSES:**
-{combined_responses}
-
-**YOUR TASK:**
-Extract 3-7 actionable lessons from these responses that should guide ALL future training plans.
-These are "seed lessons" - constraints, preferences, and context we learned during onboarding.
-
-**TYPES OF LESSONS TO EXTRACT:**
-
-1. **Physical Constraints** (priority: critical)
-   - Injuries, pain, limitations
-   - Example: "Avoid high-impact exercises due to knee pain"
-
-2. **Equipment Availability** (priority: high)
-   - What equipment they have/don't have
-   - Example: "Limited to dumbbells and bodyweight exercises only"
-
-3. **Schedule Constraints** (priority: high)
-   - When they can train, how long sessions can be
-   - Example: "Can only train early mornings, max 45 minutes per session"
-
-4. **Experience-Based Guidelines** (priority: medium)
-   - Skill level appropriate starting points
-   - Example: "Beginner level - start with fundamental movement patterns"
-
-5. **Preferences & Motivations** (priority: medium)
-   - Training style preferences, what they enjoy/avoid
-   - Example: "Prefers varied workouts to prevent boredom"
-
-6. **Goal-Specific Context** (priority: high)
-   - Specific requirements for their goal
-   - Example: "Targeting fat loss - needs caloric burn focus with heart rate monitoring"
-
-**FORMATTING RULES:**
-- Each lesson should be specific and actionable (not generic advice)
-- Use imperative language ("Avoid...", "Focus on...", "Include...", "Limit to...")
-- Reference specific constraints from their responses
-- Mark physical constraints as positive=false (warnings)
-- Mark preferences/capabilities as positive=true (guidance)
-- Assign appropriate priority levels
-- Add relevant tags
-
-**IMPORTANT:**
-- These lessons apply to ALL future plans, not just the first one
-- Focus on unchanging constraints (injuries, equipment) and strong preferences
-- Don't create lessons for things that might change week-to-week
-
-Generate 3-7 lessons in ReflectorAnalysisList format.
-"""
-
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert at extracting actionable training constraints and preferences from user responses.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                response_format=ReflectorAnalysisList,
-                temperature=0.3,
-            )
-
-            analyses = completion.choices[0].message.parsed.analyses
-
-            # Convert analyses to PlaybookLessons
-            import uuid
-
-            lessons = []
-            for analysis in analyses:
-                lesson = PlaybookLesson(
-                    id=f"onboarding_{uuid.uuid4().hex[:8]}",
-                    text=analysis.lesson,
-                    tags=analysis.tags + ["onboarding", "initial_constraint"],
-                    helpful_count=0,  # Not proven yet
-                    harmful_count=0,
-                    confidence=analysis.confidence,
-                    positive=analysis.positive,
-                    source_plan_id="onboarding",
-                )
-                lessons.append(lesson)
-
-            self.logger.info(
-                f"Extracted {len(lessons)} initial lessons from onboarding"
-            )
-            for lesson in lessons:
-                self.logger.info(
-                    f"  - [{('✅' if lesson.positive else '⚠️ ')}] {lesson.text}"
-                )
-
-            return lessons
-
-        except Exception as e:
-            self.logger.error(f"Error extracting initial lessons: {e}")
-            return []
-
-    def extract_outline_feedback_lesson(
-        self, personal_info: PersonalInfo, outline: dict, feedback: str
-    ) -> Optional[PlaybookLesson]:
-        """
-        Extract a preference lesson from user's outline feedback.
-
-        Args:
-            personal_info: User's personal information
-            outline: The training plan outline they reviewed
-            feedback: User's feedback on the outline
-
-        Returns:
-            PlaybookLesson or None if feedback is too vague
-        """
-        try:
-            if not feedback or not feedback.strip():
-                return None
-
-            self.logger.info(
-                f"Extracting lesson from outline feedback: {feedback[:50]}..."
-            )
-
-            prompt = f"""
-Analyze user feedback on their training plan outline and extract an actionable preference lesson.
-
-**USER PROFILE:**
-- Name: {personal_info.username}
-- Goal: {personal_info.goal_description}
-- Experience: {personal_info.experience_level}
-
-**OUTLINE THEY REVIEWED:**
-Title: {outline.get('title', 'N/A')}
-Duration: {outline.get('duration_weeks', 'N/A')} weeks
-Approach: {outline.get('explanation', 'N/A')}
-
-**THEIR FEEDBACK:**
-"{feedback}"
-
-**YOUR TASK:**
-Extract ONE actionable preference lesson from this feedback that should be applied to their training plan.
-
-**EXAMPLES:**
-- Feedback: "I prefer cycling over running" 
-  → Lesson: "Prioritize cycling for cardio sessions instead of running"
-
-- Feedback: "Can we do more upper body work?"
-  → Lesson: "Increase upper body training frequency - user wants more upper focus"
-
-- Feedback: "This looks too intense for me"
-  → Lesson: "Reduce training intensity and volume - user prefers moderate progression"
-
-- Feedback: "Looks great!" or "Perfect!"
-  → Return None (no specific preference to extract)
-
-**RULES:**
-- Only extract if feedback contains a specific preference or concern
-- Make it actionable and specific
-- Tag appropriately (preferences, volume, intensity, etc.)
-- Set confidence to 0.7 (medium - based on one statement)
-- Mark as positive=true (it's a preference, not a warning)
-- Priority: medium (user preference, not safety concern)
-
-If the feedback is too vague or just approval, return None by setting lesson to empty string.
-
-Return in ReflectorAnalysis format.
-"""
-
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert at extracting actionable training preferences from user feedback.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                response_format=ReflectorAnalysis,
-                temperature=0.3,
-            )
-
-            analysis = completion.choices[0].message.parsed
-
-            # Check if we got a valid lesson
-            if not analysis.lesson or analysis.lesson.strip() == "":
-                self.logger.info(
-                    "No actionable lesson from outline feedback (too vague or just approval)"
-                )
-                return None
-
-            # Convert to PlaybookLesson
-            import uuid
-
-            lesson = PlaybookLesson(
-                id=f"outline_feedback_{uuid.uuid4().hex[:8]}",
-                text=analysis.lesson,
-                tags=analysis.tags + ["outline_feedback", "user_preference"],
-                helpful_count=0,
-                harmful_count=0,
-                confidence=0.7,  # Medium confidence from single feedback
-                positive=True,  # Preferences are positive guidance
-                source_plan_id="outline_feedback",
-            )
-
-            self.logger.info(f"Extracted outline feedback lesson: {lesson.text}")
-            return lesson
-
-        except Exception as e:
-            self.logger.error(f"Error extracting outline feedback lesson: {e}")
-            return None
-
+        
     async def process_training_feedback(
         self, outcome: TrainingOutcome, personal_info: PersonalInfo, plan_context: str
     ) -> Dict[str, Any]:
         """
         Process training feedback using the ACE pattern: Reflector → Curator → Update Playbook.
+        
+        DEPRECATED: Use process_daily_training_feedback for daily feedback loop.
 
         Args:
             outcome: TrainingOutcome with completion data, feedback, HR, etc.
@@ -899,8 +752,18 @@ Return in ReflectorAnalysis format.
                 f"Processing feedback for plan {outcome.plan_id}, week {outcome.week_number} [[memory:8636680]]"
             )
 
-            # Step 1: Load current playbook
-            playbook = await db_service.load_user_playbook(outcome.user_id)
+            # Step 0: Get user_profile_id from user_id
+            user_profile = await db_service.get_user_profile_by_user_id(outcome.user_id)
+            if not user_profile.get("success") or not user_profile.get("data"):
+                self.logger.error(
+                    f"Failed to get user profile for user_id {outcome.user_id}"
+                )
+                return {"success": False, "message": "User profile not found"}
+
+            user_profile_id = user_profile["data"].get("id")
+
+            # Step 1: Load current playbook from user_profiles
+            playbook = await db_service.load_user_playbook(user_profile_id)
 
             # Step 2: Reflector - analyze outcome and generate lessons
             self.logger.info("Reflector analyzing outcome...")
@@ -939,9 +802,9 @@ Return in ReflectorAnalysis format.
             # Step 4: Update playbook with curator decisions
             updated_playbook = self.curator.update_playbook(playbook, decisions)
 
-            # Step 5: Save updated playbook
+            # Step 5: Save updated playbook to user_profiles
             saved = await db_service.save_user_playbook(
-                outcome.plan_id, updated_playbook.model_dump()
+                user_profile_id, updated_playbook.model_dump()
             )
 
             return {
@@ -973,6 +836,194 @@ Return in ReflectorAnalysis format.
             self.logger.error(f"Error processing training feedback: {e}")
             return {"success": False, "error": str(e)}
 
+    async def process_daily_training_feedback(
+        self,
+        outcome: "DailyTrainingOutcome",
+        original_training: Dict[str, Any],
+        actual_training: Dict[str, Any],
+        personal_info: PersonalInfo,
+        session_context: str,
+    ) -> Dict[str, Any]:
+        """
+        Process DAILY training feedback using the ACE pattern with modification tracking.
+
+        This is the main feedback loop for the new daily feedback system. It:
+        1. Compares original vs actual training to detect modifications (no LLM needed)
+        2. Uses Reflector to analyze the session outcome and modifications
+        3. Uses Curator to integrate lessons into the playbook
+        4. Updates the training status in database ONLY after feedback is processed
+
+        Args:
+            outcome: DailyTrainingOutcome with session data and feedback
+            original_training: Original planned training from database
+            actual_training: What user actually did from frontend
+            personal_info: User's personal information
+            session_context: Brief description of the session
+
+        Returns:
+            Dictionary with results of the feedback processing
+        """
+        start_time = time.time()  # Track processing time
+        
+        try:
+            from core.base.schemas.playbook_schemas import DailyTrainingOutcome
+            from core.training.helpers.training_comparison import TrainingComparison
+
+            self.logger.info(
+                f"Processing daily feedback: plan {outcome.plan_id}, week {outcome.week_number}, {outcome.day_of_week} [[memory:8636680]]"
+            )
+
+            # Step 0: Get user_profile_id from user_id
+            user_profile = await db_service.get_user_profile_by_user_id(outcome.user_id)
+            if not user_profile.get("success") or not user_profile.get("data"):
+                self.logger.error(
+                    f"Failed to get user profile for user_id {outcome.user_id}"
+                )
+                return {"success": False, "message": "User profile not found"}
+
+            user_profile_id = user_profile["data"].get("id")
+
+            # Step 1: Compare original vs actual training (detect modifications)
+            self.logger.info("Comparing original vs actual training for modifications...")
+            modifications = TrainingComparison.compare_daily_training(
+                original_training, actual_training
+            )
+            modifications_summary = TrainingComparison.format_modifications_for_analysis(
+                modifications
+            )
+
+            self.logger.info(f"Detected {len(modifications)} modification(s)")
+
+            # Step 2: Load current playbook
+            playbook = await db_service.load_user_playbook(user_profile_id)
+
+            # Step 3: Decide if we should analyze (skip if feedback skipped AND no modifications)
+            should_analyze = (
+                outcome.feedback_provided
+                or len(modifications) > 0
+                or outcome.injury_reported
+                or not outcome.session_completed
+            )
+
+            analyses = []
+            if should_analyze:
+                # Step 4: Reflector - analyze daily outcome
+                self.logger.info("Reflector analyzing daily session...")
+                analyses = self.reflector.analyze_daily_outcome(
+                    outcome=outcome,
+                    personal_info=personal_info,
+                    session_context=session_context,
+                    modifications_summary=modifications_summary,
+                    previous_lessons=playbook.lessons if playbook else [],
+                )
+                self.logger.info(f"Reflector generated {len(analyses)} lessons")
+            else:
+                self.logger.info(
+                    "No analysis needed - feedback skipped and no significant signals"
+                )
+
+            # Step 5: Curator - process lessons (if any)
+            decisions = []
+            if analyses:
+                self.logger.info("Curator processing lessons...")
+                for analysis in analyses:
+                    decision, lesson = self.curator.process_new_lesson(
+                        analysis=analysis,
+                        existing_playbook=playbook,
+                        source_plan_id=outcome.plan_id,
+                    )
+                    decisions.append((decision, lesson))
+                    self.logger.info(
+                        f"Curator decision: {decision.action} - {decision.reasoning}"
+                    )
+
+                # Step 6: Update playbook with curator decisions
+                updated_playbook = self.curator.update_playbook(playbook, decisions)
+
+                # Step 7: Save updated playbook
+                saved = await db_service.save_user_playbook(
+                    user_profile_id, updated_playbook.model_dump()
+                )
+            else:
+                saved = False
+
+            # Step 8: Update training status in database (NOW after feedback)
+            # Mark the daily training as completed in Supabase
+            await db_service.update_daily_training_status(
+                daily_training_id=outcome.daily_training_id,
+                completed=outcome.session_completed,
+                completion_percentage=outcome.completion_percentage,
+                modifications=modifications,
+                feedback_provided=outcome.feedback_provided,
+            )
+
+            self.logger.info(
+                f"✅ Daily training {outcome.daily_training_id} status updated in database"
+            )
+
+            # Calculate metrics for return and telemetry
+            lessons_added_count = sum(1 for d, _ in decisions if d.action == "add_new")
+            lessons_updated_count = sum(
+                1 for d, _ in decisions if d.action in ["merge_with_existing", "update_existing"]
+            )
+            duration_ms = int((time.time() - start_time) * 1000)
+
+            # Track telemetry - feedback session
+            ACETelemetry.track_feedback_session(
+                user_id=outcome.user_id,
+                feedback_provided=outcome.feedback_provided,
+                lessons_generated=len(analyses),
+                lessons_added=lessons_added_count,
+                lessons_updated=lessons_updated_count,
+                modifications_detected=len(modifications),
+                session_duration_ms=duration_ms
+            )
+
+            # Track telemetry - playbook state (if updated)
+            if analyses and decisions:
+                updated_playbook = locals().get('updated_playbook')
+                if updated_playbook and hasattr(updated_playbook, 'lessons'):
+                    positive_count = sum(1 for l in updated_playbook.lessons if l.positive)
+                    warning_count = len(updated_playbook.lessons) - positive_count
+                    avg_conf = sum(l.confidence for l in updated_playbook.lessons) / len(updated_playbook.lessons) if updated_playbook.lessons else 0
+                    max_applied = max((l.times_applied for l in updated_playbook.lessons), default=0)
+                    
+                    ACETelemetry.track_playbook_state(
+                        user_id=outcome.user_id,
+                        total_lessons=len(updated_playbook.lessons),
+                        positive_lessons=positive_count,
+                        warning_lessons=warning_count,
+                        avg_confidence=avg_conf,
+                        most_applied_lesson_times=max_applied
+                    )
+
+            return {
+                "success": True,
+                "lessons_generated": len(analyses),
+                "lessons_added": lessons_added_count,
+                "lessons_updated": lessons_updated_count,
+                "lessons_rejected": sum(
+                    1 for d, _ in decisions if d.action == "reject"
+                ),
+                "modifications_detected": len(modifications),
+                "total_lessons_in_playbook": len(playbook.lessons),
+                "playbook_updated": saved,
+                "training_status_updated": True,
+                "decisions": [
+                    {
+                        "action": d.action,
+                        "reasoning": d.reasoning,
+                        "similarity": d.similarity_score,
+                    }
+                    for d, _ in decisions
+                ],
+                "message": f"Processed daily session: {len(analyses)} lessons generated, {len(modifications)} modifications detected",
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error processing daily training feedback: {e}")
+            return {"success": False, "error": str(e)}
+
     async def get_playbook_stats(self, user_id: str) -> Optional[PlaybookStats]:
         """
         Get statistics about a user's playbook.
@@ -984,7 +1035,13 @@ Return in ReflectorAnalysis format.
             PlaybookStats object or None if no playbook exists
         """
         try:
-            playbook = await db_service.load_user_playbook(user_id)
+            # Get user_profile_id from user_id
+            user_profile = await db_service.get_user_profile_by_user_id(user_id)
+            if not user_profile.get("success") or not user_profile.get("data"):
+                return None
+
+            user_profile_id = user_profile["data"].get("id")
+            playbook = await db_service.load_user_playbook(user_profile_id)
 
             if not playbook or not playbook.lessons:
                 return None
