@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 from enum import Enum
 
@@ -55,7 +55,7 @@ class AIQuestion(BaseModel):
     with strict runtime validation to ensure type safety.
     """
 
-    model_config = ConfigDict(extra="forbid")  # Reject unknown fields
+    model_config = ConfigDict(extra="ignore")  # Ignore unknown fields for flexibility
 
     # Common fields (required for all types)
     id: str = Field(..., description="Unique identifier for the question")
@@ -78,12 +78,9 @@ class AIQuestion(BaseModel):
         default=None, description="Step increment - REQUIRED for slider ONLY"
     )
     unit: Optional[str] = Field(
-        default=None, description="Unit of measurement - REQUIRED for slider ONLY"
+        default=None, description="Unit of measurement - REQUIRED for slider ONLY (must be a single string, not array)"
     )
     min_description: Optional[str] = Field(
-        default=None, description="Minimum value label - REQUIRED for rating ONLY"
-    )
-    max_description: Optional[str] = Field(
         default=None, description="Maximum value label - REQUIRED for rating ONLY"
     )
     max_length: Optional[int] = Field(
@@ -96,138 +93,9 @@ class AIQuestion(BaseModel):
         default=None,
         description="Placeholder text - REQUIRED for free_text and conditional_boolean ONLY",
     )
-
-    @model_validator(mode="after")
-    def validate_fields_by_type(self) -> "AIQuestion":
-        """
-        Strict validation: ensure required fields are present and forbidden fields are absent.
-        This makes the unified schema as safe as separate schemas would be.
-        """
-        rt = self.response_type
-        errors = []
-
-        # Define field requirements per type
-        FIELD_RULES = {
-            QuestionType.MULTIPLE_CHOICE: {
-                "required": ["options"],
-                "forbidden": [
-                    "min_value",
-                    "max_value",
-                    "step",
-                    "unit",
-                    "min_description",
-                    "max_description",
-                    "max_length",
-                    "placeholder",
-                ],
-            },
-            QuestionType.DROPDOWN: {
-                "required": ["options"],
-                "forbidden": [
-                    "min_value",
-                    "max_value",
-                    "step",
-                    "unit",
-                    "min_description",
-                    "max_description",
-                    "max_length",
-                    "placeholder",
-                ],
-            },
-            QuestionType.SLIDER: {
-                "required": ["min_value", "max_value", "step", "unit"],
-                "forbidden": [
-                    "options",
-                    "min_description",
-                    "max_description",
-                    "max_length",
-                    "placeholder",
-                ],
-            },
-            QuestionType.RATING: {
-                "required": [
-                    "min_value",
-                    "max_value",
-                    "min_description",
-                    "max_description",
-                ],
-                "forbidden": ["options", "step", "unit", "max_length", "placeholder"],
-            },
-            QuestionType.FREE_TEXT: {
-                "required": ["max_length", "placeholder"],
-                "forbidden": [
-                    "options",
-                    "min_value",
-                    "max_value",
-                    "step",
-                    "unit",
-                    "min_description",
-                    "max_description",
-                ],
-            },
-            QuestionType.CONDITIONAL_BOOLEAN: {
-                "required": ["max_length", "placeholder"],
-                "forbidden": [
-                    "options",
-                    "min_value",
-                    "max_value",
-                    "step",
-                    "unit",
-                    "min_description",
-                    "max_description",
-                ],
-            },
-        }
-
-        rules = FIELD_RULES.get(rt)
-        if not rules:
-            raise ValueError(f"Unknown response_type: {rt}")
-
-        # Check required fields
-        for field_name in rules["required"]:
-            value = getattr(self, field_name)
-            if value is None:
-                errors.append(
-                    f"Missing required field '{field_name}' for {rt.value} question"
-                )
-            elif field_name == "options" and len(value) < 2:
-                errors.append(
-                    f"Field 'options' must have at least 2 items for {rt.value} question"
-                )
-
-        # Check forbidden fields (must be None)
-        for field_name in rules["forbidden"]:
-            value = getattr(self, field_name)
-            if value is not None:
-                errors.append(
-                    f"Field '{field_name}' must NOT be set for {rt.value} question (found: {value})"
-                )
-
-        # Additional validation for slider
-        if rt == QuestionType.SLIDER:
-            if self.min_value is not None and self.max_value is not None:
-                if self.min_value >= self.max_value:
-                    errors.append(
-                        f"min_value ({self.min_value}) must be less than max_value ({self.max_value})"
-                    )
-            if self.step is not None and self.step <= 0:
-                errors.append(f"step must be greater than 0 (found: {self.step})")
-
-        # Additional validation for rating
-        if rt == QuestionType.RATING:
-            if self.min_value is not None and self.min_value < 1:
-                errors.append(
-                    f"rating min_value must be at least 1 (found: {self.min_value})"
-                )
-            if self.max_value is not None and self.max_value > 10:
-                errors.append(
-                    f"rating max_value must be at most 10 (found: {self.max_value})"
-                )
-
-        if errors:
-            raise ValueError(" | ".join(errors))
-
-        return self
+    
+    # Validation moved to TrainingCoach._filter_valid_questions()
+    # Invalid questions are filtered out gracefully instead of throwing 422 errors
 
 
 class AIQuestionResponse(BaseModel):
@@ -392,15 +260,19 @@ class DailyTraining(BaseModel):
 
 
 class TrainingPeriod(BaseModel):
-    """Training period structure for training plan outline."""
+    """Mini-phase within a 4-week training plan."""
 
     period_name: str = Field(
         ...,
-        description="Name of the training period (e.g., 'Foundation Phase', 'Build Phase', 'Peak Phase')",
+        description="Phase name (e.g., 'Adaptation', 'Development')",
     )
-    duration_weeks: int = Field(..., description="Duration of this period in weeks")
+    duration_weeks: int = Field(
+        ..., 
+        description="Duration in weeks (all phases must total 4 weeks)"
+    )
     explanation: str = Field(
-        ..., description="Detailed explanation of what this period involves"
+        ..., 
+        description="What this phase accomplishes (1-2 sentences)"
     )
     daily_trainings: List[DailyTraining] = Field(
         ..., description="Sample daily trainings for this period"
@@ -408,22 +280,30 @@ class TrainingPeriod(BaseModel):
 
 
 class TrainingPlanOutline(BaseModel):
-    """Structured training plan outline for any sport or athletic discipline."""
+    """Structured training plan outline for 4-week training blocks."""
 
-    title: str = Field(..., description="Program title in 3 words or less")
-    duration_weeks: int = Field(..., description="Total program duration in weeks")
+    title: str = Field(
+        ..., 
+        description="Descriptive phase name for this 4-week training phase (e.g., 'Foundation Building', 'Base Endurance Development')"
+    )
+    duration_weeks: int = Field(
+        ..., 
+        description="Duration in weeks (must be 4)"
+    )
     explanation: str = Field(
-        ..., description="High-level overview and explanation of the training plan"
+        ..., 
+        description="High-level overview (2-3 sentences): what this phase accomplishes, why 4-week cycles, connection to their goal"
     )
     training_periods: List[TrainingPeriod] = Field(
-        ..., description="Training periods breakdown of the program"
+        ..., description="1-2 mini-phases within these 4 weeks"
     )
     user_observations: str = Field(
         ...,
         description="Comprehensive summary of user profile and responses from initial and follow-up questions",
     )
     ai_message: Optional[str] = Field(
-        default=None, description="Personalized AI coach message for this phase"
+        default=None, 
+        description="Personalized AI coach message explaining the 4-week approach and phase name"
     )
 
 

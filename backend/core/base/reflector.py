@@ -373,125 +373,125 @@ class Reflector:
             {f"• Enjoyment: {outcome.enjoyment}/5" if outcome.enjoyment else ""}
             {f"• Soreness: {outcome.soreness_level}/5" if outcome.soreness_level else ""}
             """
-                else:
-                    feedback_section = """
-                **USER SKIPPED FEEDBACK** (still learn from modifications and completion status)
-                    """
+        else:
+            feedback_section = """
+            **USER SKIPPED FEEDBACK** (still learn from modifications and completion status)
+            """
 
-                # Build modifications section
-                modifications_section = f"""
-                **TRAINING MODIFICATIONS:**
-                {modifications_summary}
-                    """
+        # Build modifications section
+        modifications_section = f"""
+        **TRAINING MODIFICATIONS:**
+        {modifications_summary}
+        """
 
-                # Injury warning
-                injury_warning = ""
-                if outcome.injury_reported:
-                    injury_warning = f"""
-                ⚠️  **INJURY/PAIN REPORTED:** {outcome.injury_description}
-                Location: {outcome.pain_location}
-                    """
+        # Injury warning
+        injury_warning = ""
+        if outcome.injury_reported:
+            injury_warning = f"""
+        ⚠️  **INJURY/PAIN REPORTED:** {outcome.injury_description}
+        Location: {outcome.pain_location}
+        """
 
-                prompt = f"""
-                {self._format_client_information(personal_info)}
-                
-                **WORKFLOW STATUS:**
-                ✅ Onboarding → ✅ Plan Generated → ✅ Session Completed → ✅ Daily Feedback
-                🎯 **CURRENT STEP:** Analyze Daily Session & Generate Immediate Lessons
-                
-                **SESSION CONTEXT:**
-                {session_context}
-                
-                **SESSION OUTCOME - {outcome.day_of_week}, Week {outcome.week_number}:**
-                • Training Type: {outcome.training_type}
-                • Completion: {completion_status} ({outcome.completion_percentage*100:.0f}%)
-                • Date: {outcome.training_date}
-                
-                {modifications_section}
-                {feedback_section}
-                {injury_warning}
-                
-                **EXISTING PLAYBOOK LESSONS:**
-                {lessons_context}
-                
-                **YOUR TASK:**
-                Analyze this SINGLE training session and generate 0-2 specific, actionable lessons.
-                Daily feedback enables immediate learning - focus on signals that indicate needed adjustments.
-                
-                **LESSON GENERATION STRATEGY:**
-                
-                **When to Generate Lessons (Be Selective):**
-                
-                ✅ **Generate 1-2 lessons if:**
-                • User made significant modifications (reduced weight/reps/sets/distance by >15%)
-                • Injury/pain reported (CRITICAL - always generate warning lesson)
-                • Very negative feedback (rating ≤2, difficulty 5/5, very low energy)
-                • Very positive signals with modifications (increased load - user ready for more)
-                • Completion issues (didn't finish planned session)
-                
-                ❌ **Generate 0 lessons if:**
-                • Session went as planned with neutral/positive feedback (no lessons needed)
-                • Feedback skipped AND no modifications (insufficient signal)
-                • Minor modifications (<10% changes)
-                • Everything normal/expected
-                
-                **DAILY LESSON CATEGORIES & EXAMPLES:**
-                
-                **1. Load/Intensity Adjustments** (most common)
-                • Reductions → "Reduce prescribed weight by 10-15% on squat variations - user struggled today"
-                • Increases → "Can increase upper body volume - user added extra sets and reported feeling strong"
-                • Endurance → "Shorten endurance sessions to 20-25min - user consistently reducing planned distance"
-                • Priority: high-medium
-                
-                **2. Immediate Safety Concerns** (always generate if applicable)
-                • Injuries → "Avoid high-impact plyometrics - knee pain reported during box jumps"
-                • Pain patterns → "Reduce overhead pressing volume - shoulder discomfort during workout"
-                • Fatigue → "Add extra rest day after high-intensity sessions - very low energy reported"
-                • Priority: critical
-                
-                **3. Exercise Preferences** (from modifications)
-                • Substitutions → "User prefers dumbbell press over barbell - switched exercises twice this week"
-                • Skipped exercises → "User skips deadlift variations - address technique concerns or substitute"
-                • Added exercises → "User enjoys accessory arm work - consistently adding extra sets"
-                • Priority: medium
-                
-                **4. Progression Insights** (positive signals)
-                • Readiness → "Ready for progression - rated 4/5 and described as 'easy' with high enjoyment"
-                • Adaptations → "Recovering well from high-volume sessions - energy levels good next day"
-                • Capacity → "Can handle 4 training days per week - completing all sessions with positive feedback"
-                • Priority: medium
-                
-                **LESSON QUALITY CRITERIA:**
-                ✓ **Immediate**: Based on THIS session's data (not general observations)
-                ✓ **Specific**: Reference exact exercises, weights, distances, or session details
-                ✓ **Actionable**: Clear guidance for NEXT similar session (e.g., "Reduce weight by 10kg on bench press")
-                ✓ **Evidence-based**: Direct link to modifications, feedback, or completion data
-                ✓ **Concise**: 1 sentence per lesson
-                
-                **PRIORITY ASSIGNMENT:**
-                • **critical**: Injury/pain, safety issues requiring immediate action
-                • **high**: Significant modifications indicating mismatched prescription (>20% changes)
-                • **medium**: Moderate adjustments, preferences, progression opportunities
-                • **low**: Minor optimizations (rare in daily feedback - usually just skip lesson)
-                
-                **TAG SELECTION:**
-                Choose 2-3 relevant tags:
-                • Modality: strength, endurance, mixed, sport_specific
-                • Load: volume, intensity, weight, sets, reps, distance, duration
-                • Response: recovery, fatigue, adaptation, soreness
-                • Safety: injury_prevention, pain, limitations
-                • Behavior: preferences, motivation, adherence, modifications
-                
-                **CRITICAL RULES:**
-                ✓ Be SELECTIVE - Most sessions don't need lessons (0 lessons is valid!)
-                ✓ Only generate lessons when there's a CLEAR SIGNAL requiring action
-                ✓ Don't repeat existing lessons unless new evidence contradicts them
-                ✓ Focus on ACTIONABLE insights for future similar sessions
-                ✓ Maximum 2 lessons per session (usually 0-1)
-                
-                **OUTPUT FORMAT:**
-                Return in ReflectorAnalysisList format with 0-2 lessons.
-                Each lesson must include: lesson, tags, confidence, positive, reasoning, priority.
+        prompt = f"""
+        {self._format_client_information(personal_info)}
+            
+            **WORKFLOW STATUS:**
+            ✅ Onboarding → ✅ Plan Generated → ✅ Session Completed → ✅ Daily Feedback
+            🎯 **CURRENT STEP:** Analyze Daily Session & Generate Immediate Lessons
+            
+            **SESSION CONTEXT:**
+            {session_context}
+            
+            **SESSION OUTCOME - {outcome.day_of_week}, Week {outcome.week_number}:**
+            • Training Type: {outcome.training_type}
+            • Completion: {completion_status} ({outcome.completion_percentage*100:.0f}%)
+            • Date: {outcome.training_date}
+            
+            {modifications_section}
+            {feedback_section}
+            {injury_warning}
+            
+            **EXISTING PLAYBOOK LESSONS:**
+            {lessons_context}
+            
+            **YOUR TASK:**
+            Analyze this SINGLE training session and generate 0-2 specific, actionable lessons.
+            Daily feedback enables immediate learning - focus on signals that indicate needed adjustments.
+            
+            **LESSON GENERATION STRATEGY:**
+            
+            **When to Generate Lessons (Be Selective):**
+            
+            ✅ **Generate 1-2 lessons if:**
+            • User made significant modifications (reduced weight/reps/sets/distance by >15%)
+            • Injury/pain reported (CRITICAL - always generate warning lesson)
+            • Very negative feedback (rating ≤2, difficulty 5/5, very low energy)
+            • Very positive signals with modifications (increased load - user ready for more)
+            • Completion issues (didn't finish planned session)
+            
+            ❌ **Generate 0 lessons if:**
+            • Session went as planned with neutral/positive feedback (no lessons needed)
+            • Feedback skipped AND no modifications (insufficient signal)
+            • Minor modifications (<10% changes)
+            • Everything normal/expected
+            
+            **DAILY LESSON CATEGORIES & EXAMPLES:**
+            
+            **1. Load/Intensity Adjustments** (most common)
+            • Reductions → "Reduce prescribed weight by 10-15% on squat variations - user struggled today"
+            • Increases → "Can increase upper body volume - user added extra sets and reported feeling strong"
+            • Endurance → "Shorten endurance sessions to 20-25min - user consistently reducing planned distance"
+            • Priority: high-medium
+            
+            **2. Immediate Safety Concerns** (always generate if applicable)
+            • Injuries → "Avoid high-impact plyometrics - knee pain reported during box jumps"
+            • Pain patterns → "Reduce overhead pressing volume - shoulder discomfort during workout"
+            • Fatigue → "Add extra rest day after high-intensity sessions - very low energy reported"
+            • Priority: critical
+            
+            **3. Exercise Preferences** (from modifications)
+            • Substitutions → "User prefers dumbbell press over barbell - switched exercises twice this week"
+            • Skipped exercises → "User skips deadlift variations - address technique concerns or substitute"
+            • Added exercises → "User enjoys accessory arm work - consistently adding extra sets"
+            • Priority: medium
+            
+            **4. Progression Insights** (positive signals)
+            • Readiness → "Ready for progression - rated 4/5 and described as 'easy' with high enjoyment"
+            • Adaptations → "Recovering well from high-volume sessions - energy levels good next day"
+            • Capacity → "Can handle 4 training days per week - completing all sessions with positive feedback"
+            • Priority: medium
+            
+            **LESSON QUALITY CRITERIA:**
+            ✓ **Immediate**: Based on THIS session's data (not general observations)
+            ✓ **Specific**: Reference exact exercises, weights, distances, or session details
+            ✓ **Actionable**: Clear guidance for NEXT similar session (e.g., "Reduce weight by 10kg on bench press")
+            ✓ **Evidence-based**: Direct link to modifications, feedback, or completion data
+            ✓ **Concise**: 1 sentence per lesson
+            
+            **PRIORITY ASSIGNMENT:**
+            • **critical**: Injury/pain, safety issues requiring immediate action
+            • **high**: Significant modifications indicating mismatched prescription (>20% changes)
+            • **medium**: Moderate adjustments, preferences, progression opportunities
+            • **low**: Minor optimizations (rare in daily feedback - usually just skip lesson)
+            
+            **TAG SELECTION:**
+            Choose 2-3 relevant tags:
+            • Modality: strength, endurance, mixed, sport_specific
+            • Load: volume, intensity, weight, sets, reps, distance, duration
+            • Response: recovery, fatigue, adaptation, soreness
+            • Safety: injury_prevention, pain, limitations
+            • Behavior: preferences, motivation, adherence, modifications
+            
+            **CRITICAL RULES:**
+            ✓ Be SELECTIVE - Most sessions don't need lessons (0 lessons is valid!)
+            ✓ Only generate lessons when there's a CLEAR SIGNAL requiring action
+            ✓ Don't repeat existing lessons unless new evidence contradicts them
+            ✓ Focus on ACTIONABLE insights for future similar sessions
+            ✓ Maximum 2 lessons per session (usually 0-1)
+            
+            **OUTPUT FORMAT:**
+            Return in ReflectorAnalysisList format with 0-2 lessons.
+            Each lesson must include: lesson, tags, confidence, positive, reasoning, priority.
             """
 
         return prompt
@@ -608,9 +608,9 @@ class Reflector:
                 • Available/unavailable equipment and training environments
                 • Strength example: "Limited to dumbbells (5-20kg) and bodyweight exercises only"
                 • Endurance example: "No pool access available - use running/cycling for cardio work"
-                • Sport example: "Has court/field access 3x/week - schedule skill sessions accordingly"
+                • Sport athlete example: "Has existing sport training schedule - provide supplemental strength/conditioning work only"
                 • Mixed example: "Full gym access plus outdoor running routes available"
-                • Tags: equipment, resources, environment
+                • Tags: equipment, resources, environment, supplemental_training
                 
                 **3. Schedule Constraints** (priority: high | positive: true)
                 • Training availability, session duration, timing preferences
@@ -637,9 +637,10 @@ class Reflector:
                 • Specific requirements for their athletic goal or sport
                 • Endurance example: "Marathon preparation - prioritize progressive distance with 10% weekly increases"
                 • Strength example: "Powerlifting focus - emphasize main lifts with appropriate accessories"
-                • Sport example: "Soccer season prep - combine conditioning with sport-specific agility work"
+                • Sport athlete example: "Football player with Mon/Wed/Fri practice + Saturday games - schedule strength work Tue/Thu/Sun only"
+                • Sport athlete example: "Cyclist with existing training plan - focus on supplemental core/upper body strength 2x/week"
                 • Mixed example: "General fitness - balance strength, endurance, and mobility work"
-                • Tags: goal_specific, sport_specific, training_focus
+                • Tags: goal_specific, sport_specific, training_focus, supplemental_training
                 
                 **FORMATTING REQUIREMENTS:**
                 ✓ Each lesson must be **specific** and **actionable** (not generic advice like "eat healthy")

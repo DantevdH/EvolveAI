@@ -92,6 +92,99 @@ class TrainingCoach(BaseAgent):
             "exercise_validation",
             "training_knowledge_retrieval",
         ]
+    
+    def _filter_valid_questions(self, questions: List[AIQuestion]) -> List[AIQuestion]:
+        """
+        Filter questions to only include valid ones.
+        Invalid questions are logged but don't break the flow.
+        
+        Args:
+            questions: List of AI-generated questions
+            
+        Returns:
+            List of valid questions only
+        """
+        valid_questions = []
+        
+        def sanitize_string(s: Optional[str]) -> Optional[str]:
+            """Remove common JSON artifacts from strings."""
+            if not s or not isinstance(s, str):
+                return s
+            # Strip JSON patterns: },{ and other artifacts
+            cleaned = s.replace("},{", "").replace("{", "").replace("}", "").strip()
+            return cleaned if cleaned else s
+        
+        for question in questions:
+            try:
+                # Sanitize string fields to remove JSON artifacts (use getattr for optional fields)
+                if hasattr(question, 'unit') and question.unit:
+                    question.unit = sanitize_string(question.unit)
+                if hasattr(question, 'placeholder') and question.placeholder:
+                    question.placeholder = sanitize_string(question.placeholder)
+                if hasattr(question, 'min_description') and question.min_description:
+                    question.min_description = sanitize_string(question.min_description)
+                if hasattr(question, 'max_description') and question.max_description:
+                    question.max_description = sanitize_string(question.max_description)
+                
+                # Check basic requirements based on type
+                is_valid = True
+                
+                if question.response_type == QuestionType.SLIDER:
+                    # SLIDER must have min, max, step, unit
+                    if not all([
+                        question.min_value is not None,
+                        question.max_value is not None,
+                        question.step is not None,
+                        question.unit is not None
+                    ]):
+                        self.logger.warning(
+                            f"Invalid SLIDER question '{question.id}': missing required fields"
+                        )
+                        is_valid = False
+                
+                elif question.response_type in [QuestionType.MULTIPLE_CHOICE, QuestionType.DROPDOWN]:
+                    # Must have options with at least 2 items
+                    if not question.options or len(question.options) < 2:
+                        self.logger.warning(
+                            f"Invalid {question.response_type} question '{question.id}': needs at least 2 options"
+                        )
+                        is_valid = False
+                
+                elif question.response_type == QuestionType.RATING:
+                    # RATING must have min/max values and descriptions
+                    if not all([
+                        question.min_value is not None,
+                        question.max_value is not None,
+                        question.min_description is not None,
+                        question.max_description is not None
+                    ]):
+                        self.logger.warning(
+                            f"Invalid RATING question '{question.id}': missing required fields"
+                        )
+                        is_valid = False
+                
+                elif question.response_type in [QuestionType.FREE_TEXT, QuestionType.CONDITIONAL_BOOLEAN]:
+                    # Must have max_length and placeholder
+                    if not all([
+                        question.max_length is not None,
+                        question.placeholder is not None
+                    ]):
+                        self.logger.warning(
+                            f"Invalid {question.response_type} question '{question.id}': missing required fields"
+                        )
+                        is_valid = False
+                
+                if is_valid:
+                    valid_questions.append(question)
+                else:
+                    self.logger.warning(f"Excluding invalid question: {question.text}")
+                    
+            except Exception as e:
+                self.logger.error(f"Error validating question '{question.id}': {e}")
+                # Skip this question
+                continue
+        
+        return valid_questions
 
     def process_request(self, user_request: str) -> str:
         """Process a user request - required by BaseAgent."""
@@ -162,6 +255,18 @@ class TrainingCoach(BaseAgent):
                     )
 
                     questions_response = completion.choices[0].message.parsed
+                    
+                    # Filter out invalid questions instead of failing
+                    valid_questions = self._filter_valid_questions(questions_response.questions)
+                    
+                    if len(valid_questions) < len(questions_response.questions):
+                        self.logger.warning(
+                            f"Filtered out {len(questions_response.questions) - len(valid_questions)} invalid questions"
+                        )
+                    
+                    # Update response with valid questions only
+                    questions_response.questions = valid_questions
+                    questions_response.total_questions = len(valid_questions)
 
                     # If we get here, validation passed
                     if attempt > 0:
@@ -269,6 +374,14 @@ class TrainingCoach(BaseAgent):
 
                     # Get the parsed response
                     question_response = completion.choices[0].message.parsed
+                    
+                    # Filter out invalid questions instead of failing
+                    valid_questions = self._filter_valid_questions(question_response.questions)
+                    
+                    if len(valid_questions) < len(question_response.questions):
+                        self.logger.warning(
+                            f"Filtered out {len(question_response.questions) - len(valid_questions)} invalid follow-up questions"
+                        )
 
                     # If we get here, validation passed
                     if attempt > 0:
@@ -278,8 +391,8 @@ class TrainingCoach(BaseAgent):
 
                     # Return with formatted responses and AI message
                     return AIQuestionResponseWithFormatted(
-                        questions=question_response.questions,
-                        total_questions=question_response.total_questions,
+                        questions=valid_questions,
+                        total_questions=len(valid_questions),
                         estimated_time_minutes=question_response.estimated_time_minutes,
                         formatted_responses=formatted_responses,
                         ai_message=question_response.ai_message,
@@ -604,12 +717,23 @@ class TrainingCoach(BaseAgent):
 
             # Step 5: Get the training plan
             self.logger.info("Generating training plan with AI...")
+            
+            # Get plan duration to estimate token needs
+            plan_weeks = plan_outline.get("duration_weeks", 4) if plan_outline else 4
+            
+            # Calculate safe max_tokens (~2,500 tokens per week for detailed plans)
+            # Cap at 12,000 to stay well below 16,384 limit and leave room for RAG
+            estimated_tokens = plan_weeks * 2500
+            safe_max_tokens = min(12000, estimated_tokens + 2000)  # +2000 for plan metadata
+            
+            self.logger.info(f"📊 Generating {plan_weeks}-week plan | Max tokens: {safe_max_tokens}")
+            
             completion = self.openai_client.chat.completions.parse(
                 model=os.getenv("OPENAI_MODEL", "gpt-4o"),
                 messages=[{"role": "system", "content": prompt}],
                 response_format=TrainingPlan,
                 temperature=0.7,
-                max_completion_tokens=15_500,  # Leave buffer below 16,384 max to ensure completion
+                max_completion_tokens=safe_max_tokens,  # Dynamic based on plan duration
             )
 
             training_plan = completion.choices[0].message.parsed
@@ -730,6 +854,36 @@ class TrainingCoach(BaseAgent):
 
             Please try rephrasing your request or contact support if the issue persists.
         """
+    
+    # ============================================================================
+    # ACE PATTERN METHODS (Adaptive Context Engine)
+    # ============================================================================
+    
+    def extract_initial_lessons_from_onboarding(
+        self,
+        personal_info: PersonalInfo,
+        formatted_initial_responses: str,
+        formatted_follow_up_responses: str,
+    ) -> List[PlaybookLesson]:
+        """
+        Extract initial "seed" lessons from onboarding Q&A responses.
+        
+        This is a wrapper around reflector.extract_initial_lessons that maintains
+        a clean API for the TrainingCoach.
+        
+        Args:
+            personal_info: User's personal information
+            formatted_initial_responses: Formatted responses from initial questions
+            formatted_follow_up_responses: Formatted responses from follow-up questions
+            
+        Returns:
+            List of PlaybookLesson objects representing initial constraints/preferences
+        """
+        return self.reflector.extract_initial_lessons(
+            personal_info=personal_info,
+            formatted_initial_responses=formatted_initial_responses,
+            formatted_follow_up_responses=formatted_follow_up_responses,
+        )
         
     async def process_training_feedback(
         self, outcome: TrainingOutcome, personal_info: PersonalInfo, plan_context: str

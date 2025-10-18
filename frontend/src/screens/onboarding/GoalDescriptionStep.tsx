@@ -121,6 +121,13 @@ export const GoalDescriptionStep: React.FC<GoalDescriptionStepProps> = ({
                 <IconSymbol name="figure.run" size={14} color={colors.primary} />
                 <Text style={styles.suggestionText}>Running</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.suggestionChip}
+                onPress={() => handleGoalChange("I want to get stronger for football season")}
+              >
+                <IconSymbol name="trophy.fill" size={14} color={colors.primary} />
+                <Text style={styles.suggestionText}>Sport Athlete</Text>
+              </TouchableOpacity>
             </View>
           </View>
 

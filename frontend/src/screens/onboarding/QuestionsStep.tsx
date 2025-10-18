@@ -30,7 +30,6 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
   const [showAIIntro, setShowAIIntro] = useState(true); // Show AI intro when questions first load
    
   // Essential onboarding flow logging
-  console.log(`📍 Onboarding Stage: ${stepTitle || 'Unknown'} - Questions: ${questions?.length || 0}, Loading: ${isLoading}, AI Message: ${aiMessage?.substring(0, 50) || 'NONE'}`);
   
   // Initialize answered questions based on existing responses
   const [answeredQuestions, setAnsweredQuestions] = useState(() => {

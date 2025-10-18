@@ -96,39 +96,40 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
             )}
           </View>
           
-          {/* Enhanced Features Section */}
+          {/* Enhanced Features Section - What We Provide */}
           <View style={styles.featuresContainer}>
             <View style={styles.featuresList}>
                <View style={styles.featureRow}>
                  <View style={styles.featureIconWrapper}>
-                   <IconSymbol name="brain.head.profile" size={20} color={colors.primary} />
+                   <IconSymbol name="dumbbell.fill" size={20} color={colors.primary} />
                  </View>
                  <View style={styles.featureContent}>
-                   <Text style={styles.featureTitle}>AI-Powered Plans</Text>
-                   <Text style={styles.featureDescription}>Personalized trainings tailored to your goals and preferences</Text>
+                   <Text style={styles.featureTitle}>Strength Training Programs</Text>
+                   <Text style={styles.featureDescription}>Complete workout plans with exercises, sets, reps, and progressions</Text>
                  </View>
                </View>
                
                <View style={styles.featureRow}>
                  <View style={styles.featureIconWrapper}>
-                   <IconSymbol name="chart.line.uptrend.xyaxis" size={20} color={colors.primary} />
+                   <IconSymbol name="figure.run" size={20} color={colors.primary} />
                  </View>
                  <View style={styles.featureContent}>
-                   <Text style={styles.featureTitle}>Progress Tracking</Text>
-                   <Text style={styles.featureDescription}>Monitor your training journey with detailed analytics and insights</Text>
+                   <Text style={styles.featureTitle}>Endurance Training</Text>
+                   <Text style={styles.featureDescription}>Running, cycling, swimming, and cardio plans tailored to your goals</Text>
                  </View>
                </View>
                
                <View style={styles.featureRow}>
                  <View style={styles.featureIconWrapper}>
-                   <IconSymbol name="arrow.triangle.2.circlepath" size={20} color={colors.primary} />
+                   <IconSymbol name="trophy.fill" size={20} color={colors.primary} />
                  </View>
                  <View style={styles.featureContent}>
-                   <Text style={styles.featureTitle}>Adaptive Training</Text>
-                   <Text style={styles.featureDescription}>Plans that evolve with your progress and changing needs</Text>
+                   <Text style={styles.featureTitle}>Sport Athlete Support</Text>
+                   <Text style={styles.featureDescription}>Supplemental strength & conditioning that fits around your practice schedule</Text>
                  </View>
                </View>
             </View>
+            
           </View>
 
           {error && (
@@ -246,49 +247,75 @@ const styles = StyleSheet.create({
   featuresContainer: {
     marginBottom: 20,
   },
-  featuresTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+  featuresSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
     color: colors.text,
-    marginBottom: 12,
+    marginBottom: 16,
     textAlign: 'center',
   },
   featuresList: {
     gap: 10,
+    marginBottom: 16,
   },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: colors.inputBackground,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    padding: 0,
+    paddingVertical: 12,
+    borderWidth: 0,
+    borderBottomWidth: 1,
     borderColor: colors.inputBorder,
+    opacity: 0.95,
   },
   featureIconWrapper: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primaryTransparentLight || `${colors.primary}15`,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: colors.primaryTransparentLight || `${colors.primary}12`,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
-    marginTop: 2,
+    marginRight: 14,
+    marginTop: 0,
   },
   featureContent: {
     flex: 1,
   },
   featureTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 4,
+    marginBottom: 5,
+    letterSpacing: -0.2,
   },
   featureDescription: {
-    fontSize: 11,
+    fontSize: 12,
     color: colors.text,
-    opacity: 0.8,
-    lineHeight: 15,
+    opacity: 0.75,
+    lineHeight: 17,
+  },
+  // Info Box
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primaryTransparentLight || `${colors.primary}10`,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.primaryTransparentLight || `${colors.primary}30`,
+  },
+  infoIconContainer: {
+    marginRight: 10,
+    marginTop: 2,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.text,
+    lineHeight: 16,
+    opacity: 0.9,
   },
   // Error Section
   errorContainer: {
@@ -306,3 +333,4 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 });
+

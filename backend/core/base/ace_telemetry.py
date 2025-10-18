@@ -24,7 +24,8 @@ logger = get_logger(__name__)
 # Initialize Supabase client for telemetry
 try:
     supabase_url = os.getenv("SUPABASE_URL")
-    supabase_key = os.getenv("SUPABASE_KEY")
+    # Try service role key first, fallback to anon key
+    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
     if supabase_url and supabase_key:
         supabase: Client = create_client(supabase_url, supabase_key)
     else:
