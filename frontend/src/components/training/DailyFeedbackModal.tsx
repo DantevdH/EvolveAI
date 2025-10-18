@@ -23,6 +23,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { colors } from '../../constants/designSystem';
 
 interface DailyFeedbackModalProps {
   visible: boolean;
@@ -56,27 +57,19 @@ export const DailyFeedbackModal: React.FC<DailyFeedbackModalProps> = ({
   trainingType,
   modificationsDetected,
 }) => {
-  const [rating, setRating] = useState<number | undefined>(undefined);
   const [energy, setEnergy] = useState<number | undefined>(undefined);
   const [difficulty, setDifficulty] = useState<number | undefined>(undefined);
   const [enjoyment, setEnjoyment] = useState<number | undefined>(undefined);
   const [soreness, setSoreness] = useState<number | undefined>(undefined);
   const [feedback, setFeedback] = useState('');
-  const [hasInjury, setHasInjury] = useState(false);
-  const [injuryDescription, setInjuryDescription] = useState('');
-  const [painLocation, setPainLocation] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const resetForm = () => {
-    setRating(undefined);
     setEnergy(undefined);
     setDifficulty(undefined);
     setEnjoyment(undefined);
     setSoreness(undefined);
     setFeedback('');
-    setHasInjury(false);
-    setInjuryDescription('');
-    setPainLocation('');
   };
 
   const handleSkip = () => {
@@ -90,15 +83,12 @@ export const DailyFeedbackModal: React.FC<DailyFeedbackModalProps> = ({
     try {
       const feedbackData: DailyFeedbackData = {
         feedback_provided: true,
-        user_rating: rating,
         user_feedback: feedback.trim() || undefined,
         energy_level: energy,
         difficulty: difficulty,
         enjoyment: enjoyment,
         soreness_level: soreness,
-        injury_reported: hasInjury,
-        injury_description: hasInjury ? injuryDescription.trim() : undefined,
-        pain_location: hasInjury ? painLocation.trim() : undefined,
+        injury_reported: false,
       };
 
       await onSubmit(feedbackData);
@@ -111,28 +101,6 @@ export const DailyFeedbackModal: React.FC<DailyFeedbackModalProps> = ({
     }
   };
 
-  const renderStars = (value: number | undefined, setValue: (v: number) => void, label: string) => {
-    return (
-      <View style={styles.ratingContainer}>
-        <Text style={styles.ratingLabel}>{label}</Text>
-        <View style={styles.starsRow}>
-          {[1, 2, 3, 4, 5].map((star) => (
-            <TouchableOpacity
-              key={star}
-              onPress={() => setValue(star)}
-              style={styles.starButton}
-            >
-              <Ionicons
-                name={value && value >= star ? 'star' : 'star-outline'}
-                size={32}
-                color={value && value >= star ? '#FFB800' : '#C7C7CC'}
-              />
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-    );
-  };
 
   return (
     <Modal
@@ -151,25 +119,20 @@ export const DailyFeedbackModal: React.FC<DailyFeedbackModalProps> = ({
                 {dayOfWeek} • {trainingType}
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#000" />
-            </TouchableOpacity>
           </View>
 
           {/* Modification Notice */}
           {modificationsDetected > 0 && (
             <View style={styles.modificationsNotice}>
-              <Ionicons name="information-circle" size={20} color="#007AFF" />
+              <Ionicons name="information-circle" size={20} color={colors.primary} />
               <Text style={styles.modificationsText}>
                 {modificationsDetected} modification{modificationsDetected > 1 ? 's' : ''} detected - ACE will learn from this!
               </Text>
             </View>
           )}
 
-          <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
-            {/* Overall Rating */}
-            {renderStars(rating, setRating, "Overall Session Rating")}
-
+          <View style={styles.contentWrapper}>
+            <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
             {/* Quick Metrics */}
             <View style={styles.metricsGrid}>
               <View style={styles.metricCard}>
@@ -183,8 +146,8 @@ export const DailyFeedbackModal: React.FC<DailyFeedbackModalProps> = ({
                     >
                       <Ionicons
                         name={energy && energy >= star ? 'star' : 'star-outline'}
-                        size={20}
-                        color={energy && energy >= star ? '#FFB800' : '#C7C7CC'}
+                        size={22}
+                        color={energy && energy >= star ? colors.primary : colors.inputBorder}
                       />
                     </TouchableOpacity>
                   ))}
@@ -205,8 +168,8 @@ export const DailyFeedbackModal: React.FC<DailyFeedbackModalProps> = ({
                     >
                       <Ionicons
                         name={difficulty && difficulty >= star ? 'star' : 'star-outline'}
-                        size={20}
-                        color={difficulty && difficulty >= star ? '#FFB800' : '#C7C7CC'}
+                        size={22}
+                        color={difficulty && difficulty >= star ? colors.primary : colors.inputBorder}
                       />
                     </TouchableOpacity>
                   ))}
@@ -229,8 +192,8 @@ export const DailyFeedbackModal: React.FC<DailyFeedbackModalProps> = ({
                     >
                       <Ionicons
                         name={enjoyment && enjoyment >= star ? 'star' : 'star-outline'}
-                        size={20}
-                        color={enjoyment && enjoyment >= star ? '#FFB800' : '#C7C7CC'}
+                        size={22}
+                        color={enjoyment && enjoyment >= star ? colors.primary : colors.inputBorder}
                       />
                     </TouchableOpacity>
                   ))}
@@ -251,8 +214,8 @@ export const DailyFeedbackModal: React.FC<DailyFeedbackModalProps> = ({
                     >
                       <Ionicons
                         name={soreness && soreness >= star ? 'star' : 'star-outline'}
-                        size={20}
-                        color={soreness && soreness >= star ? '#FFB800' : '#C7C7CC'}
+                        size={22}
+                        color={soreness && soreness >= star ? colors.primary : colors.inputBorder}
                       />
                     </TouchableOpacity>
                   ))}
@@ -265,11 +228,11 @@ export const DailyFeedbackModal: React.FC<DailyFeedbackModalProps> = ({
 
             {/* Text Feedback */}
             <View style={styles.feedbackSection}>
-              <Text style={styles.sectionLabel}>Additional Comments (Optional)</Text>
+              <Text style={styles.sectionLabel}>Comments (Optional)</Text>
               <TextInput
                 style={styles.feedbackInput}
-                placeholder="How did the workout feel? Any notes?"
-                placeholderTextColor="#8E8E93"
+                placeholder="How did the workout feel? Any notes or injuries to report?"
+                placeholderTextColor={colors.muted}
                 multiline
                 numberOfLines={4}
                 value={feedback}
@@ -279,73 +242,38 @@ export const DailyFeedbackModal: React.FC<DailyFeedbackModalProps> = ({
               <Text style={styles.charCount}>{feedback.length}/500</Text>
             </View>
 
-            {/* Injury Reporting */}
-            <TouchableOpacity
-              style={[styles.injuryToggle, hasInjury && styles.injuryToggleActive]}
-              onPress={() => setHasInjury(!hasInjury)}
-            >
-              <Ionicons
-                name={hasInjury ? 'checkbox' : 'square-outline'}
-                size={24}
-                color={hasInjury ? '#FF3B30' : '#8E8E93'}
-              />
-              <Text style={[styles.injuryToggleText, hasInjury && styles.injuryToggleTextActive]}>
-                Report pain or injury
-              </Text>
-            </TouchableOpacity>
+            {/* Action Buttons */}
+            <View style={styles.actionButtons}>
+              {/* Skip Button */}
+              <TouchableOpacity
+                style={styles.skipButton}
+                onPress={handleSkip}
+                disabled={isSubmitting}
+              >
+                <Ionicons name="close-circle-outline" size={20} color={colors.muted} />
+                <Text style={styles.skipButtonText}>Skip Feedback</Text>
+              </TouchableOpacity>
 
-            {hasInjury && (
-              <View style={styles.injuryDetails}>
-                <TextInput
-                  style={styles.injuryInput}
-                  placeholder="Where does it hurt? (e.g., right knee, lower back)"
-                  placeholderTextColor="#8E8E93"
-                  value={painLocation}
-                  onChangeText={setPainLocation}
-                />
-                <TextInput
-                  style={[styles.injuryInput, styles.injuryDescriptionInput]}
-                  placeholder="Describe the pain/injury..."
-                  placeholderTextColor="#8E8E93"
-                  multiline
-                  numberOfLines={3}
-                  value={injuryDescription}
-                  onChangeText={setInjuryDescription}
-                />
-              </View>
-            )}
-          </ScrollView>
-
-          {/* Action Buttons */}
-          <View style={styles.actionButtons}>
-            {/* Skip Button - Prominent */}
-            <TouchableOpacity
-              style={styles.skipButton}
-              onPress={handleSkip}
-              disabled={isSubmitting}
-            >
-              <Ionicons name="close-circle-outline" size={20} color="#8E8E93" />
-              <Text style={styles.skipButtonText}>Skip Feedback</Text>
-            </TouchableOpacity>
-
-            {/* Submit Button */}
-            <TouchableOpacity
-              style={[
-                styles.submitButton,
-                isSubmitting && styles.submitButtonDisabled,
-              ]}
-              onPress={handleSubmit}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <Text style={styles.submitButtonText}>Submit Feedback</Text>
-                  <Ionicons name="checkmark-circle" size={20} color="#FFFFFF" />
-                </>
-              )}
-            </TouchableOpacity>
+              {/* Submit Button */}
+              <TouchableOpacity
+                style={[
+                  styles.submitButton,
+                  isSubmitting && styles.submitButtonDisabled,
+                ]}
+                onPress={handleSubmit}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <>
+                    <Text style={styles.submitButtonText}>Submit Feedback</Text>
+                    <Ionicons name="checkmark-circle" size={22} color="#FFFFFF" />
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+            </ScrollView>
           </View>
         </View>
       </View>
@@ -360,201 +288,205 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContainer: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: '90%',
-    paddingTop: 20,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    height: '85%',
+    paddingTop: 24,
+    flex: 0,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 20,
-    paddingBottom: 15,
+    paddingHorizontal: 24,
+    paddingBottom: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
+    borderBottomColor: colors.inputBorder,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#000000',
+    color: colors.text,
   },
   headerSubtitle: {
     fontSize: 14,
-    color: '#8E8E93',
+    color: colors.muted,
     marginTop: 4,
   },
-  closeButton: {
-    padding: 4,
+  contentWrapper: {
+    flex: 1,
   },
   modificationsNotice: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#E8F4FD',
-    padding: 12,
-    marginHorizontal: 20,
-    marginTop: 15,
-    borderRadius: 8,
-    gap: 8,
+    backgroundColor: colors.primaryTransparentLight || `${colors.primary}10`,
+    padding: 14,
+    marginHorizontal: 24,
+    marginTop: 16,
+    borderRadius: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.primary,
   },
   modificationsText: {
     flex: 1,
     fontSize: 13,
-    color: '#007AFF',
+    color: colors.text,
     fontWeight: '500',
+    opacity: 0.9,
   },
   scrollContent: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  ratingContainer: {
-    marginBottom: 25,
-  },
-  ratingLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000000',
-    marginBottom: 12,
-  },
-  starsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  starButton: {
-    padding: 4,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 0,
   },
   metricsGrid: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   metricCard: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
-    padding: 12,
+    backgroundColor: colors.inputBackground,
+    padding: 14,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
   },
   metricLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#000000',
-    marginBottom: 8,
+    color: colors.text,
+    marginBottom: 10,
   },
   miniStars: {
     flexDirection: 'row',
-    gap: 2,
-    marginBottom: 4,
+    gap: 3,
+    marginBottom: 6,
+    justifyContent: 'center',
   },
   miniStarButton: {
     padding: 2,
   },
   metricHint: {
     fontSize: 10,
-    color: '#8E8E93',
+    color: colors.muted,
     marginTop: 4,
     minHeight: 14,
+    textAlign: 'center',
   },
   feedbackSection: {
-    marginTop: 20,
-    marginBottom: 20,
+    marginTop: 8,
+    marginBottom: 0,
   },
   sectionLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#000000',
-    marginBottom: 10,
+    color: colors.text,
+    marginBottom: 8,
   },
   feedbackInput: {
-    backgroundColor: '#F2F2F7',
+    backgroundColor: colors.inputBackground,
     borderRadius: 12,
-    padding: 12,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+    padding: 14,
     fontSize: 15,
-    color: '#000000',
+    color: colors.text,
     minHeight: 100,
     textAlignVertical: 'top',
   },
   charCount: {
     fontSize: 12,
-    color: '#8E8E93',
+    color: colors.muted,
     textAlign: 'right',
-    marginTop: 6,
+    marginTop: 8,
   },
   injuryToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: colors.inputBackground,
     borderRadius: 12,
-    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
+    marginBottom: 14,
     gap: 12,
   },
   injuryToggleActive: {
-    backgroundColor: '#FFE5E5',
-    borderWidth: 1,
-    borderColor: '#FF3B30',
+    backgroundColor: colors.errorBackground || `${colors.error}08`,
+    borderWidth: 1.5,
+    borderColor: colors.error,
   },
   injuryToggleText: {
     fontSize: 15,
     fontWeight: '500',
-    color: '#8E8E93',
+    color: colors.muted,
   },
   injuryToggleTextActive: {
-    color: '#FF3B30',
+    color: colors.error,
+    fontWeight: '600',
   },
   injuryDetails: {
-    marginBottom: 20,
+    marginBottom: 24,
     gap: 12,
   },
   injuryInput: {
-    backgroundColor: '#FFF5F5',
+    backgroundColor: colors.errorBackground || `${colors.error}08`,
     borderRadius: 12,
-    padding: 12,
+    padding: 14,
     fontSize: 15,
-    color: '#000000',
+    color: colors.text,
     borderWidth: 1,
-    borderColor: '#FFD1D1',
+    borderColor: colors.error,
   },
   injuryDescriptionInput: {
     minHeight: 80,
     textAlignVertical: 'top',
   },
   actionButtons: {
-    padding: 20,
+    marginTop: 24,
+    marginBottom: 24,
     gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
   },
   skipButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: colors.inputBackground,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
     gap: 8,
   },
   skipButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#8E8E93',
+    color: colors.muted,
   },
   submitButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
-    backgroundColor: '#007AFF',
+    padding: 18,
+    backgroundColor: colors.primary,
     borderRadius: 12,
     gap: 8,
+    shadowColor: colors.primary,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   submitButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   submitButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#FFFFFF',
   },
 });
