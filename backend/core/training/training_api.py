@@ -17,7 +17,6 @@ import jwt
 from core.training.schemas.question_schemas import (
     InitialQuestionsRequest,
     FollowUpQuestionsRequest,
-    TrainingPlanOutlineRequest,
     PlanGenerationRequest,
     PlanGenerationResponse,
     PersonalInfo,
@@ -358,12 +357,12 @@ async def get_follow_up_questions(
         raise HTTPException(status_code=500, detail=f"Failed to generate follow-up questions: {str(e)}")
 
 
-@router.post("/training-plan-outline")
-async def generate_training_plan_outline(
-    request: TrainingPlanOutlineRequest,
-    coach: TrainingCoach = Depends(get_training_coach),
+@router.post("/generate-plan")
+async def generate_training_plan(
+    request: PlanGenerationRequest,
+    coach: TrainingCoach = Depends(get_training_coach)
 ):
-    """Generate a training plan outline before creating the final plan."""
+    """Generate the final training plan using initial/follow-up questions and exercises."""
     try:
         # Validate input
         if not request.initial_responses:
@@ -381,9 +380,22 @@ async def generate_training_plan_outline(
         # Extract and validate JWT token
         user_id = extract_user_id_from_jwt(request.jwt_token)
         
-        logger.info(f"Generating training plan outline for: {request.personal_info.username}")
+        logger.info(f"Generating training plan for: {request.personal_info.goal_description}")
         
+        # Get user profile ID from database
+        user_profile_result = await db_service.get_user_profile_by_user_id(user_id, request.jwt_token)
         
+        if not user_profile_result.get("success") or not user_profile_result.get("data"):
+            raise HTTPException(
+                status_code=404,
+                detail="User profile not found - please complete onboarding first"
+            )
+        
+        user_profile_id = user_profile_result.get("data", {}).get("id")
+        logger.info(f"✅ Found user profile ID: {user_profile_id}")
+        
+        # Format responses
+        from core.training.helpers.response_formatter import ResponseFormatter
         formatted_initial_responses = ResponseFormatter.format_responses(
             request.initial_responses, request.initial_questions
         )
@@ -405,22 +417,6 @@ async def generate_training_plan_outline(
             update={"user_id": user_id}
         )
         
-        # Generate training plan outline
-        result = coach.generate_training_plan_outline(
-            personal_info=personal_info_with_user_id,
-            formatted_initial_responses=formatted_initial_responses,
-            formatted_follow_up_responses=formatted_follow_up_responses
-        )
-        
-        if not result.get("success"):
-            logger.error(f"Failed to generate outline: {result.get('error')}")
-            raise HTTPException(
-                status_code=500,
-                detail=result.get("error", "Failed to generate training plan outline")
-            )
-        
-        logger.info("✅ Training plan outline generated successfully")
-        
         # Extract initial lessons from onboarding Q&A (ACE pattern seed lessons)
         logger.info("📘 Extracting initial lessons from onboarding responses...")
         initial_lessons = coach.extract_initial_lessons_from_onboarding(
@@ -439,117 +435,21 @@ async def generate_training_plan_outline(
         
         logger.info(f"📘 Created initial playbook with {len(initial_lessons)} lessons from onboarding")
         
-        # Store plan outline, feedback field, and initial playbook
+        # Store initial playbook
         await safe_db_update(
-            "Store plan outline and initial playbook",
+            "Store initial playbook",
             db_service.update_user_profile,
             user_id=user_id,
-            data={
-                "plan_outline": {
-                    "outline": result.get("outline"),
-                    "ai_message": result.get("ai_message"),
-                },
-                "plan_outline_feedback": "",
-                "user_playbook": initial_playbook.model_dump(),
-            },
+            data={"user_playbook": initial_playbook.model_dump()},
             jwt_token=request.jwt_token
         )
         
-        return {
-            "success": True,
-            "data": {
-                "outline": result.get("outline"),
-                "ai_message": result.get("ai_message"),
-                "metadata": result.get("metadata", {}),
-                "initial_questions": request.initial_questions,
-                "follow_up_questions": request.follow_up_questions,
-            },
-            "message": "Training plan outline generated successfully",
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Error generating training plan outline: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate training plan outline: {str(e)}")
-
-
-@router.post("/generate-plan")
-async def generate_training_plan(
-    request: PlanGenerationRequest,
-    coach: TrainingCoach = Depends(get_training_coach)
-):
-    """Generate the final training plan using initial/follow-up questions and exercises."""
-    try:
-        # Validate input
-        if not request.initial_responses:
-            raise HTTPException(status_code=400, detail="Initial responses cannot be empty")
-        
-        if not request.follow_up_responses:
-            raise HTTPException(status_code=400, detail="Follow-up responses cannot be empty")
-        
-        if not request.initial_questions or not isinstance(request.initial_questions, list):
-            raise HTTPException(status_code=400, detail="Invalid initial questions structure")
-        
-        if not request.follow_up_questions or not isinstance(request.follow_up_questions, list):
-            raise HTTPException(status_code=400, detail="Invalid follow-up questions structure")
-        
-        if not request.plan_outline or not isinstance(request.plan_outline, dict):
-            raise HTTPException(status_code=400, detail="Invalid plan outline structure")
-        
-        # Extract and validate JWT token
-        user_id = extract_user_id_from_jwt(request.jwt_token)
-        
-        logger.info(f"Generating training plan for: {request.personal_info.goal_description}")
-        
-        # Get user profile ID from database
-        user_profile_result = await db_service.get_user_profile_by_user_id(user_id, request.jwt_token)
-        
-        if not user_profile_result.get("success") or not user_profile_result.get("data"):
-            raise HTTPException(
-                status_code=404,
-                detail="User profile not found - please complete onboarding first"
-            )
-        
-        user_profile_id = user_profile_result.get("data", {}).get("id")
-        logger.info(f"✅ Found user profile ID: {user_profile_id}")
-        
-        # Normalize plan_outline structure - handle both wrapped and direct formats
-        plan_outline = request.plan_outline
-        if plan_outline and isinstance(plan_outline, dict) and "outline" in plan_outline:
-            plan_outline = plan_outline["outline"]
-        
-        # Format responses
-        from core.training.helpers.response_formatter import ResponseFormatter
-        formatted_initial_responses = ResponseFormatter.format_responses(
-            request.initial_responses, request.initial_questions
-        )
-        formatted_follow_up_responses = ResponseFormatter.format_responses(
-            request.follow_up_responses, request.follow_up_questions
-        )
-        
-        # Store plan outline feedback
-        await safe_db_update(
-            "Store plan outline feedback",
-            db_service.update_user_profile,
-            user_id=user_id,
-            data={"plan_outline_feedback": request.plan_outline_feedback or ""},
-            jwt_token=request.jwt_token
-        )
-        
-        # Add user_id to personal_info
-        personal_info_with_user_id = request.personal_info.model_copy(
-            update={"user_id": user_id}
-        )
-        
-        # Generate initial training plan (onboarding - extracts lessons from outline feedback if provided)
+        # Generate initial training plan (onboarding - uses initial playbook)
         result = await coach.generate_initial_training_plan(
             personal_info=personal_info_with_user_id,
             formatted_initial_responses=formatted_initial_responses,
             formatted_follow_up_responses=formatted_follow_up_responses,
-            plan_outline=plan_outline,
             user_profile_id=user_profile_id,
-            plan_outline_feedback=request.plan_outline_feedback,
             jwt_token=request.jwt_token
         )
         

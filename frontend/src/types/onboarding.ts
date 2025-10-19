@@ -111,18 +111,12 @@ export interface OnboardingState {
   currentFollowUpQuestionIndex: number;
   followUpAiMessage?: string; // AI message for follow-up questions
   
-  // Step 7: Training Plan Outline
-  trainingPlanOutline: TrainingPlanOutline | null;
-  outlineFeedback: string;
-  outlineLoading: boolean;
-  outlineAiMessage?: string; // AI message for plan outline
-  
-  // Step 8: Plan Generation
+  // Step 7: Plan Generation
   planGenerationLoading: boolean;
   trainingPlan: any | null; // TrainingPlan type
   error: string | null;
   aiHasQuestions: boolean;
-  aiAnalysisPhase: 'initial' | 'followup' | 'outline' | 'generation' | null;
+  aiAnalysisPhase: 'initial' | 'followup' | 'generation' | null;
 }
 
 export interface QuestionResponse {
@@ -147,21 +141,10 @@ export interface FollowUpQuestionsRequest {
   jwt_token?: string;
 }
 
-export interface TrainingPlanOutlineRequest {
-  personal_info: PersonalInfo;
-  initial_responses: Record<string, any>;  // Raw responses from frontend
-  follow_up_responses: Record<string, any>;  // Raw responses from frontend
-  initial_questions?: AIQuestion[];
-  follow_up_questions?: AIQuestion[];
-  jwt_token: string;
-}
-
 export interface PlanGenerationRequest {
   personal_info: PersonalInfo;
   initial_responses: Record<string, any>;  // Raw responses from frontend
   follow_up_responses: Record<string, any>;  // Raw responses from frontend
-  plan_outline?: any;
-  plan_outline_feedback?: string;  // User feedback on plan outline
   initial_questions?: AIQuestion[];
   follow_up_questions?: AIQuestion[];
   user_profile_id?: number;

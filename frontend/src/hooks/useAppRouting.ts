@@ -74,7 +74,6 @@ export const useAppRouting = (): AppRoutingState => {
     const hasInitialResponses = !!state.userProfile.initial_responses;
     const hasFollowUpQuestions = !!state.userProfile.follow_up_questions;
     const hasFollowUpResponses = !!state.userProfile.follow_up_responses;
-    const hasPlanOutline = !!state.userProfile.plan_outline;
     const hasTrainingPlan = !!state.trainingPlan;
 
     // Granular routing based on what's missing
@@ -93,15 +92,6 @@ export const useAppRouting = (): AppRoutingState => {
         isLoading: false,
         hasError: false,
         routingReason: 'Follow-up Questions'
-      };
-    }
-
-    if (!hasPlanOutline) {
-      return {
-        targetRoute: '/onboarding/plan-outline',
-        isLoading: false,
-        hasError: false,
-        routingReason: 'Plan Outline'
       };
     }
 

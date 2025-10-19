@@ -42,7 +42,6 @@ export const useDailyFeedback = (
    */
   const captureOriginalTraining = useCallback((training: DailyTraining) => {
     originalTrainingRef.current = JSON.parse(JSON.stringify(training)); // Deep clone
-    console.log('📸 Captured original training state for modification detection');
   }, []);
 
   /**

@@ -4,7 +4,6 @@ import {
   AIQuestionResponse,
   InitialQuestionsRequest,
   FollowUpQuestionsRequest,
-  TrainingPlanOutlineRequest,
   PlanGenerationRequest,
   OnboardingApiResponse,
   AIQuestion,
@@ -159,83 +158,12 @@ export class trainingService {
   }
 
   /**
-   * Generate training plan outline
-   */
-  static async generateTrainingPlanOutline(
-    personalInfo: PersonalInfo,
-    initialResponses: Record<string, any>,  // Raw responses from frontend
-    followUpResponses: Record<string, any>,  // Raw responses from frontend
-    initialQuestions: AIQuestion[],  // Initial questions from frontend
-    followUpQuestions: AIQuestion[],  // Follow-up questions from frontend
-    jwtToken?: string
-  ): Promise<{ success: boolean; data?: any; message?: string }> {
-    try {
-      console.log('📍 Onboarding Service: Generating training plan outline');
-
-      const request: TrainingPlanOutlineRequest = {
-        personal_info: personalInfo,
-        initial_responses: initialResponses,  // Send raw responses
-        follow_up_responses: followUpResponses,  // Send raw responses
-        initial_questions: initialQuestions,  // Send initial questions
-        follow_up_questions: followUpQuestions,  // Send follow-up questions
-        jwt_token: jwtToken || '',
-      };
-
-      // Making API call to backend
-
-      const response = await apiClient.post<OnboardingApiResponse<any>>(
-        `${this.BASE_URL}/training-plan-outline`,
-        request
-      );
-
-      // API response received
-
-      // Validate response format
-      if (typeof response !== 'object' || response === null) {
-        throw new Error('Invalid response format: response is not an object');
-      }
-
-      if (typeof response.success !== 'boolean') {
-        throw new Error('Invalid response format: success field is missing or not boolean');
-      }
-
-      if (!response.success) {
-        console.error('❌ API response indicates failure:', {
-          success: response.success,
-          data: response.data,
-          message: response.message
-        });
-        throw new Error(response.message || 'Failed to generate training plan outline');
-      }
-
-      if (!response.data) {
-        throw new Error('Invalid response format: data field is missing');
-      }
-
-      const responseData = (response.data as any);
-      
-      console.log(`📍 Onboarding Service: Training plan outline generated successfully`);
-
-      return {
-        success: true,
-        data: responseData,
-        message: response.message
-      };
-    } catch (error) {
-      console.error(`❌ Onboarding Service: Plan outline failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw error;
-    }
-  }
-
-  /**
    * Generate training plan using all collected data
    */
   static async generateTrainingPlan(
     personalInfo: PersonalInfo,
     initialResponses: Record<string, any>,  // Raw responses from frontend
     followUpResponses: Record<string, any>,  // Raw responses from frontend
-    planOutline?: any,
-    planOutlineFeedback?: string,  // User feedback on plan outline
     initialQuestions: AIQuestion[],  // Initial questions from frontend
     followUpQuestions: AIQuestion[],  // Follow-up questions from frontend
     userProfileId?: number,
@@ -246,8 +174,6 @@ export class trainingService {
         personal_info: personalInfo,
         initial_responses: initialResponses,  // Send raw responses
         follow_up_responses: followUpResponses,  // Send raw responses
-        plan_outline: planOutline,
-        plan_outline_feedback: planOutlineFeedback,  // Send user feedback separately
         initial_questions: initialQuestions,  // Send initial questions
         follow_up_questions: followUpQuestions,  // Send follow-up questions
         user_profile_id: userProfileId,
