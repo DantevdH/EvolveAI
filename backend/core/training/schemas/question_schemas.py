@@ -15,28 +15,24 @@ class QuestionType(str, Enum):
 
 
 class EquipmentType(str, Enum):
-    """Available equipment types in the exercise database."""
+    """Available equipment types in the exercise database (must match exact database values)."""
 
-    ISOMETRIC = "Isometric"
-    WEIGHTED = "Weighted"
+    BARBELL = "Barbell"
+    DUMBBELL = "Dumbbell"
+    CABLE = "Cable"
+    CABLE_PULL_SIDE = "Cable (pull side)"
     MACHINE = "Machine"
-    SUSPENSION = "Suspension"
-    BODY_WEIGHT_LOWER = "Body weight"
-    BODY_WEIGHT_TITLE = "Body Weight"
-    PLYOMETRIC = "Plyometric"
-    MACHINE_SELECTORIZED = "Machine (selectorized)"
     ASSISTED_MACHINE = "Assisted (machine)"
     SMITH = "Smith"
+    BODY_WEIGHT = "Body weight"
     BAND_RESISTIVE = "Band Resistive"
-    CABLE_PULL_SIDE = "Cable (pull side)"
-    CABLE = "Cable"
-    SELF_ASSISTED = "Self-assisted"
+    SUSPENSION = "Suspension"
     SUSPENDED = "Suspended"
-    BARBELL = "Barbell"
-    BAND_ASSISTED = "Band-assisted"
-    DUMBBELL = "Dumbbell"
-    MACHINE_PLATE_LOADED = "Machine (plate loaded)"
     SLED = "Sled"
+    WEIGHTED = "Weighted"
+    PLYOMETRIC = "Plyometric"
+    ISOMETRIC = "Isometric"
+    SELF_ASSISTED = "Self-assisted"
 
 
 class QuestionOption(BaseModel):

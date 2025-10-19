@@ -326,7 +326,7 @@ Response:"""
                     {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": prompt},
                 ],
-                temperature=0.7,
+                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
                 max_tokens=1000,
             )
 

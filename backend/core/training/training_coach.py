@@ -251,7 +251,7 @@ class TrainingCoach(BaseAgent):
                         model=os.getenv("OPENAI_MODEL", "gpt-4"),
                         messages=[{"role": "system", "content": prompt}],
                         response_format=AIQuestionResponse,
-                        temperature=0.7,
+                        temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
                     )
 
                     questions_response = completion.choices[0].message.parsed
@@ -369,7 +369,7 @@ class TrainingCoach(BaseAgent):
                         model=os.getenv("OPENAI_MODEL", "gpt-4"),
                         messages=[{"role": "system", "content": prompt}],
                         response_format=AIQuestionResponse,
-                        temperature=0.7,
+                        temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
                     )
 
                     # Get the parsed response
@@ -441,9 +441,6 @@ class TrainingCoach(BaseAgent):
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
         formatted_follow_up_responses: str,
-        initial_questions: List[AIQuestion] = None,
-        follow_up_questions: List[AIQuestion] = None,
-        playbook: UserPlaybook = None,
     ) -> Dict[str, Any]:
         """Generate a training plan outline before creating the final detailed plan."""
         try:
@@ -466,18 +463,11 @@ class TrainingCoach(BaseAgent):
                     },
                 }
 
-            # Log playbook context for outline generation
-            if playbook and playbook.lessons:
-                self.logger.info(
-                    f"Generating outline with {len(playbook.lessons)} playbook lessons"
-                )
-
             # Create a comprehensive prompt for outline generation
             prompt = PromptGenerator.generate_training_plan_outline_prompt(
                 personal_info,
                 formatted_initial_responses,
-                formatted_follow_up_responses,
-                playbook=playbook,
+                formatted_follow_up_responses
             )
 
             # Generate the outline using OpenAI with structured output
@@ -491,7 +481,7 @@ class TrainingCoach(BaseAgent):
                     {"role": "user", "content": prompt},
                 ],
                 response_format=TrainingPlanOutline,
-                temperature=0.7,
+                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
             )
 
             # Parse the structured response
@@ -519,16 +509,134 @@ class TrainingCoach(BaseAgent):
                 "error": f"Failed to generate training plan outline: {str(e)}",
             }
 
-    async def generate_training_plan(
+    async def generate_initial_training_plan(
         self,
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
         formatted_follow_up_responses: str,
-        plan_outline: dict = None,
-        initial_questions: List[AIQuestion] = None,
-        follow_up_questions: List[AIQuestion] = None,
+        plan_outline: dict,
+        user_profile_id: int,
+        plan_outline_feedback: Optional[str] = None,
+        jwt_token: str = None,
     ) -> Dict[str, Any]:
-        """Generate a comprehensive training plan with AI-decided exercise retrieval."""
+        """
+        Generate the initial training plan during onboarding.
+        
+        1. Loads playbook with Q&A lessons (created during outline generation)
+        2. If plan_outline_feedback provided, extracts lessons from it and adds to playbook
+        3. Generates plan using combined lessons (does NOT mark as "applied" - no history yet)
+        
+        Args:
+            user_profile_id: Database ID of the user profile
+            plan_outline_feedback: Optional user feedback on the plan outline
+            jwt_token: JWT token for database authentication
+        """
+        # Load current playbook from database
+        playbook = await db_service.load_user_playbook(user_profile_id, jwt_token)
+        
+        if not playbook:
+            self.logger.warning("No playbook found - creating empty playbook")
+            playbook = UserPlaybook(
+                user_id=personal_info.user_id,
+                lessons=[],
+                total_lessons=0,
+            )
+        
+        # If user provided feedback on outline, extract lessons and add to playbook
+        if plan_outline_feedback and plan_outline_feedback.strip():
+            self.logger.info("📘 Extracting lessons from outline feedback...")
+            
+            # Extract lessons from outline feedback
+            feedback_lessons = self.reflector.extract_lessons_from_outline_feedback(
+                personal_info=personal_info,
+                plan_outline=plan_outline,
+                outline_feedback=plan_outline_feedback,
+            )
+            
+            if feedback_lessons:
+                self.logger.info(f"📘 Extracted {len(feedback_lessons)} lessons from outline feedback")
+                
+                # Add feedback lessons to playbook
+                for lesson in feedback_lessons:
+                    playbook.add_or_update_lesson(lesson)
+                
+                # Save updated playbook
+                await db_service.save_user_playbook(
+                    user_profile_id, playbook.model_dump(), jwt_token
+                )
+                self.logger.info(f"📘 Updated playbook now has {len(playbook.lessons)} total lessons")
+        
+        # Pass the playbook to internal method (don't reload!)
+        return await self._generate_training_plan_internal(
+            personal_info=personal_info,
+            formatted_initial_responses=formatted_initial_responses,
+            formatted_follow_up_responses=formatted_follow_up_responses,
+            plan_outline=plan_outline,
+            playbook=playbook,
+            jwt_token=jwt_token,
+            is_regeneration=False,
+        )
+    
+    async def regenerate_training_plan(
+        self,
+        personal_info: PersonalInfo,
+        formatted_initial_responses: str,
+        formatted_follow_up_responses: str,
+        plan_outline: dict,
+        user_profile_id: int,
+        jwt_token: str = None,
+    ) -> Dict[str, Any]:
+        """
+        Regenerate training plan after user has trained and provided feedback.
+        
+        Uses playbook lessons from training history AND marks which lessons
+        were applied in the new plan.
+        
+        Args:
+            user_profile_id: Database ID of the user profile
+            jwt_token: JWT token for database authentication
+        """
+        # Load current playbook from database
+        playbook = await db_service.load_user_playbook(user_profile_id, jwt_token)
+        
+        if not playbook:
+            self.logger.warning("No playbook found - creating empty playbook")
+            playbook = UserPlaybook(
+                user_id=personal_info.user_id,
+                lessons=[],
+                total_lessons=0,
+            )
+        
+        # Pass the playbook to internal method
+        return await self._generate_training_plan_internal(
+            personal_info=personal_info,
+            formatted_initial_responses=formatted_initial_responses,
+            formatted_follow_up_responses=formatted_follow_up_responses,
+            plan_outline=plan_outline,
+            playbook=playbook,
+            jwt_token=jwt_token,
+            is_regeneration=True,
+        )
+    
+    async def _generate_training_plan_internal(
+        self,
+        personal_info: PersonalInfo,
+        formatted_initial_responses: str,
+        formatted_follow_up_responses: str,
+        plan_outline: dict,
+        playbook: UserPlaybook,
+        jwt_token: str = None,
+        is_regeneration: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Internal method to generate training plans.
+        
+        Args:
+            playbook: UserPlaybook with lessons to use in plan generation
+            jwt_token: JWT token for database authentication
+            is_regeneration: If True, marks playbook lessons as applied and updates playbook.
+                           If False (onboarding), uses playbook but doesn't update it.
+        """
         try:
             # Check if debug mode is enabled - skip validation for mock data
             if os.getenv("DEBUG", "false").lower() == "true":
@@ -564,7 +672,7 @@ class TrainingCoach(BaseAgent):
                 model=os.getenv("OPENAI_MODEL", "gpt-4"),
                 messages=[{"role": "system", "content": decision_prompt}],
                 response_format=ExerciseRetrievalDecision,
-                temperature=0.3,  # Lower temp for consistent decisions
+                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),  # Lower temp for consistent decisions
             )
 
             decision = completion.choices[0].message.parsed
@@ -627,56 +735,9 @@ class TrainingCoach(BaseAgent):
                 self.logger.info("Skipping exercise retrieval (not needed)")
                 exercise_info = f"No exercises needed - {decision.alternative_approach or 'focus on sport-specific training sessions'}"
 
-            # Step 3: Load user's playbook for personalized context
-            # First try to load from user_profile.user_playbook (set during outline generation)
-            self.logger.info("Loading user playbook for personalized guidance...")
-
-            # Try to get from user profile first (where we stored it during outline)
-            user_profile = await db_service.get_user_profile_by_user_id(
-                personal_info.user_id
-            )
-            user_playbook_data = None
-            user_profile_id = None
-
-            if user_profile.get("success") and user_profile.get("data"):
-                user_profile_id = user_profile["data"].get("id")
-                user_playbook_data = user_profile["data"].get("user_playbook")
-
-            if user_playbook_data:
-                # Use the playbook from user profile
-                playbook = UserPlaybook(**user_playbook_data)
-                self.logger.info(
-                    f"Loaded playbook from user_profile with {len(playbook.lessons)} lessons"
-                )
-            else:
-                # Fallback: try loading from user_profiles table
-                playbook = (
-                    await db_service.load_user_playbook(user_profile_id)
-                    if user_profile_id
-                    else None
-                )
-
-                # Last resort: extract lessons now
-                if not playbook or len(playbook.lessons) == 0:
-                    self.logger.warning(
-                        "Playbook not found - extracting initial lessons now (should have been done during outline generation)"
-                    )
-                    initial_lessons = self.reflector.extract_initial_lessons(
-                        personal_info,
-                        formatted_initial_responses,
-                        formatted_follow_up_responses,
-                    )
-
-                    # Initialize playbook with onboarding lessons
-                    playbook = UserPlaybook(
-                        user_id=personal_info.user_id,
-                        lessons=initial_lessons,
-                        total_lessons=len(initial_lessons),
-                    )
-                    self.logger.info(
-                        f"Initialized playbook with {len(initial_lessons)} onboarding lessons"
-                    )
-
+            # Step 3: Use playbook for personalized context (passed as parameter)
+            self.logger.info(f"Using playbook with {len(playbook.lessons)} lessons for plan generation")
+            
             active_lessons = (
                 playbook.get_active_lessons(min_confidence=0.3) if playbook else []
             )
@@ -732,7 +793,7 @@ class TrainingCoach(BaseAgent):
                 model=os.getenv("OPENAI_MODEL", "gpt-4o"),
                 messages=[{"role": "system", "content": prompt}],
                 response_format=TrainingPlan,
-                temperature=0.7,
+                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
                 max_completion_tokens=safe_max_tokens,  # Dynamic based on plan duration
             )
 
@@ -756,11 +817,11 @@ class TrainingCoach(BaseAgent):
                 self.logger.info("Skipping exercise validation (no exercises used)")
                 validated_training = training_dict
 
-            # Step 6: Identify which lessons were applied & update playbook
+            # Step 6: Identify which lessons were applied & update playbook (only for regeneration)
             applied_lesson_ids = []
-            if playbook_lessons_dict and len(playbook_lessons_dict) > 0:
+            if is_regeneration and playbook_lessons_dict and len(playbook_lessons_dict) > 0:
                 self.logger.info(
-                    "Identifying which lessons were applied in the plan..."
+                    "Identifying which lessons were applied in the plan (regeneration mode)..."
                 )
                 applied_lesson_ids = self.reflector.identify_applied_lessons(
                     training_plan=validated_training,
@@ -776,6 +837,10 @@ class TrainingCoach(BaseAgent):
                     self.logger.info(
                         f"Updated playbook: {len(applied_lesson_ids)} lessons marked as applied [[memory:8636680]]"
                     )
+            elif not is_regeneration and playbook_lessons_dict:
+                self.logger.info(
+                    f"Skipping playbook update (initial plan): {len(playbook_lessons_dict)} lessons used as constraints"
+                )
 
             # Save playbook to the training plan (will be saved when plan is saved to DB)
             result_dict = {

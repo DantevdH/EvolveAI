@@ -858,6 +858,157 @@ class Reflector:
             self.logger.error(f"Error extracting outline feedback lesson: {e}")
             return None
 
+    def extract_lessons_from_outline_feedback(
+        self,
+        personal_info: PersonalInfo,
+        plan_outline: dict,
+        outline_feedback: str,
+    ) -> List[PlaybookLesson]:
+        """
+        Extract multiple actionable lessons from user's outline feedback.
+        
+        When users provide feedback on the training plan outline, this extracts
+        1-3 specific preferences or concerns to incorporate into the detailed plan.
+        
+        Args:
+            personal_info: User's personal information
+            plan_outline: The training plan outline they reviewed
+            outline_feedback: User's feedback on the outline
+            
+        Returns:
+            List of PlaybookLesson objects (0-3 lessons depending on feedback complexity)
+        """
+        try:
+            if not outline_feedback or not outline_feedback.strip():
+                self.logger.info("No outline feedback provided - returning empty lessons list")
+                return []
+            
+            self.logger.info(f"Extracting lessons from outline feedback: {outline_feedback[:80]}...")
+            
+            prompt = f"""
+                {self._format_client_information(personal_info)}
+                
+                **WORKFLOW STATUS:**
+                ✅ Onboarding → ✅ Outline Generated → ✅ User Reviewed Outline → ✅ Feedback Received
+                🎯 **CURRENT STEP:** Extract Preference Lessons from Feedback
+                
+                **OUTLINE THEY REVIEWED:**
+                • Title: {plan_outline.get('title', 'N/A')}
+                • Duration: {plan_outline.get('duration_weeks', 'N/A')} weeks
+                • Approach: {plan_outline.get('explanation', 'N/A')}
+                
+                **USER FEEDBACK:**
+                "{outline_feedback}"
+                
+                **YOUR TASK:**
+                Extract 1-3 actionable preference lessons from this feedback to apply to the detailed training plan.
+                Focus on specific requests, preferences, or concerns that will impact plan design.
+                
+                **EXTRACTION GUIDELINES:**
+                
+                ✅ **Extract If Feedback Contains:**
+                • Specific training preferences (modality, volume, intensity, duration)
+                • Concerns about the proposed approach
+                • Requests for modifications or emphasis shifts
+                • Time/schedule constraints not captured in Q&A
+                • Focus area preferences (more upper body, less cardio, etc.)
+                
+                ❌ **Do NOT Extract If Feedback Is:**
+                • Simple approval ("Looks great!", "Perfect!", "Good!")
+                • General excitement ("Can't wait to start!")
+                • Questions only ("When do we start?")
+                • Too vague to be actionable
+                
+                **LESSON FORMATTING:**
+                • Make lessons **specific and actionable** - clear guidance for plan generator
+                • Use **imperative language**: "Prioritize...", "Limit to...", "Include...", "Reduce..."
+                • Set **confidence to 0.7-0.8** (user explicitly stated preference)
+                • Mark as **positive=true** (preferences are guidance, not safety warnings)
+                • Set **priority** based on impact:
+                  - high: Major structure changes (focus shift, time constraints, frequency changes)
+                  - medium: Modality preferences, exercise selection, volume adjustments
+                  - low: Minor style preferences
+                • Add relevant **tags**: preferences + specific area (endurance, strength, volume, modality, etc.)
+                
+                **EXAMPLES:**
+                
+                **Example 1: Simple modality preference**
+                Feedback: "I prefer cycling over running"
+                → Lesson: "Prioritize cycling for endurance sessions instead of running"
+                   Tags: ["preferences", "endurance", "cycling", "modality"]
+                   Priority: medium | Confidence: 0.7 | Positive: true
+                
+                **Example 2: Multiple concerns**
+                Feedback: "This looks too intense and the sessions seem long. Can we do more upper body work?"
+                → Lesson 1: "Reduce training intensity and volume - user prefers conservative progression"
+                   Tags: ["preferences", "intensity", "volume", "conservative"]
+                → Lesson 2: "Limit session duration to 45 minutes or less"
+                   Tags: ["duration", "schedule", "time_constraint"]
+                → Lesson 3: "Increase upper body training frequency and volume"
+                   Tags: ["preferences", "upper_body", "frequency", "volume"]
+                
+                **Example 3: Training focus shift**
+                Feedback: "I want to focus more on running and less on strength"
+                → Lesson: "Prioritize endurance volume over strength work - shift emphasis to running development"
+                   Tags: ["preferences", "running", "endurance", "focus_shift"]
+                   Priority: high | Confidence: 0.8 | Positive: true
+                
+                **Example 4: Just approval (return empty)**
+                Feedback: "Looks perfect! Let's do this!"
+                → No lessons (just approval, no modifications needed)
+                
+                **OUTPUT FORMAT:**
+                Return in ReflectorAnalysisList format with 0-3 lessons.
+                Each lesson must include: lesson (text), tags (array), confidence (0.7-0.8), positive (true), reasoning (why extracted), priority (string).
+                Return empty analyses array if feedback is just approval or too vague.
+            """
+            
+            completion = self.openai_client.chat.completions.parse(
+                model=os.getenv("OPENAI_MODEL", "gpt-4"),
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are an expert at extracting actionable training preferences from user feedback.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                response_format=ReflectorAnalysisList,
+                temperature=0.3,
+            )
+            
+            analyses = completion.choices[0].message.parsed.analyses
+            
+            # Convert analyses to PlaybookLessons
+            lessons = []
+            for analysis in analyses:
+                if not analysis.lesson or not analysis.lesson.strip():
+                    continue  # Skip empty lessons
+                    
+                lesson = PlaybookLesson(
+                    id=f"outline_feedback_{uuid.uuid4().hex[:8]}",
+                    text=analysis.lesson,
+                    tags=analysis.tags + ["outline_feedback", "user_preference"],
+                    helpful_count=0,
+                    harmful_count=0,
+                    confidence=analysis.confidence,
+                    positive=analysis.positive,
+                    source_plan_id="outline_feedback",
+                )
+                lessons.append(lesson)
+            
+            if lessons:
+                self.logger.info(f"Extracted {len(lessons)} lessons from outline feedback")
+                for lesson in lessons:
+                    self.logger.info(f"  - [{('✅' if lesson.positive else '⚠️ ')}] {lesson.text}")
+            else:
+                self.logger.info("No actionable lessons extracted from feedback (likely just approval)")
+            
+            return lessons
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting lessons from outline feedback: {e}")
+            return []
+
     def identify_applied_lessons(
         self, training_plan: dict, playbook_lessons: List[dict], personal_info: PersonalInfo
     ) -> List[str]:

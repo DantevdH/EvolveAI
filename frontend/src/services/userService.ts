@@ -188,16 +188,29 @@ export class UserService {
 
   static async getUserProfile(userId: string): Promise<UserServiceResponse<UserProfile>> {
     try {
+      console.log('🔍 userService: Fetching user profile for user_id:', userId);
+      
       // Use the existing Supabase client with proper query
       const { data: user_profiles, error, status } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('user_id', userId);
 
+      console.log('📊 userService: Query result:', {
+        hasData: !!user_profiles,
+        dataLength: user_profiles?.length || 0,
+        hasError: !!error,
+        errorMessage: error?.message,
+        status
+      });
+
       if (error) {
+        console.error('❌ userService: Error fetching profile:', error);
+        
         // If it's an "Invalid API key" error, it might be due to RLS policies
         // In this case, treat it as "no profile found" since the user is authenticated
         if (error.message.includes('Invalid API key') || error.message.includes('permission denied')) {
+          console.warn('⚠️ userService: Permission error - returning undefined (may indicate RLS issue)');
           return {
             success: true,
             data: undefined,
@@ -212,6 +225,7 @@ export class UserService {
 
       // Check if we got any profiles
       if (user_profiles && user_profiles.length > 0) {
+        console.log('✅ userService: Found profile, ID:', user_profiles[0].id);
         const rawProfile = user_profiles[0];
         
         // Map database fields (snake_case) to frontend interface (camelCase)
@@ -259,6 +273,8 @@ export class UserService {
           data: mappedProfile,
         };
       } else {
+        console.warn('⚠️ userService: No profiles found for user_id:', userId);
+        console.warn('⚠️ userService: This means the profile was never created or user_id mismatch');
         return {
           success: true,
           data: undefined,
