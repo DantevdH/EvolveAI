@@ -9,5 +9,4 @@ export { PersonalInfoStep } from './PersonalInfoStep';
 export { GoalDescriptionStep } from './GoalDescriptionStep';
 export { ExperienceLevelStep } from './ExperienceLevelStep';
 export { QuestionsStep } from './QuestionsStep';
-export { TrainingPlanOutlineStep } from './TrainingPlanOutlineStep';
 export { PlanGenerationStep } from './PlanGenerationStep';

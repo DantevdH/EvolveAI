@@ -6,7 +6,6 @@ import { PersonalInfoStep } from '../../screens/onboarding/PersonalInfoStep';
 import { GoalDescriptionStep } from '../../screens/onboarding/GoalDescriptionStep';
 import { ExperienceLevelStep } from '../../screens/onboarding/ExperienceLevelStep';
 import { QuestionsStep } from '../../screens/onboarding/QuestionsStep';
-import { TrainingPlanOutlineStep } from '../../screens/onboarding';
 import { PlanGenerationStep } from '../../screens/onboarding/PlanGenerationStep';
 import { ErrorDisplay } from '../ui/ErrorDisplay';
 import { trainingService } from '../../services/onboardingService';
@@ -18,7 +17,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../config/supabase';
 import { UserService } from '../../services/userService';
-import { cleanUserProfileForResume, isValidFormattedResponse, isValidPlanOutline } from '../../utils/validation';
+import { cleanUserProfileForResume, isValidFormattedResponse } from '../../utils/validation';
 import { logStep, logData, logError, logNavigation } from '../../utils/logger';
 
 // Transform backend data structure to frontend format
@@ -116,7 +115,7 @@ const transformBackendToFrontend = (backendData: any) => {
 interface ConversationalOnboardingProps {
   onComplete: (trainingPlan: any) => Promise<void>;
   onError: (error: string) => void;
-  startFromStep?: 'welcome' | 'initial' | 'followup' | 'outline' | 'generation';
+  startFromStep?: 'welcome' | 'initial' | 'followup' | 'generation';
 }
 
 export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> = ({
@@ -144,10 +143,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     followUpQuestionsLoading: false,
     currentFollowUpQuestionIndex: 0,
     followUpAiMessage: undefined,
-    trainingPlanOutline: null,
-    outlineFeedback: '',
-    outlineLoading: false,
-    outlineAiMessage: undefined,
     planGenerationLoading: false,
     trainingPlan: null,
     error: null,
@@ -164,13 +159,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   const AI_DELAYS = {
     initialQuestions: 2000,    // 2 seconds for initial questions
     followUpQuestions: 2000,   // 2 seconds for follow-up questions
-    planOutline: 3000,         // 3 seconds for plan outline
     planGeneration: 3000,      // 3 seconds for final plan generation
   };
 
   // Determine starting step - either from prop or default to welcome
   const initialStep = startFromStep || 'welcome';
-  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial' | 'followup' | 'outline' | 'generation'>(initialStep);
+  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial' | 'followup' | 'generation'>(initialStep);
 
   // Track if we've initialized from profile (run only once per component mount)
   const hasInitializedFromProfileRef = useRef(false);
@@ -199,8 +193,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         setCurrentStep('initial');
       } else if (startFromStep === 'followup') {
         setCurrentStep('followup');
-      } else if (startFromStep === 'outline') {
-        setCurrentStep('outline');
       } else if (startFromStep === 'generation') {
         setCurrentStep('generation');
       }
@@ -226,7 +218,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         goalDescriptionValid: true,
         experienceLevel: cleanedProfile.experience_level,
         experienceLevelValid: true,
-        trainingPlanOutline: cleanedProfile.plan_outline,
         // Load questions and responses from profile
         initialQuestions: cleanedProfile.initial_questions || [],
         followUpQuestions: cleanedProfile.follow_up_questions || [],
@@ -236,7 +227,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         // Load AI messages from database
         initialAiMessage: cleanedProfile.initial_ai_message,
         followUpAiMessage: cleanedProfile.follow_up_ai_message,
-        outlineAiMessage: cleanedProfile.outline_ai_message,
       }));
       
       console.log(`📍 Onboarding Resume: Starting from ${startFromStep} - Initial: ${cleanedProfile.initial_questions?.length || 0} questions, Follow-up: ${cleanedProfile.follow_up_questions?.length || 0} questions, Initial AI Message: ${cleanedProfile.initial_ai_message?.substring(0, 50) || 'NONE'}`);
@@ -246,7 +236,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   // Track if we've already triggered loading for each step
   const hasTriggeredInitialQuestionsRef = useRef(false);
   const hasTriggeredFollowUpQuestionsRef = useRef(false);
-  const hasTriggeredPlanOutlineRef = useRef(false);
   const hasTriggeredPlanGenerationRef = useRef(false);
   const previousStepRef = useRef<string | null>(null);
 
@@ -257,8 +246,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         hasTriggeredInitialQuestionsRef.current = false;
       } else if (currentStep === 'followup') {
         hasTriggeredFollowUpQuestionsRef.current = false;
-      } else if (currentStep === 'outline') {
-        hasTriggeredPlanOutlineRef.current = false;
       } else if (currentStep === 'generation') {
         hasTriggeredPlanGenerationRef.current = false;
       }
@@ -287,17 +274,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       loadFollowUpQuestions();
     }
   }, [currentStep, state.followUpQuestions.length, state.followUpQuestionsLoading]);
-
-  // Generate plan outline when step changes to 'outline'
-  useEffect(() => {
-    if (currentStep === 'outline' && 
-        !state.trainingPlanOutline && 
-        !state.outlineLoading && 
-        !hasTriggeredPlanOutlineRef.current) {
-      hasTriggeredPlanOutlineRef.current = true;
-      generatePlanOutline();
-    }
-  }, [currentStep, state.trainingPlanOutline, state.outlineLoading]);
 
   // Auto-trigger plan generation when we have all required data
   useEffect(() => {
@@ -344,9 +320,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           const initialResponses = Object.fromEntries(state.initialResponses);
           const followUpResponses = Object.fromEntries(state.followUpResponses);
           
-          // Use stored plan outline if available, otherwise use current state
-          const planOutline = authState.userProfile?.plan_outline || state.trainingPlanOutline;
-          
           const fullPersonalInfo = {
             ...state.personalInfo!,
             username: state.username,
@@ -358,8 +331,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             fullPersonalInfo,
             initialResponses,
             followUpResponses,
-            planOutline,
-            state.outlineFeedback || '',
             state.initialQuestions,
             state.followUpQuestions,
             authState.userProfile?.id,
@@ -590,72 +561,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     }
   }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.initialQuestions, authState.userProfile?.id, onError]);
 
-  // Simple function to generate plan outline
-  const generatePlanOutline = useCallback(async () => {
-    if (!state.personalInfo) return;
-
-    setState(prev => ({ 
-      ...prev, 
-      outlineLoading: true,
-      aiAnalysisPhase: 'outline'
-    }));
-
-    try {
-      const initialResponses = Object.fromEntries(state.initialResponses);
-      const followUpResponses = Object.fromEntries(state.followUpResponses);
-      const { data: { session } } = await supabase.auth.getSession();
-      const jwtToken = session?.access_token;
-      
-      const fullPersonalInfo = {
-        ...state.personalInfo,
-        username: state.username,
-        goal_description: state.goalDescription,
-        experience_level: state.experienceLevel,
-      };
-      
-      const response = await trainingService.generateTrainingPlanOutline(
-        fullPersonalInfo,
-        initialResponses,
-        followUpResponses,
-        state.initialQuestions,
-        state.followUpQuestions,
-        jwtToken
-      );
-
-      console.log('📋 Plan outline response:', {
-        hasData: !!response.data,
-        hasOutline: !!response.data?.outline,
-        outlineKeys: response.data?.outline ? Object.keys(response.data.outline) : []
-      });
-
-      setState(prev => ({
-        ...prev,
-        trainingPlanOutline: response.data?.outline || null,
-        outlineLoading: false,
-        aiHasQuestions: true,
-        outlineAiMessage: response.data?.ai_message,
-      }));
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to generate plan outline';
-      setState(prev => ({
-        ...prev,
-        outlineLoading: false,
-        error: errorMessage,
-      }));
-      onError(errorMessage);
-    }
-  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, onError]);
-
   // Simple step progression functions
   const handleInitialQuestionsComplete = useCallback(() => {
     setCurrentStep('followup');
   }, []);
 
   const handleFollowUpQuestionsComplete = useCallback(() => {
-    setCurrentStep('outline');
-  }, []);
-
-  const handleOutlineNext = useCallback(() => {
     setCurrentStep('generation');
   }, []);
 
@@ -665,8 +576,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       setCurrentStep('initial');
     } else if (state.aiAnalysisPhase === 'followup') {
       setCurrentStep('followup');
-    } else if (state.aiAnalysisPhase === 'outline') {
-      setCurrentStep('outline');
     }
     // Reset the analysis phase and questions flag
     setState(prev => ({
@@ -769,95 +678,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     });
   }, []);
 
-  const handleFollowUpQuestionsNext = useCallback(async () => {
-    if (!state.personalInfo) return;
-
-    setState(prev => ({ 
-      ...prev, 
-      planGenerationLoading: true,
-      aiAnalysisPhase: 'outline'
-    }));
-    setCurrentStep('outline');
-
-    try {
-      // Simulate AI thinking time, then generate training plan outline
-      setTimeout(async () => {
-        try {
-          // Get JWT token from Supabase session
-          const { data: { session } } = await supabase.auth.getSession();
-          const jwtToken = session?.access_token;
-          
-          if (!jwtToken) {
-            throw new Error('JWT token is missing - cannot generate training plan');
-          }
-          
-          // Get raw responses - backend will handle formatting
-          const initialResponses = Object.fromEntries(state.initialResponses);
-          const followUpResponses = Object.fromEntries(state.followUpResponses);
-          
-          const fullPersonalInfo = {
-            ...state.personalInfo!,
-            username: state.username,
-            goal_description: state.goalDescription,
-            experience_level: state.experienceLevel,
-          };
-          
-          const response = await trainingService.generateTrainingPlanOutline(
-            fullPersonalInfo,
-            initialResponses,  // Send raw responses
-            followUpResponses,  // Send raw responses
-            state.initialQuestions,  // Send initial questions
-            state.followUpQuestions,  // Send follow-up questions
-            jwtToken
-          );
-          
-          if (response.success) {
-            console.log(`📍 Onboarding Stage: Plan Outline - Generated successfully`);
-            setState(prev => ({
-              ...prev,
-              planGenerationLoading: false,
-              trainingPlanOutline: response.data?.outline || null,
-              initialQuestions: response.data?.initial_questions || prev.initialQuestions, // Use returned questions
-              followUpQuestions: response.data?.follow_up_questions || prev.followUpQuestions, // Use returned questions
-              aiHasQuestions: true, // Show continue button to go to outline
-              outlineAiMessage: response.data?.ai_message,
-            }));
-          } else {
-            console.error(`❌ Onboarding Failed: Plan outline generation failed - ${response.message}`);
-            throw new Error(response.message || 'Failed to generate training plan outline');
-          }
-        } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : 'Failed to generate training plan outline';
-          setState(prev => ({
-            ...prev,
-            planGenerationLoading: false,
-            error: errorMessage,
-          }));
-          
-          // Set retry step for error recovery
-          setRetryStep('outline');
-          onError(errorMessage);
-        }
-      }, AI_DELAYS.planOutline); // Configurable delay for outline generation
-      
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        planGenerationLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to generate training plan outline',
-      }));
-      onError(error instanceof Error ? error.message : 'Failed to generate training plan outline');
-    }
-  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, onError, authState.userProfile?.id, startFromStep]);
-
-  // Step 4: Training Plan Outline
-  const handleOutlineFeedbackChange = useCallback((feedback: string) => {
-    setState(prev => ({
-      ...prev,
-      outlineFeedback: feedback,
-    }));
-  }, []);
-
 
   // Navigation handlers
   const handlePrevious = useCallback(() => {
@@ -880,11 +700,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       case 'followup':
         setCurrentStep('initial');
         break;
-      case 'outline':
-        setCurrentStep('followup');
-        break;
       case 'generation':
-        setCurrentStep('outline');
+        setCurrentStep('followup');
         break;
     }
   }, [currentStep]);
@@ -935,14 +752,11 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       case 'followup':
         handleInitialQuestionsComplete();
         break;
-      case 'outline':
+      case 'generation':
         handleFollowUpQuestionsComplete();
         break;
-      case 'generation':
-        handleOutlineNext();
-        break;
     }
-  }, [currentStep, retryCount, retryStep, handleWelcomeNext, handlePersonalInfoNext, handleGoalDescriptionNext, handleExperienceLevelNext, handleInitialQuestionsNext, handleInitialQuestionsComplete, handleFollowUpQuestionsComplete, handleOutlineNext]);
+  }, [currentStep, retryCount, retryStep, handleWelcomeNext, handlePersonalInfoNext, handleGoalDescriptionNext, handleExperienceLevelNext, handleInitialQuestionsNext, handleInitialQuestionsComplete, handleFollowUpQuestionsComplete]);
 
   // Handle start over action
   const handleStartOver = useCallback(() => {
@@ -1062,21 +876,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             stepTitle="Follow-up Questions"
             username={state.username}
             aiMessage={state.followUpAiMessage}
-          />
-        );
-      
-      case 'outline':
-        return (
-          <TrainingPlanOutlineStep
-            outline={state.trainingPlanOutline}
-            feedback={state.outlineFeedback}
-            onFeedbackChange={handleOutlineFeedbackChange}
-            onNext={handleOutlineNext}
-            onPrevious={handlePrevious}
-            isLoading={state.outlineLoading}
-            error={state.error || undefined}
-            username={state.username}
-            aiMessage={state.outlineAiMessage}
           />
         );
       

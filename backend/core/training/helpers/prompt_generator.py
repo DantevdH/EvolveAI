@@ -42,6 +42,7 @@ class PromptGenerator:
         • What volumes and intensities to prescribe
         • How to periodize their plan
         • All technical coaching decisions based on their goal and experience level
+        • When and where to train (this is up to the user to decide and thus irrelevant to the training plan)
 
         **Litmus Test:** 
         Would this question make a user feel confused or intimidated? 
@@ -398,189 +399,14 @@ class PromptGenerator:
         """
 
     @staticmethod
-    def get_outline_generation_intro() -> str:
-        """Get the introduction for outline generation prompts."""
-        return """
-        You are an expert training coach creating a training plan outline based on assessment responses.
-        
-        **IMPORTANT - APP SCOPE:**
-        This app creates SUPPLEMENTAL training programs (strength & conditioning).
-        • ✅ We provide: Strength training, running, cycling, swimming, hiking, and general conditioning
-        • ❌ We do NOT provide: Sport-specific drills, technical skill training, or team practice schedules
-        • 🎯 For athletes: We create supportive strength/conditioning work to complement their existing sport training
-        
-        **IMPORTANT - 4-WEEK TRAINING APPROACH:**
-        We create focused 4-week training plans to enable learning and adaptation.
-        After these 4 weeks, we'll generate the next phase using insights from their progress.
-        
-        **OUTLINE PURPOSE:**
-        • Create a 4-week program structure tailored to their goal
-        • Explain what PHASE this represents (Foundation, Base Building, etc.)
-        • Show how training progresses over the 4 weeks
-        • Connect to their overall goal
-        
-        **YOUR ROLE:** Create a clear, motivating 4-week plan with a descriptive phase name.
-        """
-
-    @staticmethod
-    def get_outline_generation_instructions() -> str:
-        """Get instructions for outline generation."""
-        return """
-        **OUTLINE STRUCTURE:**
-        1. **Title** - Descriptive phase name (3-4 words, e.g., "Foundation Building Phase", "Base Endurance Development")
-        2. **Duration** - Must be 4 weeks
-        3. **Explanation** - High-level approach (2-3 sentences):
-           • What this 4-week phase accomplishes toward their goal
-           • Brief mention of 4-week adaptive approach
-           • Connection to their long-term goal
-        4. **User Observations** - Summary of user profile + responses (2 sentences max)
-        5. **Training Phases** - 1-2 mini-phases within the 4 weeks
-        6. **Phase Details** - For each phase:
-           • Name (e.g., "Adaptation", "Development")
-           • Duration in weeks (must total 4)
-           • Explanation (1-2 sentences)
-           • Sample weekly pattern (5-7 daily trainings)
-        7. **Daily Training Samples** - Each has:
-           • Day number (1-7)
-           • Training name
-           • Description (max 20 words)
-           • Tags (strength/endurance/mixed)
-        
-        **QUALITY STANDARDS:**
-        ✓ Tailored to user's specific goal and experience level
-        ✓ Follows proper periodization principles for their goal type
-        ✓ Realistic and achievable within stated timeline
-        ✓ Builds excitement and motivation for the full plan
-        """
-
-    @staticmethod
-    def get_outline_generation_requirements() -> str:
-        """Get requirements for outline generation."""
-        return """
-        **STRICT REQUIREMENTS:**
-        • Schema: Use TrainingPlanOutline format
-        • Duration: EXACTLY 4 weeks
-        • Phases: 1-2 mini-phases within the 4 weeks
-        • Descriptions: Max 20 words per training
-        • Tags: 'strength', 'endurance', 'mixed'
-        • Tone: Engaging and motivating
-        
-        **TITLE EXAMPLES:**
-        • "Foundation Building" (strength beginners)
-        • "Base Endurance Development" (marathon prep)
-        • "Athletic Conditioning" (sport athletes)
-        
-        **EXPLANATION REQUIREMENTS:**
-        In 2-3 sentences, explain:
-        • What this 4-week phase accomplishes for their goal
-        • Brief: "We use 4-week plans to learn and adapt based on your progress"
-        • How this phase connects to their long-term goal
-        
-        Example: "Foundation Building phase establishes proper movement patterns and baseline strength for your muscle-building goal. We use 4-week cycles to learn what works for you and adapt future training accordingly. This phase sets the foundation for progressive overload in upcoming cycles."
-        """
-
-    @staticmethod
-    def generate_training_plan_outline_prompt(
-        personal_info: PersonalInfo,
-        formatted_initial_responses: str,
-        formatted_follow_up_responses: str
-    ) -> str:
-        """Generate the complete prompt for training plan outline."""
-        combined_responses = (
-            f"{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
-        )
-
-        return f"""
-        {PromptGenerator.get_outline_generation_intro()}
-
-        {PromptGenerator.format_client_information(personal_info)}
-
-        **WORKFLOW STATUS:**
-        ✅ Questions (Round 1 - Broad information) → ✅ Follow-ups (Round 2 - Clarification) → ✅ Lesson Extraction
-        🎯 **CURRENT STEP:** Training Plan Outline Creation
-        {personal_info.username} has completed both rounds of assessment questions. Now use all the data below to create a structured 4-week training outline with phases, sample trainings, and progression strategy.
-
-        **ASSESSMENT DATA:**
-        {combined_responses}
-        
-        **CRITICAL: USE THE ASSESSMENT DATA CORRECTLY**
-        • Respect their stated CONSTRAINTS: equipment, time, injuries, existing commitments, preferences
-        • Use coaching expertise to design the PROGRAM: structure, volume, intensity, progression, exercise selection
-        • If a constraint is unclear, work with what you have rather than making assumptions
-        • You decide HOW to train, they tell you WHAT'S possible
-
-        **OUTLINE DESIGN STRATEGY:**
-        Use assessment data to determine:
-        
-        **1. Training Split & Frequency**
-        • Available days → training days per week
-        • Preferences → which days are strength/endurance/mixed/rest
-        • Goal → primary focus and modality ratio
-        
-        **2. Training Activities**
-        • Goal → required modalities (strength exercises, running, cycling, etc.)
-        • Equipment → available resources for chosen activities
-        • Limitations → activities/movements to avoid
-        
-        **3. Training Load** (Coach Determines)
-        • Experience level → starting point and progression rate
-        • Goal → training emphasis distribution
-        • Time availability → session structure
-        
-        **4. Periodization**
-        • Timeline → total weeks and number of phases (2-3)
-        • Goal → periodization model (linear/undulating/block)
-        • Experience → complexity and progression rate
-
-        **USER OBSERVATIONS FORMAT:**
-        Write 2 sentences maximum capturing ALL personal info + responses. Format: "User is [age]yo [gender], [weight][unit], [height][unit] tall, focusing on [goal], with [experience_level] experience. [ALL response details: equipment, availability, limitations, preferences, motivations, etc.]"
-
-        **CRITICAL VALIDATION:**
-        ✓ Daily trainings match available days from responses
-        ✓ Activities match available equipment
-        ✓ Training types align with goal
-        ✓ Periodization suits experience level
-        ✓ 2-3 phases total (not 2-4)
-
-        {PromptGenerator.get_outline_generation_instructions()}
-
-        {PromptGenerator.get_outline_generation_requirements()}
-
-        **AI MESSAGE (max 60 words):**
-        Format: Greeting "{personal_info.username}" → Celebrate completion → Mention 4-week cycle approach → Reference phase name → Build excitement → 2-3 emojis
-        
-        Example: "Great work, [Name]! 🎉 I've created your Foundation Building phase—4 weeks of training tailored to [goal]. We use 4-week cycles to learn and adapt future training based on your progress. Let's get started! 💪"
-        
-        Return: TrainingPlanOutline schema with ai_message populated.
-        """
-
-    @staticmethod
     def generate_training_plan_prompt(
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
         formatted_follow_up_responses: str,
-        plan_outline: dict = None,
         exercise_info: str = "",
         playbook_lessons: List = None,
     ) -> str:
         """Generate the complete prompt for training plan generation."""
-
-        outline_context = ""
-        if plan_outline:
-            outline_context = f"""
-            **APPROVED OUTLINE:**
-            Title: {plan_outline.get('title', 'N/A')}
-            Duration: {plan_outline.get('duration_weeks', 'N/A')} weeks
-            User Profile: {plan_outline.get('user_observations', 'N/A')}
-
-            Training Phases:"""
-            for period in plan_outline.get("training_periods", []):
-                outline_context += f"\n\n{period.get('period_name', 'N/A')} ({period.get('duration_weeks', 'N/A')} weeks): {period.get('explanation', 'N/A')}"
-                daily_trainings = period.get("daily_trainings", [])
-                if daily_trainings:
-                    outline_context += "\n  Weekly Pattern:"
-                    for training in daily_trainings:
-                        outline_context += f"\n    Day {training.get('day', 'N/A')}: {training.get('training_name', 'N/A')} - {training.get('description', 'N/A')}"
 
         combined_responses = (
             f"{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
@@ -605,7 +431,6 @@ class PromptGenerator:
             **GOAL:** {personal_info.goal_description}
             **LEVEL:** {personal_info.experience_level}
 
-            {outline_context}
             {playbook_context}
 
             **AVAILABLE EXERCISES:**
@@ -696,7 +521,7 @@ class PromptGenerator:
 
     @staticmethod
     def generate_exercise_decision_prompt(
-        personal_info: PersonalInfo, formatted_responses: str, plan_outline: dict
+        personal_info: PersonalInfo, formatted_responses: str
     ) -> str:
         """Generate the prompt for AI to decide if exercises are needed."""
         return f"""
@@ -707,7 +532,6 @@ class PromptGenerator:
         Experience: {personal_info.experience_level}
         
         **Responses:** {formatted_responses}
-        **Outline:** {plan_outline}
         
         **EXERCISE DATABASE SCOPE:**
         

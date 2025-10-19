@@ -35,11 +35,9 @@ from core.training.schemas.question_schemas import (
     QuestionType,
     AIQuestion,
     QuestionOption,
-    TrainingPlanOutline,
     ExerciseRetrievalDecision,
 )
 from core.training.helpers.response_formatter import ResponseFormatter
-from core.training.helpers.mock_data import create_mock_training_plan_outline
 from core.training.helpers.prompt_generator import PromptGenerator
 
 # Import ACE pattern components
@@ -436,99 +434,25 @@ class TrainingCoach(BaseAgent):
                 ai_message="I need to ask a few more questions to create your perfect training plan. 💪",
             )
 
-    def generate_training_plan_outline(
-        self,
-        personal_info: PersonalInfo,
-        formatted_initial_responses: str,
-        formatted_follow_up_responses: str,
-    ) -> Dict[str, Any]:
-        """Generate a training plan outline before creating the final detailed plan."""
-        try:
-            # Check if debug mode is enabled - skip validation for mock data
-            if os.getenv("DEBUG", "false").lower() == "true":
-                self.logger.debug("DEBUG MODE: Using mock training plan outline")
-                outline = create_mock_training_plan_outline()
-
-                # Extract ai_message from outline to prevent duplication
-                outline_dict = outline.model_dump()
-                ai_message = outline_dict.pop("ai_message", None)
-
-                return {
-                    "success": True,
-                    "outline": outline_dict,
-                    "ai_message": ai_message,
-                    "metadata": {
-                        "generation_method": "Mock Data (Debug Mode)",
-                        "user_goals": personal_info.goal_description,
-                    },
-                }
-
-            # Create a comprehensive prompt for outline generation
-            prompt = PromptGenerator.generate_training_plan_outline_prompt(
-                personal_info,
-                formatted_initial_responses,
-                formatted_follow_up_responses
-            )
-
-            # Generate the outline using OpenAI with structured output
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert training coach creating training plan outlines. Provide structured, detailed outlines that give users a clear preview of their upcoming training plan.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                response_format=TrainingPlanOutline,
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
-            )
-
-            # Parse the structured response
-            outline = completion.choices[0].message.parsed
-
-            # Extract ai_message from outline to prevent duplication
-            outline_dict = outline.model_dump()
-            ai_message = outline_dict.pop("ai_message", None)
-
-            return {
-                "success": True,
-                "outline": outline_dict,
-                "ai_message": ai_message,
-                "metadata": {
-                    "generation_method": "AI Generated",
-                    "user_goals": personal_info.goal_description,
-                    "experience_level": personal_info.experience_level,
-                },
-            }
-
-        except Exception as e:
-            self.logger.error(f"Error generating training plan outline: {str(e)}")
-            return {
-                "success": False,
-                "error": f"Failed to generate training plan outline: {str(e)}",
-            }
-
     async def generate_initial_training_plan(
         self,
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
         formatted_follow_up_responses: str,
-        plan_outline: dict,
         user_profile_id: int,
-        plan_outline_feedback: Optional[str] = None,
         jwt_token: str = None,
     ) -> Dict[str, Any]:
         """
         Generate the initial training plan during onboarding.
         
-        1. Loads playbook with Q&A lessons (created during outline generation)
-        2. If plan_outline_feedback provided, extracts lessons from it and adds to playbook
-        3. Generates plan using combined lessons (does NOT mark as "applied" - no history yet)
+        1. Loads playbook with Q&A lessons (created during plan generation)
+        2. Generates plan using lessons (does NOT mark as "applied" - no history yet)
         
         Args:
+            personal_info: User's personal information and goals
+            formatted_initial_responses: Formatted responses from initial questions
+            formatted_follow_up_responses: Formatted responses from follow-up questions
             user_profile_id: Database ID of the user profile
-            plan_outline_feedback: Optional user feedback on the plan outline
             jwt_token: JWT token for database authentication
         """
         # Load current playbook from database
@@ -542,36 +466,11 @@ class TrainingCoach(BaseAgent):
                 total_lessons=0,
             )
         
-        # If user provided feedback on outline, extract lessons and add to playbook
-        if plan_outline_feedback and plan_outline_feedback.strip():
-            self.logger.info("📘 Extracting lessons from outline feedback...")
-            
-            # Extract lessons from outline feedback
-            feedback_lessons = self.reflector.extract_lessons_from_outline_feedback(
-                personal_info=personal_info,
-                plan_outline=plan_outline,
-                outline_feedback=plan_outline_feedback,
-            )
-            
-            if feedback_lessons:
-                self.logger.info(f"📘 Extracted {len(feedback_lessons)} lessons from outline feedback")
-                
-                # Add feedback lessons to playbook
-                for lesson in feedback_lessons:
-                    playbook.add_or_update_lesson(lesson)
-                
-                # Save updated playbook
-                await db_service.save_user_playbook(
-                    user_profile_id, playbook.model_dump(), jwt_token
-                )
-                self.logger.info(f"📘 Updated playbook now has {len(playbook.lessons)} total lessons")
-        
         # Pass the playbook to internal method (don't reload!)
         return await self._generate_training_plan_internal(
             personal_info=personal_info,
             formatted_initial_responses=formatted_initial_responses,
             formatted_follow_up_responses=formatted_follow_up_responses,
-            plan_outline=plan_outline,
             playbook=playbook,
             jwt_token=jwt_token,
             is_regeneration=False,
@@ -582,7 +481,6 @@ class TrainingCoach(BaseAgent):
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
         formatted_follow_up_responses: str,
-        plan_outline: dict,
         user_profile_id: int,
         jwt_token: str = None,
     ) -> Dict[str, Any]:
@@ -593,6 +491,9 @@ class TrainingCoach(BaseAgent):
         were applied in the new plan.
         
         Args:
+            personal_info: User's personal information and goals
+            formatted_initial_responses: Formatted responses from initial questions
+            formatted_follow_up_responses: Formatted responses from follow-up questions
             user_profile_id: Database ID of the user profile
             jwt_token: JWT token for database authentication
         """
@@ -612,7 +513,6 @@ class TrainingCoach(BaseAgent):
             personal_info=personal_info,
             formatted_initial_responses=formatted_initial_responses,
             formatted_follow_up_responses=formatted_follow_up_responses,
-            plan_outline=plan_outline,
             playbook=playbook,
             jwt_token=jwt_token,
             is_regeneration=True,
@@ -623,7 +523,6 @@ class TrainingCoach(BaseAgent):
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
         formatted_follow_up_responses: str,
-        plan_outline: dict,
         playbook: UserPlaybook,
         jwt_token: str = None,
         is_regeneration: bool = False,
@@ -632,6 +531,9 @@ class TrainingCoach(BaseAgent):
         Internal method to generate training plans.
         
         Args:
+            personal_info: User's personal information and goals
+            formatted_initial_responses: Formatted responses from initial questions
+            formatted_follow_up_responses: Formatted responses from follow-up questions
             playbook: UserPlaybook with lessons to use in plan generation
             jwt_token: JWT token for database authentication
             is_regeneration: If True, marks playbook lessons as applied and updates playbook.
@@ -665,7 +567,7 @@ class TrainingCoach(BaseAgent):
                 f"{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
             )
             decision_prompt = PromptGenerator.generate_exercise_decision_prompt(
-                personal_info, combined_responses, plan_outline
+                personal_info, combined_responses
             )
 
             completion = self.openai_client.chat.completions.parse(
@@ -771,7 +673,6 @@ class TrainingCoach(BaseAgent):
                 personal_info,
                 formatted_initial_responses,
                 formatted_follow_up_responses,
-                plan_outline,
                 exercise_info,
                 playbook_lessons=playbook_lessons_dict,
             )
@@ -779,8 +680,8 @@ class TrainingCoach(BaseAgent):
             # Step 5: Get the training plan
             self.logger.info("Generating training plan with AI...")
             
-            # Get plan duration to estimate token needs
-            plan_weeks = plan_outline.get("duration_weeks", 4) if plan_outline else 4
+            # Use default plan duration to estimate token needs (4 weeks is typical for onboarding)
+            plan_weeks = 4
             
             # Calculate safe max_tokens (~2,500 tokens per week for detailed plans)
             # Cap at 12,000 to stay well below 16,384 limit and leave room for RAG

@@ -75,7 +75,6 @@ function RootLayoutNav() {
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding/initial-questions" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding/follow-up-questions" options={{ headerShown: false }} />
-        <Stack.Screen name="onboarding/plan-outline" options={{ headerShown: false }} />
         <Stack.Screen name="generate-plan" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="full-profile" options={{ headerShown: false }} />

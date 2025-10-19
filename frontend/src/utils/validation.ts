@@ -13,16 +13,6 @@ export const isValidFormattedResponse = (response: any): response is string => {
 };
 
 /**
- * Validates if a value is a valid plan outline object
- */
-export const isValidPlanOutline = (outline: any): outline is object => {
-  return typeof outline === 'object' && 
-         outline !== null && 
-         !Array.isArray(outline) &&
-         (outline.weekly_schedule || outline.focus_areas || outline.progression);
-};
-
-/**
  * Validates if a value is a valid user profile for onboarding
  */
 export const isValidUserProfile = (profile: any): boolean => {
@@ -67,12 +57,8 @@ export const cleanUserProfileForResume = (profile: any) => {
     follow_up_questions: profile.follow_up_questions || null,
     initial_responses: profile.initial_responses || null,
     follow_up_responses: profile.follow_up_responses || null,
-    plan_outline: isValidPlanOutline(profile.plan_outline) 
-      ? profile.plan_outline 
-      : null,
     // AI messages from backend
     initial_ai_message: profile.initial_ai_message || null,
     follow_up_ai_message: profile.follow_up_ai_message || null,
-    outline_ai_message: profile.outline_ai_message || null,
   };
 };

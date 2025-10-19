@@ -96,6 +96,23 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
     }
   }, [currentIndex, answeredQuestions]);
 
+  // Auto-set default value for slider questions if not already answered
+  React.useEffect(() => {
+    if (!currentQuestion) return;
+    
+    // Only for slider questions that haven't been answered yet
+    if (currentQuestion.response_type === QuestionType.SLIDER && !localResponses.has(currentQuestion.id)) {
+      const defaultValue = currentQuestion.min_value ?? 0;
+      const newResponses = new Map(localResponses);
+      newResponses.set(currentQuestion.id, defaultValue);
+      setLocalResponses(newResponses);
+      onResponseChange(currentQuestion.id, defaultValue);
+      
+      // Mark as answered so the user can proceed without adjusting
+      setAnsweredQuestions(prev => new Set(prev).add(currentIndex));
+    }
+  }, [currentQuestion, currentIndex, localResponses, onResponseChange]);
+
   const handleNext = useCallback(() => {
     if (currentIndex < totalQuestions - 1) {
       setCurrentIndex(currentIndex + 1);

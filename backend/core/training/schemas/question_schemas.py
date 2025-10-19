@@ -181,25 +181,6 @@ class FollowUpQuestionsRequest(BaseModel):
     )
 
 
-class TrainingPlanOutlineRequest(BaseModel):
-    """Request for training plan outline generation."""
-
-    personal_info: PersonalInfo = Field(..., description="Basic personal information")
-    initial_responses: Dict[str, Any] = Field(
-        ..., description="Raw responses to initial questions"
-    )
-    follow_up_responses: Dict[str, Any] = Field(
-        ..., description="Raw responses to follow-up questions"
-    )
-    initial_questions: List[AIQuestion] = Field(
-        ..., description="Initial questions from frontend"
-    )
-    follow_up_questions: List[AIQuestion] = Field(
-        ..., description="Follow-up questions from frontend"
-    )
-    jwt_token: str = Field(..., description="JWT token for authentication")
-
-
 class PlanGenerationRequest(BaseModel):
     """Request for training plan generation."""
 
@@ -210,97 +191,16 @@ class PlanGenerationRequest(BaseModel):
     follow_up_responses: Dict[str, Any] = Field(
         ..., description="Raw responses to follow-up questions"
     )
-    plan_outline: Optional[dict] = Field(
-        default=None, description="Training plan outline from frontend"
-    )
-    plan_outline_feedback: Optional[str] = Field(
-        default=None, description="User feedback on plan outline"
-    )
     initial_questions: List[AIQuestion] = Field(
         ..., description="Initial questions from frontend"
     )
     follow_up_questions: List[AIQuestion] = Field(
         ..., description="Follow-up questions from frontend"
     )
+    user_profile_id: Optional[int] = Field(
+        default=None, description="User profile ID for database storage"
+    )
     jwt_token: str = Field(..., description="JWT token for authentication")
-
-
-class TrainingPlanOutlineResponse(BaseModel):
-    """Response from training plan outline generation."""
-
-    success: bool = Field(..., description="Whether outline generation was successful")
-    outline: Optional[dict] = Field(
-        default=None, description="Generated training plan outline"
-    )
-    error: Optional[str] = Field(
-        default=None, description="Error message if unsuccessful"
-    )
-
-
-class DailyTraining(BaseModel):
-    """Daily training structure for training plan outline."""
-
-    day: int = Field(..., description="Day number (1-7)")
-    training_name: str = Field(
-        ...,
-        description="Name of the training (e.g., 'Upper Body Strength', 'Easy Cardio')",
-    )
-    description: str = Field(
-        ...,
-        description="Explanation in max. 20 words of the day's training which can include items as duration, intensity, muscle groups, heart rate zones, distance, and equipment needed dependent on the training type",
-    )
-    tags: List[str] = Field(
-        ...,
-        description="Tags for categorization (e.g., 'strength', 'cardio')",
-    )
-
-
-class TrainingPeriod(BaseModel):
-    """Mini-phase within a 4-week training plan."""
-
-    period_name: str = Field(
-        ...,
-        description="Phase name (e.g., 'Adaptation', 'Development')",
-    )
-    duration_weeks: int = Field(
-        ..., 
-        description="Duration in weeks (all phases must total 4 weeks)"
-    )
-    explanation: str = Field(
-        ..., 
-        description="What this phase accomplishes (1-2 sentences)"
-    )
-    daily_trainings: List[DailyTraining] = Field(
-        ..., description="Sample daily trainings for this period"
-    )
-
-
-class TrainingPlanOutline(BaseModel):
-    """Structured training plan outline for 4-week training blocks."""
-
-    title: str = Field(
-        ..., 
-        description="Descriptive phase name for this 4-week training phase (e.g., 'Foundation Building', 'Base Endurance Development')"
-    )
-    duration_weeks: int = Field(
-        ..., 
-        description="Duration in weeks (must be 4)"
-    )
-    explanation: str = Field(
-        ..., 
-        description="High-level overview (2-3 sentences): what this phase accomplishes, why 4-week cycles, connection to their goal"
-    )
-    training_periods: List[TrainingPeriod] = Field(
-        ..., description="1-2 mini-phases within these 4 weeks"
-    )
-    user_observations: str = Field(
-        ...,
-        description="Comprehensive summary of user profile and responses from initial and follow-up questions",
-    )
-    ai_message: Optional[str] = Field(
-        default=None, 
-        description="Personalized AI coach message explaining the 4-week approach and phase name"
-    )
 
 
 class ExerciseRetrievalDecision(BaseModel):
