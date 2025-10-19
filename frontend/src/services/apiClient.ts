@@ -49,14 +49,6 @@ class ApiClient {
       const url = `${this.baseURL}${endpoint}`;
       const headers = await this.getAuthHeaders();
 
-      console.log('🌐 API Request Details:', {
-        url: url,
-        method: options.method || 'GET',
-        headers: headers,
-        body: options.body ? JSON.parse(options.body as string) : undefined,
-        timeout: this.timeout
-      });
-
       const config: RequestInit = {
         ...options,
         headers: {

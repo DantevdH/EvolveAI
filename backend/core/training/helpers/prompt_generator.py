@@ -6,7 +6,7 @@ questions, training plan outlines, and training plans.
 """
 
 from typing import List
-from core.training.helpers.ai_question_schemas import PersonalInfo, AIQuestion
+from core.training.schemas.question_schemas import PersonalInfo, AIQuestion
 
 
 class PromptGenerator:
@@ -16,28 +16,39 @@ class PromptGenerator:
     def get_question_generation_intro() -> str:
         """Get the introduction for question generation prompts."""
         return """
-        You are an expert training coach designing personalized training plans. Your questions must 
-        gather ONLY information that directly impacts the final training plan structure AND that are relevant to the user's specific goal.
+        You are an expert training coach designing personalized training plans. Your questions gather information ABOUT THE USER so you can apply your coaching expertise to design their optimal plan.
         
-        **Your Goal:** Collect specific data needed to create a detailed, actionable training plan tailored to their goal.
+        **Your Goal:** Collect facts about the user's life, constraints, and preferences. YOU will use this to create their tailored training plan.
         
-        **Training Plan Components You May Need to Design (depending on their goal):**
+        **IMPORTANT - App Scope:**
+        This app creates SUPPLEMENTAL training programs (strength & conditioning).
+        • ✅ We provide: Strength training, running, cycling, swimming, hiking, and general conditioning
+        • ❌ We do NOT provide: Sport-specific drills, technical skill training, or team practice schedules
+        • 🎯 For athletes: We create supportive strength/conditioning work to complement their existing sport training
         
-        1. **Training Activities** - Which activities are relevant (strength exercises, running, cycling, swimming, sport-specific drills, etc.)
-        2. **Training Structure** - How to organize training across the week (split, frequency, combination of activities)
-        3. **Training Frequency** - How many sessions per week and which days
-        4. **Intensity & Volume** - Appropriate levels (sets/reps, distance/time, zones, pace, etc.). Do NOT ask for currently lifted weights as this will be determined after the plan is generated.
-        5. **Periodization** - How to increase difficulty over time (weekly increments, phase changes)
-        6. **Recovery** - When and how to schedule rest/recovery
-        7. **Equipment & Resources** - What's available and needed for their activities
-        8. **Limitations** - Physical constraints, injuries, or preferences to work around
+        **🏆 THE GOLDEN RULE:**
+        Gather USER CONTEXT. You handle creating the training plan. Ask only questions that are relevant to designing the training plan.
+
+        **What to Ask (Learn About THEM):**
+        • **Constraints:** Injuries, equipment access, time availability, existing training commitments
+        • **Preferences:** Activities enjoyed/avoided, training environment, focus areas
+        • **Situation:** Lifestyle factors (work, stress, sleep), schedule, recovery capacity
+        • **Goals:** Specific outcomes, timeline, motivation, priorities
         
-        **Question Focus:** 
-        - Analyze their goal to determine which components are relevant
-        - Only ask about components that apply to THEIR specific goal
-        - Adapt your questions to match their training context (strength, endurance, mixed, sport-specific, etc.)
-        - Adapt question complexity and terminology to their experience level (simpler for beginners, you are allowed to go more technical for advanced)
-        - Every question must help you make concrete decisions about their training plan
+        YOU decide: activities, structure, periodization, volume, intensity, and all programming.
+
+        **What NOT to Ask (YOU Decide):**
+        • How to structure their training (splits, frequency, progression models)
+        • What volumes and intensities to prescribe
+        • How to periodize their plan
+        • All technical coaching decisions based on their goal and experience level
+
+        **Litmus Test:** 
+        Would this question make a user feel confused or intimidated? 
+        If yes, it's too technical—decide it yourself based on your expertise and the user's input.
+
+        **Remember:** 
+        Users tell us ABOUT themselves. Coaches design the TRAINING.
         """
 
     @staticmethod
@@ -56,56 +67,244 @@ class PromptGenerator:
         """
 
     @staticmethod
+    def format_playbook_lessons(
+        playbook, personal_info: PersonalInfo, context: str = "training"
+    ) -> str:
+        """
+        Format playbook lessons for inclusion in prompts.
+
+        Args:
+            playbook: UserPlaybook object or list of lesson dicts
+            personal_info: PersonalInfo object for personalization
+            context: Context for the prompt ("outline" or "training")
+
+        Returns:
+            Formatted playbook context string
+        """
+        if not playbook:
+            return ""
+
+        # Handle both UserPlaybook objects and list of dicts
+        if hasattr(playbook, "lessons"):
+            lessons = playbook.lessons
+        elif isinstance(playbook, list):
+            lessons = playbook
+        else:
+            return ""
+
+        if not lessons or len(lessons) == 0:
+            return ""
+
+        # Choose header based on context
+        if context == "outline":
+            header = f"""
+            **🧠 PERSONALIZED CONSTRAINTS & PREFERENCES:**
+            
+            Based on {personal_info.username}'s onboarding responses, these are the key constraints and preferences to follow:
+        
+            """
+            footer = f"""
+            **IMPORTANT:** These are fundamental constraints extracted from the onboarding assessment.
+            The outline MUST respect these limitations and preferences.
+            """
+        else:  # context == "training"
+            header = f"""
+            **🧠 PERSONALIZED PLAYBOOK - LESSONS FROM {personal_info.username.upper()}'S TRAINING HISTORY:**
+            
+            These are proven insights from {personal_info.username}'s previous training outcomes. 
+            YOU MUST follow these lessons when creating this plan:
+            """
+
+            footer = f"""
+            **CRITICAL:** These lessons are based on real outcomes from {personal_info.username}'s training.
+            Ignoring them may lead to poor adherence, injury, or failure to achieve goals.
+            """
+
+        # Separate positive lessons and warnings
+        positive_lessons = [
+            l
+            for l in lessons
+            if (l.positive if hasattr(l, "positive") else l.get("positive", True))
+        ]
+        warning_lessons = [
+            l
+            for l in lessons
+            if not (l.positive if hasattr(l, "positive") else l.get("positive", True))
+        ]
+
+        # Build the content
+        content = ""
+
+        if positive_lessons:
+            if context == "outline":
+                content += f"        ✅ **Capabilities & Preferences:**\n"
+            else:
+                content += f"        ✅ **What Works for {personal_info.username}:**\n"
+
+            for lesson in positive_lessons:
+                if hasattr(lesson, "text"):
+                    text = lesson.text
+                    confidence = lesson.confidence
+                    helpful = lesson.helpful_count
+                else:
+                    text = lesson.get("text", "")
+                    confidence = lesson.get("confidence", 0.5)
+                    helpful = lesson.get("helpful_count", 0)
+                
+                # Escape curly braces in lesson text to prevent format errors
+                safe_text = str(text).replace("{", "{{").replace("}", "}}")
+
+                if context == "outline":
+                    content += f"        - {safe_text}\n"
+                else:
+                    content += f"        - {safe_text} (confidence: {confidence:.0%}, proven {helpful}x)\n"
+
+        if warning_lessons:
+            if context == "outline":
+                content += f"\n        ⚠️  **Constraints & Limitations:**\n"
+            else:
+                content += f"\n        ⚠️  **What to Avoid:**\n"
+
+            for lesson in warning_lessons:
+                if hasattr(lesson, "text"):
+                    text = lesson.text
+                    confidence = lesson.confidence
+                    harmful = lesson.harmful_count
+                else:
+                    text = lesson.get("text", "")
+                    confidence = lesson.get("confidence", 0.5)
+                    harmful = lesson.get("harmful_count", 0)
+                
+                # Escape curly braces in lesson text to prevent format errors
+                safe_text = str(text).replace("{", "{{").replace("}", "}}")
+
+                if context == "outline":
+                    content += f"        - {safe_text}\n"
+                else:
+                    content += f"        - {safe_text} (confidence: {confidence:.0%}, learned from {harmful} negative outcome(s))\n"
+
+        return header + content + footer
+
+    @staticmethod
     def get_question_generation_instructions() -> str:
         """Get instructions for question generation."""
         return """
         **QUESTION TYPE SELECTION GUIDE:**
         
-        Choose the right type based on HOW the user should respond:
+        Choose based on HOW the user should respond:
         
-        1. **MULTIPLE_CHOICE** - Use when there are 2-5 clear, distinct options to choose from
-           - Phrase question so user picks ONE option from a short list
-           - Example: "What is your preferred learning style?" → Options: Visual, Auditory, Kinesthetic, Reading/Writing
-           - When to use: Clear categories, limited options, mutually exclusive choices
-           - REQUIRED fields: help_text, options (list of QuestionOption with id, text, value)
+        **1. MULTIPLE_CHOICE** - 2-5 distinct options
+        • User picks ONE from short list
+        • Example: "Preferred training environment?" → Home, Gym, Outdoors, Hybrid
+        • Use for: Clear categories, mutually exclusive choices
+        • Required: help_text, options[{id, text, value}]
         
-        2. **DROPDOWN** - Use when there are more than 5 options to choose from
-           - Phrase question so user selects ONE option from a longer list
-           - Example: "Which country were you born in?" → Options: List of 150+ countries
-           - When to use: Many options, single selection, predefined list
-           - REQUIRED fields: help_text, options (list of QuestionOption with id, text, value)
+        **2. DROPDOWN** - 6+ options
+        • User selects ONE from longer list
+        • Example: "Primary sport?" → 50+ sports list
+        • Use for: Many predefined options, single selection
+        • Required: help_text, options[{id, text, value}]
         
-        3. **RATING** - Use for subjective scales with 5 or fewer points
-           - Phrase question asking to rate something on a scale (1-5) if more than 5 points, use slider instead
-           - Example: "How would you rate your current cooking skills?" → Scale: 1 (Starter) to 5 (Chef)
-           - When to use: Opinion/feeling measurement, quality assessment, experience level
-           - REQUIRED fields: help_text, min_value, max_value, min_description (e.g., 'Poor', 'Low', 'Never'), max_description (e.g., 'Excellent', 'High', 'Always')
+        **3. RATING** - Subjective scale (up to 5 points, else use slider)
+        • User rates on discrete scale with labeled endpoints
+        • Example: "Energy level?" → 1 (Always Tired) to 5 (Highly Energetic)
+        • Use for: Opinions, quality assessments, subjective measures
+        • Required: help_text, min_value, max_value, min_description, max_description
         
-        4. **SLIDER** - Use for numeric values with more than 5 possible values
-           - Phrase question asking for a specific numeric amount
-           - Example: "How many hours do you sleep per night?" → Slider: 4-12 hours with 0.5 step
-           - When to use: Quantities, measurements, continuous ranges
-           - REQUIRED fields: help_text, min_value, max_value, step, unit (hours, kg, minutes, km, etc.)
+        **4. SLIDER** - Continuous numeric range (6+ distinct values)
+        • User selects specific quantity from range
+        • Example: "How many hours per week can you train?" → min_value: 2, max_value: 20, step: 0.5, unit: "hours"
+        • Use for: Quantities, measurements, continuous ranges
+        • Required: help_text, min_value, max_value, step, unit
+        • ⚠️ CRITICAL: unit must be a SINGLE STRING (e.g., "days", "hours", "kg") NOT an array
+        • DO NOT include: max_length, placeholder (those are for FREE_TEXT, not SLIDER)
         
-        5. **FREE_TEXT** - Use ONLY when user must write a descriptive answer
-           - Phrase as an open-ended question requiring explanation
-           - Example: "Describe your previous work experience" → Text field
-           - When to use: Complex descriptions, personal stories, detailed explanations
-           - Use SPARINGLY - prefer structured types when possible
-           - REQUIRED fields: help_text, placeholder (instruction text), max_length (200-500 chars)
+        **5. FREE_TEXT** - Open-ended description (USE SPARINGLY)
+        • User writes detailed response
+        • Example: "Describe past injuries affecting training?"
+        • Use for: Complex context requiring narrative explanation
+        • Limit: 1-2 per assessment phase (slow to answer)
+        • Required: help_text, placeholder, max_length (200-500)
         
-        6. **CONDITIONAL_BOOLEAN** - Use when a yes/no answer determines if details are needed
-           - Phrase as a yes/no question where "Yes" needs elaboration
-           - Example: "Do you have any allergies?" → Yes (describe them) / No (skip)
-           - When to use: Screening questions where "No" needs no follow-up
-           - Use instead of free_text when the question can start with "Do you have..." or "Have you ever..."
-           - REQUIRED fields: help_text, placeholder (for text input), max_length (200-500 chars)
+        **6. CONDITIONAL_BOOLEAN** - Yes/No with conditional detail (USE SPARINGLY)
+        • "Yes" requires elaboration; "No" skips
+        • Example: "Any dietary restrictions?" → Yes (describe) / No
+        • Use for: Screening questions where "No" = no further info needed
+        • Limit: 1-2 per assessment phase (adds complexity)
+        • Required: help_text, placeholder, max_length (200-500)
         
-        **IMPORTANT - Avoid Over-Using Open Formats:**
-        - If the answer can be structured (multiple choice, slider, rating), use structured types instead
-        - free text questions or conditional boolean questions should be used sparingly as they take longer to answer.
-        - Structured questions are faster and easier for users to answer
-        - Reserve open formats for when you truly need unstructured information
+        **UX OPTIMIZATION RULES:**
+        ✓ Prefer structured types (1-4) - faster, easier to answer
+        ✓ Limit open formats (5-6) to 20-30% of total questions
+        ✓ Use CONDITIONAL_BOOLEAN instead of FREE_TEXT when applicable
+        
+        **CRITICAL: Field Requirements by Type**
+        
+        For each response_type, populate ONLY the relevant fields (omit or set others to null):
+        
+        • MULTIPLE_CHOICE: options[] (array of {id, text, value})
+        • DROPDOWN: options[] (array of {id, text, value})
+        • RATING: min_value, max_value, min_description, max_description
+        • SLIDER: min_value, max_value, step, unit (STRING, not array!)
+        • FREE_TEXT: max_length, placeholder
+        • CONDITIONAL_BOOLEAN: max_length, placeholder
+        
+        ⚠️ ALL fields must be the correct type:
+        • Numeric fields: numbers (not strings)
+        • String fields: single strings (NOT arrays!)
+        • Array fields: arrays of objects
+        
+        **COMMON ERROR TO AVOID:**
+        ❌ WRONG: Slider with max_length and placeholder (those are FREE_TEXT fields!)
+        ✓ CORRECT: Slider with min_value, max_value, step, unit
+        
+        **COMPLETE EXAMPLES:**
+        
+        ✅ SLIDER (numeric range with steps):
+        {
+          "id": "training_days",
+          "text": "How many days per week can you train?",
+          "help_text": "Select your realistic training frequency",
+          "response_type": "slider",
+          "min_value": 1,
+          "max_value": 7,
+          "step": 1,
+          "unit": "days"  // ⚠️ Must be string, NOT ["days"]
+        }
+        
+        ✅ FREE_TEXT (open-ended input):
+        {
+          "id": "injury_details",
+          "text": "Describe any injuries or limitations",
+          "help_text": "Help us design a safe program",
+          "response_type": "free_text",
+          "max_length": 300,
+          "placeholder": "E.g., lower back pain, knee sensitivity..."
+        }
+        
+        ✅ MULTIPLE_CHOICE (select from options):
+        {
+          "id": "training_goal",
+          "text": "What is your primary training goal?",
+          "help_text": "Choose the goal that matters most to you",
+          "response_type": "multiple_choice",
+          "options": [
+            {"id": "strength", "text": "Build Strength", "value": "strength"},
+            {"id": "muscle", "text": "Gain Muscle", "value": "muscle"},
+            {"id": "endurance", "text": "Improve Endurance", "value": "endurance"}
+          ]
+        }
+        
+        ✅ CONDITIONAL_BOOLEAN (ONLY when user has EXISTING scheduled training commitments):
+        {
+          "id": "existing_training",
+          "text": "Do you already have regular training or practice sessions?",
+          "help_text": "For example: team practices, club sessions, scheduled classes, or matches",
+          "response_type": "conditional_boolean",
+          "max_length": 300,
+          "placeholder": "E.g., football practice Mon/Wed/Fri 2 hours + game Saturday, tennis club Tuesday/Thursday, martial arts class Wednesday..."
+        }
+        Note: Only use this if user has EXISTING commitments (team practices, sport club sessions, scheduled classes). NOT for general fitness goals where we're creating their plan from scratch.
         """
 
     @staticmethod
@@ -114,66 +313,49 @@ class PromptGenerator:
         return f"""
         {PromptGenerator.get_question_generation_intro()}
         
+        **WORKFLOW STATUS:**
+        🎯 **CURRENT STEP:** Initial Assessment Questions (Round 1 of 2)
+        {personal_info.username} has provided basic profile information above. This is the FIRST round of questions. Generate broad, targeted questions to gather essential details about their constraints, preferences, situation, and goal specifics. 
+        A second round of follow-up questions will come after to clarify and refine.
+
         {PromptGenerator.format_client_information(personal_info)}
         
-        **WORKFLOW STATUS:**
-        🎯 **CURRENT STEP:** Initial Questions Phase
-        - Gather specific information needed to build their training plan
-        - Focus on understanding their goal and collecting actionable training data
-        - Generate 5-8 targeted questions that directly impact plan design
-        - Use a nice combination of different question types
+        **USER PROFILE:**
+        • Goal: "{personal_info.goal_description}"
+        • Experience: {personal_info.experience_level}
+    
+        **CRITICAL FOR STRENGTH TRAINING:**
+        If the plan will include ANY strength training, you MUST ask this question EXACTLY:
+        • Question: "What training equipment do you have access to?"
+        • Type: multiple_choice
+        • Options (in this order):
+          - "Body Weight Only" → No equipment available
+          - "Dumbbells" → Have dumbbells at home or gym
+          - "Full Gym Access" → Barbell, machines, cables, racks, etc.
+          - "Resistance Bands" → Bands and similar portable equipment
+        • This is ESSENTIAL to match exercises to available equipment
         
-        **PRIMARY OBJECTIVE:** Collect concrete data needed to design their complete training plan.
-        
-        **ANALYZE THEIR GOAL:** 
-        Goal: "{personal_info.goal_description}"
-        Experience: {personal_info.experience_level}
-        
-        Based on their goal, determine what information you need to create their plan:
-        - What specific outcomes do they want to achieve?
-        - What training activities are relevant to their goal?
-        - What resources and constraints affect their training?
-        - What is their current starting point?
-        
-        **QUESTION STRATEGY:**
-        Generate 5-8 questions that help you determine the training plan components from the intro.
-        Only ask questions that are:
-        - Directly relevant to their specific goal
-        - Necessary to make concrete decisions about their plan
-        - Not already answered by the information you have
-        
-        Focus your questions on gathering:
-        - Goal clarification (specific targets, timeline, priorities)
-        - Training resources (equipment, location, schedule availability)
-        - Current abilities (starting point for their goal-relevant activities)
-        - Preferences (training approaches they prefer or want to avoid)
-        - Limitations (physical constraints, injuries, restrictions)
-        
-        **CRITICAL REQUIREMENTS:**
-        - Ask ONLY about information that directly impacts training plan design
-        - DO NOT ask about tracking methods, apps, or how they'll measure progress (not relevant for plan design)
-        - Avoid generic lifestyle questions unless they affect training schedule or recovery
-        - Focus on concrete, actionable data that helps you make specific training decisions
-        - Use varied question types (not just open-ended) for better user experience
-        - Adapt complexity to their experience level
+        **QUESTION FOCUS AREAS FOR INITIAL QUESTIONS:**
+        1. Goal specifics (targets, timeline, priorities)
+        2. Existing commitments (team practices, sport club sessions, scheduled classes, or matches that we need to work around)
+        3. Resources (equipment, location, schedule availability for NEW training sessions we need to schedule)
+        4. Current abilities (baseline for goal-relevant activities)
+        5. Preferences (preferred/avoided training approaches)
+        6. Limitations (injuries, restrictions, constraints)
+
+        **REQUIREMENTS:**
+        ✓ Ask 7-10 questions that gather ESSENTIAL information for plan design
+        ✓ Better to ask 5 focused questions than 8 with irrelevant ones
+        ✓ Use varied question types - limit open formats to 20-30% (1-2 questions max)
+        ✓ Adapt complexity to {personal_info.experience_level} level
+        ✓ If goal is vague/unclear, include clarifying question first
         
         {PromptGenerator.get_question_generation_instructions()}
         
-        **EXPECTED OUTPUT:**
-        - 5-8 targeted questions that provide the data needed to design their training plan
-        - Personalized AI coach message welcoming them to the assessment
-        - Questions tailored to their specific goal and experience level
+        **AI MESSAGE (max 70 words):**
+        Format: Greeting using "{personal_info.username}" → Reference "{personal_info.goal_description}" with excitement → Mention profile analysis + need for refinement questions → 2-3 emojis → Call to action
         
-        **AI COACH MESSAGE REQUIREMENTS:**
-        Generate a personalized message that:
-        - Greets them warmly using their username "{personal_info.username}"
-        - References their specific goal: "{personal_info.goal_description}" and you're very excited to help them
-        - Mention that you have analysed their profile but you have some further questions to refine the plan
-        - Uses 2-3 relevant emojis
-        - Use a maximum of 70 words
-        - Format: Greeting → Analysis → Call to action
-        
-        Return in AIQuestionResponse format with ai_message populated.
+        Return: AIQuestionResponse schema with ai_message populated.
         """
 
     @staticmethod
@@ -187,98 +369,121 @@ class PromptGenerator:
         {PromptGenerator.format_client_information(personal_info)}
         
         **WORKFLOW STATUS:**
-        ✅ **COMPLETED:** Initial Questions Phase
-        - Gathered foundational information about their goal, training preferences, and constraints
-        - As we're asking follow-up questions, do not ask completely new or redundant questions. But zoom in on already discovered topics.
-        - As we're asking follow-up questions you are allowed to use more free format question types as we need more detailed information.
+        ✅ **COMPLETED:** Initial Assessment Questions (Round 1) - Gathered broad information about constraints, preferences, and goals
+        🎯 **CURRENT STEP:** Follow-up Questions (Round 2 of 2)
+        {personal_info.username} answered the first round of questions. This is the SECOND and FINAL round. Review their responses below and ask targeted follow-up questions to clarify critical gaps and refine your understanding of their situation.
         
-        🎯 **CURRENT STEP:** Follow-up Questions Phase
-        - Fill remaining gaps needed to finalize training plan design
-        - Generate as much as needed (max 7 but prefer less) targeted questions to complete the training plan blueprint
-        
-        **INITIAL RESPONSES TO ANALYZE:**
+        **INITIAL RESPONSES:**
         {formatted_responses}
         
-        **STRATEGIC FOLLOW-UP APPROACH:**
-        Review their responses and identify what's STILL MISSING to create the complete training plan.
+        **STRATEGIC APPROACH:**
+        1. Review responses → identify missing information for complete plan design
+        2. Focus on gaps, NOT redundant or new unrelated topics
+        3. Zoom in on already-discovered areas requiring clarification
         
-        Generate max 7 follow-up questions that fill these specific gaps for THEIR goal
-             
+        **REQUIREMENTS:**
+        ✓ Ask 3-7 questions that fill CRITICAL gaps in understanding the USER
+        ✓ Better to ask 3 essential questions than 7 with redundant ones
+        ✓ No repetition of already-gathered information
+        ✓ Use varied question types - limit open formats to 30% max
+        ✓ Be specific to their responses and goal
+        ✓ Fewer questions if info is nearly complete
+        
         {PromptGenerator.get_question_generation_instructions()}
         
-        **CRITICAL REQUIREMENTS:**
-        - ONLY ask questions that fill critical gaps for training plan design
-        - DO NOT ask about progress tracking, measurement methods, or monitoring tools
-        - AVOID repeating information already gathered
-        - AVOID generic questions - be specific to their goal and responses
-        - If all necessary information is gathered, ask fewer questions (3 minimum)
+        **AI MESSAGE (max 70 words):**
+        Format: Greeting "{personal_info.username}" → Acknowledge great initial responses → Reference specific things mentioned (equipment/goals/constraints) → Explain these refine their perfect plan → 2-3 emojis → Next steps
         
-        **EXPECTED OUTPUT:**
-        - Max 7 targeted questions that complete the training plan blueprint
-        - Personalized AI coach message acknowledging their initial responses
-        - Questions that provide the final pieces of data needed for plan creation
-        
-        **AI COACH MESSAGE REQUIREMENTS:**
-        Generate a personalized message that:
-        - Greets them warmly using their username "{personal_info.username}"
-        - Acknowledges their great initial responses
-        - Shows you're building a clearer picture of their training needs
-        - References specific things they mentioned (equipment, goals, constraints)
-        - Explains these follow-up questions will fine-tune their perfect plan
-        - Uses 2-3 relevant emojis
-        - Use a maximum of 70 words
-        - Format: Acknowledgment → Analysis → Next steps
-        
-        Return in AIQuestionResponse format with ai_message populated.
+        Return: AIQuestionResponse schema with ai_message populated.
         """
 
     @staticmethod
     def get_outline_generation_intro() -> str:
         """Get the introduction for outline generation prompts."""
         return """
-        You are an expert training coach creating a comprehensive training plan outline. 
-        Based on the client's responses, create a structured outline that gives them 
-        a clear preview of their upcoming personalized training plan.
+        You are an expert training coach creating a training plan outline based on assessment responses.
+        
+        **IMPORTANT - APP SCOPE:**
+        This app creates SUPPLEMENTAL training programs (strength & conditioning).
+        • ✅ We provide: Strength training, running, cycling, swimming, hiking, and general conditioning
+        • ❌ We do NOT provide: Sport-specific drills, technical skill training, or team practice schedules
+        • 🎯 For athletes: We create supportive strength/conditioning work to complement their existing sport training
+        
+        **IMPORTANT - 4-WEEK TRAINING APPROACH:**
+        We create focused 4-week training plans to enable learning and adaptation.
+        After these 4 weeks, we'll generate the next phase using insights from their progress.
+        
+        **OUTLINE PURPOSE:**
+        • Create a 4-week program structure tailored to their goal
+        • Explain what PHASE this represents (Foundation, Base Building, etc.)
+        • Show how training progresses over the 4 weeks
+        • Connect to their overall goal
+        
+        **YOUR ROLE:** Create a clear, motivating 4-week plan with a descriptive phase name.
         """
 
     @staticmethod
     def get_outline_generation_instructions() -> str:
         """Get instructions for outline generation."""
         return """
-        Create a training plan outline that includes:
-        1. A catchy program title (3 words or less)
-        2. Total program duration in weeks
-        3. High-level explanation of the training approach
-        4. Breakdown into training periods/phases
-        5. For each period: name, duration, explanation, and sample daily trainings
-        6. Each daily training should have: day number, training name, description (max 20 words), and relevant tags
+        **OUTLINE STRUCTURE:**
+        1. **Title** - Descriptive phase name (3-4 words, e.g., "Foundation Building Phase", "Base Endurance Development")
+        2. **Duration** - Must be 4 weeks
+        3. **Explanation** - High-level approach (2-3 sentences):
+           • What this 4-week phase accomplishes toward their goal
+           • Brief mention of 4-week adaptive approach
+           • Connection to their long-term goal
+        4. **User Observations** - Summary of user profile + responses (2 sentences max)
+        5. **Training Phases** - 1-2 mini-phases within the 4 weeks
+        6. **Phase Details** - For each phase:
+           • Name (e.g., "Adaptation", "Development")
+           • Duration in weeks (must total 4)
+           • Explanation (1-2 sentences)
+           • Sample weekly pattern (5-7 daily trainings)
+        7. **Daily Training Samples** - Each has:
+           • Day number (1-7)
+           • Training name
+           • Description (max 20 words)
+           • Tags (strength/endurance/mixed)
         
-        Make sure the outline:
-        - Is tailored to their specific goals and experience level
-        - Follows proper periodization principles
-        - Is realistic and achievable
-        - Builds excitement for the full plan
+        **QUALITY STANDARDS:**
+        ✓ Tailored to user's specific goal and experience level
+        ✓ Follows proper periodization principles for their goal type
+        ✓ Realistic and achievable within stated timeline
+        ✓ Builds excitement and motivation for the full plan
         """
 
     @staticmethod
     def get_outline_generation_requirements() -> str:
         """Get requirements for outline generation."""
         return """
-        Requirements:
-        - Use the TrainingPlanOutline schema format
-        - Limit to 8-12 weeks total duration (prevent overly long plans)
-        - Include 2-3 training periods max
-        - Each period should have 3-7 daily trainings
-        - Training descriptions: max 20 words each
-        - Tags should be relevant (e.g., 'strength', 'cardio', 'recovery', 'high-intensity')
-        - Make it engaging and motivating but concise
+        **STRICT REQUIREMENTS:**
+        • Schema: Use TrainingPlanOutline format
+        • Duration: EXACTLY 4 weeks
+        • Phases: 1-2 mini-phases within the 4 weeks
+        • Descriptions: Max 20 words per training
+        • Tags: 'strength', 'endurance', 'mixed'
+        • Tone: Engaging and motivating
+        
+        **TITLE EXAMPLES:**
+        • "Foundation Building" (strength beginners)
+        • "Base Endurance Development" (marathon prep)
+        • "Athletic Conditioning" (sport athletes)
+        
+        **EXPLANATION REQUIREMENTS:**
+        In 2-3 sentences, explain:
+        • What this 4-week phase accomplishes for their goal
+        • Brief: "We use 4-week plans to learn and adapt based on your progress"
+        • How this phase connects to their long-term goal
+        
+        Example: "Foundation Building phase establishes proper movement patterns and baseline strength for your muscle-building goal. We use 4-week cycles to learn what works for you and adapt future training accordingly. This phase sets the foundation for progressive overload in upcoming cycles."
         """
 
     @staticmethod
     def generate_training_plan_outline_prompt(
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
-        formatted_follow_up_responses: str,
+        formatted_follow_up_responses: str
     ) -> str:
         """Generate the complete prompt for training plan outline."""
         combined_responses = (
@@ -291,90 +496,62 @@ class PromptGenerator:
         {PromptGenerator.format_client_information(personal_info)}
 
         **WORKFLOW STATUS:**
-        ✅ **COMPLETED:** Initial Questions Phase
-        - Gathered foundational data: goal details, training type preferences, equipment, availability
-        - Collected information on current performance level and physical limitations
-        
-        ✅ **COMPLETED:** Follow-up Questions Phase
-        - Filled critical gaps for training plan design
-        
-        **COMPLETE TRAINING DATA TO USE:**
+        ✅ Questions (Round 1 - Broad information) → ✅ Follow-ups (Round 2 - Clarification) → ✅ Lesson Extraction
+        🎯 **CURRENT STEP:** Training Plan Outline Creation
+        {personal_info.username} has completed both rounds of assessment questions. Now use all the data below to create a structured 4-week training outline with phases, sample trainings, and progression strategy.
+
+        **ASSESSMENT DATA:**
         {combined_responses}
-
-        🎯 **CURRENT STEP:** Training Plan Outline Phase
-        - Create a training plan outline based on the SPECIFIC data gathered
-        - Design the weekly structure showing which days are strength, endurance, mixed, or recovery
-        - Define periodization strategy across training periods
-        - Show them the blueprint of their personalized program
-
-
-        **OUTLINE CREATION STRATEGY:**
-        Use the SPECIFIC information from their responses to determine:
         
-        1. **Training Split & Frequency**:
-           - Based on available days → How many training days per week?
-           - Based on preferences → Which days are strength, endurance, mixed, or recovery?
-           - Based on goal → What's the primary focus (strength vs. endurance ratio)?
-        
-        2. **Exercise & Session Selection**:
-           - Based on equipment → Which exercise categories are available?
-           - Based on goal & preferences → Push/pull/legs? Full body? Endurance sport type?
-           - Based on limitations → Any exercises or movements to avoid?
-        
-        3. **Intensity & Volume Approach**:
-           - Based on experience level → Starting intensity and volume
-           - Based on goal → Higher volume or higher intensity focus?
-           - Based on time availability → Session duration and density
-        
-        4. **Periodization**:
-           - Based on timeline → How many weeks and training periods?
-           - Based on goal → Linear periodization? Undulating? Block periodization?
-           - Based on experience → Rate of difficulty increases and complexity
+        **CRITICAL: USE THE ASSESSMENT DATA CORRECTLY**
+        • Respect their stated CONSTRAINTS: equipment, time, injuries, existing commitments, preferences
+        • Use coaching expertise to design the PROGRAM: structure, volume, intensity, progression, exercise selection
+        • If a constraint is unclear, work with what you have rather than making assumptions
+        • You decide HOW to train, they tell you WHAT'S possible
 
-        **OUTLINE STRUCTURE:**
-        - **Title**: 3 words max, reflects their specific goal
-        - **Duration**: 8-12 weeks maximum (keep plans focused and achievable)
-        - **Explanation**: Directly references their goal, available training days, and approach (2-3 sentences max)
-        - **User Observations**: Comprehensive summary capturing ALL information from personal info and responses
-        - **Training Periods**: 2-3 phases showing periodization (e.g., Build Base → Increase Intensity → Peak)
-        - **Daily Trainings**: Show weekly pattern (e.g., Mon: Strength Upper, Wed: Endurance Run, Fri: Strength Lower)
+        **OUTLINE DESIGN STRATEGY:**
+        Use assessment data to determine:
+        
+        **1. Training Split & Frequency**
+        • Available days → training days per week
+        • Preferences → which days are strength/endurance/mixed/rest
+        • Goal → primary focus and modality ratio
+        
+        **2. Training Activities**
+        • Goal → required modalities (strength exercises, running, cycling, etc.)
+        • Equipment → available resources for chosen activities
+        • Limitations → activities/movements to avoid
+        
+        **3. Training Load** (Coach Determines)
+        • Experience level → starting point and progression rate
+        • Goal → training emphasis distribution
+        • Time availability → session structure
+        
+        **4. Periodization**
+        • Timeline → total weeks and number of phases (2-3)
+        • Goal → periodization model (linear/undulating/block)
+        • Experience → complexity and progression rate
 
-        **USER OBSERVATIONS REQUIREMENTS:**
-        Create a comprehensive summary capturing ALL information from personal info and responses in maximum 2 sentences. Analyze the actual questions asked and responses given - include every relevant detail about their training preferences, equipment, availability, limitations, motivations, and more...
-          - Write in the following format: the user is a [age] year old [gender] who weighs [weight] [unit] and is [height] [unit] tall. They want to focus on [goal_description] and 
-            have [experience_level] experience level. [Continue with ALL details from responses in proper sentence structure] 
+        **USER OBSERVATIONS FORMAT:**
+        Write 2 sentences maximum capturing ALL personal info + responses. Format: "User is [age]yo [gender], [weight][unit], [height][unit] tall, focusing on [goal], with [experience_level] experience. [ALL response details: equipment, availability, limitations, preferences, motivations, etc.]"
 
-        **CRITICAL REQUIREMENTS FOR OUTLINE:**
-        - Daily trainings must reflect their available days and preferences from responses
-        - Exercise types must match their available equipment
-        - Training_type for each day must align with their goal (strength/endurance/mixed/recovery)
-        - Periodization across periods must be clear and goal-appropriate
-        - Volume and intensity should match their experience level
+        **CRITICAL VALIDATION:**
+        ✓ Daily trainings match available days from responses
+        ✓ Activities match available equipment
+        ✓ Training types align with goal
+        ✓ Periodization suits experience level
+        ✓ 2-3 phases total (not 2-4)
 
         {PromptGenerator.get_outline_generation_instructions()}
 
         {PromptGenerator.get_outline_generation_requirements()}
 
-        **EXPECTED OUTPUT:**
-        - Training plan outline that directly reflects the data gathered in questions
-        - Comprehensive user observations summary capturing ALL personal info and responses
-        - Weekly structure showing specific training types for each available day
-        - Clear periodization strategy across 2-4 training periods
-        - Personalized AI coach message celebrating their assessment completion
-
-        **AI COACH MESSAGE REQUIREMENTS:**
-        Generate a personalized message that:
-        - Greets them warmly using their username "{personal_info.username}"
-        - Celebrates completing the comprehensive assessment
-        - Shows you've analyzed all their responses thoroughly
-        - Explains you're crafting their personalized training plan outline
-        - Emphasizes how it's tailored to their specific goal and situation
-        - Builds excitement for seeing their complete plan
-        - Uses 2-3 relevant emojis
-        - Use a maximum of 70 words
-        - Format: Celebration → Analysis → Anticipation
-
-        Return in TrainingPlanOutline format with ai_message populated.
+        **AI MESSAGE (max 60 words):**
+        Format: Greeting "{personal_info.username}" → Celebrate completion → Mention 4-week cycle approach → Reference phase name → Build excitement → 2-3 emojis
+        
+        Example: "Great work, [Name]! 🎉 I've created your Foundation Building phase—4 weeks of training tailored to [goal]. We use 4-week cycles to learn and adapt future training based on your progress. Let's get started! 💪"
+        
+        Return: TrainingPlanOutline schema with ai_message populated.
         """
 
     @staticmethod
@@ -384,68 +561,137 @@ class PromptGenerator:
         formatted_follow_up_responses: str,
         plan_outline: dict = None,
         exercise_info: str = "",
+        playbook_lessons: List = None,
     ) -> str:
         """Generate the complete prompt for training plan generation."""
-        
-        # Build outline context
-        outline_context = ""
 
+        outline_context = ""
         if plan_outline:
             outline_context = f"""
             **APPROVED OUTLINE:**
             Title: {plan_outline.get('title', 'N/A')}
             Duration: {plan_outline.get('duration_weeks', 'N/A')} weeks
-            
-            **USER PROFILE SUMMARY:**
-            {plan_outline.get('user_observations', 'N/A')}
+            User Profile: {plan_outline.get('user_observations', 'N/A')}
 
-            Training Periods:"""
+            Training Phases:"""
             for period in plan_outline.get("training_periods", []):
-               outline_context += f"\n\n{period.get('period_name', 'N/A')} ({period.get('duration_weeks', 'N/A')} weeks):"
-               outline_context += f"\n  {period.get('explanation', 'N/A')}"
-               
-               # Add daily trainings pattern for this period
-               daily_trainings = period.get('daily_trainings', [])
-               if daily_trainings:
-                  outline_context += "\n  Weekly Pattern:"
-                  for training in daily_trainings:
+                outline_context += f"\n\n{period.get('period_name', 'N/A')} ({period.get('duration_weeks', 'N/A')} weeks): {period.get('explanation', 'N/A')}"
+                daily_trainings = period.get("daily_trainings", [])
+                if daily_trainings:
+                    outline_context += "\n  Weekly Pattern:"
+                    for training in daily_trainings:
                         outline_context += f"\n    Day {training.get('day', 'N/A')}: {training.get('training_name', 'N/A')} - {training.get('description', 'N/A')}"
 
-        # Build the complete prompt
-        prompt = f"""
-            Create a detailed training plan for {personal_info.username}.
+        combined_responses = (
+            f"{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
+        )
+        
+        playbook_context = PromptGenerator.format_playbook_lessons(
+            playbook_lessons, personal_info, context="training"
+        )
 
+        prompt = f"""
+            Create detailed 4-week training plan for {personal_info.username}.
+
+            **CRITICAL - APP SCOPE:**
+            This app creates SUPPLEMENTAL training programs (strength & conditioning).
+            • ✅ We provide: Strength training, running, cycling, swimming, hiking, and general conditioning
+            • ❌ We do NOT provide: Sport-specific drills, technical skill training, or team practice schedules
+            • 🎯 For athletes: We create supportive strength/conditioning work to complement their existing sport training
+            
+            **4-WEEK TRAINING PHASE:**
+            This is a focused 4-week training phase. After completion, we'll create the next phase using insights from their progress.
+            
             **GOAL:** {personal_info.goal_description}
             **LEVEL:** {personal_info.experience_level}
 
             {outline_context}
+            {playbook_context}
 
             **AVAILABLE EXERCISES:**
             {exercise_info}
 
-             **INSTRUCTIONS:**
-             1. Use the EXACT outline structure (same title, duration, periods)
-             2. For each period, create weekly schedules with 7 daily trainings (Mon-Sun)
-             3. Set training_type: "strength", "endurance", "mixed", or "recovery"
-             4. For STRENGTH: Add 3-5 exercises max with sets, reps, weight_1rm (include compound movements)
-             5. For ENDURANCE: Create sessions with name, description (20 words max), sport_type, training_volume, unit, heart_rate_zone
-             6. For MIXED: Include 2-3 strength exercises AND 1 endurance session max
-             7. For RECOVERY: Set is_rest_day=true, empty arrays
-             8. Keep motivation concise:
-                - Daily training: 1-2 sentences max
-                - Weekly schedule: 2-3 sentences max
-                - Overall plan: 3-4 sentences max
+            **ASSESSMENT DATA:**
+            {combined_responses}
+            
+            **CRITICAL: USE THE ASSESSMENT DATA CORRECTLY**
+            • Respect their stated CONSTRAINTS: equipment, time, injuries, existing commitments, preferences
+            • Use coaching expertise to design the PROGRAM: structure, volume, intensity, progression, exercise selection
+            • Only prescribe exercises that match their available equipment
+            • If a constraint is unclear, work with what you have rather than making assumptions
+            • You decide HOW to train, they tell you WHAT'S possible
 
-             **CRITICAL:**
-             - Match {personal_info.experience_level} complexity
-             - Support goal: "{personal_info.goal_description}"
-             - Increase difficulty across weeks and periods (periodization)
-             - VARIETY IS KEY: Vary activities week-to-week to prevent plateaus
-             - STAY CONCISE: Keep descriptions brief to avoid exceeding token limits
+             **PLAN STRUCTURE:**
+             1. Match outline EXACTLY (same title, duration=4 weeks, phases)
+             2. Create EXACTLY 4 weekly schedules (Weeks 1-4)
+             3. Each week → 7 days consisting of training or rest days
+             4. Each day → set training_type: strength/endurance/mixed/rest
+             
+             **MODALITY-SPECIFIC INSTRUCTIONS:**
+             
+             **STRENGTH days:** provide exercises with sets, reps, weight_1rm
+             • Select movements for goal, equipment, experience
+             • Balance movement patterns (push/pull, upper/lower, etc.)
+             
+             **ENDURANCE days:** Sessions with name, description (≤20 words), sport_type, training_volume, unit
+             • sport_type MUST be EXACTLY one of these values (case-sensitive): 
+               running | cycling | swimming | rowing | hiking | walking | elliptical | stair_climbing | jump_rope | other
+             • unit MUST be EXACTLY one of these values (case-sensitive):
+               minutes | km | miles | meters
+             • Vary session types (easy, tempo, intervals, recovery)
+             • Interval sessions can be created by making several endurance sessions with different tempo's / heart rate zones
+             • Heart_rate_zone (Zone 1, Zone 2, Zone 3, Zone 4, Zone 5)
+             • Choose sport_type based on user's goal, equipment, and preferences
+             • Examples: {{"sport_type": "running", "unit": "km"}} or {{"sport_type": "cycling", "unit": "minutes"}}
 
-            Return in TrainingPlan schema format.
+             
+             **MIXED days:** strength exercises + endurance session(s)
+             • Balance modalities to avoid interference
+             • Consider recovery demands
+             
+             **REST days:** training_type="rest", is_rest_day=true, empty exercise/session arrays
+             
+             **MOTIVATION TEXT REQUIREMENTS:**
+             
+             • **Overall plan motivation (3 sentences):**
+               - Name the phase (e.g., "Foundation Building Phase")
+               - What these 4 weeks accomplish for their goal
+               - Mention: "We'll adapt your next 4-week phase based on your progress"
+               
+             • **Weekly motivation (2 sentences):**
+               - This week's purpose in the 4-week phase
+               - How it progresses toward phase goals
+               
+             • **Daily motivation (1 sentence):**
+               - Today's training focus
+
+             **TRAINING PRINCIPLES:**
+             ✓ Progressive Overload - gradual difficulty increases
+             ✓ Variety - prevent plateaus, vary exercises and sessions week-to-week
+             ✓ Specificity - matches goal requirements
+             ✓ Recovery - adequate rest between hard sessions
+             ✓ Individualization - respects constraints/preferences
+
+             **CRITICAL REQUIREMENTS:**
+             ✓ Match {personal_info.experience_level} complexity
+             ✓ Align with "{personal_info.goal_description}" (primary driver)
+             ✓ Apply goal-appropriate periodization
+             ✓ Apply ALL playbook lessons (if provided - these are proven constraints and preferences)
+             ✓ Stay concise
+             
+             **SUPPLEMENTAL TRAINING SCHEDULING (for sport athletes):**
+             If user has existing sport training (practice, games, matches):
+             • Schedule strength/conditioning on OFF days from their sport training
+             • Keep volume manageable to avoid interfering with sport performance
+             • Prioritize injury prevention and athletic development
+             • Do NOT schedule high-intensity work before games/matches
+             
+             **FLEXIBILITY NOTE:**
+             If outline has obvious errors or user equipment changed, note the discrepancy and proceed with best judgment for user safety/success.
+
+            Return: TrainingPlan schema format.
          """
-        
+
         return prompt
 
     @staticmethod
@@ -454,63 +700,68 @@ class PromptGenerator:
     ) -> str:
         """Generate the prompt for AI to decide if exercises are needed."""
         return f"""
-        You are an expert training coach analyzing a user's training goals and responses.
+        You are an expert training coach analyzing training requirements.
         
         **User Profile:**
-        - Goal: {personal_info.goal_description}
-        - Experience: {personal_info.experience_level}
+        Goal: {personal_info.goal_description}
+        Experience: {personal_info.experience_level}
         
-        **User Responses:**
-        {formatted_responses}
-
-        **Training Plan Outline:**
-        {plan_outline}
+        **Responses:** {formatted_responses}
+        **Outline:** {plan_outline}
         
-        **Available Exercise Database:**
-        Our exercise database contains strength training exercises with the following EXACT equipment types (use these exact strings):
+        **EXERCISE DATABASE SCOPE:**
         
-        **Primary Equipment:**
-        - "Barbell" - Olympic bar, standard barbell
-        - "Dumbbell" - Single or pair of dumbbells
-        - "Cable" - Cable machines, pull stations
-        - "Cable (pull side)" - Cable pull exercises
-        - "Machine" - General gym machines
-        - "Machine (selectorized)" - Pin-loaded machines
-        - "Machine (plate loaded)" - Plate-loaded machines
-        - "Smith" - Smith machine
-        - "Body Weight" - No equipment needed (capitalize both words)
-        - "Body weight" - No equipment needed (lowercase 'weight')
+        ✅ **What we HAVE:** Strength training exercises with these equipment types:
+        Barbell | Dumbbell | Cable | Machine | Smith | Body weight | Band Resistive | Suspension | Sled | Weighted | Plyometric | Isometric
         
-        **Resistance & Support:**
-        - "Band Resistive" - Resistance bands
-        - "Band-assisted" - Bands for assistance
-        - "Suspension" - TRX, suspension trainers
-        - "Suspended" - Suspended exercises
-        - "Sled" - Pushing/pulling sleds
-        - "Weighted" - Added weight, weighted vests
+        ❌ **What we DON'T have:**
+        Running/cycling/swimming programs | Sport-specific skills drills | Yoga/dance sequences
         
-        **Specialized:**
-        - "Assisted (machine)" - Assisted pull-up/dip machines
-        - "Self-assisted" - Using own body for assistance
-        - "Isometric" - Static holds
-        - "Plyometric" - Explosive/jumping movements
+        **EQUIPMENT TYPE STRINGS (use EXACTLY as shown):**
+        • "Barbell"
+        • "Dumbbell"
+        • "Cable"
+        • "Cable (pull side)"
+        • "Machine"
+        • "Assisted (machine)"
+        • "Smith"
+        • "Body weight"
+        • "Band Resistive"
+        • "Suspension"
+        • "Suspended"
+        • "Sled"
+        • "Weighted"
+        • "Plyometric"
+        • "Isometric"
+        • "Self-assisted"
         
-        **What we DON'T have:**
-        - Running-specific drills or endurance programs
-        - Swimming techniques or training plans
-        - Cycling training plans
-        - Sport-specific skills training (ball sports, martial arts, etc.)
-        - Yoga sequences or flows
-        - Dance routines
+        **DECISION TASK:**
         
-        **Decision Task:**
-        Based on the user's goal, questions and anwers providing more detail and training plan outline, decide:
-        1. Do you need exercises from our database? (Yes if any strength training is needed)
-        2. What difficulty level? (beginner/intermediate/advanced)
-        3. Which equipment types should we retrieve? 
-           - Use the EXACT strings from the list above (including quotes, capitalization, and parentheses)
-           - Select based on what equipment the user has access to
-           - You can select multiple equipment types
+        **1. Need exercises from database?**
+        → YES if plan includes ANY strength training
+        → NO if purely endurance/cardio/sport-specific
         
-        **CRITICAL:** The equipment strings must EXACTLY match the database values listed above, including capitalization and special characters.
+        **2. Difficulty level?**
+        Determine based on:
+        • {personal_info.experience_level} experience level
+        • Responses about training history
+        • Goal complexity
+        → Return: beginner | intermediate | advanced
+        
+        **3. Equipment types to retrieve?**
+        Based on user's available equipment from responses, map to database strings:
+        
+        **EQUIPMENT MAPPING:**
+        User selected "Body Weight Only" → ["Body weight"]
+        User selected "Dumbbells" → ["Dumbbell", "Body weight"]
+        User selected "Full Gym Access" → ALL (include all equipment types from database)
+        User selected "Resistance Bands" → ["Band Resistive", "Body weight"]
+        
+        **RULES:**
+        • Match user equipment to database strings EXACTLY (see list above)
+        • Select ALL applicable types (can be multiple)
+        • Use EXACT capitalization from list above
+        • Always include "Body weight" since it requires no equipment
+        
+        **VALIDATION:** Equipment strings must match database exactly - check capitalization, spacing, and special characters.
         """

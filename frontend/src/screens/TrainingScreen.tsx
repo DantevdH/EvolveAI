@@ -1,5 +1,5 @@
 // Training Screen - Main training interface
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, SafeAreaView } from 'react-native';
 import { useTraining } from '../hooks/useTraining';
 import { useAuth } from '../context/AuthContext';
@@ -11,6 +11,8 @@ import ConfirmationDialog from '../components/shared/ConfirmationDialog';
 import ExerciseDetailView from '../components/training/ExerciseDetailView';
 import OneRMCalculatorView from '../components/training/OneRMCalculatorView';
 import ExerciseSwapModal from '../components/training/ExerciseSwapModal';
+import { DailyFeedbackModal, DailyFeedbackData } from '../components/training/DailyFeedbackModal';
+import { useDailyFeedback } from '../hooks/useDailyFeedback';
 
 const TrainingScreen: React.FC = () => {
   const { state: authState } = useAuth();
@@ -44,6 +46,52 @@ const TrainingScreen: React.FC = () => {
     isPlanComplete,
     currentWeekProgress
   } = useTraining();
+
+  // Daily Feedback Hook for ACE Pattern
+  const {
+    showFeedbackModal,
+    setShowFeedbackModal,
+    captureOriginalTraining,
+    submitFeedback,
+    skipFeedback,
+    modificationsDetected,
+    isSubmitting,
+  } = useDailyFeedback(
+    authState.user?.id || '',
+    trainingPlan?.id || '',
+    trainingState.currentWeekSelected,
+    {
+      username: authState.userProfile?.username || authState.user?.user_metadata?.username || authState.user?.email || 'User',
+      age: authState.userProfile?.age || 30,
+      weight: authState.userProfile?.weight || 70,
+      weight_unit: authState.userProfile?.weightUnit || 'kg',
+      height: authState.userProfile?.height || 175,
+      height_unit: authState.userProfile?.heightUnit || 'cm',
+      gender: authState.userProfile?.gender || 'male',
+      goal_description: authState.userProfile?.goalDescription || trainingPlan?.description || 'General Fitness',
+      experience_level: authState.userProfile?.experienceLevel || 'intermediate',
+      measurement_system: authState.userProfile?.weightUnit === 'lbs' ? 'imperial' : 'metric',
+    }
+  );
+
+  // Capture original training state when selected day changes
+  useEffect(() => {
+    if (selectedDayTraining && !selectedDayTraining.completed) {
+      captureOriginalTraining(selectedDayTraining);
+    }
+  }, [selectedDayTraining, captureOriginalTraining]);
+
+  // Show feedback modal when training is completed
+  useEffect(() => {
+    if (selectedDayTraining?.completed && !selectedDayTraining.isRestDay) {
+      // Small delay to let the completion animation finish
+      const timer = setTimeout(() => {
+        setShowFeedbackModal(true);
+      }, 800);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [selectedDayTraining?.completed, selectedDayTraining?.isRestDay, setShowFeedbackModal]);
 
   const handleOneRMCalculator = (exerciseName: string) => {
     setSelectedExerciseForCalculator(exerciseName);
@@ -92,6 +140,26 @@ const TrainingScreen: React.FC = () => {
         swapExercise(exerciseToReplace.id, newExercise);
       }
     }
+  };
+
+  // Daily Feedback Handlers
+  const handleFeedbackSubmit = async (feedbackData: DailyFeedbackData) => {
+    if (!selectedDayTraining) return;
+
+    try {
+      await submitFeedback(feedbackData, selectedDayTraining);
+      // Success message is shown by the hook
+    } catch (error) {
+      // Error is already handled by the hook
+      console.error('Failed to submit feedback');
+    }
+  };
+
+  const handleFeedbackSkip = async () => {
+    if (!selectedDayTraining) return;
+
+    await skipFeedback(selectedDayTraining);
+    setShowFeedbackModal(false);
   };
 
   // Handle loading state
@@ -245,6 +313,17 @@ const TrainingScreen: React.FC = () => {
         onCancel={() => confirmReopenTraining(false)}
         confirmButtonColor={colors.primary}
         icon="refresh"
+      />
+
+      {/* Daily Feedback Modal (ACE Pattern) */}
+      <DailyFeedbackModal
+        visible={showFeedbackModal}
+        onClose={() => setShowFeedbackModal(false)}
+        onSubmit={handleFeedbackSubmit}
+        onSkip={handleFeedbackSkip}
+        dayOfWeek={selectedDayTraining?.dayOfWeek || ''}
+        trainingType={selectedDayTraining?.isRestDay ? 'Rest Day' : 'Training'}
+        modificationsDetected={modificationsDetected}
       />
     </SafeAreaView>
   );

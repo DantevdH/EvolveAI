@@ -383,6 +383,40 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     paddingHorizontal: 16,
   },
+  // What You'll Get Section
+  whatYouGetSection: {
+    backgroundColor: colors.primaryTransparentLight || `${colors.primary}08`,
+    borderWidth: 1,
+    borderColor: colors.primaryTransparentLight || `${colors.primary}25`,
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 28,
+  },
+  whatYouGetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  whatYouGetList: {
+    gap: 12,
+  },
+  whatYouGetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkmarkIcon: {
+    marginRight: 12,
+    marginTop: 1,
+  },
+  whatYouGetText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 19,
+    fontWeight: '500',
+  },
   // Weeks Section
   weeksSection: {
     marginBottom: 24,

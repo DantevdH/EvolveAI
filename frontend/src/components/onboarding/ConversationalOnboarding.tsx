@@ -521,7 +521,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         jwtToken
       );
       
-      console.log(`📍 Onboarding Stage: Initial Questions - AI Message: ${response.ai_message?.substring(0, 50)}...`);
       
       setState(prev => ({
         ...prev,
@@ -705,7 +704,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         try {
           const responsesObject = Object.fromEntries(state.initialResponses);
           
-          console.log(`📍 Onboarding Stage: Follow-up Questions - Generating ${state.initialQuestions.length} follow-up questions`);
           
           // Get JWT token from Supabase session
           const { data: { session } } = await supabase.auth.getSession();

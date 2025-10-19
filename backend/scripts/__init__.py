@@ -1,1 +1,1 @@
-# Scripts package for EvolveAI backend 
+# Scripts package for EvolveAI backend

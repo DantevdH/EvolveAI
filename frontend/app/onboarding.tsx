@@ -20,9 +20,14 @@ export default function Onboarding() {
   }, []);
 
   const handleComplete = async (trainingPlan: any) => {
-    console.log('✅ Training plan generated successfully');
+    console.log('✅ Onboarding: Training plan generated successfully');
+    console.log('🔄 Onboarding: Refreshing user profile before navigation...');
     
-    // Navigate directly to main app - training plan generation is complete
+    // CRITICAL: Refresh user profile to load the newly generated plan
+    await refreshUserProfile();
+    
+    console.log('✅ Onboarding: User profile refreshed, navigating to main app');
+    // Navigate to main app - training plan generation is complete
     router.replace('/(tabs)');
   };
 

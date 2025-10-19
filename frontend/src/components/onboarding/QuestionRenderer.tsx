@@ -44,6 +44,21 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
       return <TextInputQuestion {...commonProps} />;
     
     case QuestionType.SLIDER:
+      // Debug logging to catch unit data type issues
+      if (question.unit && typeof question.unit !== 'string') {
+        console.error('❌ SLIDER unit is not a string:', {
+          questionId: question.id,
+          unitType: typeof question.unit,
+          unitValue: question.unit,
+          rawQuestion: JSON.stringify(question)
+        });
+      }
+      
+      // Ensure unit is a string (defensive programming)
+      const unitValue = Array.isArray(question.unit) 
+        ? question.unit[0] 
+        : (question.unit ?? '');
+      
       return (
         <CoolSlider
           title=""
@@ -52,7 +67,7 @@ export const QuestionRenderer: React.FC<QuestionRendererProps> = ({
           min={question.min_value ?? 0}
           max={question.max_value ?? 100}
           step={question.step ?? 1}
-          unit={question.unit ?? ''}
+          unit={typeof unitValue === 'string' ? unitValue : String(unitValue)}
           size="large"
           style={{ backgroundColor: 'transparent', borderWidth: 0, padding: 0 }}
         />
