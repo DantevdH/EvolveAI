@@ -114,9 +114,18 @@ export interface OnboardingState {
   // Step 7: Plan Generation
   planGenerationLoading: boolean;
   trainingPlan: any | null; // TrainingPlan type
+  completionMessage: string | null; // AI completion message after plan generation
+  hasSeenCompletionMessage: boolean; // Track if user has seen the completion message
   error: string | null;
   aiHasQuestions: boolean;
   aiAnalysisPhase: 'initial' | 'followup' | 'generation' | null;
+  
+  // Plan metadata for feedback updates
+  planMetadata?: {
+    exerciseInfo?: string;
+    formattedInitialResponses?: string;
+    formattedFollowUpResponses?: string;
+  };
 }
 
 export interface QuestionResponse {
@@ -234,4 +243,8 @@ export interface PlanGenerationStepProps {
   onRetry: () => void;
   onStartGeneration?: () => void;
   username?: string;
+  isCompleted?: boolean;
+  completionMessage?: string;
+  onContinue?: () => void;
+  onViewPlan?: () => void;
 }

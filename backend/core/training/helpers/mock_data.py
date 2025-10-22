@@ -413,7 +413,7 @@ def create_mock_training_plan_outline() -> TrainingPlanOutline:
     periods = [
         TrainingPeriod(
             period_name="Foundation Phase",
-            duration_weeks=4,
+            duration_weeks=1,  # 1-week schedule duplicated to 4 weeks
             explanation="Build a solid foundation with fundamental movement patterns and proper form",
             daily_trainings=[
                 DailyTraining(
@@ -438,7 +438,7 @@ def create_mock_training_plan_outline() -> TrainingPlanOutline:
         ),
         TrainingPeriod(
             period_name="Progressive Overload Phase",
-            duration_weeks=4,
+            duration_weeks=1,  # 1-week schedule duplicated to 4 weeks
             explanation="Gradually increase weights and volume to stimulate muscle growth and strength gains",
             daily_trainings=[
                 DailyTraining(

@@ -259,6 +259,7 @@ class DatabaseService:
                 "title": plan_dict.get("title", "Personalized Training Plan"),
                 "summary": plan_dict.get("summary", ""),
                 "motivation": plan_dict.get("motivation", ""),
+                "ai_message": plan_dict.get("ai_message"),  # Store AI completion message
                 "created_at": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat(),
             }
@@ -745,6 +746,68 @@ class DatabaseService:
 
         except Exception as e:
             self.logger.error(f"Error saving user playbook: {e}")
+            return False
+
+    async def update_training_plan(
+        self, 
+        plan_id: int, 
+        updated_plan_data: Dict[str, Any],
+        jwt_token: Optional[str] = None
+    ) -> bool:
+        """
+        Update an existing training plan with new data.
+
+        Args:
+            plan_id: The training plan ID to update
+            updated_plan_data: The updated plan data as dictionary
+            jwt_token: Optional JWT token for authentication
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Use authenticated client if JWT token is provided
+            if jwt_token:
+                supabase_client = self._get_authenticated_client(jwt_token)
+            else:
+                # Use service role key for server-side operations
+                supabase_client = create_client(
+                    settings.SUPABASE_URL,
+                    settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY,
+                )
+
+            # Convert plan data to JSON if not already a string
+            if isinstance(updated_plan_data, dict):
+                plan_json = json.dumps(updated_plan_data)
+                # Extract ai_message if it exists in the updated data
+                ai_message = updated_plan_data.get("ai_message")
+            else:
+                plan_json = updated_plan_data
+                ai_message = None
+
+            # Prepare update data
+            update_data = {
+                "plan_data": plan_json,
+                "updated_at": datetime.utcnow().isoformat()
+            }
+            
+            # Add ai_message if it exists
+            if ai_message is not None:
+                update_data["ai_message"] = ai_message
+
+            # Update the training_plans table
+            result = (
+                supabase_client.table("training_plans")
+                .update(update_data)
+                .eq("id", plan_id)
+                .execute()
+            )
+
+            self.logger.info(f"Successfully updated training plan {plan_id}")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error updating training plan {plan_id}: {e}")
             return False
 
 

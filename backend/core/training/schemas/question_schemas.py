@@ -233,3 +233,82 @@ class PlanGenerationResponse(BaseModel):
     error: Optional[str] = Field(
         default=None, description="Error message if unsuccessful"
     )
+
+
+class PlanFeedbackRequest(BaseModel):
+    """Request schema for plan feedback processing."""
+    
+    user_profile_id: int = Field(..., description="User profile ID")
+    plan_id: int = Field(..., description="Training plan ID")
+    feedback_message: str = Field(..., description="User feedback message")
+    conversation_history: Optional[List[Dict[str, str]]] = Field(
+        default=[], 
+        description="Previous conversation messages for context"
+    )
+    exercises: Optional[List[Dict[str, Any]]] = Field(
+        None, 
+        description="Raw exercise data from original plan generation"
+    )
+    formatted_initial_responses: Optional[str] = Field(
+        None, 
+        description="Formatted initial question responses for context"
+    )
+    formatted_follow_up_responses: Optional[str] = Field(
+        None, 
+        description="Formatted follow-up question responses for context"
+    )
+
+
+class PlanFeedbackResponse(BaseModel):
+    """Response schema for plan feedback processing."""
+    
+    success: bool = Field(..., description="Whether the feedback was processed successfully")
+    ai_response: str = Field(..., description="AI's response to the feedback")
+    plan_updated: bool = Field(..., description="Whether the plan was modified")
+    updated_plan: Optional[Dict[str, Any]] = Field(
+        None, 
+        description="Updated plan data if changes were made"
+    )
+    changes_explanation: Optional[str] = Field(
+        None, 
+        description="Explanation of what was changed and why"
+    )
+    navigate_to_main_app: Optional[bool] = Field(
+        default=False, 
+        description="If true, frontend should navigate to the main application"
+    )
+    error: Optional[str] = Field(None, description="Error message if processing failed")
+
+
+# ===== Feedback classification schema =====
+
+class FeedbackIntent(str, Enum):
+    """Strict three-intent system plus fallback."""
+
+    CLARIFICATION_OR_CONCERN = "clarification_or_concern"
+    UPDATE_REQUEST = "update_request"
+    SATISFIED = "satisfied"
+    OTHER = "other"
+
+
+class FeedbackAction(str, Enum):
+    """Allowed actions based on feedback intent."""
+
+    RESPOND_ONLY = "respond_only"
+    UPDATE_PLAN = "update_plan"
+    NAVIGATE_TO_MAIN_APP = "navigate_to_main_app"
+
+
+class FeedbackClassification(BaseModel):
+    """Validated structure for feedback classification results from LLM."""
+
+    intent: FeedbackIntent = Field(..., description="User intent classification")
+    action: FeedbackAction = Field(..., description="Action the system should take")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Classifier confidence 0-1")
+    needs_plan_update: bool = Field(..., description="Whether a plan update is required")
+    navigate_to_main_app: bool = Field(..., description="Whether to navigate to main app")
+    reasoning: str = Field(..., description="Short explanation for the decision")
+    specific_changes: List[str] = Field(
+        default_factory=list,
+        description="Explicit change requests if intent is update_request, otherwise []",
+    )

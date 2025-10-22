@@ -212,7 +212,7 @@ describe('Homepage Data Flow Integration', () => {
       expect(trainingPlan.id).toBe(1);
       expect(trainingPlan.user_profile_id).toBe(1);
       expect(trainingPlan.title).toBe('Beginner Strength Program');
-      expect(trainingPlan.summary).toBe('A comprehensive 4-week strength training program');
+      expect(trainingPlan.summary).toBe('A comprehensive strength training program');
       expect(trainingPlan.plan_data).toBeDefined();
       expect(trainingPlan.plan_data.weekly_schedules).toBeDefined();
       expect(Array.isArray(trainingPlan.plan_data.weekly_schedules)).toBe(true);

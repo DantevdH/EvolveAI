@@ -11,6 +11,7 @@ interface SimpleAuthState {
   user: any | null;
   userProfile: UserProfile | null;
   trainingPlan: TrainingPlan | null;
+  exercises: any[] | null;
   isLoading: boolean;
   trainingPlanLoading: boolean;
   error: string | null;
@@ -24,6 +25,7 @@ type SimpleAuthAction =
   | { type: 'SET_USER'; payload: any | null }
   | { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
   | { type: 'SET_WORKOUT_PLAN'; payload: TrainingPlan | null }
+  | { type: 'SET_EXERCISES'; payload: any[] | null }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_INITIALIZED'; payload: boolean }
   | { type: 'CLEAR_AUTH' };
@@ -33,6 +35,7 @@ const initialState: SimpleAuthState = {
   user: null,
   userProfile: null,
   trainingPlan: null,
+  exercises: null,
   isLoading: false,
   trainingPlanLoading: false,
   error: null,
@@ -66,6 +69,11 @@ const authReducer = (state: SimpleAuthState, action: SimpleAuthAction): SimpleAu
       return {
         ...state,
         trainingPlan: action.payload,
+      };
+    case 'SET_EXERCISES':
+      return {
+        ...state,
+        exercises: action.payload,
       };
     case 'SET_ERROR':
       return {
@@ -112,6 +120,10 @@ interface AuthContextType {
   // generateTrainingPlan: () => Promise<boolean>; // REMOVED: Use GeneratePlanScreen instead
   refreshTrainingPlan: () => Promise<void>;
   setTrainingPlan: (trainingPlan: TrainingPlan) => void;
+  
+  // Exercise methods
+  setExercises: (exercises: any[]) => void;
+  clearExercises: () => void;
   
   // Utility methods
   clearError: () => void;
@@ -599,6 +611,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     dispatch({ type: 'SET_WORKOUT_PLAN', payload: trainingPlan });
   };
 
+  // Set exercises directly (for use after plan generation)
+  const setExercises = (exercises: any[]): void => {
+    console.log('🏋️ Exercises set');
+    dispatch({ type: 'SET_EXERCISES', payload: exercises });
+  };
+
+  // Clear exercises
+  const clearExercises = (): void => {
+    console.log('🧹 Exercises cleared');
+    dispatch({ type: 'SET_EXERCISES', payload: null });
+  };
 
   const contextValue: AuthContextType = {
     state,
@@ -618,6 +641,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // generateTrainingPlan, // REMOVED: Use GeneratePlanScreen instead
     refreshTrainingPlan,
     setTrainingPlan,
+    setExercises,
+    clearExercises,
     clearError,
     checkAuthState,
     getCurrentUser,

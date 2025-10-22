@@ -19,6 +19,8 @@ from core.training.schemas.question_schemas import (
     FollowUpQuestionsRequest,
     PlanGenerationRequest,
     PlanGenerationResponse,
+    PlanFeedbackRequest,
+    PlanFeedbackResponse,
     PersonalInfo,
 )
 from core.training.training_coach import TrainingCoach
@@ -486,6 +488,19 @@ async def generate_training_plan(
         training_plan_id = save_result.get("data", {}).get("training_plan_id")
         logger.info(f"✅ Training plan saved (ID: {training_plan_id})")
         
+        # Set plan_accepted=False since this is a new plan that needs user approval
+        await safe_db_update(
+            "Set plan_accepted=False for new plan",
+            db_service.update_user_profile,
+            user_id=user_id,
+            data={"plan_accepted": False},
+            jwt_token=request.jwt_token
+        )
+        logger.info("✅ Set plan_accepted=False for new training plan")
+        
+        # Get completion message from result (generated during plan creation)
+        completion_message = result.get("completion_message")
+        
         # Fetch complete training plan with real IDs from database
         try:
             complete_plan = await _fetch_complete_training_plan(user_profile_id)
@@ -496,6 +511,8 @@ async def generate_training_plan(
                     "success": True,
                     "data": complete_plan,
                     "message": "Training plan generated and saved successfully",
+                    "completion_message": completion_message,
+                    "metadata": result.get("metadata", {}),  # Include metadata for frontend
                 }
             else:
                 logger.warning("⚠️ Could not fetch complete plan, returning original data")
@@ -503,6 +520,8 @@ async def generate_training_plan(
                     "success": True,
                     "data": training_plan_data,
                     "message": "Training plan generated and saved successfully",
+                    "completion_message": completion_message,
+                    "metadata": result.get("metadata", {}),  # Include metadata for frontend
                 }
         except Exception as fetch_error:
             logger.error(f"❌ Error fetching complete training plan: {str(fetch_error)}")
@@ -845,3 +864,150 @@ async def get_playbook_stats(
             "data": None,
             "message": f"Failed to get playbook stats: {str(e)}",
         }
+
+
+@router.post("/plan-feedback", response_model=PlanFeedbackResponse)
+async def process_plan_feedback(
+    request: PlanFeedbackRequest,
+    coach: TrainingCoach = Depends(get_training_coach)
+):
+    """
+    Process user feedback on their training plan and provide real-time updates.
+    
+    This endpoint handles:
+    - Feedback classification (clarification, modification, approval, etc.)
+    - AI response generation
+    - Plan updates when needed
+    - Change explanations
+    """
+    try:
+        logger.info(f"Processing plan feedback for user {request.user_profile_id}, plan {request.plan_id}")
+        
+        # Get current training plan
+        current_plan_data = await _fetch_complete_training_plan(request.user_profile_id)
+        if not current_plan_data:
+            raise HTTPException(
+                status_code=404, 
+                detail="Training plan not found"
+            )
+        
+        # Get user profile to extract personal info
+        user_profile = await db_service.get_user_profile(request.user_profile_id)
+        if not user_profile:
+            raise HTTPException(
+                status_code=404,
+                detail="User profile not found"
+            )
+        
+        # Create PersonalInfo object from user profile
+        personal_info = PersonalInfo(
+            user_id=user_profile.get("user_id"),
+            username=user_profile.get("username", "User"),
+            age=user_profile.get("age"),
+            weight=user_profile.get("weight"),
+            weight_unit=user_profile.get("weight_unit", "kg"),
+            height=user_profile.get("height"),
+            height_unit=user_profile.get("height_unit", "cm"),
+            gender=user_profile.get("gender"),
+            experience_level=user_profile.get("experience_level", "beginner"),
+            goal_description=user_profile.get("goal_description", "improve fitness"),
+            measurement_system=user_profile.get("measurement_system", "metric"),
+        )
+        
+        # Convert to TrainingPlan object
+        current_plan = TrainingPlan(**current_plan_data)
+        
+        # Step 1: Classify feedback intent
+        classification_result = await coach.classify_feedback_intent(
+            request.feedback_message,
+            request.conversation_history
+        )
+        
+        # Step 2: Handle based on intent/action
+        if classification_result.get("intent") == "satisfied" or classification_result.get("action") == "navigate_to_main_app":
+            # User is satisfied; set plan_accepted=True and navigate to main app
+            user_id = user_profile.get("user_id")
+            if user_id:
+                await safe_db_update(
+                    "Set plan_accepted=True for satisfied user",
+                    db_service.update_user_profile,
+                    user_id=user_id,
+                    data={"plan_accepted": True},
+                    jwt_token=request.jwt_token
+                )
+                logger.info("✅ Set plan_accepted=True - user satisfied with plan")
+            
+            return PlanFeedbackResponse(
+                success=True,
+                ai_response="Amazing! You're all set. I'll take you to your main dashboard now. 🚀",
+                plan_updated=False,
+                updated_plan=None,
+                changes_explanation=None,
+                navigate_to_main_app=True
+            )
+        
+        if classification_result["needs_plan_update"]:
+            logger.info("Plan update triggered by feedback")
+            
+            # Generate updated plan with all context (includes AI message generation)
+            update_result = await coach.update_plan_from_feedback(
+                personal_info=personal_info,
+                current_plan=current_plan,
+                feedback_message=request.feedback_message,
+                classification_result=classification_result,
+                conversation_history=request.conversation_history,
+                exercises=request.exercises or [],
+                formatted_initial_responses=request.formatted_initial_responses or "",
+                formatted_follow_up_responses=request.formatted_follow_up_responses or ""
+            )
+            
+            # Save updated plan to database
+            try:
+                await db_service.update_training_plan(
+                    request.plan_id,
+                    update_result["updated_plan"]
+                )
+                logger.info(f"Successfully updated plan {request.plan_id} based on feedback")
+            except Exception as e:
+                logger.error(f"Error saving updated plan: {str(e)}")
+                return PlanFeedbackResponse(
+                    success=False,
+                    ai_response="I updated your plan but encountered an error saving it. Please try again.",
+                    plan_updated=False,
+                    updated_plan=None,
+                    changes_explanation=None,
+                    error=f"Plan updated but failed to save: {str(e)}"
+                )
+            
+            return PlanFeedbackResponse(
+                success=True,
+                ai_response=update_result["ai_message"],  # Use AI message from plan update
+                plan_updated=True,
+                updated_plan=update_result["updated_plan"],
+                changes_explanation=update_result["explanation"]
+            )
+        else:
+            # Just respond without updating plan - use simple fallback message
+            ai_response = "Thanks for your question! Here's my guidance:"
+            
+            return PlanFeedbackResponse(
+                success=True,
+                ai_response=ai_response,
+                plan_updated=False,
+                updated_plan=None,
+                changes_explanation=None,
+                navigate_to_main_app=False
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing plan feedback: {str(e)}")
+        return PlanFeedbackResponse(
+            success=False,
+            ai_response="I apologize, but I encountered an error processing your feedback. Please try again.",
+            plan_updated=False,
+            updated_plan=None,
+            changes_explanation=None,
+            error=str(e)
+        )

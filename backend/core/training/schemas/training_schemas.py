@@ -188,7 +188,7 @@ class WeeklySchedule(BaseModel):
     )
     motivation: str = Field(
         ...,
-        description="AI motivation: this week's purpose in the 4-week phase and how it progresses",
+        description="AI motivation: this week's purpose and how it progresses toward the goal",
     )
     created_at: Optional[datetime] = Field(
         default=None, description="Creation timestamp"
@@ -199,7 +199,7 @@ class WeeklySchedule(BaseModel):
 
 
 class TrainingPlan(BaseModel):
-    """Schema for 4-week training plans."""
+    """Schema for training plans (1-week schedule duplicated to 4 weeks)."""
 
     id: Optional[int] = Field(default=None, description="Database ID")
     user_profile_id: int = Field(..., description="ID of the user profile")
@@ -209,14 +209,18 @@ class TrainingPlan(BaseModel):
     )
     summary: str = Field(
         ..., 
-        description="Summary of this 4-week phase's purpose"
+        description="Summary of this training phase's purpose"
     )
     weekly_schedules: List[WeeklySchedule] = Field(
-        default=[], description="4 weekly schedules"
+        default=[], description="Weekly schedules (1-week template duplicated to 4 weeks)"
     )
     motivation: str = Field(
         ...,
-        description="AI motivation: phase name, what these 4 weeks accomplish, how next phase will adapt based on progress",
+        description="AI motivation: phase name, what this training accomplishes, how next phase will adapt based on progress",
+    )
+    ai_message: Optional[str] = Field(
+        default=None, 
+        description="AI message explaining the plan or recent changes"
     )
     created_at: Optional[datetime] = Field(
         default=None, description="Creation timestamp"

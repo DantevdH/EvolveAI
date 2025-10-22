@@ -39,9 +39,6 @@ export interface UserProfile {
   username: string;
   goalDescription: string;
   experienceLevel: string;
-  daysPerWeek: number;
-  minutesPerSession: number;
-  equipment: string;
   age: number;
   weight: number;
   weightUnit: string;
@@ -61,16 +58,12 @@ export interface UserProfile {
   // AI messages from database
   initial_ai_message?: string | null;
   follow_up_ai_message?: string | null;
-  outline_ai_message?: string | null;
-  
-  // Plan outline and feedback (separated)
-  plan_outline?: PlanOutline | null;
-  plan_outline_feedback?: string | null;
   
   // Database fields (read-only)
   id?: number;
   userId?: string;
   coachId?: number;
+  planAccepted?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }

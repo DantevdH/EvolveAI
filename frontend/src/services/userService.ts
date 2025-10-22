@@ -236,9 +236,6 @@ export class UserService {
           goalDescription: rawProfile.goal_description || '',
           coachId: rawProfile.coach_id,
           experienceLevel: rawProfile.experience_level || '',
-          daysPerWeek: rawProfile.days_per_week || 3,
-          minutesPerSession: rawProfile.minutes_per_session || 45,
-          equipment: rawProfile.equipment || '',
           age: rawProfile.age || 25,
           weight: rawProfile.weight || 70,
           weightUnit: rawProfile.weight_unit || 'kg',
@@ -301,9 +298,6 @@ export class UserService {
       if (updates.goalDescription !== undefined) updateData.goal_description = updates.goalDescription;
       if (updates.coachId !== undefined) updateData.coach_id = updates.coachId;
       if (updates.experienceLevel !== undefined) updateData.experience_level = updates.experienceLevel;
-      if (updates.daysPerWeek !== undefined) updateData.days_per_week = updates.daysPerWeek;
-      if (updates.minutesPerSession !== undefined) updateData.minutes_per_session = updates.minutesPerSession;
-      if (updates.equipment !== undefined) updateData.equipment = updates.equipment;
       if (updates.age !== undefined) updateData.age = updates.age;
       if (updates.weight !== undefined) updateData.weight = updates.weight;
       if (updates.weightUnit !== undefined) updateData.weight_unit = updates.weightUnit;

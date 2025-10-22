@@ -246,7 +246,7 @@ class TrainingCoach(BaseAgent):
                 try:
                     # Generate questions using OpenAI
                     completion = self.openai_client.chat.completions.parse(
-                        model=os.getenv("OPENAI_MODEL", "gpt-4"),
+                        model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4"),
                         messages=[{"role": "system", "content": prompt}],
                         response_format=AIQuestionResponse,
                         temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
@@ -364,7 +364,7 @@ class TrainingCoach(BaseAgent):
                 try:
                     # Generate questions using OpenAI
                     completion = self.openai_client.chat.completions.parse(
-                        model=os.getenv("OPENAI_MODEL", "gpt-4"),
+                        model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4"),
                         messages=[{"role": "system", "content": prompt}],
                         response_format=AIQuestionResponse,
                         temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
@@ -571,7 +571,7 @@ class TrainingCoach(BaseAgent):
             )
 
             completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
+                model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4"),
                 messages=[{"role": "system", "content": decision_prompt}],
                 response_format=ExerciseRetrievalDecision,
                 temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),  # Lower temp for consistent decisions
@@ -585,7 +585,7 @@ class TrainingCoach(BaseAgent):
             self.logger.info(f"Reasoning: {decision.reasoning}")
 
             # Step 2: Retrieve exercises if needed
-            exercise_info = ""
+            exercises = []
             exercises_retrieved = 0
 
             if decision.retrieve_exercises:
@@ -622,20 +622,12 @@ class TrainingCoach(BaseAgent):
                         "error": "No exercises available for the specified difficulty level and equipment. Please try different parameters.",
                     }
 
-                # Get formatted exercises for AI prompt
-                exercise_info = self.exercise_selector.get_formatted_exercises_for_ai(
-                    difficulty=difficulty, equipment=equipment_list
-                )
-
-                # Check if formatting was successful
-                if exercise_info == "No exercises available":
-                    return {
-                        "success": False,
-                        "error": "Failed to format exercises for AI. Please try again.",
-                    }
+                # Store raw exercises for later use
+                exercises = all_exercises
+                self.logger.info(f"Stored {len(exercises)} raw exercises for plan generation and future updates")
             else:
                 self.logger.info("Skipping exercise retrieval (not needed)")
-                exercise_info = f"No exercises needed - {decision.alternative_approach or 'focus on sport-specific training sessions'}"
+                exercises = []
 
             # Step 3: Use playbook for personalized context (passed as parameter)
             self.logger.info(f"Using playbook with {len(playbook.lessons)} lessons for plan generation")
@@ -673,29 +665,19 @@ class TrainingCoach(BaseAgent):
                 personal_info,
                 formatted_initial_responses,
                 formatted_follow_up_responses,
-                exercise_info,
+                exercises=exercises,
                 playbook_lessons=playbook_lessons_dict,
             )
 
             # Step 5: Get the training plan
             self.logger.info("Generating training plan with AI...")
             
-            # Use default plan duration to estimate token needs (4 weeks is typical for onboarding)
-            plan_weeks = 4
-            
-            # Calculate safe max_tokens (~2,500 tokens per week for detailed plans)
-            # Cap at 12,000 to stay well below 16,384 limit and leave room for RAG
-            estimated_tokens = plan_weeks * 2500
-            safe_max_tokens = min(12000, estimated_tokens + 2000)  # +2000 for plan metadata
-            
-            self.logger.info(f"📊 Generating {plan_weeks}-week plan | Max tokens: {safe_max_tokens}")
-            
             completion = self.openai_client.chat.completions.parse(
                 model=os.getenv("OPENAI_MODEL", "gpt-4o"),
                 messages=[{"role": "system", "content": prompt}],
                 response_format=TrainingPlan,
                 temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
-                max_completion_tokens=safe_max_tokens,  # Dynamic based on plan duration
+                max_completion_tokens=8000,  
             )
 
             training_plan = completion.choices[0].message.parsed
@@ -743,6 +725,17 @@ class TrainingCoach(BaseAgent):
                     f"Skipping playbook update (initial plan): {len(playbook_lessons_dict)} lessons used as constraints"
                 )
 
+            # The AI message is now generated within the TrainingPlan by the LLM
+            # Extract it from the training plan for the API response
+            ai_message = validated_training.get("ai_message") if isinstance(validated_training, dict) else getattr(validated_training, "ai_message", None)
+            
+            # Fallback message if AI didn't generate one
+            if not ai_message:
+                ai_message = f"🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨"
+                # Add fallback to the training plan
+                if isinstance(validated_training, dict):
+                    validated_training["ai_message"] = ai_message
+
             # Save playbook to the training plan (will be saved when plan is saved to DB)
             result_dict = {
                 "success": True,
@@ -750,6 +743,7 @@ class TrainingCoach(BaseAgent):
                 "user_playbook": (
                     playbook.model_dump() if playbook else None
                 ),  # Include playbook for saving
+                "completion_message": ai_message,  # Keep for backward compatibility with API
                 "metadata": {
                     "exercises_candidates": exercises_retrieved,
                     "validation_messages": validation_messages,
@@ -769,6 +763,9 @@ class TrainingCoach(BaseAgent):
                     ),
                     "lessons_applied_count": len(applied_lesson_ids),
                     "lessons_applied_ids": applied_lesson_ids,
+                    "exercises": exercises,  # Store raw exercises for feedback updates
+                    "formatted_initial_responses": formatted_initial_responses,  # Store for feedback updates
+                    "formatted_follow_up_responses": formatted_follow_up_responses,  # Store for feedback updates
                 },
             }
 
@@ -1211,3 +1208,149 @@ class TrainingCoach(BaseAgent):
         except Exception as e:
             self.logger.error(f"Error getting playbook stats: {e}")
             return None
+
+    async def classify_feedback_intent(
+        self, 
+        feedback_message: str, 
+        conversation_history: List[Dict[str, str]]
+    ) -> Dict[str, Any]:
+        """
+        Classify the user's feedback intent using GPT-4o-mini.
+        
+        Returns:
+            Classification result with intent, confidence, and action needed
+        """
+        try:
+            # Build conversation context
+            context = self._build_conversation_context(conversation_history)
+            
+            # Get prompt from PromptGenerator
+            prompt = PromptGenerator.generate_feedback_classification_prompt(
+                feedback_message, context
+            )
+
+            # Use structured parsing with Pydantic model
+            from core.training.schemas.question_schemas import FeedbackClassification
+            completion = self.openai_client.chat.completions.parse(
+                model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4o"),
+                messages=[{"role": "user", "content": prompt}],
+                response_format=FeedbackClassification,
+                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
+                max_completion_tokens=300,
+            )
+
+            parsed_obj = completion.choices[0].message.parsed
+            result = parsed_obj.model_dump() if hasattr(parsed_obj, 'model_dump') else parsed_obj
+            self.logger.info(f"Feedback classified as: {result['intent']} (confidence: {result['confidence']})")
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Error classifying feedback: {str(e)}")
+            # Default to safe response
+            return {
+                "intent": "general",
+                "confidence": 0.5,
+                "action": "respond_only",
+                "reasoning": "Error in classification, defaulting to safe response",
+                "needs_plan_update": False,
+                "specific_changes": []
+            }
+
+    async def update_plan_from_feedback(
+        self,
+        personal_info: PersonalInfo,
+        current_plan: TrainingPlan,
+        feedback_message: str,
+        classification_result: Dict[str, Any],
+        conversation_history: List[Dict[str, str]],
+        exercises: List[Dict] = None,
+        formatted_initial_responses: str = "",
+        formatted_follow_up_responses: str = ""
+    ) -> Dict[str, Any]:
+        """
+        Update the training plan based on user feedback.
+        
+        Uses the same structured completion approach as plan generation.
+        """
+        try:
+            # Convert plan to dict for context
+            plan_dict = current_plan.model_dump() if hasattr(current_plan, 'model_dump') else current_plan
+            
+            # Build conversation context
+            context = self._build_conversation_context(conversation_history)
+            
+            # Use the consolidated plan update prompt
+            full_prompt = PromptGenerator.generate_plan_update_prompt(
+                personal_info,
+                plan_dict,
+                feedback_message,
+                classification_result,
+                context,
+                formatted_initial_responses,
+                formatted_follow_up_responses,
+                exercises
+            )
+            
+            # Use structured completion like in plan generation
+            self.logger.info("Updating training plan with structured completion...")
+            
+            # Calculate safe max_tokens based on model (same logic as plan generation)
+            model = os.getenv("OPENAI_MODEL", "gpt-4o")
+            if "gpt-4o-mini" in model or "gpt-5-mini" in model:
+                safe_max_tokens = 8000  # GPT-5-mini supports up to 128k, using 8k for plan updates
+            else:
+                safe_max_tokens = 12000  # Full limit for regular models
+            
+            self.logger.info(f"📊 Updating plan | Model: {model} | Max tokens: {safe_max_tokens}")
+            
+            completion = self.openai_client.chat.completions.parse(
+                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+                messages=[{"role": "system", "content": full_prompt}],
+                response_format=TrainingPlan,
+                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
+                max_completion_tokens=safe_max_tokens,
+            )
+            
+            updated_plan = completion.choices[0].message.parsed
+            updated_plan_dict = updated_plan.model_dump()
+            
+            # The AI message is now generated within the TrainingPlan by the LLM
+            # Extract it from the updated plan
+            ai_message = updated_plan_dict.get("ai_message")
+            
+            # Fallback message if AI didn't generate one
+            if not ai_message:
+                ai_message = "Thank you for your feedback! I've updated your plan based on your input. Take a look and let me know if you'd like any other changes! 💪"
+                updated_plan_dict["ai_message"] = ai_message
+            
+            # Generate explanation of changes
+            explanation = f"Updated your plan based on: {feedback_message}"
+            if classification_result.get('specific_changes'):
+                explanation += f" Specific changes: {', '.join(classification_result['specific_changes'])}"
+            
+            return {
+                "updated_plan": updated_plan_dict,
+                "explanation": explanation,
+                "ai_message": ai_message  # Return for API response
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error updating plan: {str(e)}")
+            return {
+                "updated_plan": current_plan,
+                "explanation": "I encountered an error updating your plan. Please try again with more specific feedback."
+            }
+
+    def _build_conversation_context(self, conversation_history: List[Dict[str, str]]) -> str:
+        """Build conversation context from history."""
+        if not conversation_history:
+            return "No previous conversation."
+        
+        context_lines = []
+        for msg in conversation_history[-5:]:  # Last 5 messages for context
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            context_lines.append(f"{role.upper()}: {content}")
+        
+        return "\n".join(context_lines)

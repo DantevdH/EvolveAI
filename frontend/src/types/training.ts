@@ -89,6 +89,7 @@ export interface TrainingPlan {
   totalWeeks: number;
   currentWeek: number;
   weeklySchedules: WeeklySchedule[];
+  aiMessage?: string;  // AI-generated message explaining the plan
   createdAt: Date;
   updatedAt: Date;
   completed: boolean;

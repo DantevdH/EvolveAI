@@ -7,6 +7,7 @@ import { GoalDescriptionStep } from '../../screens/onboarding/GoalDescriptionSte
 import { ExperienceLevelStep } from '../../screens/onboarding/ExperienceLevelStep';
 import { QuestionsStep } from '../../screens/onboarding/QuestionsStep';
 import { PlanGenerationStep } from '../../screens/onboarding/PlanGenerationStep';
+import PlanPreviewStep from '../../screens/onboarding/PlanPreviewStep';
 import { ErrorDisplay } from '../ui/ErrorDisplay';
 import { trainingService } from '../../services/onboardingService';
 import { 
@@ -123,7 +124,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   onError,
   startFromStep = 'welcome',
 }) => {
-  const { state: authState, refreshUserProfile, setTrainingPlan } = useAuth();
+  const { state: authState, refreshUserProfile, setTrainingPlan, setExercises } = useAuth();
   const [state, setState] = useState<OnboardingState>({
     username: '',
     usernameValid: false,
@@ -145,9 +146,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     followUpAiMessage: undefined,
     planGenerationLoading: false,
     trainingPlan: null,
+    completionMessage: null,
+    hasSeenCompletionMessage: false,
     error: null,
     aiHasQuestions: false,
     aiAnalysisPhase: null,
+    planMetadata: undefined,
   });
 
   // Add retry state for error recovery
@@ -164,7 +168,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   // Determine starting step - either from prop or default to welcome
   const initialStep = startFromStep || 'welcome';
-  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial' | 'followup' | 'generation'>(initialStep);
+  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial' | 'followup' | 'generation' | 'preview'>(initialStep);
 
   // Track if we've initialized from profile (run only once per component mount)
   const hasInitializedFromProfileRef = useRef(false);
@@ -232,6 +236,37 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       console.log(`📍 Onboarding Resume: Starting from ${startFromStep} - Initial: ${cleanedProfile.initial_questions?.length || 0} questions, Follow-up: ${cleanedProfile.follow_up_questions?.length || 0} questions, Initial AI Message: ${cleanedProfile.initial_ai_message?.substring(0, 50) || 'NONE'}`);
     }
   }, [authState.userProfile, startFromStep, onError]);
+
+  // Check if user has a plan but hasn't accepted it yet - show preview step
+  useEffect(() => {
+    if (authState.userProfile && authState.trainingPlan && !authState.userProfile.planAccepted) {
+      console.log('📍 Onboarding: User has plan but not accepted - showing preview step');
+      
+      // Extract AI message from training plan
+      const aiMessageFromPlan = (authState.trainingPlan as any)?.aiMessage || 
+        (authState.trainingPlan as any)?.ai_message;
+      
+      console.log(`📍 Onboarding: AI message from plan: ${aiMessageFromPlan ? aiMessageFromPlan.substring(0, 50) + '...' : 'NONE - using fallback'}`);
+      
+      setCurrentStep('preview');
+      
+      // Load the training plan into state
+      setState(prev => ({
+        ...prev,
+        trainingPlan: authState.trainingPlan,
+        planMetadata: {
+          formattedInitialResponses: authState.userProfile?.initial_responses ? 
+            Object.entries(authState.userProfile.initial_responses)
+              .map(([key, value]) => `${key}: ${value}`)
+              .join('\n') : '',
+          formattedFollowUpResponses: authState.userProfile?.follow_up_responses ? 
+            Object.entries(authState.userProfile.follow_up_responses)
+              .map(([key, value]) => `${key}: ${value}`)
+              .join('\n') : '',
+        },
+      }));
+    }
+  }, [authState.userProfile, authState.trainingPlan]);
 
   // Track if we've already triggered loading for each step
   const hasTriggeredInitialQuestionsRef = useRef(false);
@@ -351,14 +386,24 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
               throw new Error('Failed to transform training plan data');
             }
             
+            // Store exercises in AuthContext for future use
+            if (response.metadata?.exercises) {
+              setExercises(response.metadata.exercises);
+            }
+            
             setState(prev => ({
               ...prev,
               trainingPlan: transformedPlan,
+              completionMessage: response.completion_message || "🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨",
               planGenerationLoading: false,
+              planMetadata: {
+                formattedInitialResponses: response.metadata?.formatted_initial_responses,
+                formattedFollowUpResponses: response.metadata?.formatted_follow_up_responses,
+              },
             }));
             
-            // Navigate to main app with the transformed plan
-            onComplete(transformedPlan!);
+            // Stay in generation step to show completion message
+            // The PlanGenerationStep will handle showing the completion message
           } else {
             logError('Plan generation failed', response.message);
             throw new Error(response.message || 'Failed to generate training plan');
@@ -386,7 +431,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }));
       onError(errorMessage);
     }
-  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.followUpResponses, state.trainingPlanOutline, state.outlineFeedback, state.initialQuestions, state.followUpQuestions, authState.userProfile, onComplete, onError]);
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, authState.userProfile, onComplete, onError]);
 
   // Step 1: Username
   const handleUsernameChange = useCallback((username: string) => {
@@ -766,6 +811,14 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     setCurrentStep('welcome');
   }, []);
 
+  // Handle completion of onboarding
+  const handleComplete = useCallback(() => {
+    console.log('📍 Onboarding: Completing onboarding flow');
+    if (state.trainingPlan) {
+      onComplete(state.trainingPlan);
+    }
+  }, [state.trainingPlan, onComplete]);
+
 
   const renderCurrentStep = () => {
     // Essential onboarding flow logging - render step
@@ -887,6 +940,25 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             onRetry={handleRetry}
             onStartGeneration={handlePlanGeneration}
             username={state.username}
+            isCompleted={!!state.trainingPlan && !state.planGenerationLoading}
+            completionMessage={state.completionMessage || undefined}
+            onContinue={() => {
+              setState(prev => ({ ...prev, hasSeenCompletionMessage: true }));
+              handleComplete();
+            }}
+            onViewPlan={() => {
+              setState(prev => ({ ...prev, hasSeenCompletionMessage: true }));
+              setCurrentStep('preview');
+            }}
+          />
+        );
+      
+      case 'preview':
+        return (
+          <PlanPreviewStep
+            onContinue={handleComplete}
+            onBack={() => setCurrentStep('generation')}
+            planMetadata={state.planMetadata}
           />
         );
       
