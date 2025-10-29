@@ -417,7 +417,7 @@ class PromptGenerator:
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
         formatted_follow_up_responses: str,
-        exercises: List[Dict] = None,
+        metadata_options: Dict[str, List[str]] = None,
         playbook_lessons: List = None,
     ) -> str:
         """Generate the complete prompt for training plan generation."""
@@ -430,13 +430,8 @@ class PromptGenerator:
             playbook_lessons, personal_info, context="training"
         )
 
-        # Format exercises only if provided
-        exercise_section = ""
-        if exercises:
-            exercise_section = f"""
-            **AVAILABLE EXERCISES:**
-            {PromptGenerator._format_exercise_info(exercises)}
-            """
+        # Format metadata options section (reusable helper)
+        metadata_section = PromptGenerator._format_exercise_metadata_section(metadata_options)
 
         prompt = f"""
             Create detailed 1-week training plan for {personal_info.username}.
@@ -455,7 +450,7 @@ class PromptGenerator:
 
             {playbook_context}
 
-            {exercise_section}
+            {metadata_section}
 
             **ASSESSMENT DATA:**
             {combined_responses}
@@ -475,8 +470,15 @@ class PromptGenerator:
              **MODALITY-SPECIFIC INSTRUCTIONS:**
              
              **STRENGTH days:** provide exercises with sets, reps, weight_1rm
+             • For each strength exercise, provide:
+               - exercise_name: Descriptive name WITHOUT equipment (e.g., "Chest Press", "Lateral Raise", "Farmer Carry")
+               - main_muscle: From the provided list (e.g., "Pectoralis Major")
+               - equipment: From the provided list (e.g., "Dumbbell") - equipment type goes HERE, NOT in exercise_name
+               - sets, reps, weight, weight_1rm: Training parameters
              • Select movements for goal, equipment, experience
              • Balance movement patterns (push/pull, upper/lower, etc.)
+             • DO NOT set exercise_id (will be matched automatically)
+             • CRITICAL: Equipment type should ONLY be in the equipment field, NOT in exercise_name
              
              **ENDURANCE days:** Sessions with name, description (≤20 words), sport_type, training_volume, unit
              • sport_type MUST be EXACTLY one of these values (case-sensitive): 
@@ -555,6 +557,52 @@ class PromptGenerator:
         return prompt
 
     @staticmethod
+    def _format_exercise_metadata_section(metadata_options: Dict[str, List[str]]) -> str:
+        """
+        Format exercise metadata options section for prompts.
+        
+        This reusable section explains to AI how to generate strength exercises with metadata
+        that will be matched to the database. Note: Individual metadata values are NOT listed here
+        as Pydantic schemas handle validation automatically.
+        
+        Args:
+            metadata_options: Dict with keys: equipment, main_muscles (used only to check if available)
+        
+        Returns:
+            Formatted string section for prompts
+        """
+        if not metadata_options:
+            return """
+            **NO METADATA OPTIONS PROVIDED:**
+            • The user's focus may be endurance-only (e.g., running-only). Do NOT add new strength_exercises.
+            • If updating existing strength_exercises, preserve exercise_id and only adjust sets/reps/intensity.
+            """
+        
+        return """
+            **EXERCISE METADATA REQUIREMENTS:**
+            
+            When creating or modifying STRENGTH exercises, you must provide:
+            - exercise_name: A descriptive name for the exercise WITHOUT equipment type (e.g., "Bench Press", "Shoulder Press", "Push-ups", "Lateral Raise", "Farmer Carry")
+            - main_muscle: MUST be a valid MainMuscleEnum value (exact case-sensitive match required)
+            - equipment: MUST be a valid EquipmentEnum value (exact case-sensitive match required)
+            
+            **IMPORTANT FIELD DESCRIPTIONS:**
+            • exercise_name: A clear, descriptive name that identifies the exercise WITHOUT including equipment type
+              - ✅ CORRECT: "Bench Press", "Lateral Raise", "Back Squat", "Chest Fly", "Farmer Carry"
+              - ❌ WRONG: "Barbell Bench Press", "Dumbbell Lateral Raise (Machine)", "Seated Calf Raise (Machine)"
+              - The equipment type should ONLY be specified in the 'equipment' field, NOT in the exercise_name
+            • main_muscle: The specific primary muscle group worked (e.g., "Pectoralis Major", "Quadriceps", "Deltoids", "Latissimus Dorsi")
+            • equipment: The equipment type required - must match database values exactly
+            
+            ⚠️ CRITICAL RULES:
+            - The TrainingPlan Pydantic schema will automatically validate that main_muscle and equipment match valid Enum values.
+            - Use your knowledge of common exercise metadata - the validation will catch any invalid values.
+            - DO NOT include equipment type in exercise_name - provide it separately in the equipment field
+            - DO NOT set exercise_id - it will be set automatically during post-processing matching.
+            - For existing exercises being modified (only sets/reps/intensity changes), you can preserve exercise_id if it already exists.
+            """
+
+    @staticmethod
     def _format_exercise_info(exercises: List[Dict]) -> str:
         """Format exercise information for prompts."""
         if not exercises:
@@ -569,77 +617,6 @@ class PromptGenerator:
             )
         
         return "\n".join(formatted_exercises)
-
-    @staticmethod
-    def generate_exercise_decision_prompt(
-        personal_info: PersonalInfo, formatted_responses: str
-    ) -> str:
-        """Generate the prompt for AI to decide if exercises are needed."""
-        return f"""
-        You are an expert training coach analyzing training requirements.
-        
-        **User Profile:**
-        Goal: {personal_info.goal_description}
-        Experience: {personal_info.experience_level}
-        
-        **Responses:** {formatted_responses}
-        
-        **EXERCISE DATABASE SCOPE:**
-        
-        ✅ **What we HAVE:** Strength training exercises with these equipment types:
-        Barbell | Dumbbell | Cable | Machine | Smith | Body weight | Band Resistive | Suspension | Sled | Weighted | Plyometric | Isometric
-        
-        ❌ **What we DON'T have:**
-        Running/cycling/swimming programs | Sport-specific skills drills | Yoga/dance sequences
-        
-        **EQUIPMENT TYPE STRINGS (use EXACTLY as shown):**
-        • "Barbell"
-        • "Dumbbell"
-        • "Cable"
-        • "Cable (pull side)"
-        • "Machine"
-        • "Assisted (machine)"
-        • "Smith"
-        • "Body weight"
-        • "Band Resistive"
-        • "Suspension"
-        • "Suspended"
-        • "Sled"
-        • "Weighted"
-        • "Plyometric"
-        • "Isometric"
-        • "Self-assisted"
-        
-        **DECISION TASK:**
-        
-        **1. Need exercises from database?**
-        → YES if plan includes ANY strength training
-        → NO if purely endurance/cardio/sport-specific
-        
-        **2. Difficulty level?**
-        Determine based on:
-        • {personal_info.experience_level} experience level
-        • Responses about training history
-        • Goal complexity
-        → Return: beginner | intermediate | advanced
-        
-        **3. Equipment types to retrieve?**
-        Based on user's available equipment from responses, map to database strings:
-        
-        **EQUIPMENT MAPPING:**
-        User selected "Body Weight Only" → ["Body weight"]
-        User selected "Dumbbells" → ["Dumbbell", "Body weight"]
-        User selected "Full Gym Access" → ALL (include all equipment types from database)
-        User selected "Resistance Bands" → ["Band Resistive", "Body weight"]
-        
-        **RULES:**
-        • Match user equipment to database strings EXACTLY (see list above)
-        • Select ALL applicable types (can be multiple)
-        • Use EXACT capitalization from list above
-        • Always include "Body weight" since it requires no equipment
-        
-        **VALIDATION:** Equipment strings must match database exactly - check capitalization, spacing, and special characters.
-        """
 
     @staticmethod
     def generate_feedback_classification_prompt(
@@ -710,45 +687,32 @@ class PromptGenerator:
         conversation_context: str,
         formatted_initial_responses: str,
         formatted_follow_up_responses: str,
-        exercises: List[Dict] = None
+        metadata_options: Dict[str, List[str]] = None
     ) -> str:
         """Generate complete prompt for updating training plan based on feedback.
 
         This prompt consolidates all update context and mirrors the structure/clarity
         used in other generation prompts (role, workflow status, rules, and outputs).
         """
-        # Build dynamic exercise context
-        has_exercise_db = bool(exercises and len(exercises) > 0)
-        if has_exercise_db:
-            exercise_section = f"""
-        **AVAILABLE EXERCISES (USE EXACTLY THESE, IDs ARE AUTHORITATIVE):**
-        {PromptGenerator._format_exercise_info(exercises)}
-
-        • When modifying strength_exercises:
-          - Use the exact exercise_id from this list; do NOT invent new IDs
-          - Prefer preserving existing exercise_id unless feedback requests a substitution
-          - For substitutions, choose a suitable alternative from this list (same equipment/movement intent) and set exercise_id accordingly
-          - Keep schema fields intact: exercise_id, sets, reps, weight, weight_1rm
-        """
+        # Build metadata options section (reusable helper)
+        metadata_section = PromptGenerator._format_exercise_metadata_section(metadata_options)
+        
+        # Strength update rules
+        if metadata_options:
             strength_update_rules = """
         **STRENGTH EXERCISE UPDATE RULES:**
-        • Keep current exercise_id unless the feedback requests changing the exercise
-        • If changing, select a replacement from AVAILABLE EXERCISES and set exercise_id to that exact id
-        • Do not create exercises not present in the database list
+        • If adding new exercises, provide exercise_name, main_muscle, equipment (from metadata options)
+        • If modifying existing exercises, preserve exercise_id if only adjusting sets/reps/intensity
+        • If replacing exercises, provide new exercise_name + metadata (matching will happen automatically)
+        • DO NOT set exercise_id for new/modified exercises - will be matched during post-processing
         • Adjust sets/reps/intensity as needed to satisfy the feedback while preserving training intent
         """
         else:
-            exercise_section = """
-        **NO EXERCISE DATABASE PROVIDED:**
-        • The user's focus may be endurance-only (e.g., running-only). Do NOT add new strength_exercises.
-        • If the current plan contains strength_exercises and feedback does not request them, leave them unchanged or remove them only if the feedback asks.
-        • Make updates primarily to endurance_sessions, schedule, or intensity as requested.
-        """
             strength_update_rules = """
         **STRENGTH EXERCISE UPDATE RULES:**
-        • Do NOT introduce new strength_exercises without an exercise database
+        • Do NOT introduce new strength_exercises without metadata options
         • You may remove or keep existing strength_exercises only if explicitly requested in the feedback
-        • Prefer adjusting endurance_sessions, schedule, or intensity when no exercise list is provided
+        • Prefer adjusting endurance_sessions, schedule, or intensity when no metadata is provided
         """
 
         return f"""
@@ -770,7 +734,7 @@ class PromptGenerator:
         Follow-up Questions with their responses:
         {formatted_follow_up_responses}
 
-        {exercise_section}
+        {metadata_section}
 
         **CONVERSATION CONTEXT:**
         {conversation_context}
@@ -806,8 +770,8 @@ class PromptGenerator:
         - Return the COMPLETE updated TrainingPlan object (JSON) matching the existing structure.
         - Preserve identifiers and fields not affected by the change (e.g., user_profile_id, id if present).
         - Keep weekly_schedules as a 1-week template (we duplicate later to 4 weeks in persistence).
-        - For strength_exercises, use exact exercise_id values from the AVAILABLE EXERCISES (when provided). Never invent IDs.
-        - If no exercise database is provided, do not add new strength_exercises; adjust endurance or scheduling instead unless feedback explicitly requests removal of strength.
+        - For strength_exercises, provide exercise_name, main_muscle, equipment (from metadata options). DO NOT set exercise_id - it will be matched automatically.
+        - If no metadata options are provided, do not add new strength_exercises; adjust endurance or scheduling instead unless feedback explicitly requests removal of strength.
         - Populate ai_message with a concise, friendly response (2-3 sentences) that:
           • Acknowledges their feedback
           • Explains what you changed and why (if changes were applied)

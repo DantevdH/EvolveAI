@@ -9,48 +9,54 @@ const WeekNavigationAndOverview: React.FC<WeekNavigationAndOverviewProps> = ({
   weekNavigation,
   dayIndicators,
   onWeekChange,
-  onDaySelect
+  onDaySelect,
+  hideNavigation = false
 }) => {
   const { currentWeek, totalWeeks, canGoBack, canGoForward } = weekNavigation;
 
   return (
     <View style={styles.container}>
-      {/* Week Navigation Section */}
-      <View style={styles.weekNavigation}>
-        <TouchableOpacity
-          style={[styles.navButton, !canGoBack && styles.navButtonDisabled]}
-          onPress={() => canGoBack && onWeekChange(currentWeek - 1)}
-          disabled={!canGoBack}
-        >
-          <Ionicons 
-            name="chevron-back" 
-            size={20} 
-            color={canGoBack ? colors.primary : colors.muted} 
-          />
-        </TouchableOpacity>
+      {/* Week Navigation Section - Hidden if hideNavigation is true */}
+      {!hideNavigation && (
+        <>
+          <View style={styles.weekNavigation}>
+            <TouchableOpacity
+              style={[styles.navButton, !canGoBack && styles.navButtonDisabled]}
+              onPress={() => canGoBack && onWeekChange(currentWeek - 1)}
+              disabled={!canGoBack}
+            >
+              <Ionicons 
+                name="chevron-back" 
+                size={20} 
+                color={canGoBack ? colors.primary : colors.muted} 
+              />
+            </TouchableOpacity>
 
-        <Text style={styles.weekText}>Week {currentWeek}</Text>
+            <Text style={styles.weekText}>Week {currentWeek}</Text>
 
-        <TouchableOpacity
-          style={[styles.navButton, !canGoForward && styles.navButtonDisabled]}
-          onPress={() => canGoForward && onWeekChange(currentWeek + 1)}
-          disabled={!canGoForward}
-        >
-          <Ionicons 
-            name="chevron-forward" 
-            size={20} 
-            color={canGoForward ? colors.primary : colors.muted} 
-          />
-        </TouchableOpacity>
-      </View>
+            <TouchableOpacity
+              style={[styles.navButton, !canGoForward && styles.navButtonDisabled]}
+              onPress={() => canGoForward && onWeekChange(currentWeek + 1)}
+              disabled={!canGoForward}
+            >
+              <Ionicons 
+                name="chevron-forward" 
+                size={20} 
+                color={canGoForward ? colors.primary : colors.muted} 
+              />
+            </TouchableOpacity>
+          </View>
 
-      {/* Weekly Overview Section */}
-      <View style={styles.weeklyOverview}>
-        <View style={styles.overviewHeader}>
-          <Text style={styles.overviewTitle}>This Week</Text>
-        </View>
+          {/* Weekly Overview Section */}
+          <View style={styles.weeklyOverview}>
+            <View style={styles.overviewHeader}>
+              <Text style={styles.overviewTitle}>This Week</Text>
+            </View>
+          </View>
+        </>
+      )}
         
-        <View style={styles.daysContainer}>
+      <View style={styles.daysContainer}>
           {dayIndicators.map((day, index) => {
             const dayName = day.dayOfWeek.substring(0, 3);
             
@@ -93,7 +99,6 @@ const WeekNavigationAndOverview: React.FC<WeekNavigationAndOverviewProps> = ({
             );
           })}
         </View>
-      </View>
     </View>
   );
 };

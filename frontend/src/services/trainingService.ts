@@ -121,8 +121,8 @@ export class TrainingService {
     });
 
     try {
-      // First, try to fetch using relational structure
-      console.log('📊 TrainingService: Attempting relational query...');
+      // Use relational query to get training plan with all exercise details
+      console.log('📊 TrainingService: Fetching training plan with relational query...');
       const { data, error } = await supabase
         .from('training_plans')
         .select(`
@@ -142,13 +142,6 @@ export class TrainingService {
         .eq('user_profile_id', userProfileId)
         .single();
 
-      console.log('📊 TrainingService: Relational query result:', {
-        hasData: !!data,
-        hasError: !!error,
-        errorCode: error?.code,
-        errorMessage: error?.message,
-        timestamp: new Date().toISOString()
-      });
 
       if (error) {
         if (error.code === 'PGRST116') {
@@ -224,14 +217,14 @@ export class TrainingService {
         }
       }
 
-      // Transform the data to match our TrainingTrainingPlan interface
-      
+      // Transform the relational data to match our TrainingTrainingPlan interface
       const trainingPlan: TrainingTrainingPlan = {
         id: data.id.toString(),
         title: data.title,
         description: data.summary,
         totalWeeks: data.weekly_schedules?.length || 1,
-        currentWeek: data.current_week,
+        currentWeek: data.current_week || 1,
+        aiMessage: data.ai_message,
         weeklySchedules: data.weekly_schedules?.map((schedule: any) => {
           // Sort daily trainings by day order (Monday = 0, Tuesday = 1, etc.) - Monday-first week
           const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -245,30 +238,30 @@ export class TrainingService {
             id: schedule.id.toString(),
             weekNumber: schedule.week_number,
             dailyTrainings: sortedDailyTrainings.map((daily: any) => {
-                // Combine strength exercises and endurance sessions
+                // Combine strength exercises and endurance sessions from relational data
                 const strengthExercises = daily.strength_exercise?.map((se: any) => ({
-                  id: se.id.toString(),
-                  exerciseId: se.exercise_id.toString(),
-                  completed: se.completed,
-                  order: se.order || 0,
-                  exercise: se.exercises ? {
-                    id: se.exercises.id.toString(),
-                    name: se.exercises.name,
-                    force: se.exercises.force,
-                    instructions: se.exercises.instructions,
-                    equipment: se.exercises.equipment,
-                    target_area: se.exercises.target_area,
-                    secondary_muscles: se.exercises.secondary_muscles,
-                    main_muscles: se.exercises.main_muscles,
-                    difficulty: se.exercises.difficulty,
-                    exercise_tier: se.exercises.exercise_tier,
-                    preparation: se.exercises.preparation,
-                    execution: se.exercises.execution,
-                    tips: se.exercises.tips
-                  } : null,
-                  sets: this.parseSets(se.sets, se.reps, se.weight),
-                  weight1RM: se.weight_1rm
-                })) || [];
+                    id: se.id.toString(),
+                    exerciseId: se.exercise_id.toString(),
+                    completed: se.completed,
+                    order: se.order || 0,
+                    exercise: se.exercises ? {
+                      id: se.exercises.id.toString(),
+                      name: se.exercises.name,
+                      force: se.exercises.force,
+                      instructions: se.exercises.instructions,
+                      equipment: se.exercises.equipment,
+                      target_area: se.exercises.target_area,
+                      secondary_muscles: se.exercises.secondary_muscles,
+                      main_muscles: se.exercises.main_muscles,
+                      difficulty: se.exercises.difficulty,
+                      exercise_tier: se.exercises.exercise_tier,
+                      preparation: se.exercises.preparation,
+                      execution: se.exercises.execution,
+                      tips: se.exercises.tips
+                    } : null,
+                    sets: this.parseSets(se.sets, se.reps, se.weight),
+                    weight1RM: se.weight_1rm
+                  })) || [];
 
                 // Map endurance sessions to proper format
                 const enduranceSessions = daily.endurance_session?.map((es: any, index: number) => {

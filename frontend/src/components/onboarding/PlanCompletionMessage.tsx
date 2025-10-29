@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 
 interface PlanCompletionMessageProps {
@@ -56,7 +57,7 @@ const PlanCompletionMessage: React.FC<PlanCompletionMessageProps> = ({
       <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
         {/* AI Avatar */}
         <View style={styles.avatar}>
-          <Ionicons name="brain" size={32} color="white" />
+          <MaterialIcons name="psychology" size={32} color="white" />
         </View>
 
         {/* Message */}

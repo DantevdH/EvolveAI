@@ -224,7 +224,6 @@ export class trainingService {
     planId: number,
     feedbackMessage: string,
     conversationHistory: Array<{ role: string; content: string }> = [],
-    exercises?: any[],
     formattedInitialResponses?: string,
     formattedFollowUpResponses?: string
   ): Promise<any> {
@@ -236,7 +235,6 @@ export class trainingService {
         plan_id: planId,
         feedback_message: feedbackMessage,
         conversation_history: conversationHistory,
-        exercises: exercises,
         formatted_initial_responses: formattedInitialResponses,
         formatted_follow_up_responses: formattedFollowUpResponses,
       };

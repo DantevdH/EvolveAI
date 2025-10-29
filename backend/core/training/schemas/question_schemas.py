@@ -245,10 +245,6 @@ class PlanFeedbackRequest(BaseModel):
         default=[], 
         description="Previous conversation messages for context"
     )
-    exercises: Optional[List[Dict[str, Any]]] = Field(
-        None, 
-        description="Raw exercise data from original plan generation"
-    )
     formatted_initial_responses: Optional[str] = Field(
         None, 
         description="Formatted initial question responses for context"

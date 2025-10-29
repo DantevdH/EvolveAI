@@ -92,7 +92,7 @@ class Reflector:
                     {"role": "user", "content": prompt},
                 ],
                 response_format=ReflectorAnalysisList,
-                temperature=0.3,  # Lower temperature for consistent analysis
+                temperature=os.getenv("OPENAI_TEMPERATURE", 1.0),  # Lower temperature for consistent analysis
             )
 
             # Parse the response

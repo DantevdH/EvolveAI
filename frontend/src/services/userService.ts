@@ -196,13 +196,7 @@ export class UserService {
         .select('*')
         .eq('user_id', userId);
 
-      console.log('📊 userService: Query result:', {
-        hasData: !!user_profiles,
-        dataLength: user_profiles?.length || 0,
-        hasError: !!error,
-        errorMessage: error?.message,
-        status
-      });
+
 
       if (error) {
         console.error('❌ userService: Error fetching profile:', error);

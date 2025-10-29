@@ -21,98 +21,6 @@ import { UserService } from '../../services/userService';
 import { cleanUserProfileForResume, isValidFormattedResponse } from '../../utils/validation';
 import { logStep, logData, logError, logNavigation } from '../../utils/logger';
 
-// Transform backend data structure to frontend format
-const transformBackendToFrontend = (backendData: any) => {
-  if (!backendData) return null;
-  
-  return {
-    id: backendData.id?.toString(),
-    title: backendData.title,
-    description: backendData.summary,
-    totalWeeks: backendData.weekly_schedules?.length || 1,
-    currentWeek: 1, // Default to week 1
-    weeklySchedules: backendData.weekly_schedules?.map((schedule: any) => {
-      // Sort daily trainings by day order (Monday = 0, Tuesday = 1, etc.)
-      const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-      const sortedDailyTrainings = schedule.daily_training?.sort((a: any, b: any) => {
-        const aIndex = dayOrder.indexOf(a.day_of_week);
-        const bIndex = dayOrder.indexOf(b.day_of_week);
-        return aIndex - bIndex;
-      }) || [];
-
-      return {
-        id: schedule.id?.toString(),
-        weekNumber: schedule.week_number,
-        dailyTrainings: sortedDailyTrainings.map((daily: any) => {
-          // Combine strength exercises and endurance sessions into exercises array
-          const exercises: any[] = [];
-          
-          // Add strength exercises
-          if (daily.strength_exercise && daily.strength_exercise.length > 0) {
-            daily.strength_exercise.forEach((se: any) => {
-              exercises.push({
-                id: se.id?.toString(),
-                exerciseId: se.exercise_id?.toString(),
-                exercise: se.exercise || null,
-                sets: Array.from({ length: se.sets || 0 }, (_, index) => ({
-                  id: `set-${index}`,
-                  reps: se.reps?.[index] || 0,
-                  weight: se.weight?.[index] || 0,
-                  completed: false,
-                  restTime: 60
-                })),
-                completed: se.completed || false,
-                order: exercises.length
-              });
-            });
-          }
-          
-          // Add endurance sessions
-          if (daily.endurance_session && daily.endurance_session.length > 0) {
-            daily.endurance_session.forEach((es: any) => {
-              exercises.push({
-                id: es.id?.toString(),
-                exerciseId: `endurance_${es.id}`,
-                exercise: {
-                  id: `endurance_${es.id}`,
-                  name: `${es.sport_type} - ${es.training_volume} ${es.unit}`,
-                  instructions: `${es.sport_type} session`,
-                  target_area: 'Endurance',
-                  force: null,
-                  equipment: null,
-                  secondary_muscles: [],
-                  main_muscles: [],
-                  difficulty: null,
-                  exercise_tier: null,
-                  imageUrl: null,
-                  videoUrl: null
-                },
-                sets: [],
-                completed: es.completed || false,
-                order: exercises.length
-              });
-            });
-          }
-
-          return {
-            id: daily.id?.toString(),
-            dayOfWeek: daily.day_of_week,
-            isRestDay: daily.is_rest_day || false,
-            exercises,
-            completed: daily.completed || false
-          };
-        }),
-        completed: false,
-        completedAt: undefined
-      };
-    }) || [],
-    createdAt: backendData.created_at ? new Date(backendData.created_at) : new Date(),
-    updatedAt: backendData.updated_at ? new Date(backendData.updated_at) : new Date(),
-    completed: false,
-    completedAt: undefined
-  };
-};
-
 interface ConversationalOnboardingProps {
   onComplete: (trainingPlan: any) => Promise<void>;
   onError: (error: string) => void;
@@ -378,29 +286,78 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             // Backend now returns the complete formatted training plan
             logStep('Plan Generation', 'completed', 'Training plan received from backend');
             
-            // Transform backend data to frontend format before setting
-            const transformedPlan = transformBackendToFrontend(response.data);
-            if (transformedPlan) {
+            // CRITICAL: Fetch plan from database while spinner is still showing
+            // This ensures AuthContext is populated before we stop loading
+            console.log('📍 ConversationalOnboarding: Fetching plan from database after generation...');
+            
+            if (!authState.userProfile?.id) {
+              throw new Error('No user profile ID available to fetch training plan');
+            }
+            
+            try {
+              // Import TrainingService to fetch the plan from database
+              const { TrainingService } = await import('../../services/trainingService');
+              
+              // Fetch plan from database - keep spinner running during this
+              const freshPlanResult = await TrainingService.getTrainingPlan(authState.userProfile.id);
+              
+              if (freshPlanResult.success && freshPlanResult.data) {
+                console.log('✅ ConversationalOnboarding: Plan loaded from database into AuthContext');
+                
+                // Set plan in AuthContext - this ensures it's available for PlanPreviewStep
+                setTrainingPlan(freshPlanResult.data);
+                
+                // Store exercises in AuthContext for future use
+                if (response.metadata?.exercises) {
+                  setExercises(response.metadata.exercises);
+                }
+                
+                // NOW we can stop the spinner - plan is in AuthContext
+                setState(prev => ({
+                  ...prev,
+                  trainingPlan: freshPlanResult.data,
+                  completionMessage: response.completion_message || "🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨",
+                  planGenerationLoading: false,
+                  planMetadata: {
+                    formattedInitialResponses: response.metadata?.formatted_initial_responses,
+                    formattedFollowUpResponses: response.metadata?.formatted_follow_up_responses,
+                  },
+                }));
+              } else {
+                console.error('❌ ConversationalOnboarding: Failed to fetch plan from database');
+                // Still stop spinner, but log warning
+                setState(prev => ({
+                  ...prev,
+                  trainingPlan: response.data, // Fallback to response data
+                  completionMessage: response.completion_message || "🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨",
+                  planGenerationLoading: false,
+                  planMetadata: {
+                    formattedInitialResponses: response.metadata?.formatted_initial_responses,
+                    formattedFollowUpResponses: response.metadata?.formatted_follow_up_responses,
+                  },
+                }));
+                setTrainingPlan(response.data); // Fallback: still set in AuthContext
+              }
+            } catch (fetchError) {
+              console.error('❌ ConversationalOnboarding: Error fetching plan from DB:', fetchError);
+              // Fallback: Use response data and stop spinner
+              const transformedPlan = response.data;
               setTrainingPlan(transformedPlan);
-            } else {
-              throw new Error('Failed to transform training plan data');
+              if (response.metadata?.exercises) {
+                setExercises(response.metadata.exercises);
+              }
+              
+              setState(prev => ({
+                ...prev,
+                trainingPlan: transformedPlan,
+                completionMessage: response.completion_message || "🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨",
+                planGenerationLoading: false,
+                planMetadata: {
+                  formattedInitialResponses: response.metadata?.formatted_initial_responses,
+                  formattedFollowUpResponses: response.metadata?.formatted_follow_up_responses,
+                },
+              }));
             }
-            
-            // Store exercises in AuthContext for future use
-            if (response.metadata?.exercises) {
-              setExercises(response.metadata.exercises);
-            }
-            
-            setState(prev => ({
-              ...prev,
-              trainingPlan: transformedPlan,
-              completionMessage: response.completion_message || "🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨",
-              planGenerationLoading: false,
-              planMetadata: {
-                formattedInitialResponses: response.metadata?.formatted_initial_responses,
-                formattedFollowUpResponses: response.metadata?.formatted_follow_up_responses,
-              },
-            }));
             
             // Stay in generation step to show completion message
             // The PlanGenerationStep will handle showing the completion message
@@ -431,7 +388,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }));
       onError(errorMessage);
     }
-  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, authState.userProfile, onComplete, onError]);
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, authState.userProfile, authState.userProfile?.id, setTrainingPlan, setExercises, onComplete, onError]);
 
   // Step 1: Username
   const handleUsernameChange = useCallback((username: string) => {

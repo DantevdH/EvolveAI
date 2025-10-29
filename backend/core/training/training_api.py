@@ -104,6 +104,8 @@ async def _fetch_complete_training_plan(user_profile_id: int) -> Dict[str, Any]:
                     strength_exercises = strength_exercises_response.data or []
 
                     # Get exercise details for each strength exercise
+                    # Store as "exercises" (plural) to match Supabase relational query format
+                    # Frontend TrainingService expects se.exercises from Supabase queries
                     for strength_exercise in strength_exercises:
                         exercise_response = (
                             supabase.table("exercises")
@@ -113,10 +115,12 @@ async def _fetch_complete_training_plan(user_profile_id: int) -> Dict[str, Any]:
                             .execute()
                         )
                         if exercise_response.data:
-                            strength_exercise["exercise"] = exercise_response.data
+                            strength_exercise["exercises"] = exercise_response.data  # Plural to match Supabase format
                         else:
-                            strength_exercise["exercise"] = None
+                            strength_exercise["exercises"] = None
 
+                    # Store as strength_exercise (singular) to match Supabase relational query format
+                    # Frontend TrainingService expects this format from Supabase queries
                     daily_training["strength_exercise"] = strength_exercises
 
                     # Get endurance sessions
@@ -126,6 +130,7 @@ async def _fetch_complete_training_plan(user_profile_id: int) -> Dict[str, Any]:
                         .eq("daily_training_id", daily_training["id"])
                         .execute()
                     )
+                    # Store as endurance_session (singular) to match Supabase relational query format
                     daily_training["endurance_session"] = (
                         endurance_sessions_response.data or []
                     )
@@ -394,6 +399,7 @@ async def generate_training_plan(
             )
         
         user_profile_id = user_profile_result.get("data", {}).get("id")
+        user_profile = user_profile_result.get("data", {})
         logger.info(f"✅ Found user profile ID: {user_profile_id}")
         
         # Format responses
@@ -419,34 +425,50 @@ async def generate_training_plan(
             update={"user_id": user_id}
         )
         
-        # Extract initial lessons from onboarding Q&A (ACE pattern seed lessons)
-        logger.info("📘 Extracting initial lessons from onboarding responses...")
-        initial_lessons = coach.extract_initial_lessons_from_onboarding(
-            personal_info=personal_info_with_user_id,
-            formatted_initial_responses=formatted_initial_responses,
-            formatted_follow_up_responses=formatted_follow_up_responses,
+        # Check if playbook already exists - if so, skip lesson extraction (performance optimization)
+        logger.info("📘 Checking if playbook already exists...")
+        existing_playbook = await db_service.load_user_playbook(user_profile_id, request.jwt_token)
+        
+        # Check if playbook exists in database by comparing user_id
+        # If user_id matches, it means playbook was loaded from DB (exists), not newly created
+        playbook_exists = (
+            existing_playbook 
+            and existing_playbook.user_id 
+            and existing_playbook.user_id == user_id
         )
         
-        # Create initial playbook with onboarding lessons
-        from core.base.schemas.playbook_schemas import UserPlaybook
-        initial_playbook = UserPlaybook(
-            user_id=user_id,
-            lessons=initial_lessons,
-            total_lessons=len(initial_lessons),
-        )
-        
-        logger.info(f"📘 Created initial playbook with {len(initial_lessons)} lessons from onboarding")
-        
-        # Store initial playbook
-        await safe_db_update(
-            "Store initial playbook",
-            db_service.update_user_profile,
-            user_id=user_id,
-            data={"user_playbook": initial_playbook.model_dump()},
-            jwt_token=request.jwt_token
-        )
+        if playbook_exists:
+            logger.info(f"📘 Playbook already exists (user_id: {existing_playbook.user_id}) with {len(existing_playbook.lessons)} lessons - skipping lesson extraction")
+        else:
+            # Extract initial lessons from onboarding Q&A (ACE pattern seed lessons) - only if playbook doesn't exist
+            logger.info("📘 Extracting initial lessons from onboarding responses...")
+            initial_lessons = coach.extract_initial_lessons_from_onboarding(
+                personal_info=personal_info_with_user_id,
+                formatted_initial_responses=formatted_initial_responses,
+                formatted_follow_up_responses=formatted_follow_up_responses,
+            )
+            
+            # Create initial playbook with onboarding lessons
+            from core.base.schemas.playbook_schemas import UserPlaybook
+            initial_playbook = UserPlaybook(
+                user_id=user_id,
+                lessons=initial_lessons,
+                total_lessons=len(initial_lessons),
+            )
+            
+            logger.info(f"📘 Created initial playbook with {len(initial_lessons)} lessons from onboarding")
+            
+            # Store initial playbook
+            await safe_db_update(
+                "Store initial playbook",
+                db_service.update_user_profile,
+                user_id=user_id,
+                data={"user_playbook": initial_playbook.model_dump()},
+                jwt_token=request.jwt_token
+            )
         
         # Generate initial training plan (onboarding - uses initial playbook)
+        # AI will decide and retrieve exercises internally
         result = await coach.generate_initial_training_plan(
             personal_info=personal_info_with_user_id,
             formatted_initial_responses=formatted_initial_responses,
@@ -891,13 +913,16 @@ async def process_plan_feedback(
                 detail="Training plan not found"
             )
         
-        # Get user profile to extract personal info
-        user_profile = await db_service.get_user_profile(request.user_profile_id)
-        if not user_profile:
+        # Get user profile to extract personal info (by integer ID)
+        profile_response = await db_service.get_user_profile_by_id(request.user_profile_id)
+        if not profile_response or not profile_response.get("success"):
             raise HTTPException(
                 status_code=404,
                 detail="User profile not found"
             )
+        
+        # Extract the actual profile data
+        user_profile = profile_response.get("data", {})
         
         # Create PersonalInfo object from user profile
         personal_info = PersonalInfo(
@@ -950,23 +975,37 @@ async def process_plan_feedback(
             logger.info("Plan update triggered by feedback")
             
             # Generate updated plan with all context (includes AI message generation)
+            # Metadata options will be fetched automatically inside update_plan_from_feedback
             update_result = await coach.update_plan_from_feedback(
                 personal_info=personal_info,
                 current_plan=current_plan,
                 feedback_message=request.feedback_message,
                 classification_result=classification_result,
                 conversation_history=request.conversation_history,
-                exercises=request.exercises or [],
                 formatted_initial_responses=request.formatted_initial_responses or "",
                 formatted_follow_up_responses=request.formatted_follow_up_responses or ""
             )
             
+            # Ensure updated_plan is a dictionary, not a Pydantic object
+            updated_plan_data = update_result["updated_plan"]
+            if not isinstance(updated_plan_data, dict):
+                # If it's still a Pydantic model, convert it
+                if hasattr(updated_plan_data, 'model_dump'):
+                    updated_plan_data = updated_plan_data.model_dump()
+                elif hasattr(updated_plan_data, 'dict'):
+                    updated_plan_data = updated_plan_data.dict()
+                else:
+                    logger.error(f"Updated plan is not serializable: {type(updated_plan_data)}")
+                    updated_plan_data = None
+            
             # Save updated plan to database
             try:
-                await db_service.update_training_plan(
-                    request.plan_id,
-                    update_result["updated_plan"]
-                )
+                if updated_plan_data:
+                    await db_service.update_training_plan(
+                        request.plan_id,
+                        updated_plan_data,
+                        jwt_token=request.jwt_token
+                    )
                 logger.info(f"Successfully updated plan {request.plan_id} based on feedback")
             except Exception as e:
                 logger.error(f"Error saving updated plan: {str(e)}")
@@ -979,13 +1018,40 @@ async def process_plan_feedback(
                     error=f"Plan updated but failed to save: {str(e)}"
                 )
             
-            return PlanFeedbackResponse(
-                success=True,
-                ai_response=update_result["ai_message"],  # Use AI message from plan update
-                plan_updated=True,
-                updated_plan=update_result["updated_plan"],
-                changes_explanation=update_result["explanation"]
-            )
+            # Fetch complete training plan with real IDs and all nested relationships from database
+            # This ensures we return the actual saved data with proper structure (same as plan generation)
+            try:
+                complete_updated_plan = await _fetch_complete_training_plan(request.user_profile_id)
+                
+                if complete_updated_plan:
+                    logger.info("✅ Complete updated training plan fetched with real IDs and nested data")
+                    return PlanFeedbackResponse(
+                        success=True,
+                        ai_response=update_result.get("ai_message", "Thank you for your feedback! I've updated your plan based on your input. Take a look and let me know if you'd like any other changes! 💪"),
+                        plan_updated=True,
+                        updated_plan=complete_updated_plan,  # Use fetched plan with real IDs and nested data
+                        changes_explanation=update_result.get("explanation", "Plan updated successfully")
+                    )
+                else:
+                    logger.warning("⚠️ Could not fetch complete updated plan, returning LLM data as fallback")
+                    # Fallback to LLM data if fetch fails
+                    return PlanFeedbackResponse(
+                        success=True,
+                        ai_response=update_result.get("ai_message", "Thank you for your feedback! I've updated your plan based on your input. Take a look and let me know if you'd like any other changes! 💪"),
+                        plan_updated=True,
+                        updated_plan=updated_plan_data,  # Fallback to LLM data
+                        changes_explanation=update_result.get("explanation", "Plan updated successfully")
+                    )
+            except Exception as fetch_error:
+                logger.error(f"❌ Error fetching complete updated training plan: {str(fetch_error)}")
+                # Fallback to LLM data if fetch fails
+                return PlanFeedbackResponse(
+                    success=True,
+                    ai_response=update_result.get("ai_message", "Thank you for your feedback! I've updated your plan based on your input. Take a look and let me know if you'd like any other changes! 💪"),
+                    plan_updated=True,
+                    updated_plan=updated_plan_data,  # Fallback to LLM data
+                    changes_explanation=update_result.get("explanation", "Plan updated successfully")
+                )
         else:
             # Just respond without updating plan - use simple fallback message
             ai_response = "Thanks for your question! Here's my guidance:"

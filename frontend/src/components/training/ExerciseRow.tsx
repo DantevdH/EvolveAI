@@ -66,12 +66,14 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
 
         <View style={styles.exerciseInfo}>
           <View style={styles.exerciseHeader}>
-            <Text style={styles.exerciseName}>
-              {exercise.exerciseId?.startsWith('endurance_') 
-                ? (exercise.enduranceSession?.name || 'Endurance Session')
-                : (exercise.exercise?.name || 'Exercise')
-              }
-            </Text>
+            <View style={{ backgroundColor: 'red', padding: 10, width: '100%' }}>
+              <Text style={{ fontSize: 20, color: 'white', fontWeight: 'bold' }}>
+                HARDCODED TEXT TEST
+              </Text>
+              <Text style={{ fontSize: 18, color: 'yellow', fontWeight: 'bold' }}>
+                {exercise.exercise?.name || 'NO NAME'}
+              </Text>
+            </View>
           </View>
           
           <View style={styles.exerciseDetails}>
@@ -389,16 +391,33 @@ const styles = StyleSheet.create({
   },
   exerciseInfo: {
     flex: 1,
-    gap: 4
+    gap: 4,
+    backgroundColor: 'rgba(0, 255, 0, 0.2)', // Green debug background
+    padding: 4
   },
   exerciseHeader: {
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    flex: 1,
+    width: '100%',
+    minHeight: 40,
+    backgroundColor: 'rgba(255, 0, 255, 0.2)' // Magenta debug background
   },
   exerciseName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.text
+    fontSize: 24, // Increased size
+    fontWeight: '700', // Bolder
+    color: '#FF0000', // Bright red for debugging
+    backgroundColor: '#FFFF00', // Bright yellow background for debugging
+    marginRight: 8,
+    padding: 8,
+    flexShrink: 1,
+    flexGrow: 1,
+    minWidth: 100,
+    maxWidth: '100%',
+    textAlign: 'left',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    lineHeight: 30
   },
   actionButtons: {
     flexDirection: 'row',

@@ -299,6 +299,91 @@ class ExerciseSelector:
             logger.error(f"Error grouping exercises by main_muscles: {e}")
             return exercises
 
+    def get_metadata_options(self) -> Dict[str, List[str]]:
+        """
+        Get available metadata options from database (equipment, target_area, muscles).
+        
+        These are the options AI can choose from when generating exercise metadata.
+        Uses SQL queries to get distinct values, including unnesting arrays.
+        
+        Returns:
+            Dict with keys: equipment, target_areas, main_muscles (distinct values from both main_muscles and secondary_muscles)
+        """
+        try:
+            # Get distinct equipment values
+            equipment_result = (
+                self.supabase.table("exercises")
+                .select("equipment")
+                .execute()
+            )
+            equipment_set = set()
+            if equipment_result.data:
+                for ex in equipment_result.data:
+                    eq = ex.get("equipment")
+                    if eq:
+                        # Handle both string and list types
+                        if isinstance(eq, list):
+                            equipment_set.update(eq)
+                        elif isinstance(eq, str):
+                            equipment_set.add(eq)
+            
+            # Get distinct target_area values
+            target_areas_result = (
+                self.supabase.table("exercises")
+                .select("target_area")
+                .execute()
+            )
+            target_areas_set = set()
+            if target_areas_result.data:
+                for ex in target_areas_result.data:
+                    ta = ex.get("target_area")
+                    if ta:
+                        target_areas_set.add(ta)
+            
+            # Get all exercises to extract muscles from both main_muscles and secondary_muscles
+            # We'll process in Python since Supabase client doesn't support complex SQL with UNION and unnest
+            all_exercises_result = (
+                self.supabase.table("exercises")
+                .select("main_muscles, secondary_muscles")
+                .execute()
+            )
+            muscles_set = set()
+            if all_exercises_result.data:
+                for ex in all_exercises_result.data:
+                    # Process main_muscles
+                    main_muscles = ex.get("main_muscles")
+                    if main_muscles:
+                        if isinstance(main_muscles, list):
+                            muscles_set.update(main_muscles)
+                        elif isinstance(main_muscles, str):
+                            muscles_set.add(main_muscles)
+                    
+                    # Process secondary_muscles
+                    secondary_muscles = ex.get("secondary_muscles")
+                    if secondary_muscles:
+                        if isinstance(secondary_muscles, list):
+                            muscles_set.update(secondary_muscles)
+                        elif isinstance(secondary_muscles, str):
+                            muscles_set.add(secondary_muscles)
+            
+            return {
+                "equipment": sorted(list(equipment_set)),
+                "target_areas": sorted(list(target_areas_set)),
+                "main_muscles": sorted(list(muscles_set))  # Actually includes all muscles from both columns
+            }
+        except Exception as e:
+            logger.error(f"Error fetching metadata options: {e}")
+            # Return fallback values
+            return {
+                "equipment": [
+                    "Barbell", "Dumbbell", "Cable", "Machine", "Smith",
+                    "Body weight", "Band Resistive", "Suspension", "Sled",
+                    "Weighted", "Plyometric", "Isometric", "Self-assisted"
+                ],
+                "target_areas": [],
+                "main_muscles": []
+            }
+
     def _format_exercises_for_ai(self, exercises: List[Dict]) -> str:
         """
         Format exercises grouped by target_area for AI prompt.

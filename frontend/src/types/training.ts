@@ -247,6 +247,7 @@ export interface WeekNavigationAndOverviewProps {
   dayIndicators: DayIndicator[];
   onWeekChange: (week: number) => void;
   onDaySelect: (dayIndex: number) => void;
+  hideNavigation?: boolean;
 }
 
 export interface DailyTrainingDetailProps {

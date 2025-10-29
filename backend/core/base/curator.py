@@ -546,7 +546,7 @@ class Curator:
                     {"role": "user", "content": prompt},
                 ],
                 response_format=ContradictionCheck,
-                temperature=0.2,
+                temperature=os.getenv("OPENAI_TEMPERATURE", 0.7),
             )
 
             result = completion.choices[0].message.parsed
@@ -655,7 +655,7 @@ class Curator:
                     {"role": "user", "content": prompt},
                 ],
                 response_format=SimilarityCheck,
-                temperature=0.2,
+                temperature=os.getenv("OPENAI_TEMPERATURE", 1.0),
             )
 
             result = completion.choices[0].message.parsed

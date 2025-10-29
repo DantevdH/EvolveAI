@@ -8,6 +8,7 @@ import json
 import openai
 import time
 from typing import List, Dict, Any, Optional
+from datetime import datetime
 
 from core.base.base_agent import BaseAgent
 from logging_config import get_logger
@@ -35,7 +36,6 @@ from core.training.schemas.question_schemas import (
     QuestionType,
     AIQuestion,
     QuestionOption,
-    ExerciseRetrievalDecision,
 )
 from core.training.helpers.response_formatter import ResponseFormatter
 from core.training.helpers.prompt_generator import PromptGenerator
@@ -447,6 +447,7 @@ class TrainingCoach(BaseAgent):
         
         1. Loads playbook with Q&A lessons (created during plan generation)
         2. Generates plan using lessons (does NOT mark as "applied" - no history yet)
+        3. AI generates exercises with metadata which are then matched to database
         
         Args:
             personal_info: User's personal information and goals
@@ -466,7 +467,7 @@ class TrainingCoach(BaseAgent):
                 total_lessons=0,
             )
         
-        # Pass the playbook to internal method (don't reload!)
+        # Pass the playbook to internal method (AI will generate exercises with metadata for matching)
         return await self._generate_training_plan_internal(
             personal_info=personal_info,
             formatted_initial_responses=formatted_initial_responses,
@@ -560,76 +561,16 @@ class TrainingCoach(BaseAgent):
                     },
                 }
 
-            # Step 1: Let AI decide if we need exercises
-            self.logger.info("AI analyzing if exercises are needed...")
-
-            combined_responses = (
-                f"{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
-            )
-            decision_prompt = PromptGenerator.generate_exercise_decision_prompt(
-                personal_info, combined_responses
-            )
-
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4"),
-                messages=[{"role": "system", "content": decision_prompt}],
-                response_format=ExerciseRetrievalDecision,
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),  # Lower temp for consistent decisions
-            )
-
-            decision = completion.choices[0].message.parsed
-
+            # Step 1: Get metadata options from database (equipment, target_areas, main_muscles)
+            self.logger.info("Fetching exercise metadata options from database...")
+            metadata_options = self.exercise_selector.get_metadata_options()
             self.logger.info(
-                f"AI Decision: {'Retrieve exercises' if decision.retrieve_exercises else 'No exercises needed'}"
+                f"Metadata options: {len(metadata_options.get('equipment', []))} equipment types, "
+                f"{len(metadata_options.get('target_areas', []))} target areas, "
+                f"{len(metadata_options.get('main_muscles', []))} muscle groups"
             )
-            self.logger.info(f"Reasoning: {decision.reasoning}")
 
-            # Step 2: Retrieve exercises if needed
-            exercises = []
-            exercises_retrieved = 0
-
-            if decision.retrieve_exercises:
-                self.logger.info("Retrieving exercises with AI-decided parameters...")
-                self.logger.info(
-                    f"   - Difficulty: {decision.difficulty or personal_info.experience_level}"
-                )
-
-                # Extract equipment strings from enum values for SQL search
-                equipment_list = (
-                    [eq.value for eq in decision.equipment]
-                    if decision.equipment
-                    else None
-                )
-                self.logger.info(f"   - Equipment: {equipment_list}")
-
-                # Use AI-decided parameters or fallback to defaults
-                difficulty = (
-                    decision.difficulty or personal_info.experience_level or "beginner"
-                )
-
-                # Get exercises using existing exercise_selector
-                all_exercises = self.exercise_selector.get_exercise_candidates(
-                    difficulty=difficulty, equipment=equipment_list
-                )
-
-                exercises_retrieved = len(all_exercises)
-                self.logger.info(f"Retrieved {exercises_retrieved} exercise candidates")
-
-                # Check if we have exercises available
-                if not all_exercises:
-                    return {
-                        "success": False,
-                        "error": "No exercises available for the specified difficulty level and equipment. Please try different parameters.",
-                    }
-
-                # Store raw exercises for later use
-                exercises = all_exercises
-                self.logger.info(f"Stored {len(exercises)} raw exercises for plan generation and future updates")
-            else:
-                self.logger.info("Skipping exercise retrieval (not needed)")
-                exercises = []
-
-            # Step 3: Use playbook for personalized context (passed as parameter)
+            # Step 2: Use playbook for personalized context (passed as parameter)
             self.logger.info(f"Using playbook with {len(playbook.lessons)} lessons for plan generation")
             
             active_lessons = (
@@ -660,47 +601,47 @@ class TrainingCoach(BaseAgent):
                 else None
             )
 
-            # Step 4: Generate plan with playbook context
+            # Step 3: Generate plan with metadata options (AI will generate name + metadata)
             prompt = PromptGenerator.generate_training_plan_prompt(
                 personal_info,
                 formatted_initial_responses,
                 formatted_follow_up_responses,
-                exercises=exercises,
+                metadata_options=metadata_options,
                 playbook_lessons=playbook_lessons_dict,
             )
 
-            # Step 5: Get the training plan
-            self.logger.info("Generating training plan with AI...")
+            # Step 4: Get the training plan
+            model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
+            self.logger.info(f"🤖 Generating training plan with AI model: {model_name} (AI will generate exercise name + metadata)...")
             
             completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+                model=model_name,
                 messages=[{"role": "system", "content": prompt}],
                 response_format=TrainingPlan,
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
-                max_completion_tokens=8000,  
+                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
             )
 
             training_plan = completion.choices[0].message.parsed
             training_dict = training_plan.model_dump()
 
-            # Step 6: Validate the training plan with exercise_validator (only if exercises were used)
+            # Step 5: Post-process strength exercises (match AI-generated metadata to database)
+            self.logger.info("Post-processing strength exercises (matching to database)...")
+            validated_training = self.exercise_validator.post_process_strength_exercises(training_dict)
+            
+            # Step 6: Validate the training plan with exercise_validator (checks exercise_id existence)
             validation_messages = []
-            if decision.retrieve_exercises and exercises_retrieved > 0:
-                self.logger.info("Validating training plan...")
-                validated_training, validation_messages = (
-                    self.exercise_validator.validate_training_plan(training_dict)
-                )
+            self.logger.info("Validating training plan...")
+            validated_training, validation_messages = (
+                self.exercise_validator.validate_training_plan(validated_training)
+            )
 
-                self.logger.info(
-                    f"Validation complete: {len(validation_messages)} messages"
-                )
-                for message in validation_messages:
-                    self.logger.debug(f"   {message}")
-            else:
-                self.logger.info("Skipping exercise validation (no exercises used)")
-                validated_training = training_dict
+            self.logger.info(
+                f"Validation complete: {len(validation_messages)} messages"
+            )
+            for message in validation_messages:
+                self.logger.debug(f"   {message}")
 
-            # Step 6: Identify which lessons were applied & update playbook (only for regeneration)
+            # Step 7: Identify which lessons were applied & update playbook (only for regeneration)
             applied_lesson_ids = []
             if is_regeneration and playbook_lessons_dict and len(playbook_lessons_dict) > 0:
                 self.logger.info(
@@ -745,17 +686,12 @@ class TrainingCoach(BaseAgent):
                 ),  # Include playbook for saving
                 "completion_message": ai_message,  # Keep for backward compatibility with API
                 "metadata": {
-                    "exercises_candidates": exercises_retrieved,
                     "validation_messages": validation_messages,
-                    "generation_method": (
-                        "AI + Smart Exercise Selection"
-                        if decision.retrieve_exercises
-                        else "AI + Sport-Specific Training"
-                    ),
-                    "ai_decision": {
-                        "retrieve_exercises": decision.retrieve_exercises,
-                        "reasoning": decision.reasoning,
-                        "alternative_approach": decision.alternative_approach,
+                    "generation_method": "AI + Metadata-Based Exercise Matching",
+                    "metadata_options_count": {
+                        "equipment": len(metadata_options.get("equipment", [])),
+                        "target_areas": len(metadata_options.get("target_areas", [])),
+                        "main_muscles": len(metadata_options.get("main_muscles", []))
                     },
                     "playbook_lessons_count": len(playbook.lessons) if playbook else 0,
                     "playbook_initialized": (
@@ -763,7 +699,6 @@ class TrainingCoach(BaseAgent):
                     ),
                     "lessons_applied_count": len(applied_lesson_ids),
                     "lessons_applied_ids": applied_lesson_ids,
-                    "exercises": exercises,  # Store raw exercises for feedback updates
                     "formatted_initial_responses": formatted_initial_responses,  # Store for feedback updates
                     "formatted_follow_up_responses": formatted_follow_up_responses,  # Store for feedback updates
                 },
@@ -1235,8 +1170,7 @@ class TrainingCoach(BaseAgent):
                 model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4o"),
                 messages=[{"role": "user", "content": prompt}],
                 response_format=FeedbackClassification,
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
-                max_completion_tokens=300,
+                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
             )
 
             parsed_obj = completion.choices[0].message.parsed
@@ -1264,7 +1198,6 @@ class TrainingCoach(BaseAgent):
         feedback_message: str,
         classification_result: Dict[str, Any],
         conversation_history: List[Dict[str, str]],
-        exercises: List[Dict] = None,
         formatted_initial_responses: str = "",
         formatted_follow_up_responses: str = ""
     ) -> Dict[str, Any]:
@@ -1274,13 +1207,17 @@ class TrainingCoach(BaseAgent):
         Uses the same structured completion approach as plan generation.
         """
         try:
-            # Convert plan to dict for context
-            plan_dict = current_plan.model_dump() if hasattr(current_plan, 'model_dump') else current_plan
+            # Convert plan to dict for context (use mode='json' to serialize datetimes)
+            plan_dict = current_plan.model_dump(mode='json') if hasattr(current_plan, 'model_dump') else current_plan
+            
+            # Get metadata options from database (same as plan generation)
+            self.logger.info("Fetching exercise metadata options for plan update...")
+            metadata_options = self.exercise_selector.get_metadata_options()
             
             # Build conversation context
             context = self._build_conversation_context(conversation_history)
             
-            # Use the consolidated plan update prompt
+            # Use the consolidated plan update prompt (with metadata options)
             full_prompt = PromptGenerator.generate_plan_update_prompt(
                 personal_info,
                 plan_dict,
@@ -1289,31 +1226,30 @@ class TrainingCoach(BaseAgent):
                 context,
                 formatted_initial_responses,
                 formatted_follow_up_responses,
-                exercises
+                metadata_options
             )
             
             # Use structured completion like in plan generation
-            self.logger.info("Updating training plan with structured completion...")
-            
-            # Calculate safe max_tokens based on model (same logic as plan generation)
-            model = os.getenv("OPENAI_MODEL", "gpt-4o")
-            if "gpt-4o-mini" in model or "gpt-5-mini" in model:
-                safe_max_tokens = 8000  # GPT-5-mini supports up to 128k, using 8k for plan updates
-            else:
-                safe_max_tokens = 12000  # Full limit for regular models
-            
-            self.logger.info(f"📊 Updating plan | Model: {model} | Max tokens: {safe_max_tokens}")
+            model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
+            self.logger.info(f"🤖 Updating training plan with AI model: {model_name}...")
             
             completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4o"),
+                model=model_name,
                 messages=[{"role": "system", "content": full_prompt}],
                 response_format=TrainingPlan,
                 temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
-                max_completion_tokens=safe_max_tokens,
             )
             
             updated_plan = completion.choices[0].message.parsed
-            updated_plan_dict = updated_plan.model_dump()
+            # Use mode='json' to ensure datetime objects are serialized as strings
+            updated_plan_dict = updated_plan.model_dump(mode='json')
+            
+            # Post-process strength exercises (match AI-generated metadata to database)
+            self.logger.info("Post-processing strength exercises in updated plan...")
+            updated_plan_dict = self.exercise_validator.post_process_strength_exercises(updated_plan_dict)
+            
+            # Clean the plan data to ensure JSON serialization (in case anything slipped through)
+            updated_plan_dict = self._clean_for_json_serialization(updated_plan_dict)
             
             # The AI message is now generated within the TrainingPlan by the LLM
             # Extract it from the updated plan
@@ -1337,9 +1273,14 @@ class TrainingCoach(BaseAgent):
             
         except Exception as e:
             self.logger.error(f"Error updating plan: {str(e)}")
+            # Ensure current_plan is serializable (use mode='json' to serialize datetimes)
+            current_plan_dict = current_plan.model_dump(mode='json') if hasattr(current_plan, 'model_dump') else current_plan
+            current_plan_dict = self._clean_for_json_serialization(current_plan_dict)
+            
             return {
-                "updated_plan": current_plan,
-                "explanation": "I encountered an error updating your plan. Please try again with more specific feedback."
+                "updated_plan": current_plan_dict,
+                "explanation": "I encountered an error updating your plan. Please try again with more specific feedback.",
+                "ai_message": "I encountered an error updating your plan. Please try again with more specific feedback."
             }
 
     def _build_conversation_context(self, conversation_history: List[Dict[str, str]]) -> str:
@@ -1354,3 +1295,26 @@ class TrainingCoach(BaseAgent):
             context_lines.append(f"{role.upper()}: {content}")
         
         return "\n".join(context_lines)
+
+    def _clean_for_json_serialization(self, data: Any) -> Any:
+        """
+        Clean data to ensure it's JSON serializable by converting datetime objects
+        and other non-serializable types to strings or basic types.
+        """
+        if isinstance(data, dict):
+            return {key: self._clean_for_json_serialization(value) for key, value in data.items()}
+        elif isinstance(data, list):
+            return [self._clean_for_json_serialization(item) for item in data]
+        elif isinstance(data, datetime):
+            return data.isoformat()
+        elif hasattr(data, 'model_dump'):
+            # Handle Pydantic models
+            return self._clean_for_json_serialization(data.model_dump())
+        elif hasattr(data, 'dict'):
+            # Handle older Pydantic models
+            return self._clean_for_json_serialization(data.dict())
+        elif isinstance(data, (str, int, float, bool, type(None))):
+            return data
+        else:
+            # Convert other types to string as fallback
+            return str(data)

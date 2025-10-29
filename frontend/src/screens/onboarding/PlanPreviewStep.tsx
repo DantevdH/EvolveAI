@@ -9,11 +9,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
-import WeeklyOverview from '../../components/training/WeeklyOverview';
-import DailyTrainingDetail from '../../components/training/DailyTrainingDetail';
+import WeekNavigationAndOverview from '../../components/training/WeekNavigationAndOverview';
+import { SimplePlanPreview } from '../../components/onboarding/SimplePlanPreview';
 import ChatMessage from '../../components/onboarding/ChatMessage';
 import { useAuth } from '@/src/context/AuthContext';
 import { TrainingPlan, DailyTraining } from '../../types/training';
@@ -41,35 +42,82 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
   onBack,
   planMetadata
 }) => {
-  const { state, refreshUserProfile } = useAuth();
+  const { state, refreshUserProfile, setTrainingPlan } = useAuth();
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isUpdatingPlan, setIsUpdatingPlan] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<TrainingPlan | null>(null);
+  const [showPlanPreview, setShowPlanPreview] = useState(false);
+  const [displayedWelcomeText, setDisplayedWelcomeText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const typingStartedRef = useRef(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  // Initialize with AI completion message from training plan
+  // Get the AI message from training plan
+  const aiWelcomeMessage = React.useMemo(() => {
+    if (!currentPlan) return '';
+    return (currentPlan as any)?.aiMessage || 
+      (currentPlan as any)?.ai_message ||
+      `Hi ${state.userProfile?.username || 'there'}! 👋\n\n🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨`;
+  }, [currentPlan, state?.userProfile?.username]);
+
+  // Initialize training plan from AuthContext (plan is loaded during generation spinner)
   useEffect(() => {
     if (state?.trainingPlan) {
       setCurrentPlan(state.trainingPlan as any);
-      
-      // Use AI-generated message from the training plan, or fallback to a default message
-      const aiMessage = (state.trainingPlan as any)?.aiMessage || 
-        (state.trainingPlan as any)?.ai_message ||
-        `Hi ${state.userProfile?.username || 'there'}! 👋\n\n🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨`;
-      
+      setShowPlanPreview(true);
+    }
+  }, [state?.trainingPlan]);
+
+  // Typing animation effect
+  useEffect(() => {
+    if (!aiWelcomeMessage || typingStartedRef.current) return;
+    
+    typingStartedRef.current = true;
+    setIsTyping(true);
+    setDisplayedWelcomeText('');
+    
+    let currentIndex = 0;
+    let timeoutId: ReturnType<typeof setTimeout>;
+    
+    const typeText = () => {
+      if (currentIndex < aiWelcomeMessage.length) {
+        setDisplayedWelcomeText(aiWelcomeMessage.slice(0, currentIndex + 1));
+        currentIndex++;
+        timeoutId = setTimeout(typeText, 30); // 30ms per character
+      } else {
+        setIsTyping(false);
+      }
+    };
+    
+    // Start typing after a short delay
+    const startTimeout = setTimeout(() => {
+      typeText();
+    }, 500);
+    
+    return () => {
+      clearTimeout(startTimeout);
+      clearTimeout(timeoutId);
+    };
+  }, [aiWelcomeMessage]);
+
+  // Update chat messages when displayed text changes
+  useEffect(() => {
+    if (displayedWelcomeText) {
       const welcomeMessage: ChatMessage = {
         id: 'welcome',
-        message: aiMessage,
+        message: displayedWelcomeText,
         isUser: false,
         timestamp: new Date(),
+        isTyping: isTyping,
       };
       setChatMessages([welcomeMessage]);
     }
-  }, [state]);
+  }, [displayedWelcomeText, isTyping]);
 
-  // Generate day indicators for WeeklyOverview
+  // Generate day indicators for WeekNavigationAndOverview
   const dayIndicators = React.useMemo(() => {
     if (!currentPlan?.weeklySchedules?.[0]?.dailyTrainings) {
       return [];
@@ -84,6 +132,16 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
       isPastWeek: false, // Not relevant for preview
     }));
   }, [currentPlan, selectedDayIndex]);
+
+  // Generate week navigation data for WeekNavigationAndOverview
+  const weekNavigation = React.useMemo(() => {
+    return {
+      currentWeek: 1, // Always show week 1 for preview
+      totalWeeks: 1, // Only 1 week for preview
+      canGoBack: false, // No navigation in preview
+      canGoForward: false, // No navigation in preview
+    };
+  }, []);
 
   const selectedDayTraining = currentPlan?.weeklySchedules?.[0]?.dailyTrainings?.[selectedDayIndex] || null;
 
@@ -109,6 +167,7 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
       timestamp: new Date(),
       isTyping: true,
     };
+    console.log('🎯 PlanPreviewStep: Adding typing message:', typingMessage);
     setChatMessages(prev => [...prev, typingMessage]);
 
     try {
@@ -122,12 +181,12 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
           role: msg.isUser ? 'user' : 'assistant',
           content: msg.message,
         })),
-        state.exercises || [],
         planMetadata?.formattedInitialResponses,
         planMetadata?.formattedFollowUpResponses
       );
 
       // Remove typing indicator
+      console.log('🎯 PlanPreviewStep: Removing typing message');
       setChatMessages(prev => prev.filter(msg => msg.id !== 'typing'));
 
       if (data.success) {
@@ -154,15 +213,25 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
         };
         setChatMessages(prev => [...prev, aiMessage]);
 
-        // If plan was updated, refresh the plan
+        // If plan was updated, update local state directly with API response
         if (data.plan_updated && data.updated_plan) {
-          setCurrentPlan(data.updated_plan);
+          console.log('🎯 PlanPreviewStep: Plan updated, updating local state with API response');
           
-          // Refresh user profile to get the updated plan
-          await refreshUserProfile();
+          // Set updating state to show visual feedback
+          setIsUpdatingPlan(true);
+          
+          // Backend returns plan in the same format as Supabase fetch
+          // No transformation needed - already in the correct format
+          const updatedPlan = data.updated_plan as TrainingPlan;
+          
+          // Update local plan state with updated data
+          setCurrentPlan(updatedPlan);
+          
+          // Update AuthContext state to keep it in sync
+          setTrainingPlan(updatedPlan);
           
           // Use AI message from the updated plan if available, otherwise use the response
-          const planAiMessage = data.updated_plan?.ai_message;
+          const planAiMessage = updatedPlan?.aiMessage;
           if (planAiMessage && planAiMessage !== data.ai_response) {
             // Replace the last AI message with the one from the plan
             setChatMessages(prev => {
@@ -187,6 +256,11 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
             };
             setChatMessages(prev => [...prev, changeMessage]);
           }
+          
+          // Clear updating state after a brief delay to show the update
+          setTimeout(() => {
+            setIsUpdatingPlan(false);
+          }, 1000);
         }
       } else {
         throw new Error(data.error || 'Failed to process feedback');
@@ -197,14 +271,26 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
       // Remove typing indicator
       setChatMessages(prev => prev.filter(msg => msg.id !== 'typing'));
       
-      // Add error message
-      const errorMessage: ChatMessage = {
+      // Add error message with more specific error handling
+      let errorMessage = 'Sorry, I encountered an error. Please try again.';
+      
+      if (error instanceof Error) {
+        if (error.message.includes('network') || error.message.includes('fetch')) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'Request timed out. Please try again.';
+        } else if (error.message.includes('plan update')) {
+          errorMessage = 'Failed to update your plan. Please try again or contact support if the issue persists.';
+        }
+      }
+      
+      const errorChatMessage: ChatMessage = {
         id: Date.now().toString(),
-        message: 'Sorry, I encountered an error. Please try again.',
+        message: errorMessage,
         isUser: false,
         timestamp: new Date(),
       };
-      setChatMessages(prev => [...prev, errorMessage]);
+      setChatMessages(prev => [...prev, errorChatMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -220,6 +306,7 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
     scrollToBottom();
   }, [chatMessages]);
 
+  // Show error state if no plan (should not happen as plan is loaded during generation)
   if (!currentPlan) {
     return (
       <View style={styles.container}>
@@ -233,100 +320,91 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Review Your Plan</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      {/* Plan Preview */}
-      <View style={styles.previewSection}>
-        <Text style={styles.sectionTitle}>Your Training Week</Text>
-        
-        {/* Weekly Overview */}
-        <WeeklyOverview
-          dayIndicators={dayIndicators}
-          onDaySelect={setSelectedDayIndex}
-        />
-        
-        {/* Daily Training Detail */}
-        <View style={styles.dailyDetailContainer}>
-          <DailyTrainingDetail
-            dailyTraining={selectedDayTraining}
-            isPastWeek={false}
-            onExerciseToggle={() => {}} // Not interactive in preview
-            onSetUpdate={async () => {}} // Not interactive in preview
-            onExerciseDetail={() => {}} // Not interactive in preview
-            onOneRMCalculator={() => {}} // Not interactive in preview
-            onSwapExercise={() => {}} // Not interactive in preview
-            onReopenTraining={() => {}} // Not interactive in preview
-            onIntensityUpdate={async () => {}} // Not interactive in preview
-          />
-        </View>
-      </View>
-
-      {/* Chat Section */}
-      <View style={styles.chatSection}>
-        <Text style={styles.sectionTitle}>Questions or Changes?</Text>
-        
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.chatContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          {chatMessages.map((message) => (
-            <ChatMessage
-              key={message.id}
-              message={message.message}
-              isUser={message.isUser}
-              timestamp={message.timestamp}
-              isTyping={message.isTyping}
+      {/* Main Content Container */}
+      <View style={styles.contentContainer}>
+        {/* Plan Preview - Always show when plan exists */}
+        {currentPlan && (
+          <View style={styles.previewSection}>
+            
+            {/* Plan Update Indicator */}
+            {isUpdatingPlan && (
+              <View style={styles.updateIndicator}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={styles.updateText}>Updating your plan...</Text>
+              </View>
+            )}
+            
+            {/* Week Navigation and Overview */}
+            <WeekNavigationAndOverview
+              weekNavigation={weekNavigation}
+              dayIndicators={dayIndicators}
+              onWeekChange={() => {}} // No-op for preview
+              onDaySelect={setSelectedDayIndex}
+              hideNavigation={true}
             />
-          ))}
-        </ScrollView>
+            
+            {/* Simple Plan Preview */}
+            <View style={styles.dailyDetailContainer}>
+              <SimplePlanPreview
+                trainingPlan={currentPlan}
+                selectedDayIndex={selectedDayIndex}
+              />
+            </View>
+          </View>
+        )}
 
-        {/* Input */}
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.textInput}
-            value={inputMessage}
-            onChangeText={setInputMessage}
-            placeholder="Ask questions or suggest changes..."
-            placeholderTextColor={colors.muted}
-            multiline
-            maxLength={500}
-            editable={!isLoading}
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!inputMessage.trim() || isLoading) && styles.sendButtonDisabled
-            ]}
-            onPress={handleSendMessage}
-            disabled={!inputMessage.trim() || isLoading}
+        {/* Horizontal Divider */}
+        <View style={styles.divider} />
+
+        {/* Chat Section - Below exercises */}
+        <View style={styles.chatSection}>
+          
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.chatContainer}
+            showsVerticalScrollIndicator={false}
           >
-            <Ionicons 
-              name="send" 
-              size={20} 
-              color={inputMessage.trim() && !isLoading ? 'white' : colors.muted} 
+            {chatMessages.map((message) => (
+              <ChatMessage
+                key={message.id}
+                message={message.message}
+                isUser={message.isUser}
+                timestamp={message.timestamp}
+                isTyping={message.isTyping}
+              />
+            ))}
+          </ScrollView>
+
+          {/* Input */}
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.textInput}
+              value={inputMessage}
+              onChangeText={setInputMessage}
+              placeholder="Ask questions or suggest changes..."
+              placeholderTextColor={colors.muted}
+              multiline
+              maxLength={500}
+              editable={!isLoading}
             />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                (!inputMessage.trim() || isLoading) && styles.sendButtonDisabled
+              ]}
+              onPress={handleSendMessage}
+              disabled={!inputMessage.trim() || isLoading}
+            >
+              <Ionicons 
+                name="send" 
+                size={20} 
+                color={inputMessage.trim() && !isLoading ? 'white' : colors.muted} 
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
-      {/* Continue Button */}
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.continueButton}
-          onPress={onContinue}
-        >
-          <Text style={styles.continueButtonText}>Continue</Text>
-          <Ionicons name="arrow-forward" size={20} color="white" />
-        </TouchableOpacity>
-      </View>
     </KeyboardAvoidingView>
   );
 };
@@ -335,6 +413,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  contentContainer: {
+    flex: 1,
+    flexDirection: 'column',
   },
   header: {
     flexDirection: 'row',
@@ -358,9 +440,26 @@ const styles = StyleSheet.create({
     width: 40,
   },
   previewSection: {
-    flex: 1,
+    flex: 0.5, // Takes 50% of available space
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 70, // Increased top margin
+    paddingBottom: 16,
+  },
+  updateIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary + '20',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  updateText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 8,
   },
   sectionTitle: {
     fontSize: 16,
@@ -370,13 +469,33 @@ const styles = StyleSheet.create({
   },
   dailyDetailContainer: {
     marginTop: 16,
+    marginHorizontal: 16, // Match WeekNavigationAndOverview margin
+    maxHeight: 240, // Show max 5-6 exercises (increased from 200)
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: colors.overlay,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 3.84,
+    elevation: 5,
+    overflow: 'hidden',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginHorizontal: 16,
+    marginVertical: 12,
   },
   chatSection: {
-    height: 300,
+    flex: 0.4, // Takes 40% of available space
     paddingHorizontal: 16,
     paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    paddingBottom: 20, // Add margin from bottom
   },
   chatContainer: {
     flex: 1,

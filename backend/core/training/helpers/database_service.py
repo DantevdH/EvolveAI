@@ -46,6 +46,29 @@ class DatabaseService:
 
         return client
 
+    def _clean_for_json_serialization(self, data: Any) -> Any:
+        """
+        Clean data to ensure it's JSON serializable by converting datetime objects
+        and other non-serializable types to strings or basic types.
+        """
+        if isinstance(data, dict):
+            return {key: self._clean_for_json_serialization(value) for key, value in data.items()}
+        elif isinstance(data, list):
+            return [self._clean_for_json_serialization(item) for item in data]
+        elif isinstance(data, datetime):
+            return data.isoformat()
+        elif hasattr(data, 'model_dump'):
+            # Handle Pydantic models
+            return self._clean_for_json_serialization(data.model_dump())
+        elif hasattr(data, 'dict'):
+            # Handle older Pydantic models
+            return self._clean_for_json_serialization(data.dict())
+        elif isinstance(data, (str, int, float, bool, type(None))):
+            return data
+        else:
+            # Convert other types to string as fallback
+            return str(data)
+
     async def create_user_profile(
         self,
         user_id: str,
@@ -360,6 +383,16 @@ class DatabaseService:
                             strength_exercises
                         ):
                             exercise_id = exercise_data.get("exercise_id")
+                            
+                            # CRITICAL: Validate exercise_id exists before saving
+                            if exercise_id is None:
+                                self.logger.warning(
+                                    f"Skipping strength exercise with missing exercise_id "
+                                    f"(daily_training_id: {daily_training_id}, exercise_index: {exercise_index}). "
+                                    f"This usually indicates a failed exercise matching. Exercise data: {exercise_data}"
+                                )
+                                continue
+                            
                             sets = exercise_data.get("sets", 3)
                             reps = exercise_data.get("reps", [10, 10, 10])
                             weight_1rm = exercise_data.get("weight_1rm", [80, 80, 80])
@@ -500,9 +533,6 @@ class DatabaseService:
                 .eq("user_id", user_id)
                 .execute()
             )
-            self.logger.debug(f"Query result: {result}")
-            self.logger.debug(f"Result data: {result.data}")
-            self.logger.debug(f"Result count: {len(result.data) if result.data else 0}")
 
             if not result.data or len(result.data) == 0:
                 self.logger.warning(f"No user profile found for user_id: {user_id}")
@@ -528,6 +558,46 @@ class DatabaseService:
 
         except Exception as e:
             self.logger.error(f"Error getting user profile by user_id: {str(e)}")
+            return {"success": False, "error": f"Database error: {str(e)}"}
+
+    async def get_user_profile_by_id(self, user_profile_id: int) -> Dict[str, Any]:
+        """
+        Get user profile by ID (integer).
+        
+        Args:
+            user_profile_id: The user profile ID (integer)
+            
+        Returns:
+            Dict containing success status and profile data or error
+        """
+        try:
+            self.logger.info(f"🔍 Querying user_profiles by id: {user_profile_id}")
+            
+            # Use authenticated client with service role to bypass RLS
+            supabase_client = self._get_authenticated_client(None)
+            
+            # Query for the specific user profile by id
+            result = (
+                supabase_client.table("user_profiles")
+                .select("*")
+                .eq("id", user_profile_id)
+                .execute()
+            )
+           
+            
+            if result.data and len(result.data) > 0:
+                self.logger.info(f"✅ Found user profile with id: {user_profile_id}")
+                return {
+                    "success": True,
+                    "data": result.data[0],  # Get first result
+                    "message": "User profile found",
+                }
+            else:
+                self.logger.warning(f"⚠️ No user profile found with id: {user_profile_id}")
+                return {"success": False, "error": "User profile not found"}
+                
+        except Exception as e:
+            self.logger.error(f"Error getting user profile by id: {str(e)}")
             return {"success": False, "error": f"Database error: {str(e)}"}
 
     async def get_training_plan(self, user_profile_id: int) -> Dict[str, Any]:
@@ -756,6 +826,9 @@ class DatabaseService:
     ) -> bool:
         """
         Update an existing training plan with new data.
+        
+        This deletes all existing plan data (weekly schedules, daily trainings, exercises)
+        and recreates them with the new data.
 
         Args:
             plan_id: The training plan ID to update
@@ -766,6 +839,8 @@ class DatabaseService:
             True if successful, False otherwise
         """
         try:
+            self.logger.info(f"Updating training plan {plan_id}...")
+            
             # Use authenticated client if JWT token is provided
             if jwt_token:
                 supabase_client = self._get_authenticated_client(jwt_token)
@@ -776,32 +851,149 @@ class DatabaseService:
                     settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY,
                 )
 
-            # Convert plan data to JSON if not already a string
+            # Clean the plan data to ensure JSON serialization
             if isinstance(updated_plan_data, dict):
-                plan_json = json.dumps(updated_plan_data)
-                # Extract ai_message if it exists in the updated data
-                ai_message = updated_plan_data.get("ai_message")
+                plan_dict = self._clean_for_json_serialization(updated_plan_data)
             else:
-                plan_json = updated_plan_data
-                ai_message = None
+                plan_dict = updated_plan_data
 
-            # Prepare update data
-            update_data = {
-                "plan_data": plan_json,
-                "updated_at": datetime.utcnow().isoformat()
+            # Update the main training plan record (without plan_data column)
+            plan_record = {
+                "title": plan_dict.get("title", "Personalized Training Plan"),
+                "summary": plan_dict.get("summary", ""),
+                "motivation": plan_dict.get("motivation", ""),
+                "ai_message": plan_dict.get("ai_message", ""),
+                "updated_at": datetime.utcnow().isoformat(),
             }
-            
-            # Add ai_message if it exists
-            if ai_message is not None:
-                update_data["ai_message"] = ai_message
 
-            # Update the training_plans table
-            result = (
-                supabase_client.table("training_plans")
-                .update(update_data)
-                .eq("id", plan_id)
-                .execute()
-            )
+            # Update the main training plan
+            supabase_client.table("training_plans").update(plan_record).eq("id", plan_id).execute()
+            
+            # Delete existing weekly schedules and all related data (cascading)
+            # This will also delete daily trainings, exercises, and endurance sessions
+            supabase_client.table("weekly_schedules").delete().eq("training_plan_id", plan_id).execute()
+            
+            # Recreate weekly schedules and their details
+            weekly_schedules = plan_dict.get("weekly_schedules", [])
+            
+            for week_index, week_data in enumerate(weekly_schedules):
+                week_number = week_data.get("week_number", 1)
+                
+                # Create weekly schedule record
+                weekly_schedule_record = {
+                    "training_plan_id": plan_id,
+                    "week_number": week_number,
+                    "motivation": week_data.get("motivation", ""),
+                    "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat(),
+                }
+                
+                weekly_result = (
+                    supabase_client.table("weekly_schedules")
+                    .insert(weekly_schedule_record)
+                    .execute()
+                )
+                
+                if not weekly_result.data:
+                    continue
+                
+                weekly_schedule_id = weekly_result.data[0]["id"]
+                
+                # Save daily trainings
+                daily_trainings = week_data.get("daily_trainings", [])
+                
+                for daily_index, daily_data in enumerate(daily_trainings):
+                    day_of_week = daily_data.get("day_of_week", "Monday")
+                    is_rest_day = daily_data.get("is_rest_day", False)
+                    
+                    # Create daily training record
+                    daily_training_record = {
+                        "weekly_schedule_id": weekly_schedule_id,
+                        "day_of_week": day_of_week,
+                        "is_rest_day": is_rest_day,
+                        "training_type": daily_data.get(
+                            "training_type", "rest" if is_rest_day else "strength"
+                        ),
+                        "motivation": daily_data.get("motivation", ""),
+                        "created_at": datetime.utcnow().isoformat(),
+                        "updated_at": datetime.utcnow().isoformat(),
+                    }
+                    
+                    daily_result = (
+                        supabase_client.table("daily_training")
+                        .insert(daily_training_record)
+                        .execute()
+                    )
+                    
+                    if not daily_result.data:
+                        continue
+                    
+                    daily_training_id = daily_result.data[0]["id"]
+                    
+                    # Save exercises and endurance sessions if not a rest day
+                    if not is_rest_day:
+                        # Save strength exercises
+                        strength_exercises = daily_data.get("strength_exercises", [])
+                        
+                        for exercise_index, exercise_data in enumerate(
+                            strength_exercises
+                        ):
+                            exercise_id = exercise_data.get("exercise_id")
+                            
+                            # CRITICAL: Validate exercise_id exists before saving
+                            if exercise_id is None:
+                                self.logger.warning(
+                                    f"Skipping strength exercise with missing exercise_id "
+                                    f"(daily_training_id: {daily_training_id}, exercise_index: {exercise_index}). "
+                                    f"This usually indicates a failed exercise matching. Exercise data: {exercise_data}"
+                                )
+                                continue
+                            
+                            sets = exercise_data.get("sets", 3)
+                            reps = exercise_data.get("reps", [10, 10, 10])
+                            weight_1rm = exercise_data.get("weight_1rm", [80, 80, 80])
+                            
+                            # Create strength exercise record
+                            strength_exercise_record = {
+                                "daily_training_id": daily_training_id,
+                                "exercise_id": exercise_id,
+                                "sets": sets,
+                                "reps": reps,
+                                "weight": [None] * sets,
+                                "weight_1rm": weight_1rm,
+                                "completed": False,
+                                "created_at": datetime.utcnow().isoformat(),
+                                "updated_at": datetime.utcnow().isoformat(),
+                            }
+                            
+                            supabase_client.table("strength_exercise").insert(strength_exercise_record).execute()
+                        
+                        # Save endurance sessions
+                        endurance_sessions = daily_data.get("endurance_sessions", [])
+                        
+                        for session_index, session_data in enumerate(endurance_sessions):
+                            name = session_data.get("name", "Endurance Session")
+                            description = session_data.get("description", "")
+                            sport_type = session_data.get("sport_type", "running")
+                            training_volume = session_data.get("training_volume", 30.0)
+                            unit = session_data.get("unit", "minutes")
+                            heart_rate_zone = session_data.get("heart_rate_zone")
+                            
+                            # Create endurance session record
+                            endurance_session_record = {
+                                "daily_training_id": daily_training_id,
+                                "name": name,
+                                "description": description,
+                                "sport_type": sport_type,
+                                "training_volume": training_volume,
+                                "unit": unit,
+                                "heart_rate_zone": heart_rate_zone,
+                                "completed": False,
+                                "created_at": datetime.utcnow().isoformat(),
+                                "updated_at": datetime.utcnow().isoformat(),
+                            }
+                            
+                            supabase_client.table("endurance_session").insert(endurance_session_record).execute()
 
             self.logger.info(f"Successfully updated training plan {plan_id}")
             return True
