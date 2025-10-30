@@ -22,6 +22,10 @@ logger = get_logger(__name__)
 class ExerciseSelector:
     """Smart exercise selection service for training generation."""
 
+    # Class-level cache for metadata options (shared across all instances)
+    _metadata_cache: Optional[Dict[str, List[str]]] = None
+    _cache_initialized: bool = False
+
     def __init__(self):
         """Initialize the exercise selector."""
         self._validate_environment()
@@ -97,34 +101,6 @@ class ExerciseSelector:
             logger.error("Check your database connection and exercise data")
             return []
 
-    def get_formatted_exercises_for_ai(
-        self, difficulty: str, equipment: Optional[List[str]] = None
-    ) -> str:
-        """
-        Get exercise candidates formatted as a string for AI prompts.
-
-        Args:
-            difficulty: Target difficulty level
-            equipment: Optional list of equipment types to filter by
-
-        Returns:
-            Formatted string of exercise candidates for AI prompts
-        """
-        try:
-            # Get grouped exercises
-            grouped_exercises = self.get_exercise_candidates(difficulty, equipment)
-
-            if not grouped_exercises:
-                return "No exercises available"
-
-            # Format exercises for AI prompt
-            formatted_exercises = self._format_exercises_for_ai(grouped_exercises)
-
-            return formatted_exercises
-
-        except Exception as e:
-            logger.error(f"Error formatting exercises for AI: {e}")
-            return "No exercises available"
 
     def get_exercise_by_id(self, exercise_id: str) -> Optional[Dict[str, Any]]:
         """Get full exercise details by ID."""
@@ -184,7 +160,6 @@ class ExerciseSelector:
             "id",
             "name",
             "equipment",
-            "target_area",
             "main_muscles",
             "difficulty",
             "exercise_tier",
@@ -301,14 +276,21 @@ class ExerciseSelector:
 
     def get_metadata_options(self) -> Dict[str, List[str]]:
         """
-        Get available metadata options from database (equipment, target_area, muscles).
+        Get available metadata options from database (equipment, muscles).
         
         These are the options AI can choose from when generating exercise metadata.
-        Uses SQL queries to get distinct values, including unnesting arrays.
+        Uses class-level caching to avoid repeated expensive queries (10s → <1ms).
         
         Returns:
-            Dict with keys: equipment, target_areas, main_muscles (distinct values from both main_muscles and secondary_muscles)
+            Dict with keys: equipment, main_muscles (distinct values from both main_muscles and secondary_muscles)
         """
+        # Return cached data if available
+        if ExerciseSelector._cache_initialized and ExerciseSelector._metadata_cache is not None:
+            logger.debug("✅ Using cached metadata options (fast path)")
+            return ExerciseSelector._metadata_cache
+        
+        # First call: fetch from database and cache
+        logger.info("📊 Fetching metadata options from database (first call only)...")
         try:
             # Get distinct equipment values
             equipment_result = (
@@ -326,19 +308,6 @@ class ExerciseSelector:
                             equipment_set.update(eq)
                         elif isinstance(eq, str):
                             equipment_set.add(eq)
-            
-            # Get distinct target_area values
-            target_areas_result = (
-                self.supabase.table("exercises")
-                .select("target_area")
-                .execute()
-            )
-            target_areas_set = set()
-            if target_areas_result.data:
-                for ex in target_areas_result.data:
-                    ta = ex.get("target_area")
-                    if ta:
-                        target_areas_set.add(ta)
             
             # Get all exercises to extract muscles from both main_muscles and secondary_muscles
             # We'll process in Python since Supabase client doesn't support complex SQL with UNION and unnest
@@ -366,52 +335,29 @@ class ExerciseSelector:
                         elif isinstance(secondary_muscles, str):
                             muscles_set.add(secondary_muscles)
             
-            return {
+            # Cache the result at class level
+            ExerciseSelector._metadata_cache = {
                 "equipment": sorted(list(equipment_set)),
-                "target_areas": sorted(list(target_areas_set)),
                 "main_muscles": sorted(list(muscles_set))  # Actually includes all muscles from both columns
             }
+            ExerciseSelector._cache_initialized = True
+            
+            logger.info(f"✅ Metadata options cached: {len(equipment_set)} equipment, {len(muscles_set)} muscles")
+            return ExerciseSelector._metadata_cache
+            
         except Exception as e:
             logger.error(f"Error fetching metadata options: {e}")
             # Return fallback values
-            return {
+            fallback = {
                 "equipment": [
                     "Barbell", "Dumbbell", "Cable", "Machine", "Smith",
                     "Body weight", "Band Resistive", "Suspension", "Sled",
                     "Weighted", "Plyometric", "Isometric", "Self-assisted"
                 ],
-                "target_areas": [],
                 "main_muscles": []
             }
+            # Cache fallback to avoid repeated failures
+            ExerciseSelector._metadata_cache = fallback
+            ExerciseSelector._cache_initialized = True
+            return fallback
 
-    def _format_exercises_for_ai(self, exercises: List[Dict]) -> str:
-        """
-        Format exercises grouped by target_area for AI prompt.
-
-        Args:
-            exercises: List of exercises with target_area field
-
-        Returns:
-            Formatted string for AI prompt, grouped by target_area
-        """
-        if not exercises:
-            return "No exercises available"
-
-        # Group exercises by target_area
-        target_areas = {}
-        for exercise in exercises:
-            target_area = exercise.get("target_area", "Unknown")
-            if target_area not in target_areas:
-                target_areas[target_area] = []
-            target_areas[target_area].append(exercise)
-
-        # Format each target area
-        formatted_groups = []
-        for target_area, area_exercises in target_areas.items():
-            group_info = [f"  {target_area}:"]
-            for exercise in area_exercises:
-                exercise_line = f"    - {exercise['name']} (ID: {exercise['id']}): Tier = {exercise.get('tier', 'Unknown')} - Main muscles = {exercise.get('main_muscles', 'Unknown')} - Equipment = {exercise.get('equipment', 'Unknown equipment')}"
-                group_info.append(exercise_line)
-            formatted_groups.append("\n".join(group_info))
-
-        return "\n\n".join(formatted_groups)

@@ -9,6 +9,7 @@ import re
 from typing import List, Dict, Any, Optional, Tuple
 from logging_config import get_logger
 from .exercise_selector import ExerciseSelector
+import logging
 
 # Try to use RapidFuzz for fast fuzzy matching, fallback to difflib
 try:
@@ -19,6 +20,8 @@ except ImportError:
     HAS_RAPIDFUZZ = False
 
 logger = get_logger(__name__)
+# Reduce log verbosity - only show warnings and errors
+logger.setLevel(logging.WARNING)
 
 
 class ExerciseMatcher:

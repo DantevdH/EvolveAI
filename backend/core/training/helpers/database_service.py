@@ -281,7 +281,7 @@ class DatabaseService:
                 "user_profile_id": user_profile_id,
                 "title": plan_dict.get("title", "Personalized Training Plan"),
                 "summary": plan_dict.get("summary", ""),
-                "motivation": plan_dict.get("motivation", ""),
+                "justification": plan_dict.get("justification", ""),
                 "ai_message": plan_dict.get("ai_message"),  # Store AI completion message
                 "created_at": datetime.utcnow().isoformat(),
                 "updated_at": datetime.utcnow().isoformat(),
@@ -296,7 +296,7 @@ class DatabaseService:
 
             # Insert the training plan
             self.logger.debug(
-                f"Saving training plan with motivation: {plan_record.get('motivation', 'No motivation provided')[:100]}..."
+                f"Saving training plan with justification: {plan_record.get('justification', 'No justification provided')[:100]}..."
             )
             plan_result = (
                 supabase_client.table("training_plans").insert(plan_record).execute()
@@ -310,6 +310,10 @@ class DatabaseService:
                 }
 
             training_plan_id = plan_result.data[0]["id"]
+            
+            # Enrich plan_dict with database IDs for returning complete structure
+            plan_dict["id"] = training_plan_id
+            plan_dict["user_profile_id"] = user_profile_id
 
             # Save weekly schedules and their details
             weekly_schedules = plan_dict.get("weekly_schedules", [])
@@ -321,13 +325,13 @@ class DatabaseService:
                 weekly_schedule_record = {
                     "training_plan_id": training_plan_id,
                     "week_number": week_number,
-                    "motivation": week_data.get("motivation", ""),
+                    "justification": week_data.get("justification", ""),
                     "created_at": datetime.utcnow().isoformat(),
                     "updated_at": datetime.utcnow().isoformat(),
                 }
 
                 self.logger.debug(
-                    f"Saving weekly schedule {week_number} with motivation: {weekly_schedule_record.get('motivation', 'No motivation provided')[:100]}..."
+                    f"Saving weekly schedule {week_number} with justification: {weekly_schedule_record.get('justification', 'No justification provided')[:100]}..."
                 )
                 weekly_result = (
                     supabase_client.table("weekly_schedules")
@@ -339,6 +343,10 @@ class DatabaseService:
                     continue
 
                 weekly_schedule_id = weekly_result.data[0]["id"]
+                
+                # Enrich week_data with database ID
+                week_data["id"] = weekly_schedule_id
+                week_data["training_plan_id"] = training_plan_id
 
                 # Save daily trainings
                 daily_trainings = week_data.get("daily_trainings", [])
@@ -355,13 +363,13 @@ class DatabaseService:
                         "training_type": daily_data.get(
                             "training_type", "rest" if is_rest_day else "strength"
                         ),
-                        "motivation": daily_data.get("motivation", ""),
+                        "justification": daily_data.get("justification", ""),
                         "created_at": datetime.utcnow().isoformat(),
                         "updated_at": datetime.utcnow().isoformat(),
                     }
 
                     self.logger.debug(
-                        f"Saving daily training {day_of_week} with motivation: {daily_training_record.get('motivation', 'No motivation provided')[:100]}..."
+                        f"Saving daily training {day_of_week} with justification: {daily_training_record.get('justification', 'No justification provided')[:100]}..."
                     )
                     daily_result = (
                         supabase_client.table("daily_training")
@@ -373,6 +381,10 @@ class DatabaseService:
                         continue
 
                     daily_training_id = daily_result.data[0]["id"]
+                    
+                    # Enrich daily_data with database ID
+                    daily_data["id"] = daily_training_id
+                    daily_data["weekly_schedule_id"] = weekly_schedule_id
 
                     # Save exercises and endurance sessions if not a rest day
                     if not is_rest_day:
@@ -415,6 +427,11 @@ class DatabaseService:
                                 .insert(strength_exercise_record)
                                 .execute()
                             )
+                            
+                            # Enrich exercise_data with database ID
+                            if exercise_result.data:
+                                exercise_data["id"] = exercise_result.data[0]["id"]
+                                exercise_data["daily_training_id"] = daily_training_id
 
                         # Save endurance sessions
                         endurance_sessions = daily_data.get("endurance_sessions", [])
@@ -448,18 +465,23 @@ class DatabaseService:
                                 .insert(endurance_session_record)
                                 .execute()
                             )
+                            
+                            # Enrich session_data with database ID
+                            if session_result.data:
+                                session_data["id"] = session_result.data[0]["id"]
+                                session_data["daily_training_id"] = daily_training_id
 
             self.logger.info(
                 f"Training plan saved successfully (ID: {training_plan_id})"
             )
 
+            # Return complete plan structure with all database IDs
+            # This allows caller to use the plan without refetching from DB
             return {
                 "success": True,
                 "data": {
                     "training_plan_id": training_plan_id,
-                    "title": plan_record["title"],
-                    "summary": plan_record["summary"],
-                    "motivation": plan_record["motivation"],
+                    "training_plan": plan_dict,  # Include full nested structure
                 },
                 "message": "Training plan saved successfully",
             }
@@ -823,20 +845,21 @@ class DatabaseService:
         plan_id: int, 
         updated_plan_data: Dict[str, Any],
         jwt_token: Optional[str] = None
-    ) -> bool:
+    ) -> Optional[Dict[str, Any]]:
         """
         Update an existing training plan with new data.
         
         This deletes all existing plan data (weekly schedules, daily trainings, exercises)
-        and recreates them with the new data.
+        and recreates them with the new data, then returns the updated plan.
 
         Args:
             plan_id: The training plan ID to update
-            updated_plan_data: The updated plan data as dictionary
+            updated_plan_data: The updated plan data as dictionary (already validated/enriched)
             jwt_token: Optional JWT token for authentication
 
         Returns:
-            True if successful, False otherwise
+            The updated_plan_data that was passed in (on success),
+            None if update failed
         """
         try:
             self.logger.info(f"Updating training plan {plan_id}...")
@@ -861,8 +884,8 @@ class DatabaseService:
             plan_record = {
                 "title": plan_dict.get("title", "Personalized Training Plan"),
                 "summary": plan_dict.get("summary", ""),
-                "motivation": plan_dict.get("motivation", ""),
-                "ai_message": plan_dict.get("ai_message", ""),
+                "justification": plan_dict.get("justification", ""),
+                # IMPORTANT: never update ai_message here; keep initial message in DB unchanged
                 "updated_at": datetime.utcnow().isoformat(),
             }
 
@@ -883,7 +906,7 @@ class DatabaseService:
                 weekly_schedule_record = {
                     "training_plan_id": plan_id,
                     "week_number": week_number,
-                    "motivation": week_data.get("motivation", ""),
+                    "justification": week_data.get("justification", ""),
                     "created_at": datetime.utcnow().isoformat(),
                     "updated_at": datetime.utcnow().isoformat(),
                 }
@@ -914,7 +937,7 @@ class DatabaseService:
                         "training_type": daily_data.get(
                             "training_type", "rest" if is_rest_day else "strength"
                         ),
-                        "motivation": daily_data.get("motivation", ""),
+                        "justification": daily_data.get("justification", ""),
                         "created_at": datetime.utcnow().isoformat(),
                         "updated_at": datetime.utcnow().isoformat(),
                     }
@@ -996,10 +1019,115 @@ class DatabaseService:
                             supabase_client.table("endurance_session").insert(endurance_session_record).execute()
 
             self.logger.info(f"Successfully updated training plan {plan_id}")
-            return True
+            
+            # Return the updated plan data that was passed in
+            # It's already validated and enriched before being passed to this method
+            # No need to fetch from database - we just saved it!
+            return updated_plan_data
 
         except Exception as e:
             self.logger.error(f"Error updating training plan {plan_id}: {e}")
+            return None
+
+    # ============================================================================
+    # LATENCY TRACKING METHODS
+    # ============================================================================
+
+    async def log_latency_event(
+        self,
+        event: str,
+        duration_seconds: float,
+        completion: Optional[Any] = None
+    ) -> bool:
+        """
+        Log a latency event to the database with token usage for cost tracking.
+        Simple event-based logging for AI operation durations and costs.
+        Uses service role key to bypass RLS.
+        
+        Args:
+            event: Type of event (initial_questions, followup_questions, playbook, 
+                   initial_plan, feedback_plan, regenerate_plan)
+            duration_seconds: Duration of the AI API call in seconds
+            completion: Optional OpenAI completion object (will extract tokens/model automatically)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Validate event type
+            valid_events = [
+                "initial_questions",
+                "followup_questions",
+                "playbook",
+                "initial_plan",
+                "feedback_classify",  # Stage 1: Lightweight intent classification
+                "feedback_parse_operations",  # Stage 2: Operation parsing (only for update_request)
+                "feedback_plan_intent",  # E2E intent-based update (classify + apply)
+                "feedback_plan",  # Legacy: combined feedback event
+                "regenerate_plan"  # Legacy: full regeneration
+            ]
+            if event not in valid_events:
+                self.logger.warning(f"Invalid latency event type: {event}")
+                return False
+            
+            # Extract token usage from completion object if provided
+            input_tokens = None
+            output_tokens = None
+            total_tokens = None
+            model = None
+            
+            if completion is not None:
+                # Extract usage data
+                if hasattr(completion, 'usage') and completion.usage:
+                    usage = completion.usage
+                    input_tokens = getattr(usage, 'prompt_tokens', None)
+                    output_tokens = getattr(usage, 'completion_tokens', None)
+                    total_tokens = getattr(usage, 'total_tokens', None)
+                
+                # Extract model name
+                if hasattr(completion, 'model'):
+                    model = completion.model
+            
+            # Use service role key to bypass RLS for internal metrics
+            supabase_client = create_client(
+                settings.SUPABASE_URL,
+                settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY,
+            )
+            
+            # Build insert data
+            insert_data = {
+                "event": event,
+                "duration_seconds": duration_seconds
+            }
+            
+            # Add optional token tracking fields
+            if input_tokens is not None:
+                insert_data["input_tokens"] = input_tokens
+            if output_tokens is not None:
+                insert_data["output_tokens"] = output_tokens
+            if total_tokens is not None:
+                insert_data["total_tokens"] = total_tokens
+            if model is not None:
+                insert_data["model"] = model
+            
+            # Insert event
+            result = supabase_client.table("latency").insert(insert_data).execute()
+            
+            if result.data:
+                log_msg = f"Logged latency event: {event} = {duration_seconds:.3f}s"
+                if total_tokens:
+                    log_msg += f" ({total_tokens} tokens"
+                    if model:
+                        log_msg += f", {model}"
+                    log_msg += ")"
+                self.logger.debug(log_msg)
+                return True
+            else:
+                self.logger.warning(f"Failed to log latency event: {event}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Error logging latency event {event}: {e}")
             return False
 
 

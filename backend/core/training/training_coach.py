@@ -221,8 +221,8 @@ class TrainingCoach(BaseAgent):
             self.logger.error(f"Error processing training request: {e}")
             return self._generate_error_response(user_request)
 
-    def generate_initial_questions(
-        self, personal_info: PersonalInfo
+    async def generate_initial_questions(
+        self, personal_info: PersonalInfo, user_profile_id: Optional[int] = None
     ) -> AIQuestionResponse:
         """Generate initial questions for onboarding based on personal information."""
         try:
@@ -244,13 +244,18 @@ class TrainingCoach(BaseAgent):
 
             for attempt in range(max_retries):
                 try:
-                    # Generate questions using OpenAI
+                    # Generate questions using OpenAI - TRACK AI LATENCY
+                    ai_start = time.time()
                     completion = self.openai_client.chat.completions.parse(
                         model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4"),
                         messages=[{"role": "system", "content": prompt}],
                         response_format=AIQuestionResponse,
                         temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
                     )
+                    ai_duration = time.time() - ai_start
+                    
+                    # Track AI latency and token usage (tokens extracted automatically from completion)
+                    await db_service.log_latency_event("initial_questions", ai_duration, completion)
 
                     questions_response = completion.choices[0].message.parsed
                     
@@ -325,11 +330,12 @@ class TrainingCoach(BaseAgent):
                 ai_message="I'm here to help you create the perfect training plan! Let's start with understanding your goals. 💪",
             )
 
-    def generate_follow_up_questions(
+    async def generate_follow_up_questions(
         self,
         personal_info: PersonalInfo,
         formatted_responses: str,
         initial_questions: List[AIQuestion] = None,
+        user_profile_id: Optional[int] = None,
     ) -> AIQuestionResponseWithFormatted:
         """Generate follow-up questions based on initial responses."""
         try:
@@ -362,13 +368,18 @@ class TrainingCoach(BaseAgent):
 
             for attempt in range(max_retries):
                 try:
-                    # Generate questions using OpenAI
+                    # Generate questions using OpenAI - TRACK AI LATENCY
+                    ai_start = time.time()
                     completion = self.openai_client.chat.completions.parse(
                         model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4"),
                         messages=[{"role": "system", "content": prompt}],
                         response_format=AIQuestionResponse,
                         temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
                     )
+                    ai_duration = time.time() - ai_start
+                    
+                    # Track AI latency and token usage (tokens extracted automatically from completion)
+                    await db_service.log_latency_event("followup_questions", ai_duration, completion)
 
                     # Get the parsed response
                     question_response = completion.choices[0].message.parsed
@@ -441,6 +452,7 @@ class TrainingCoach(BaseAgent):
         formatted_follow_up_responses: str,
         user_profile_id: int,
         jwt_token: str = None,
+        playbook: Optional[UserPlaybook] = None,
     ) -> Dict[str, Any]:
         """
         Generate the initial training plan during onboarding.
@@ -453,11 +465,13 @@ class TrainingCoach(BaseAgent):
             personal_info: User's personal information and goals
             formatted_initial_responses: Formatted responses from initial questions
             formatted_follow_up_responses: Formatted responses from follow-up questions
-            user_profile_id: Database ID of the user profile
+            user_profile_id: Database ID of the user profile (also used for latency tracking)
             jwt_token: JWT token for database authentication
+            playbook: Optional pre-loaded playbook (avoids duplicate DB call if already loaded)
         """
-        # Load current playbook from database
-        playbook = await db_service.load_user_playbook(user_profile_id, jwt_token)
+        # Load current playbook from database only if not provided
+        if not playbook:
+            playbook = await db_service.load_user_playbook(user_profile_id, jwt_token)
         
         if not playbook:
             self.logger.warning("No playbook found - creating empty playbook")
@@ -475,6 +489,7 @@ class TrainingCoach(BaseAgent):
             playbook=playbook,
             jwt_token=jwt_token,
             is_regeneration=False,
+            user_profile_id=user_profile_id,
         )
     
     async def regenerate_training_plan(
@@ -495,7 +510,7 @@ class TrainingCoach(BaseAgent):
             personal_info: User's personal information and goals
             formatted_initial_responses: Formatted responses from initial questions
             formatted_follow_up_responses: Formatted responses from follow-up questions
-            user_profile_id: Database ID of the user profile
+            user_profile_id: Database ID of the user profile (also used for latency tracking)
             jwt_token: JWT token for database authentication
         """
         # Load current playbook from database
@@ -517,6 +532,7 @@ class TrainingCoach(BaseAgent):
             playbook=playbook,
             jwt_token=jwt_token,
             is_regeneration=True,
+            user_profile_id=user_profile_id,
         )
     
     async def _generate_training_plan_internal(
@@ -527,6 +543,7 @@ class TrainingCoach(BaseAgent):
         playbook: UserPlaybook,
         jwt_token: str = None,
         is_regeneration: bool = False,
+        user_profile_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Internal method to generate training plans.
@@ -539,6 +556,7 @@ class TrainingCoach(BaseAgent):
             jwt_token: JWT token for database authentication
             is_regeneration: If True, marks playbook lessons as applied and updates playbook.
                            If False (onboarding), uses playbook but doesn't update it.
+            user_profile_id: User profile ID for latency tracking (optional)
         """
         try:
             # Check if debug mode is enabled - skip validation for mock data
@@ -561,12 +579,11 @@ class TrainingCoach(BaseAgent):
                     },
                 }
 
-            # Step 1: Get metadata options from database (equipment, target_areas, main_muscles)
+            # Step 1: Get metadata options from database (equipment, main_muscles)
             self.logger.info("Fetching exercise metadata options from database...")
             metadata_options = self.exercise_selector.get_metadata_options()
             self.logger.info(
                 f"Metadata options: {len(metadata_options.get('equipment', []))} equipment types, "
-                f"{len(metadata_options.get('target_areas', []))} target areas, "
                 f"{len(metadata_options.get('main_muscles', []))} muscle groups"
             )
 
@@ -610,19 +627,30 @@ class TrainingCoach(BaseAgent):
                 playbook_lessons=playbook_lessons_dict,
             )
 
-            # Step 4: Get the training plan
+            # Step 4: Get the training plan - TRACK AI LATENCY
             model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
             self.logger.info(f"🤖 Generating training plan with AI model: {model_name} (AI will generate exercise name + metadata)...")
             
+            ai_start_plan = time.time()
+            # Note: No max_completion_tokens - structured output requires complete JSON.
+            # Token reduction comes from prompt word limits (MAX 40/30/20 words per justification)
             completion = self.openai_client.chat.completions.parse(
                 model=model_name,
                 messages=[{"role": "system", "content": prompt}],
                 response_format=TrainingPlan,
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
+                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
             )
+            plan_gen_duration = time.time() - ai_start_plan
 
             training_plan = completion.choices[0].message.parsed
             training_dict = training_plan.model_dump()
+            
+            # Verify plan structure (should be exactly 1 week)
+            num_weeks = len(training_dict.get("weekly_schedules", []))
+            num_days_per_week = [len(week.get("daily_trainings", [])) for week in training_dict.get("weekly_schedules", [])]
+            self.logger.info(f"📊 Generated plan structure: {num_weeks} weekly_schedule(s), days per week: {num_days_per_week}")
+            if num_weeks != 1:
+                self.logger.warning(f"⚠️ AI generated {num_weeks} weeks instead of 1! Prompt enforcement may need adjustment.")
 
             # Step 5: Post-process strength exercises (match AI-generated metadata to database)
             self.logger.info("Post-processing strength exercises (matching to database)...")
@@ -643,15 +671,21 @@ class TrainingCoach(BaseAgent):
 
             # Step 7: Identify which lessons were applied & update playbook (only for regeneration)
             applied_lesson_ids = []
+            identify_duration = 0.0
+            
             if is_regeneration and playbook_lessons_dict and len(playbook_lessons_dict) > 0:
                 self.logger.info(
                     "Identifying which lessons were applied in the plan (regeneration mode)..."
                 )
+                # Track AI call for identify_applied_lessons
+                ai_start_identify = time.time()
                 applied_lesson_ids = self.reflector.identify_applied_lessons(
                     training_plan=validated_training,
                     playbook_lessons=playbook_lessons_dict,
                     personal_info=personal_info,
                 )
+                identify_duration = time.time() - ai_start_identify
+                self.logger.info(f"Identify applied lessons AI call took {identify_duration:.2f}s")
 
                 # Update playbook with application counts
                 if applied_lesson_ids and playbook:
@@ -665,6 +699,18 @@ class TrainingCoach(BaseAgent):
                 self.logger.info(
                     f"Skipping playbook update (initial plan): {len(playbook_lessons_dict)} lessons used as constraints"
                 )
+            
+            # Track latency for initial_plan or regenerate_plan
+            if is_regeneration:
+                # regenerate_plan: track both AI calls (plan generation + identify)
+                # Note: identify_lessons doesn't return token usage, so we only log plan generation tokens
+                total_ai_duration = plan_gen_duration + identify_duration
+                await db_service.log_latency_event("regenerate_plan", total_ai_duration, completion)
+                self.logger.info(f"Regenerate plan total AI calls: {total_ai_duration:.2f}s (plan: {plan_gen_duration:.2f}s, identify: {identify_duration:.2f}s)")
+            else:
+                # initial_plan: track only plan generation AI call
+                await db_service.log_latency_event("initial_plan", plan_gen_duration, completion)
+                self.logger.info(f"Initial plan AI call: {plan_gen_duration:.2f}s")
 
             # The AI message is now generated within the TrainingPlan by the LLM
             # Extract it from the training plan for the API response
@@ -690,7 +736,6 @@ class TrainingCoach(BaseAgent):
                     "generation_method": "AI + Metadata-Based Exercise Matching",
                     "metadata_options_count": {
                         "equipment": len(metadata_options.get("equipment", [])),
-                        "target_areas": len(metadata_options.get("target_areas", [])),
                         "main_muscles": len(metadata_options.get("main_muscles", []))
                     },
                     "playbook_lessons_count": len(playbook.lessons) if playbook else 0,
@@ -895,6 +940,7 @@ class TrainingCoach(BaseAgent):
         actual_training: Dict[str, Any],
         personal_info: PersonalInfo,
         session_context: str,
+        user_profile_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Process DAILY training feedback using the ACE pattern with modification tracking.
@@ -915,8 +961,6 @@ class TrainingCoach(BaseAgent):
         Returns:
             Dictionary with results of the feedback processing
         """
-        start_time = time.time()  # Track processing time
-        
         try:
             from core.base.schemas.playbook_schemas import DailyTrainingOutcome
             from core.training.helpers.training_comparison import TrainingComparison
@@ -958,9 +1002,12 @@ class TrainingCoach(BaseAgent):
             )
 
             analyses = []
+            reflector_duration = 0.0
+            
             if should_analyze:
-                # Step 4: Reflector - analyze daily outcome
+                # Step 4: Reflector - analyze daily outcome - TRACK AI CALL
                 self.logger.info("Reflector analyzing daily session...")
+                ai_start_reflector = time.time()
                 analyses = self.reflector.analyze_daily_outcome(
                     outcome=outcome,
                     personal_info=personal_info,
@@ -968,26 +1015,35 @@ class TrainingCoach(BaseAgent):
                     modifications_summary=modifications_summary,
                     previous_lessons=playbook.lessons if playbook else [],
                 )
-                self.logger.info(f"Reflector generated {len(analyses)} lessons")
+                reflector_duration = time.time() - ai_start_reflector
+                self.logger.info(f"Reflector AI call took {reflector_duration:.2f}s, generated {len(analyses)} lessons")
             else:
                 self.logger.info(
                     "No analysis needed - feedback skipped and no significant signals"
                 )
 
-            # Step 5: Curator - process lessons (if any)
+            # Step 5: Curator - process lessons (if any) - TRACK AI CALLS
             decisions = []
+            curator_ai_duration = 0.0
+            
             if analyses:
                 self.logger.info("Curator processing lessons...")
                 for analysis in analyses:
+                    # Curator may make AI calls for similarity checking
+                    ai_start_curator = time.time()
                     decision, lesson = self.curator.process_new_lesson(
                         analysis=analysis,
                         existing_playbook=playbook,
                         source_plan_id=outcome.plan_id,
                     )
+                    curator_ai_duration += (time.time() - ai_start_curator)
                     decisions.append((decision, lesson))
                     self.logger.info(
                         f"Curator decision: {decision.action} - {decision.reasoning}"
                     )
+                
+                if curator_ai_duration > 0:
+                    self.logger.info(f"Curator AI calls took {curator_ai_duration:.2f}s total")
 
                 # Step 6: Update playbook with curator decisions
                 updated_playbook = self.curator.update_playbook(playbook, decisions)
@@ -1018,7 +1074,15 @@ class TrainingCoach(BaseAgent):
             lessons_updated_count = sum(
                 1 for d, _ in decisions if d.action in ["merge_with_existing", "update_existing"]
             )
-            duration_ms = int((time.time() - start_time) * 1000)
+            
+            # Track playbook AI latency (Reflector + Curator)
+            # TODO: Add token tracking - requires refactoring Reflector/Curator to return usage
+            total_playbook_ai = reflector_duration + curator_ai_duration
+            await db_service.log_latency_event("playbook", total_playbook_ai)
+            self.logger.info(f"Playbook total AI calls: {total_playbook_ai:.2f}s (reflector: {reflector_duration:.2f}s, curator: {curator_ai_duration:.2f}s)")
+            
+            # For telemetry, calculate total duration including all processing
+            duration_ms = int(total_playbook_ai * 1000)  # Use AI duration for consistency
 
             # Track telemetry - feedback session
             ACETelemetry.track_feedback_session(
@@ -1144,38 +1208,275 @@ class TrainingCoach(BaseAgent):
             self.logger.error(f"Error getting playbook stats: {e}")
             return None
 
-    async def classify_feedback_intent(
-        self, 
-        feedback_message: str, 
+    def _summarize_plan_for_context(self, current_plan: Dict[str, Any]) -> str:
+        """
+        Create a brief summary of the current plan for context in prompts.
+        
+        Used for operation parsing to give AI context about what exercises/days exist.
+        """
+        try:
+            weekly_schedules = current_plan.get("weekly_schedules", [])
+            if not weekly_schedules:
+                return "Empty plan"
+            
+            week = weekly_schedules[0]
+            daily_trainings = week.get("daily_trainings", [])
+            
+            summary_lines = []
+            for day in daily_trainings:
+                day_name = day.get("day_of_week", "Unknown")
+                is_rest = day.get("is_rest_day", False)
+                
+                if is_rest:
+                    summary_lines.append(f"- {day_name}: Rest")
+                else:
+                    # Count exercises
+                    strength_count = len(day.get("strength_exercises", []))
+                    endurance_count = len(day.get("endurance_sessions", []))
+                    
+                    if strength_count > 0:
+                        # List first 2-3 exercise names
+                        exercise_names = [ex.get("exercise_name", "Unknown") for ex in day.get("strength_exercises", [])[:3]]
+                        exercises_str = ", ".join(exercise_names)
+                        if strength_count > 3:
+                            exercises_str += f" (+{strength_count - 3} more)"
+                        summary_lines.append(f"- {day_name}: Strength ({strength_count} exercises: {exercises_str})")
+                    
+                    if endurance_count > 0:
+                        sessions = day.get("endurance_sessions", [])
+                        session_names = [s.get("name", "Endurance") for s in sessions[:2]]
+                        sessions_str = ", ".join(session_names)
+                        if endurance_count > 2:
+                            sessions_str += f" (+{endurance_count - 2} more)"
+                        summary_lines.append(f"- {day_name}: Endurance ({endurance_count} sessions: {sessions_str})")
+            
+            return "\n".join(summary_lines)
+            
+        except Exception as e:
+            self.logger.warning(f"Error summarizing plan: {e}")
+            return "Unable to summarize plan"
+
+    async def classify_feedback_intent_lightweight(
+        self,
+        feedback_message: str,
         conversation_history: List[Dict[str, str]]
     ) -> Dict[str, Any]:
         """
-        Classify the user's feedback intent using GPT-4o-mini.
+        STAGE 1: Lightweight intent classification (no operations parsing).
+        
+        Fast and efficient - only uses feedback and conversation history.
+        No plan details, assessment data, or metadata needed.
+        
+        Args:
+            feedback_message: User's feedback message
+            conversation_history: Conversation context
         
         Returns:
-            Classification result with intent, confidence, and action needed
+            Classification result with intent, action, ai_message (no operations)
         """
         try:
             # Build conversation context
             context = self._build_conversation_context(conversation_history)
             
-            # Get prompt from PromptGenerator
-            prompt = PromptGenerator.generate_feedback_classification_prompt(
-                feedback_message, context
+            # Get lightweight prompt
+            prompt = PromptGenerator.generate_lightweight_intent_classification_prompt(
+                feedback_message=feedback_message,
+                conversation_context=context
             )
-
-            # Use structured parsing with Pydantic model
-            from core.training.schemas.question_schemas import FeedbackClassification
+            
+            # Use structured parsing with Pydantic model - TRACK AI CALL
+            from core.training.schemas.question_schemas import FeedbackIntentClassification
+            ai_start = time.time()
             completion = self.openai_client.chat.completions.parse(
                 model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4o"),
                 messages=[{"role": "user", "content": prompt}],
-                response_format=FeedbackClassification,
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
+                response_format=FeedbackIntentClassification
             )
-
+            duration = time.time() - ai_start
+            
             parsed_obj = completion.choices[0].message.parsed
             result = parsed_obj.model_dump() if hasattr(parsed_obj, 'model_dump') else parsed_obj
-            self.logger.info(f"Feedback classified as: {result['intent']} (confidence: {result['confidence']})")
+            result['_classify_duration'] = duration
+            
+            # Track latency with tokens
+            await db_service.log_latency_event("feedback_classify", duration, completion)
+            
+            self.logger.info(f"✨ Lightweight intent classification took {duration:.2f}s (intent: {result['intent']}, confidence: {result['confidence']})")
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Error in lightweight classification: {str(e)}")
+            # Default to safe response
+            return {
+                "intent": "unclear",
+                "confidence": 0.5,
+                "action": "respond_only",
+                "reasoning": "Error in classification, asking for clarification",
+                "needs_plan_update": False,
+                "navigate_to_main_app": False,
+                "ai_message": "I'm having trouble understanding your feedback. Could you please be more specific about what you'd like to change or know? 😊"
+            }
+
+    async def parse_feedback_operations(
+        self,
+        feedback_message: str,
+        current_plan: Dict[str, Any],
+        personal_info: PersonalInfo,
+        formatted_initial_responses: str = "",
+        formatted_follow_up_responses: str = ""
+    ) -> Dict[str, Any]:
+        """
+        STAGE 2: Parse operations from feedback (only for update_request intent).
+        
+        Uses full context: assessment data, plan details, metadata options.
+        Only called when Stage 1 determined intent is "update_request".
+        
+        Args:
+            feedback_message: User's feedback message
+            current_plan: Current training plan dict
+            personal_info: User's personal information
+            formatted_initial_responses: Formatted initial question responses
+            formatted_follow_up_responses: Formatted follow-up question responses
+        
+        Returns:
+            Operations result with list of operations and ai_message
+        """
+        try:
+            # Summarize plan
+            plan_summary = self._summarize_plan_for_context(current_plan)
+            
+            # Get metadata options from database (cached after first call)
+            metadata_options = self.exercise_selector.get_metadata_options()
+            
+            # Get operation parsing prompt
+            prompt = PromptGenerator.generate_operation_parsing_prompt(
+                feedback_message=feedback_message,
+                personal_info=personal_info,
+                current_plan_summary=plan_summary,
+                formatted_initial_responses=formatted_initial_responses,
+                formatted_follow_up_responses=formatted_follow_up_responses,
+                metadata_options=metadata_options
+            )
+            
+            # Use structured parsing with Pydantic model - TRACK AI CALL
+            from core.training.schemas.question_schemas import FeedbackOperations
+            ai_start = time.time()
+            completion = self.openai_client.chat.completions.parse(
+                model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4o"),
+                messages=[{"role": "user", "content": prompt}],
+                response_format=FeedbackOperations
+            )
+            duration = time.time() - ai_start
+            
+            parsed_obj = completion.choices[0].message.parsed
+            # Use mode='json' to properly serialize Enums to string values
+            result = parsed_obj.model_dump(mode='json') if hasattr(parsed_obj, 'model_dump') else parsed_obj
+            result['_parse_duration'] = duration
+            
+            # Track latency with tokens
+            await db_service.log_latency_event("feedback_parse_operations", duration, completion)
+            
+            ops_count = len(result.get('operations', []))
+            self.logger.info(f"⚙️ Operation parsing took {duration:.2f}s ({ops_count} operation(s) parsed)")
+            
+            if ops_count > 0:
+                self.logger.info(f"🔍 Parsed operations:")
+                for idx, op in enumerate(result.get('operations', [])):
+                    self.logger.info(f"  Op {idx+1}: type={op.get('type')}, keys={list(op.keys())}")
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"Error parsing operations: {str(e)}")
+            # Return empty operations to fallback to "unclear"
+            return {
+                "operations": [],
+                "ai_message": "I'm having trouble parsing your requested changes. Could you be more specific?"
+            }
+
+    async def classify_feedback_intent(
+        self,
+        feedback_message: str,
+        conversation_history: List[Dict[str, str]],
+        current_plan: Optional[Dict[str, Any]] = None,
+        personal_info: Optional[PersonalInfo] = None,
+        formatted_initial_responses: str = "",
+        formatted_follow_up_responses: str = ""
+    ) -> Dict[str, Any]:
+        """
+        LEGACY: Single-stage classification with operations (combined approach).
+        
+        Use classify_feedback_intent_lightweight() + parse_feedback_operations() instead.
+        Keeping this for backward compatibility during migration.
+        
+        Args:
+            feedback_message: User's feedback message
+            conversation_history: Conversation context
+            current_plan: Current training plan dict (for summarizing in prompt)
+            personal_info: User's personal information (age, goals, equipment, etc.)
+            formatted_initial_responses: Formatted initial question responses
+            formatted_follow_up_responses: Formatted follow-up question responses
+        
+        Returns:
+            Classification result with intent, confidence, action, and operations
+        """
+        try:
+            # Build conversation context
+            context = self._build_conversation_context(conversation_history)
+            
+            # Summarize plan if provided
+            plan_summary = ""
+            if current_plan:
+                plan_summary = self._summarize_plan_for_context(current_plan)
+            
+            # Get metadata options from database (for operation parsing)
+            # This allows the AI to extract main_muscle and equipment for exercise swaps
+            self.logger.info("Fetching exercise metadata options for operation parsing...")
+            metadata_options = self.exercise_selector.get_metadata_options()
+            
+            # Get prompt from PromptGenerator (with full context like plan generation)
+            prompt = PromptGenerator.generate_feedback_classification_with_operations_prompt(
+                feedback_message=feedback_message,
+                personal_info=personal_info,
+                conversation_context=context,
+                formatted_initial_responses=formatted_initial_responses,
+                formatted_follow_up_responses=formatted_follow_up_responses,
+                plan_summary=plan_summary,
+                metadata_options=metadata_options
+            )
+            
+            # Use structured parsing with Pydantic model - TRACK AI CALL
+            from core.training.schemas.question_schemas import FeedbackClassification
+            ai_start_classify = time.time()
+            completion = self.openai_client.chat.completions.parse(
+                model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4o"),
+                messages=[{"role": "user", "content": prompt}],
+                response_format=FeedbackClassification
+            )
+            classify_duration = time.time() - ai_start_classify
+
+            # Debug: Log raw completion content
+            raw_content = completion.choices[0].message.content
+            self.logger.debug(f"🤖 Raw AI response content: {raw_content[:500]}..." if len(raw_content or "") > 500 else f"🤖 Raw AI response content: {raw_content}")
+            
+            parsed_obj = completion.choices[0].message.parsed
+            result = parsed_obj.model_dump() if hasattr(parsed_obj, 'model_dump') else parsed_obj
+            result['_classify_duration'] = classify_duration  # Store duration in result for later tracking
+            
+            # Track classification AI latency with tokens (logged separately, combined later for intent-based flow)
+            await db_service.log_latency_event("feedback_classify", classify_duration, completion)
+            
+            # Log with operations count if present
+            ops_count = len(result.get('operations', []))
+            ops_info = f", {ops_count} operation(s) parsed" if ops_count > 0 else ""
+            self.logger.info(f"Feedback classification AI call took {classify_duration:.2f}s (intent: {result['intent']}, confidence: {result['confidence']}{ops_info})")
+            
+            # Debug: Log full classification result
+            if ops_count > 0:
+                self.logger.info(f"🔍 Operations details from AI:")
+                for idx, op in enumerate(result.get('operations', [])):
+                    self.logger.info(f"  Op {idx+1}: {op}")
             
             return result
             
@@ -1189,98 +1490,6 @@ class TrainingCoach(BaseAgent):
                 "reasoning": "Error in classification, defaulting to safe response",
                 "needs_plan_update": False,
                 "specific_changes": []
-            }
-
-    async def update_plan_from_feedback(
-        self,
-        personal_info: PersonalInfo,
-        current_plan: TrainingPlan,
-        feedback_message: str,
-        classification_result: Dict[str, Any],
-        conversation_history: List[Dict[str, str]],
-        formatted_initial_responses: str = "",
-        formatted_follow_up_responses: str = ""
-    ) -> Dict[str, Any]:
-        """
-        Update the training plan based on user feedback.
-        
-        Uses the same structured completion approach as plan generation.
-        """
-        try:
-            # Convert plan to dict for context (use mode='json' to serialize datetimes)
-            plan_dict = current_plan.model_dump(mode='json') if hasattr(current_plan, 'model_dump') else current_plan
-            
-            # Get metadata options from database (same as plan generation)
-            self.logger.info("Fetching exercise metadata options for plan update...")
-            metadata_options = self.exercise_selector.get_metadata_options()
-            
-            # Build conversation context
-            context = self._build_conversation_context(conversation_history)
-            
-            # Use the consolidated plan update prompt (with metadata options)
-            full_prompt = PromptGenerator.generate_plan_update_prompt(
-                personal_info,
-                plan_dict,
-                feedback_message,
-                classification_result,
-                context,
-                formatted_initial_responses,
-                formatted_follow_up_responses,
-                metadata_options
-            )
-            
-            # Use structured completion like in plan generation
-            model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
-            self.logger.info(f"🤖 Updating training plan with AI model: {model_name}...")
-            
-            completion = self.openai_client.chat.completions.parse(
-                model=model_name,
-                messages=[{"role": "system", "content": full_prompt}],
-                response_format=TrainingPlan,
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
-            )
-            
-            updated_plan = completion.choices[0].message.parsed
-            # Use mode='json' to ensure datetime objects are serialized as strings
-            updated_plan_dict = updated_plan.model_dump(mode='json')
-            
-            # Post-process strength exercises (match AI-generated metadata to database)
-            self.logger.info("Post-processing strength exercises in updated plan...")
-            updated_plan_dict = self.exercise_validator.post_process_strength_exercises(updated_plan_dict)
-            
-            # Clean the plan data to ensure JSON serialization (in case anything slipped through)
-            updated_plan_dict = self._clean_for_json_serialization(updated_plan_dict)
-            
-            # The AI message is now generated within the TrainingPlan by the LLM
-            # Extract it from the updated plan
-            ai_message = updated_plan_dict.get("ai_message")
-            
-            # Fallback message if AI didn't generate one
-            if not ai_message:
-                ai_message = "Thank you for your feedback! I've updated your plan based on your input. Take a look and let me know if you'd like any other changes! 💪"
-                updated_plan_dict["ai_message"] = ai_message
-            
-            # Generate explanation of changes
-            explanation = f"Updated your plan based on: {feedback_message}"
-            if classification_result.get('specific_changes'):
-                explanation += f" Specific changes: {', '.join(classification_result['specific_changes'])}"
-            
-            return {
-                "updated_plan": updated_plan_dict,
-                "explanation": explanation,
-                "ai_message": ai_message  # Return for API response
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Error updating plan: {str(e)}")
-            # Ensure current_plan is serializable (use mode='json' to serialize datetimes)
-            current_plan_dict = current_plan.model_dump(mode='json') if hasattr(current_plan, 'model_dump') else current_plan
-            current_plan_dict = self._clean_for_json_serialization(current_plan_dict)
-            
-            return {
-                "updated_plan": current_plan_dict,
-                "explanation": "I encountered an error updating your plan. Please try again with more specific feedback.",
-                "ai_message": "I encountered an error updating your plan. Please try again with more specific feedback."
             }
 
     def _build_conversation_context(self, conversation_history: List[Dict[str, str]]) -> str:

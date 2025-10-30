@@ -259,6 +259,10 @@ export class TrainingService {
                       execution: se.exercises.execution,
                       tips: se.exercises.tips
                     } : null,
+                    // Extract equipment and mainMuscle - prefer from strength_exercise table (AI-generated), fallback to exercises table
+                    equipment: se.equipment || se.exercises?.equipment || 'Bodyweight',
+                    mainMuscle: se.main_muscle || se.exercises?.main_muscles?.[0] || null,
+                    exerciseName: se.exercise_name || se.exercises?.name || 'Unknown Exercise',
                     sets: this.parseSets(se.sets, se.reps, se.weight),
                     weight1RM: se.weight_1rm
                   })) || [];

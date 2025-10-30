@@ -16,6 +16,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
 logger = logging.getLogger(__name__)
+# Reduce log verbosity - only show warnings and errors
+logger.setLevel(logging.WARNING)
 
 
 class ExerciseValidator:
@@ -691,10 +693,11 @@ class ExerciseValidator:
                                 valid_ids, _ = self.exercise_selector.validate_exercise_ids([str(matched_exercise_id)])
                                 if str(matched_exercise_id) in valid_ids:
                                     exercise["exercise_id"] = matched_exercise_id
-                                    # Clean up AI metadata fields as they're no longer needed
-                                    exercise.pop("exercise_name", None)
-                                    exercise.pop("main_muscle", None)
-                                    exercise.pop("equipment", None)
+                                    # Keep exercise_name for frontend display, update with matched name
+                                    exercise["exercise_name"] = matched_exercise_name
+                                    # Update other metadata with matched values
+                                    exercise["main_muscle"] = matched_exercise.get("main_muscle")
+                                    exercise["equipment"] = matched_exercise.get("equipment")
                                     stats["exercises_matched"] += 1
                                     
                                     if similarity_score < 0.70:
@@ -745,10 +748,11 @@ class ExerciseValidator:
                                     if str(fallback_exercise_id) in valid_ids:
                                         # Replace with fallback exercise
                                         exercise["exercise_id"] = fallback_exercise_id
-                                        # Remove AI metadata fields
-                                        exercise.pop("exercise_name", None)
-                                        exercise.pop("main_muscle", None)
-                                        exercise.pop("equipment", None)
+                                        # Keep exercise_name for frontend display, update with fallback name
+                                        exercise["exercise_name"] = fallback_exercise_name
+                                        # Update other metadata with fallback values
+                                        exercise["main_muscle"] = fallback_exercise.get("main_muscle")
+                                        exercise["equipment"] = fallback_exercise.get("equipment")
                                         stats["exercises_matched"] += 1
                                         
                                         logger.info(
@@ -794,14 +798,13 @@ class ExerciseValidator:
                         if not exercise.get("_remove_from_plan", False):
                             exercises_to_keep.append(exercise)
                     
-                    # CRITICAL: Update daily_training with only matched exercises
-                    if len(exercises_to_keep) < len(strength_exercises):
-                        removed_count = len(strength_exercises) - len(exercises_to_keep)
-                        logger.warning(
-                            f"Removed {removed_count} unmatched exercise(s) from daily_training "
-                            f"(kept {len(exercises_to_keep)}/{len(strength_exercises)})"
-                        )
-                    daily_training["strength_exercises"] = exercises_to_keep
+                    # Preserve all existing exercises unless explicitly marked for removal
+                    # Only drop exercises that are flagged with _remove_from_plan
+                    if exercises_to_keep:
+                        daily_training["strength_exercises"] = exercises_to_keep
+                    else:
+                        # If no filtering happened, keep original list
+                        daily_training["strength_exercises"] = strength_exercises
             
             # Bulk log all exercises at once (non-critical monitoring operation)
             if exercises_to_log:

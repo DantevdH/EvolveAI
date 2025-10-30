@@ -240,6 +240,12 @@ class PromptGenerator:
         ✓ Limit open formats (5-6) to 20-30% of total questions
         ✓ Use CONDITIONAL_BOOLEAN instead of FREE_TEXT when applicable
         
+        **FORMATTING RULES:**
+        ✓ CRITICAL: ALL question texts MUST end with a question mark (?)
+        ✓ Questions should be properly formatted as interrogative sentences
+        ✓ Example: "What training equipment do you have access to?" ✅
+        ✓ Example: "Training equipment access" ❌
+        
         **CRITICAL: Field Requirements by Type**
         
         For each response_type, populate ONLY the relevant fields (omit or set others to null):
@@ -351,6 +357,7 @@ class PromptGenerator:
         ✓ Use varied question types - limit open formats to 20-30% (1-2 questions max)
         ✓ Adapt complexity to {personal_info.experience_level} level
         ✓ If goal is vague/unclear, include clarifying question first
+        ✓ IMPORTANT: All question texts MUST end with a question mark (?)
         
         {PromptGenerator.get_question_generation_instructions()}
         
@@ -396,6 +403,7 @@ class PromptGenerator:
         ✓ Use varied question types - limit open formats to 30% max
         ✓ Be specific to their responses and goal
         ✓ Fewer questions if info is nearly complete
+        ✓ IMPORTANT: All question texts MUST end with a question mark (?)
         
         {PromptGenerator.get_question_generation_instructions()}
         
@@ -442,9 +450,6 @@ class PromptGenerator:
             • ❌ We do NOT provide: Sport-specific drills, technical skill training, or team practice schedules
             • 🎯 For athletes: We create supportive strength/conditioning work to complement their existing sport training
             
-            **1-WEEK TRAINING SCHEDULE:**
-            Create a focused 1-week training schedule. This will be duplicated to create a 4-week plan. After completion, we'll create the next phase using insights from their progress.
-            
             **GOAL:** {personal_info.goal_description}
             **LEVEL:** {personal_info.experience_level}
 
@@ -462,62 +467,13 @@ class PromptGenerator:
             • If a constraint is unclear, work with what you have rather than making assumptions
             • You decide HOW to train, they tell you WHAT'S possible
 
-             **PLAN STRUCTURE:**
-             1. Create a 1-week training schedule (7 days)
-             2. Each day → set training_type: strength/endurance/mixed/rest
-             3. This 1-week schedule will be duplicated to create the full 4-week plan
+            {PromptGenerator._get_one_week_enforcement()}
              
-             **MODALITY-SPECIFIC INSTRUCTIONS:**
+            {PromptGenerator._get_modality_instructions()}
              
-             **STRENGTH days:** provide exercises with sets, reps, weight_1rm
-             • For each strength exercise, provide:
-               - exercise_name: Descriptive name WITHOUT equipment (e.g., "Chest Press", "Lateral Raise", "Farmer Carry")
-               - main_muscle: From the provided list (e.g., "Pectoralis Major")
-               - equipment: From the provided list (e.g., "Dumbbell") - equipment type goes HERE, NOT in exercise_name
-               - sets, reps, weight, weight_1rm: Training parameters
-             • Select movements for goal, equipment, experience
-             • Balance movement patterns (push/pull, upper/lower, etc.)
-             • DO NOT set exercise_id (will be matched automatically)
-             • CRITICAL: Equipment type should ONLY be in the equipment field, NOT in exercise_name
-             
-             **ENDURANCE days:** Sessions with name, description (≤20 words), sport_type, training_volume, unit
-             • sport_type MUST be EXACTLY one of these values (case-sensitive): 
-               running | cycling | swimming | rowing | hiking | walking | elliptical | stair_climbing | jump_rope | other
-             • unit MUST be EXACTLY one of these values (case-sensitive):
-               minutes | km | miles | meters
-             • Vary session types (easy, tempo, intervals, recovery)
-             • Interval sessions can be created by making several endurance sessions with different tempo's / heart rate zones
-             • Heart_rate_zone (Zone 1, Zone 2, Zone 3, Zone 4, Zone 5)
-             • Choose sport_type based on user's goal, equipment, and preferences
-             • Examples: {{"sport_type": "running", "unit": "km"}} or {{"sport_type": "cycling", "unit": "minutes"}}
+            {PromptGenerator._get_justification_requirements()}
 
-             
-             **MIXED days:** strength exercises + endurance session(s)
-             • Balance modalities to avoid interference
-             • Consider recovery demands
-             
-             **REST days:** training_type="rest", is_rest_day=true, empty exercise/session arrays
-             
-             **MOTIVATION TEXT REQUIREMENTS:**
-             
-             • **Overall plan motivation (3 sentences):**
-               - Name the phase (e.g., "Foundation Building Phase")
-               - What this 1-week schedule accomplishes for their goal
-               - Mention: "This schedule will be repeated for 4 weeks, then we'll adapt based on your progress"
-               
-             • **Weekly motivation (2 sentences):**
-               - This week's training focus and purpose
-               - How it progresses toward their goal
-               
-             • **Daily motivation (1 sentence):**
-               - Today's training focus
-
-             **TRAINING PRINCIPLES:**
-             ✓ Progressive Overload - gradual difficulty increases
-             ✓ Variety - prevent plateaus, vary exercises and sessions week-to-week
-             ✓ Specificity - matches goal requirements
-             ✓ Recovery - adequate rest between hard sessions
-             ✓ Individualization - respects constraints/preferences
+            {PromptGenerator._get_training_principles()}
 
              **CRITICAL REQUIREMENTS:**
              ✓ Match {personal_info.experience_level} complexity
@@ -526,15 +482,7 @@ class PromptGenerator:
              ✓ Apply ALL playbook lessons (if provided - these are proven constraints and preferences)
              ✓ Stay concise
              
-             **SUPPLEMENTAL TRAINING SCHEDULING (for sport athletes):**
-             If user has existing sport training commitments (e.g., "football practice Tuesday & Saturday", "tennis matches on Wednesdays"):
-             • MARK those days as REST days in our program (training_type="rest", is_rest_day=true)
-             • Their sport training IS their training for that day - we don't add to it
-             • Schedule our strength/conditioning work on their OFF days from sport
-             • Example: If they have football Tuesday/Saturday → Mark Tuesday/Saturday as rest → Schedule our training on the other days
-             • Keep total weekly volume manageable to support (not interfere with) sport performance
-             • Design the 1-week schedule to work around their existing commitments
-             • Do NOT schedule high-intensity strength work the day before games/matches
+            {PromptGenerator._get_supplemental_training_scheduling()}
              
              **FLEXIBILITY NOTE:**
              If outline has obvious errors or user equipment changed, note the discrepancy and proceed with best judgment for user safety/success.
@@ -557,16 +505,120 @@ class PromptGenerator:
         return prompt
 
     @staticmethod
+    def _get_one_week_enforcement() -> str:
+        """Shared section enforcing exactly 1-week output."""
+        return """
+            ⚠️ **CRITICAL: GENERATE EXACTLY 1 WEEK (7 DAYS)**
+            • Create ONE weekly_schedule object with week_number: 1
+            • Include exactly 7 daily_trainings with day_of_week in this EXACT order:
+              1. Monday
+              2. Tuesday
+              3. Wednesday
+              4. Thursday
+              5. Friday
+              6. Saturday
+              7. Sunday
+            • DO NOT duplicate any days or generate 8+ days
+            • DO NOT generate multiple weeks or reference future weeks in your output
+            • The system will handle repetition and progression downstream
+        """
+    
+    @staticmethod
+    def _get_modality_instructions() -> str:
+        """Shared section with modality-specific instructions (STRENGTH, ENDURANCE, MIXED, REST)."""
+        return """
+            **MODALITY-SPECIFIC INSTRUCTIONS:**
+            
+            **STRENGTH days:** provide exercises with sets, reps, weight_1rm
+            • For each strength exercise, provide:
+              - exercise_name: Descriptive name WITHOUT equipment (e.g., "Chest Press", "Lateral Raise", "Farmer Carry")
+              - main_muscle: Choose from the EXACT values in the AVAILABLE MAIN MUSCLE OPTIONS list provided above
+              - equipment: Choose from the EXACT values in the AVAILABLE EQUIPMENT OPTIONS list provided above
+              - sets, reps, weight, weight_1rm: Training parameters
+            • Select movements for goal, equipment, experience
+            • Balance movement patterns (push/pull, upper/lower, etc.)
+            • DO NOT set exercise_id (will be matched automatically)
+            • CRITICAL: Equipment type should ONLY be in the equipment field, NOT in exercise_name
+            
+            **ENDURANCE days:** Sessions with name, description (MAX 15 words), sport_type, training_volume, unit
+            • sport_type MUST be EXACTLY one of these values (case-sensitive): 
+              running | cycling | swimming | rowing | hiking | walking | elliptical | stair_climbing | jump_rope | other
+            • unit MUST be EXACTLY one of these values (case-sensitive):
+              minutes | km | miles | meters
+            • Vary session types (easy, tempo, intervals, recovery)
+            • Interval sessions can be created by making several endurance sessions with different tempo's / heart rate zones
+            • Heart_rate_zone (Zone 1, Zone 2, Zone 3, Zone 4, Zone 5)
+            • Choose sport_type based on user's goal, equipment, and preferences
+            • Examples: {"sport_type": "running", "unit": "km"} or {"sport_type": "cycling", "unit": "minutes"}
+            
+            **MIXED days:** strength exercises + endurance session(s)
+            • Balance modalities to avoid interference
+            • Consider recovery demands
+            
+            **REST days:** training_type="rest", is_rest_day=true, empty exercise/session arrays
+        """
+    
+    @staticmethod
+    def _get_justification_requirements() -> str:
+        """Shared section with all justification length requirements."""
+        return """
+            **JUSTIFICATION TEXT REQUIREMENTS (BE CONCISE):**
+            
+            • **Plan title (3-5 words):**
+              - Short phase name (e.g., "Foundation Building Phase", "Base Endurance Development")
+            
+            • **Plan summary (MAX 25 words, 2 sentences):**
+              - Brief overview of what this training phase accomplishes
+              
+            • **Plan justification (MAX 40 words, ~3 sentences):**
+              - Explain the training approach and philosophy
+              - How this week's training accomplishes their goal
+              - Keep it focused and actionable
+              
+            • **Weekly justification (MAX 30 words, ~2 sentences):**
+              - This week's training focus and purpose
+              - How it progresses toward their goal
+              
+            • **Daily justification (MAX 20 words, 1 sentence):**
+              - Today's specific training focus and what it develops
+        """
+    
+    @staticmethod
+    def _get_training_principles() -> str:
+        """Shared section with core training principles."""
+        return """
+            **TRAINING PRINCIPLES:**
+            ✓ Progressive Overload - gradual difficulty increases
+            ✓ Variety - prevent plateaus, vary exercises and sessions week-to-week
+            ✓ Specificity - matches goal requirements
+            ✓ Recovery - adequate rest between hard sessions
+            ✓ Individualization - respects constraints/preferences
+        """
+    
+    @staticmethod
+    def _get_supplemental_training_scheduling() -> str:
+        """Shared section for scheduling around existing sport commitments."""
+        return """
+            **SUPPLEMENTAL TRAINING SCHEDULING (for sport athletes):**
+            If user has existing sport training commitments (e.g., "football practice Tuesday & Saturday", "tennis matches on Wednesdays"):
+            • MARK those days as REST days in our program (training_type="rest", is_rest_day=true)
+            • Their sport training IS their training for that day - we don't add to it
+            • Schedule our strength/conditioning work on their OFF days from sport
+            • Example: If they have football Tuesday/Saturday → Mark Tuesday/Saturday as rest → Schedule our training on the other days
+            • Keep total weekly volume manageable to support (not interfere with) sport performance
+            • Do NOT schedule high-intensity strength work the day before games/matches
+        """
+
+    @staticmethod
     def _format_exercise_metadata_section(metadata_options: Dict[str, List[str]]) -> str:
         """
         Format exercise metadata options section for prompts.
         
-        This reusable section explains to AI how to generate strength exercises with metadata
-        that will be matched to the database. Note: Individual metadata values are NOT listed here
-        as Pydantic schemas handle validation automatically.
+        This section lists the exact valid values for main_muscle and equipment
+        that the AI must choose from when generating strength exercises.
         
         Args:
-            metadata_options: Dict with keys: equipment, main_muscles (used only to check if available)
+            metadata_options: Dict with keys: equipment, main_muscles
         
         Returns:
             Formatted string section for prompts
@@ -578,21 +630,37 @@ class PromptGenerator:
             • If updating existing strength_exercises, preserve exercise_id and only adjust sets/reps/intensity.
             """
         
-        return """
+        # Extract and format the lists
+        equipment_list = metadata_options.get("equipment", [])
+        muscles_list = metadata_options.get("main_muscles", [])
+        
+        # Format equipment as a bulleted list
+        equipment_str = "\n              ".join([f"- {eq}" for eq in sorted(equipment_list)]) if equipment_list else "- (none available)"
+        
+        # Format muscles as a bulleted list
+        muscles_str = "\n              ".join([f"- {mm}" for mm in sorted(muscles_list)]) if muscles_list else "- (none available)"
+        
+        return f"""
             **EXERCISE METADATA REQUIREMENTS:**
             
             When creating or modifying STRENGTH exercises, you must provide:
             - exercise_name: A descriptive name for the exercise WITHOUT equipment type (e.g., "Bench Press", "Shoulder Press", "Push-ups", "Lateral Raise", "Farmer Carry")
-            - main_muscle: MUST be a valid MainMuscleEnum value (exact case-sensitive match required)
-            - equipment: MUST be a valid EquipmentEnum value (exact case-sensitive match required)
+            - main_muscle: MUST be one of the values listed below (exact case-sensitive match required)
+            - equipment: MUST be one of the values listed below (exact case-sensitive match required)
+            
+            **AVAILABLE EQUIPMENT OPTIONS (choose from these exact values):**
+              {equipment_str}
+            
+            **AVAILABLE MAIN MUSCLE OPTIONS (choose from these exact values):**
+              {muscles_str}
             
             **IMPORTANT FIELD DESCRIPTIONS:**
             • exercise_name: A clear, descriptive name that identifies the exercise WITHOUT including equipment type
               - ✅ CORRECT: "Bench Press", "Lateral Raise", "Back Squat", "Chest Fly", "Farmer Carry"
               - ❌ WRONG: "Barbell Bench Press", "Dumbbell Lateral Raise (Machine)", "Seated Calf Raise (Machine)"
               - The equipment type should ONLY be specified in the 'equipment' field, NOT in the exercise_name
-            • main_muscle: The specific primary muscle group worked (e.g., "Pectoralis Major", "Quadriceps", "Deltoids", "Latissimus Dorsi")
-            • equipment: The equipment type required - must match database values exactly
+            • main_muscle: Choose from the EXACT values in the list above (case-sensitive)
+            • equipment: Choose from the EXACT values in the list above (case-sensitive)
             
             ⚠️ CRITICAL RULES:
             - The TrainingPlan Pydantic schema will automatically validate that main_muscle and equipment match valid Enum values.
@@ -619,168 +687,189 @@ class PromptGenerator:
         return "\n".join(formatted_exercises)
 
     @staticmethod
-    def generate_feedback_classification_prompt(
-        feedback_message: str, 
+    def generate_lightweight_intent_classification_prompt(
+        feedback_message: str,
         conversation_context: str
     ) -> str:
-        """Generate prompt for classifying user feedback intent (strict 3-intent system)."""
-        return f"""
-        You are analyzing user feedback about their training plan to determine the next action.
+        """
+        Generate lightweight prompt for STAGE 1: Intent classification only (no operations).
         
-        **CONVERSATION CONTEXT:**
+        Fast and efficient - only uses feedback and conversation history.
+        No plan details, assessment data, or metadata needed.
+        """
+        return f"""
+        Classify the user's intent from their feedback about their training plan.
+        
+        **CONVERSATION HISTORY:**
         {conversation_context}
         
-        **CURRENT FEEDBACK:**
+        **USER'S CURRENT FEEDBACK:**
         "{feedback_message}"
         
-        **CLASSIFICATION TASK:**
-        Classify this into EXACTLY one of these intents and map to actions:
-        1) clarification_or_concern → The user is asking a question, needs clarification, or shares a concern.
-           - action: respond_only
-           - needs_plan_update: false
-           - navigate_to_main_app: false
-        2) update_request → The user asks to change something in the plan (add/remove/modify/move/adjust difficulty/equipment/etc.).
-           - action: update_plan
-           - needs_plan_update: true
-           - navigate_to_main_app: false
-        3) satisfied → The user is happy with the plan and wants to proceed.
-           - action: navigate_to_main_app
-           - needs_plan_update: false
-           - navigate_to_main_app: true
+        ═══════════════════════════════════════════════════════════════════════════════
+        CLASSIFY INTO ONE OF FIVE INTENTS
+        ═══════════════════════════════════════════════════════════════════════════════
         
-        **TRIGGERS (examples, not exhaustive):**
-        - update_request: "change", "modify", "instead", "prefer", "switch", "too hard/easy", "adjust", "update", "can't do", "won't work", "add/remove", "different day/time"
-        - clarification_or_concern: "what if", "can I", "how do I", "what equipment", "is it ok if", questions, doubts, or general concerns
-        - satisfied: "looks great", "perfect", "ready", "let's go", "thanks, done", approvals/closure
+        **1. question** - User asks a clear question you can answer
+           Examples: "Can I do this at home?", "What equipment do I need?", "Why running on Tuesday?"
+           → ANSWER their question directly
+           
+        **2. unclear** - ONLY when you genuinely cannot make reasonable assumptions
+           Use this SPARINGLY - prefer making reasonable assumptions over asking questions.
+           Examples: "Change it" (change what?), "Different" (different how?)
+           → Ask ONE specific follow-up question maximum
+           → The goal is efficiency, not perfection - avoid back-and-forth
+           
+        **3. update_request** - User wants specific changes
+           Examples: "Replace bench press with push-ups", "Make Monday easier", "Move Wed to Friday"
+           → This will trigger operation parsing in next step
+           
+        **4. satisfied** - User is happy and ready to start
+           Examples: "Looks great!", "Let's go!", "Perfect, thanks!"
+           → User will navigate to main app
+           
+        **5. other** - Off-topic or unrelated
+           Examples: "What's the weather?", "Tell me a joke"
+           → Redirect to training topics
         
-        **EXAMPLES:**
-        - "Can I do this at home?" → clarification_or_concern, respond_only
-        - "I prefer running over cycling" → update_request, update_plan
-        - "This looks perfect!" → satisfied, navigate_to_main_app
-        - "This is too hard for me" → clarification_or_concern, respond_only (why is it too hard for you?)
-        - "What equipment do I need?" → clarification_or_concern, respond_only
+        **IMPORTANT DISTINCTION:**
+        - "This is too hard" → **unclear** (which day? which exercise?)
+        - "Monday is too hard" → **update_request** (specific day identified)
+        - "Bench press is too hard" → **update_request** (specific exercise identified)
         
-        Include a fourth fallback intent for anything outside scope:
-        4) other → The input is outside your scope or unclear. Explain your capabilities briefly (clarifiying or updating) and ask a clarifying question.
-           - action: respond_only
-           - needs_plan_update: false
-           - navigate_to_main_app: false
-
-        Return a STRICT JSON object with these fields ONLY:
-        {{
-            "intent": "clarification_or_concern" | "update_request" | "satisfied" | "other",
-            "action": "respond_only" | "update_plan" | "navigate_to_main_app",
-            "confidence": 0.0-1.0,
-            "needs_plan_update": true | false,
-            "navigate_to_main_app": true | false,
-            "reasoning": "brief explanation (include capabilities explanation when intent is 'other')",
-            "specific_changes": ["list any explicit change requests if intent is update_request, else []"]
-        }}
+        ═══════════════════════════════════════════════════════════════════════════════
+        OUTPUT (FeedbackIntentClassification schema)
+        ═══════════════════════════════════════════════════════════════════════════════
+        
+        Your response will be automatically structured with these fields:
+        - intent: "question" | "unclear" | "update_request" | "satisfied" | "other"
+        - action: "respond_only" | "update_plan" | "navigate_to_main_app"
+        - confidence: 0.0-1.0
+        - needs_plan_update: true | false
+        - navigate_to_main_app: true | false
+        - reasoning: Brief explanation of classification
+        - ai_message: Your response to the user
+        
+        **ai_message by intent:**
+        - **question**: Answer their question with helpful information
+        - **unclear**: Ask follow-up questions to get missing details
+        - **update_request**: Acknowledge and say you'll make the changes
+        - **satisfied**: Not needed (handled separately)
+        - **other**: Explain your capabilities and redirect
+        
+        **CRITICAL AI_MESSAGE RULES:**
+        - Maximum 40 words (strict limit)
+        - Always address the user directly (use "you", "your", "I'll")
+        - Be conversational and friendly
+        - Stay on topic (training plan feedback)
+        - ALWAYS end by asking: "Any other changes, or are you ready to start?"
+          (or similar variation - keep it natural and conversational)
         """
-        
+
     @staticmethod
-    def generate_plan_update_prompt(
-        personal_info,
-        current_plan: dict,
+    def generate_operation_parsing_prompt(
         feedback_message: str,
-        classification_result: dict,
-        conversation_context: str,
-        formatted_initial_responses: str,
-        formatted_follow_up_responses: str,
+        personal_info,
+        current_plan_summary: str,
+        formatted_initial_responses: str = "",
+        formatted_follow_up_responses: str = "",
         metadata_options: Dict[str, List[str]] = None
     ) -> str:
-        """Generate complete prompt for updating training plan based on feedback.
-
-        This prompt consolidates all update context and mirrors the structure/clarity
-        used in other generation prompts (role, workflow status, rules, and outputs).
         """
-        # Build metadata options section (reusable helper)
+        Generate prompt for STAGE 2: Operation parsing (only for update_request intent).
+        
+        Uses full context: assessment data, plan details, metadata options.
+        Only called when Stage 1 determined intent is "update_request".
+        """
+        # Format metadata section
         metadata_section = PromptGenerator._format_exercise_metadata_section(metadata_options)
         
-        # Strength update rules
-        if metadata_options:
-            strength_update_rules = """
-        **STRENGTH EXERCISE UPDATE RULES:**
-        • If adding new exercises, provide exercise_name, main_muscle, equipment (from metadata options)
-        • If modifying existing exercises, preserve exercise_id if only adjusting sets/reps/intensity
-        • If replacing exercises, provide new exercise_name + metadata (matching will happen automatically)
-        • DO NOT set exercise_id for new/modified exercises - will be matched during post-processing
-        • Adjust sets/reps/intensity as needed to satisfy the feedback while preserving training intent
-        """
-        else:
-            strength_update_rules = """
-        **STRENGTH EXERCISE UPDATE RULES:**
-        • Do NOT introduce new strength_exercises without metadata options
-        • You may remove or keep existing strength_exercises only if explicitly requested in the feedback
-        • Prefer adjusting endurance_sessions, schedule, or intensity when no metadata is provided
-        """
-
+        # Format personal info section
+        client_info = PromptGenerator.format_client_information(personal_info) if personal_info else ""
+        
         return f"""
-        You are an expert training coach designing personalized training plans..
-        Your role: Safely and effectively update the user's training plan based on their feedback while preserving the plan's structure and philosophy.
-
-        **WORKFLOW STATUS:**
-        ✓ Session Step 1 of 3: Initial Assessment Questions — completed (Round 1 of 2)
-        ✓ Session Step 2 of 3: Follow-up Questions — completed (Round 2 of 2)
-        ✓ Session Step 3 of 3: Training Plan Creation — completed (1-week schedule created; duplicated to 4 weeks for storage)
-        Current Substep: Live Plan Feedback and Update — apply specific changes requested by the user
-
-        {PromptGenerator.format_client_information(personal_info)}
-
-        **ASSESSMENT RESPONSES (Round 1 & Round 2):**
-        Initial Assessment Questions with their responses:
-        {formatted_initial_responses}
-
-        Follow-up Questions with their responses:
-        {formatted_follow_up_responses}
-
-        {metadata_section}
-
-        **CONVERSATION CONTEXT:**
-        {conversation_context}
-
-        **USER FEEDBACK TO APPLY:**
+        Parse the user's requested changes into specific operations.
+        
+        {client_info}
+        
+        **USER'S CONTEXT:**
+        Initial Assessment: {formatted_initial_responses if formatted_initial_responses else "Not available"}
+        Follow-up Responses: {formatted_follow_up_responses if formatted_follow_up_responses else "Not available"}
+        Current Plan Summary: {current_plan_summary if current_plan_summary else "Not available"}
+        
+        **USER'S CHANGE REQUEST:**
         "{feedback_message}"
-
-        **CLASSIFICATION RESULT:**
-        {json.dumps(classification_result, indent=2)}
-
-        **CURRENT PLAN TO UPDATE:**
-        {json.dumps(current_plan, indent=2)}
-
-        **UPDATE PRINCIPLES:**
-        1. Make ONLY the specific changes requested in the user's feedback/classification.
-        2. Preserve the plan's structure, weekly cadence, training philosophy, and progression logic.
-        3. Ensure updates are realistic and safe for {personal_info.username} given experience level and constraints.
-        4. Maintain the 1-week schedule format (this will be duplicated to 4 weeks downstream).
-        5. Respect assessment constraints and preferences. Use coaching expertise to fill gaps sensibly.
-        6. If the user has scheduled sport commitments (practices/games), treat those days as REST in our plan.
-        7. Equipment mapping must be accurate; if "Full Gym Access" is indicated, map to ALL gym equipment types (Barbell, Dumbbell, Cable, Machine, Body weight, etc.) using exact database capitalization.
-        8. Do not introduce filler content. Every change must be purposeful and tied to the feedback.
-
-        {strength_update_rules}
-
-        **ALLOWED CHANGE TYPES (examples):**
-        - Exercise substitutions (same movement pattern/equipment category)
-        - Intensity tweaks (reps, sets, RPE/load guidance, durations)
-        - Schedule shifts (move day, swap sessions, rest day adjustments)
-        - Equipment adjustments (home-friendly vs gym-based alternatives)
-
-        **OUTPUT REQUIREMENTS:**
-        - Return the COMPLETE updated TrainingPlan object (JSON) matching the existing structure.
-        - Preserve identifiers and fields not affected by the change (e.g., user_profile_id, id if present).
-        - Keep weekly_schedules as a 1-week template (we duplicate later to 4 weeks in persistence).
-        - For strength_exercises, provide exercise_name, main_muscle, equipment (from metadata options). DO NOT set exercise_id - it will be matched automatically.
-        - If no metadata options are provided, do not add new strength_exercises; adjust endurance or scheduling instead unless feedback explicitly requests removal of strength.
-        - Populate ai_message with a concise, friendly response (2-3 sentences) that:
-          • Acknowledges their feedback
-          • Explains what you changed and why (if changes were applied)
-          • Uses a supportive coaching tone and includes 1-2 relevant emojis
-        - Do NOT add new top-level fields; keep schema consistent.
-
-        Examples for ai_message:
-        - "Great feedback! I've adjusted Tuesday to running instead of cycling so it matches your preference and targets the same energy system. 🏃✨"
-        - "Absolutely! I've made your workouts home-friendly with dumbbell options while preserving your progression. 💪🏠"
-
-        Now return ONLY the updated TrainingPlan JSON. Do not include any extra commentary outside the JSON object.
+        
+        ═══════════════════════════════════════════════════════════════════════════════
+        YOUR TASK: Parse this into specific operations (MAKE REASONABLE ASSUMPTIONS)
+        ═══════════════════════════════════════════════════════════════════════════════
+        
+        The intent has already been classified as "update_request", meaning the user wants specific changes.
+        Your job is to extract the operations with ALL required fields.
+        
+        **CRITICAL: MAKE REASONABLE ASSUMPTIONS**
+        - User says "too hard" → reduce intensity on ALL training days
+        - User says "don't like X exercise" → swap X on ALL days it appears
+        - User says "make it easier" → reduce intensity globally
+        - User says "need more legs" → adjust volume for leg exercises across plan
+        - When vague, apply changes broadly rather than returning empty operations
+        - Only return empty operations if request is truly incomprehensible
+        
+        **AVAILABLE OPERATION TYPES:**
+        
+        1. **swap_exercise**: type, day_of_week, old_exercise_name, new_exercise_name, new_main_muscle, new_equipment
+        2. **adjust_intensity**: type, scope (day/exercise/week), day_of_week (if day/exercise), direction (easier/harder)
+        3. **move_day**: type, source_day, target_day, swap (true/false)
+        4. **add_rest_day**: type, day_of_week
+        5. **adjust_volume**: type, scope, change_type (sets/reps/duration), adjustment (number), day_of_week (if day/exercise)
+        6. **add_exercise**: type, day_of_week, new_exercise_name, new_main_muscle, new_equipment, sets, reps, weight_1rm
+        7. **remove_exercise**: type, day_of_week, exercise_name
+        
+        {metadata_section}
+        
+        **FOR SWAP_EXERCISE AND ADD_EXERCISE:**
+        - Extract new_main_muscle from AVAILABLE MAIN MUSCLE OPTIONS above
+        - Extract new_equipment from AVAILABLE EQUIPMENT OPTIONS above
+        - Respect user's available equipment from initial assessment
+        - Examples: "push-ups" → "Pectoralis Major Sternal" + "Body Weight"
+        
+        **FOR ADD_EXERCISE:**
+        - Adds a new exercise to the specified day
+        - REQUIRED: Must specify sets (number), reps (array), weight_1rm (array)
+        - Array lengths for reps and weight_1rm must match the number of sets
+        - Example: sets=4, reps=[12,10,8,6], weight_1rm=[60,70,80,90]
+        - System will gracefully default if accidentally omitted, but always try to provide them
+        
+        **FOR REMOVE_EXERCISE:**
+        - Removes the specified exercise from the specified day based on the exercise_name
+        
+        ═══════════════════════════════════════════════════════════════════════════════
+        OUTPUT (FeedbackOperations schema)
+        ═══════════════════════════════════════════════════════════════════════════════
+        
+        Your response will be automatically structured with these fields:
+        - operations: List of PlanOperation objects (must have at least 1 with ALL required fields)
+        - ai_message: Confirmation of what changes you'll make
+        
+        **Example operation:**
+        - type: "swap_exercise"
+        - day_of_week: "Monday"
+        - old_exercise_name: "Bench Press"
+        - new_exercise_name: "Push-Up"
+        - new_main_muscle: "Pectoralis Major Sternal"
+        - new_equipment: "Body Weight"
+        
+        **CRITICAL AI_MESSAGE RULES:**
+        - Maximum 40 words (strict limit)
+        - Always address the user directly (use "you", "your", "I'll")
+        - Be conversational and friendly (e.g., "I'll swap bench press for push-ups on Monday!")
+        - Summarize the changes you're making
+        - ALWAYS end by asking: "Any other changes, or ready to go?"
+          (or similar variation - keep it natural and conversational)
+        
+        ⚠️ RETURN EMPTY OPERATIONS ONLY AS LAST RESORT
+        - Make reasonable assumptions first (apply changes broadly if vague)
+        - Empty operations should be EXTREMELY RARE
+        - Only return [] if the request is truly incomprehensible (e.g., "asdfgh", "xyz")
         """
+

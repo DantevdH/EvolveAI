@@ -56,7 +56,7 @@ export const SimplePlanPreview: React.FC<SimplePlanPreviewProps> = ({
         {selectedDay.exercises?.map((exercise, index) => {
           const exerciseName = exercise.exerciseId?.startsWith('endurance_')
             ? exercise.enduranceSession?.name || 'Endurance Session'
-            : exercise.exercise?.name || `Exercise ${index + 1}`;
+            : exercise.exerciseName || exercise.exercise?.name || `Exercise ${index + 1}`;
 
           return (
             <View key={exercise.id} style={styles.exerciseCard}>
@@ -66,9 +66,9 @@ export const SimplePlanPreview: React.FC<SimplePlanPreviewProps> = ({
                 </View>
                 <View style={styles.exerciseNameContainer}>
                   <Text style={styles.exerciseName}>{exerciseName}</Text>
-                  {!exercise.exerciseId?.startsWith('endurance_') && (
+                  {!exercise.exerciseId?.startsWith('endurance_') && exercise.sets && (
                     <Text style={styles.setsInfo}>
-                      {exercise.sets?.length || 0} sets
+                      {exercise.equipment || 'Bodyweight'} • [{exercise.sets.map(set => set.reps).join(', ')}]
                     </Text>
                   )}
                 </View>

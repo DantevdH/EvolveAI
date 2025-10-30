@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union, Literal
 from enum import Enum
 
 
@@ -241,6 +241,7 @@ class PlanFeedbackRequest(BaseModel):
     user_profile_id: int = Field(..., description="User profile ID")
     plan_id: int = Field(..., description="Training plan ID")
     feedback_message: str = Field(..., description="User feedback message")
+    current_plan: Dict[str, Any] = Field(..., description="Current training plan data (sent from frontend)")
     conversation_history: Optional[List[Dict[str, str]]] = Field(
         default=[], 
         description="Previous conversation messages for context"
@@ -253,6 +254,7 @@ class PlanFeedbackRequest(BaseModel):
         None, 
         description="Formatted follow-up question responses for context"
     )
+    jwt_token: str = Field(..., description="JWT token for authentication")
 
 
 class PlanFeedbackResponse(BaseModel):
@@ -265,10 +267,6 @@ class PlanFeedbackResponse(BaseModel):
         None, 
         description="Updated plan data if changes were made"
     )
-    changes_explanation: Optional[str] = Field(
-        None, 
-        description="Explanation of what was changed and why"
-    )
     navigate_to_main_app: Optional[bool] = Field(
         default=False, 
         description="If true, frontend should navigate to the main application"
@@ -276,15 +274,131 @@ class PlanFeedbackResponse(BaseModel):
     error: Optional[str] = Field(None, description="Error message if processing failed")
 
 
+# ===== Operation schemas for plan updates =====
+
+class OperationType(str, Enum):
+    """Types of operations that can be performed on a training plan."""
+    
+    SWAP_EXERCISE = "swap_exercise"
+    ADJUST_INTENSITY = "adjust_intensity"
+    MOVE_DAY = "move_day"
+    ADD_REST_DAY = "add_rest_day"
+    ADJUST_VOLUME = "adjust_volume"
+    ADD_EXERCISE = "add_exercise"
+    REMOVE_EXERCISE = "remove_exercise"
+
+
+class PlanOperation(BaseModel):
+    """
+    Unified operation model for plan updates (OpenAI structured output compatible).
+    
+    OpenAI's API does NOT support Union types, so we use a single flexible schema
+    with conditional fields. The 'type' field determines which other fields are required.
+    
+    Field requirements by operation type:
+    - swap_exercise: type, day_of_week, old_exercise_name, new_exercise_name, new_main_muscle, new_equipment
+    - adjust_intensity: type, scope, direction, day_of_week (if scope=day/exercise), exercise_name (if scope=exercise)
+    - move_day: type, source_day, target_day, swap
+    - add_rest_day: type, day_of_week
+    - adjust_volume: type, scope, change_type, adjustment, day_of_week (if scope=day/exercise)
+    - add_exercise: type, day_of_week, new_exercise_name, new_main_muscle, new_equipment, sets, reps, weight_1rm
+    - remove_exercise: type, day_of_week, exercise_name
+    """
+    
+    model_config = ConfigDict(extra="ignore")  # Ignore unknown fields for flexibility
+    
+    # Common field (required for ALL operation types)
+    type: OperationType = Field(..., description="Type of operation to perform")
+    
+    # Fields for swap_exercise
+    old_exercise_name: Optional[str] = Field(
+        None, 
+        description="REQUIRED for swap_exercise: Name of exercise to replace"
+    )
+    new_exercise_name: Optional[str] = Field(
+        None, 
+        description="REQUIRED for swap_exercise: Name of new exercise (without equipment in name)"
+    )
+    new_main_muscle: Optional[str] = Field(
+        None, 
+        description="REQUIRED for swap_exercise: Main muscle targeted (must match database options)"
+    )
+    new_equipment: Optional[str] = Field(
+        None, 
+        description="REQUIRED for swap_exercise: Equipment needed (must match database options)"
+    )
+    
+    # Fields for adjust_intensity and adjust_volume
+    scope: Optional[str] = Field(
+        None, 
+        description="REQUIRED for adjust_intensity/adjust_volume: 'day', 'exercise', or 'week'"
+    )
+    
+    # Fields for adjust_intensity
+    direction: Optional[str] = Field(
+        None, 
+        description="REQUIRED for adjust_intensity: 'easier' or 'harder'"
+    )
+    
+    # Fields for adjust_volume
+    change_type: Optional[str] = Field(
+        None, 
+        description="REQUIRED for adjust_volume: 'sets', 'reps', or 'duration'"
+    )
+    adjustment: Optional[int] = Field(
+        None, 
+        description="REQUIRED for adjust_volume: Amount to adjust (positive to add, negative to remove)"
+    )
+    
+    # Fields for move_day
+    source_day: Optional[str] = Field(
+        None, 
+        description="REQUIRED for move_day: Day to move from"
+    )
+    target_day: Optional[str] = Field(
+        None, 
+        description="REQUIRED for move_day: Day to move to"
+    )
+    swap: Optional[bool] = Field(
+        None, 
+        description="REQUIRED for move_day: If true, swap days; if false, just move"
+    )
+    
+    # Fields for add_exercise
+    sets: Optional[int] = Field(
+        None,
+        description="REQUIRED for add_exercise: Number of sets"
+    )
+    reps: Optional[List[int]] = Field(
+        None,
+        description="REQUIRED for add_exercise: Reps for each set (array length must match sets)"
+    )
+    weight_1rm: Optional[List[float]] = Field(
+        None,
+        description="REQUIRED for add_exercise: 1RM percentages for each set (array length must match sets)"
+    )
+    
+    # Shared fields (used by multiple operation types)
+    day_of_week: Optional[str] = Field(
+        None, 
+        description="REQUIRED for: swap_exercise, add_rest_day, adjust_intensity (if scope=day/exercise), adjust_volume (if scope=day/exercise), add_exercise, remove_exercise"
+    )
+    exercise_name: Optional[str] = Field(
+        None, 
+        description="REQUIRED for: adjust_intensity (if scope=exercise), adjust_volume (if scope=exercise), remove_exercise"
+    )
+
+
 # ===== Feedback classification schema =====
 
 class FeedbackIntent(str, Enum):
-    """Strict three-intent system plus fallback."""
+    """Intent classification for user feedback."""
 
-    CLARIFICATION_OR_CONCERN = "clarification_or_concern"
-    UPDATE_REQUEST = "update_request"
-    SATISFIED = "satisfied"
-    OTHER = "other"
+    QUESTION = "question"  # User asks a specific question AI can answer
+    UNCLEAR = "unclear"  # User's feedback is vague, AI needs more information
+    UPDATE_REQUEST = "update_request"  # User wants specific changes with complete info
+    SATISFIED = "satisfied"  # User is happy and ready to start
+    OTHER = "other"  # Off-topic or out of scope
 
 
 class FeedbackAction(str, Enum):
@@ -295,8 +409,8 @@ class FeedbackAction(str, Enum):
     NAVIGATE_TO_MAIN_APP = "navigate_to_main_app"
 
 
-class FeedbackClassification(BaseModel):
-    """Validated structure for feedback classification results from LLM."""
+class FeedbackIntentClassification(BaseModel):
+    """Lightweight intent classification (Stage 1) - no operations parsing."""
 
     intent: FeedbackIntent = Field(..., description="User intent classification")
     action: FeedbackAction = Field(..., description="Action the system should take")
@@ -304,7 +418,45 @@ class FeedbackClassification(BaseModel):
     needs_plan_update: bool = Field(..., description="Whether a plan update is required")
     navigate_to_main_app: bool = Field(..., description="Whether to navigate to main app")
     reasoning: str = Field(..., description="Short explanation for the decision")
-    specific_changes: List[str] = Field(
-        default_factory=list,
+    ai_message: str = Field(..., description="AI's response to the user")
+
+
+class FeedbackOperations(BaseModel):
+    """Operation parsing results (Stage 2) - only for update_request intent."""
+
+    operations: List[PlanOperation] = Field(
+        ...,
+        description="Parsed operations for plan updates (must have at least 1)"
+    )
+    ai_message: Optional[str] = Field(
+        default=None,
+        description="Confirmation message about what changes will be made"
+    )
+
+
+class FeedbackClassification(BaseModel):
+    """
+    LEGACY: Combined classification and operations (single-stage approach).
+    
+    Use FeedbackIntentClassification + FeedbackOperations for two-stage approach instead.
+    Keeping this for backward compatibility during migration.
+    """
+
+    intent: FeedbackIntent = Field(..., description="User intent classification")
+    action: FeedbackAction = Field(..., description="Action the system should take")
+    confidence: float = Field(..., ge=0.0, le=1.0, description="Classifier confidence 0-1")
+    needs_plan_update: bool = Field(..., description="Whether a plan update is required")
+    navigate_to_main_app: bool = Field(..., description="Whether to navigate to main app")
+    reasoning: str = Field(..., description="Short explanation for the decision")
+    specific_changes: Optional[List[str]] = Field(
+        default=[],
         description="Explicit change requests if intent is update_request, otherwise []",
+    )
+    operations: Optional[List[PlanOperation]] = Field(
+        default=[],
+        description="Parsed operations for plan updates (only if intent is update_request)",
+    )
+    ai_message: Optional[str] = Field(
+        default=None,
+        description="Friendly AI message confirming changes or responding to feedback"
     )

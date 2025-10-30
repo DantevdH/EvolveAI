@@ -6,6 +6,7 @@ for monitoring and potential database expansion.
 """
 
 import os
+import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from dotenv import load_dotenv
@@ -15,6 +16,8 @@ from logging_config import get_logger
 load_dotenv()
 
 logger = get_logger(__name__)
+# Reduce log verbosity - only show warnings and errors
+logger.setLevel(logging.WARNING)
 
 
 class AIExerciseLogger:
@@ -169,10 +172,18 @@ class AIExerciseLogger:
             stats = {"inserted": 0, "updated": 0, "errors": 0}
             now = datetime.utcnow().isoformat()
             
-            # Prepare records with default values
-            records_to_check = []
+            # Step 1: Deduplicate within the batch first
+            # Group by (name, main_muscle, equipment) and count occurrences
+            batch_groups = {}
             for exercise in exercises:
-                record = {
+                key = (
+                    exercise["ai_exercise_name"],
+                    exercise["main_muscle"],
+                    exercise["equipment"]
+                )
+                
+                if key not in batch_groups:
+                    batch_groups[key] = {
                     "ai_exercise_name": exercise["ai_exercise_name"],
                     "main_muscle": exercise["main_muscle"],
                     "equipment": exercise["equipment"],
@@ -182,7 +193,21 @@ class AIExerciseLogger:
                     "status": exercise.get("status", "pending_review"),
                     "occurrence_count": 1,
                 }
-                records_to_check.append(record)
+                else:
+                    # Duplicate within batch - increment count and update with latest match info
+                    batch_groups[key]["occurrence_count"] += 1
+                    batch_groups[key]["similarity_score"] = exercise.get("similarity_score", 0.0)
+                    batch_groups[key]["matched_exercise_id"] = exercise.get("matched_exercise_id")
+                    batch_groups[key]["matched_exercise_name"] = exercise.get("matched_exercise_name")
+            
+            # Convert to list of deduplicated records
+            records_to_check = list(batch_groups.values())
+            
+            if len(records_to_check) < len(exercises):
+                logger.info(
+                    f"Deduplicated batch: {len(exercises)} exercises → {len(records_to_check)} unique "
+                    f"(removed {len(exercises) - len(records_to_check)} duplicates within batch)"
+                )
             
             # Build a query to check for existing records
             # We'll use OR conditions to check all at once, then process in memory
@@ -255,13 +280,14 @@ class AIExerciseLogger:
                 )
                 
                 if key in existing_map:
-                    # Update existing
+                    # Update existing - ADD the batch occurrence count
                     existing = existing_map[key]
                     existing_id = existing["id"]
-                    existing_count = existing.get("occurrence_count", 1)
+                    existing_count = existing.get("occurrence_count", 0)
+                    batch_count = record["occurrence_count"]  # Get count from deduplicated batch
                     
                     update_data = {
-                        "occurrence_count": existing_count + 1,
+                        "occurrence_count": existing_count + batch_count,  # Add batch count, not just +1
                         "similarity_score": record["similarity_score"],
                         "matched_exercise_id": record.get("matched_exercise_id"),
                         "matched_exercise_name": record.get("matched_exercise_name"),

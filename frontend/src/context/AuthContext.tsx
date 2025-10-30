@@ -9,6 +9,7 @@ import { NotificationService } from '@/src/services/NotificationService';
 // Simplified auth state interface
 interface SimpleAuthState {
   user: any | null;
+  session: any | null;  // Store full session (includes access_token)
   userProfile: UserProfile | null;
   trainingPlan: TrainingPlan | null;
   exercises: any[] | null;
@@ -23,6 +24,7 @@ type SimpleAuthAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_WORKOUT_PLAN_LOADING'; payload: boolean }
   | { type: 'SET_USER'; payload: any | null }
+  | { type: 'SET_SESSION'; payload: any | null }
   | { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
   | { type: 'SET_WORKOUT_PLAN'; payload: TrainingPlan | null }
   | { type: 'SET_EXERCISES'; payload: any[] | null }
@@ -33,6 +35,7 @@ type SimpleAuthAction =
 // Simplified initial state
 const initialState: SimpleAuthState = {
   user: null,
+  session: null,
   userProfile: null,
   trainingPlan: null,
   exercises: null,
@@ -59,6 +62,11 @@ const authReducer = (state: SimpleAuthState, action: SimpleAuthAction): SimpleAu
       return {
         ...state,
         user: action.payload,
+      };
+    case 'SET_SESSION':
+      return {
+        ...state,
+        session: action.payload,
       };
     case 'SET_USER_PROFILE':
       return {
@@ -224,6 +232,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         } else if (session) {
           console.log('✅ User session found');
           dispatch({ type: 'SET_USER', payload: session.user });
+          dispatch({ type: 'SET_SESSION', payload: session });
           
           // Load user profile if we have a session
           if (session.user) {
@@ -249,6 +258,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (event === 'SIGNED_IN' && session) {
         console.log('✅ User signed in');
         dispatch({ type: 'SET_USER', payload: session.user });
+        dispatch({ type: 'SET_SESSION', payload: session });
         
         // Check if OAuth user needs email verification (not for email signup)
         if (session.user && !session.user.email_confirmed_at && session.user.app_metadata?.provider !== 'email') {

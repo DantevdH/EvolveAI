@@ -223,20 +223,24 @@ export class trainingService {
     userProfileId: number,
     planId: number,
     feedbackMessage: string,
+    currentPlan: any,  // Current plan data from frontend
     conversationHistory: Array<{ role: string; content: string }> = [],
     formattedInitialResponses?: string,
-    formattedFollowUpResponses?: string
+    formattedFollowUpResponses?: string,
+    jwtToken?: string
   ): Promise<any> {
     try {
-      console.log('📍 Onboarding Service: Sending plan feedback');
+      console.log('📍 Onboarding Service: Sending plan feedback with current plan data');
 
       const request = {
         user_profile_id: userProfileId,
         plan_id: planId,
         feedback_message: feedbackMessage,
+        current_plan: currentPlan,  // Send current plan to backend
         conversation_history: conversationHistory,
         formatted_initial_responses: formattedInitialResponses,
         formatted_follow_up_responses: formattedFollowUpResponses,
+        jwt_token: jwtToken,
       };
 
       const response = await apiClient.post<any>(

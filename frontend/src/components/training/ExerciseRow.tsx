@@ -39,6 +39,10 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
     setIsExpanded(!isExpanded);
   };
 
+  // Display helpers
+  const equipmentLabel = exercise.exercise?.equipment || (exercise as any).equipment || 'Bodyweight';
+  const numSets = (exercise.sets || []).length;
+
   return (
     <View style={styles.container}>
       {/* Main exercise row */}
@@ -66,20 +70,19 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
 
         <View style={styles.exerciseInfo}>
           <View style={styles.exerciseHeader}>
-            <View style={{ backgroundColor: 'red', padding: 10, width: '100%' }}>
-              <Text style={{ fontSize: 20, color: 'white', fontWeight: 'bold' }}>
-                HARDCODED TEXT TEST
-              </Text>
-              <Text style={{ fontSize: 18, color: 'yellow', fontWeight: 'bold' }}>
-                {exercise.exercise?.name || 'NO NAME'}
-              </Text>
-            </View>
+            <Text style={styles.exerciseName} numberOfLines={1}>
+              {exercise.exercise?.name || 'Exercise'}
+            </Text>
           </View>
           
           <View style={styles.exerciseDetails}>
-            <Text style={styles.setsText}>
-              {exercise.exerciseId?.startsWith('endurance_') ? 'Endurance' : `${exercise.sets?.length || 0} sets`}
-            </Text>
+            {exercise.exerciseId?.startsWith('endurance_') ? (
+              <Text style={styles.setsText}>Endurance</Text>
+            ) : (
+              <Text style={styles.setsText}>
+                {equipmentLabel} • {numSets} {numSets === 1 ? 'set' : 'sets'}
+              </Text>
+            )}
             
             <TouchableOpacity
               style={[styles.expandButton, isLocked && styles.expandButtonLocked]}
@@ -362,7 +365,8 @@ const styles = StyleSheet.create({
   exerciseRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     gap: 12
   },
   completionButton: {
@@ -392,7 +396,6 @@ const styles = StyleSheet.create({
   exerciseInfo: {
     flex: 1,
     gap: 4,
-    backgroundColor: 'rgba(0, 255, 0, 0.2)', // Green debug background
     padding: 4
   },
   exerciseHeader: {
@@ -400,24 +403,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     width: '100%',
-    minHeight: 40,
-    backgroundColor: 'rgba(255, 0, 255, 0.2)' // Magenta debug background
+    minHeight: 32
   },
   exerciseName: {
-    fontSize: 24, // Increased size
-    fontWeight: '700', // Bolder
-    color: '#FF0000', // Bright red for debugging
-    backgroundColor: '#FFFF00', // Bright yellow background for debugging
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
     marginRight: 8,
-    padding: 8,
     flexShrink: 1,
     flexGrow: 1,
     minWidth: 100,
-    maxWidth: '100%',
-    textAlign: 'left',
-    textAlignVertical: 'center',
-    includeFontPadding: false,
-    lineHeight: 30
+    maxWidth: '100%'
   },
   actionButtons: {
     flexDirection: 'row',
@@ -442,7 +438,7 @@ const styles = StyleSheet.create({
     gap: 8
   },
   setsText: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.muted
   },
   expandButton: {

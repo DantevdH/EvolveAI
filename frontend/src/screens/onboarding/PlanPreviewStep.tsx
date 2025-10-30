@@ -19,6 +19,7 @@ import ChatMessage from '../../components/onboarding/ChatMessage';
 import { useAuth } from '@/src/context/AuthContext';
 import { TrainingPlan, DailyTraining } from '../../types/training';
 import { trainingService } from '../../services/onboardingService';
+import { reverseTransformTrainingPlan, transformTrainingPlan } from '../../utils/trainingPlanTransformer';
 
 interface PlanPreviewStepProps {
   onContinue: () => void;
@@ -173,16 +174,25 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
     try {
       const planId = typeof currentPlan?.id === 'string' ? parseInt(currentPlan.id, 10) : currentPlan?.id!;
       
+      // Get JWT token from session in AuthContext state
+      const jwtToken = state.session?.access_token;
+      
+      // Convert plan from camelCase (frontend) to snake_case (backend) before sending
+      const backendFormatPlan = reverseTransformTrainingPlan(currentPlan);
+      console.log('🔄 PlanPreviewStep: Converted plan to backend format (snake_case)');
+      
       const data = await trainingService.sendPlanFeedback(
         state.userProfile?.id!,
         planId,
         userMessage.message,
+        backendFormatPlan,  // Send plan in backend format (snake_case)
         chatMessages.map(msg => ({
           role: msg.isUser ? 'user' : 'assistant',
           content: msg.message,
         })),
         planMetadata?.formattedInitialResponses,
-        planMetadata?.formattedFollowUpResponses
+        planMetadata?.formattedFollowUpResponses,
+        jwtToken
       );
 
       // Remove typing indicator
@@ -213,18 +223,20 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
         };
         setChatMessages(prev => [...prev, aiMessage]);
 
-        // If plan was updated, update local state directly with API response
-        if (data.plan_updated && data.updated_plan) {
-          console.log('🎯 PlanPreviewStep: Plan updated, updating local state with API response');
+        // Always sync plan with backend response (updated or not)
+        if (data.updated_plan) {
+          console.log(`🎯 PlanPreviewStep: ${data.plan_updated ? 'Plan updated' : 'Plan synced'}, updating local state with backend response`);
           
-          // Set updating state to show visual feedback
-          setIsUpdatingPlan(true);
+          // Set updating state to show visual feedback (only if actually updated)
+          if (data.plan_updated) {
+            setIsUpdatingPlan(true);
+          }
           
-          // Backend returns plan in the same format as Supabase fetch
-          // No transformation needed - already in the correct format
-          const updatedPlan = data.updated_plan as TrainingPlan;
+          // Backend returns plan in snake_case format - transform to camelCase for frontend
+          console.log('🔄 PlanPreviewStep: Transforming plan from backend format (snake_case) to frontend format (camelCase)');
+          const updatedPlan = transformTrainingPlan(data.updated_plan);
           
-          // Update local plan state with updated data
+          // Update local plan state with transformed data
           setCurrentPlan(updatedPlan);
           
           // Update AuthContext state to keep it in sync
@@ -244,17 +256,6 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
               }
               return newMessages;
             });
-          }
-          
-          // Add change explanation if provided
-          if (data.changes_explanation) {
-            const changeMessage: ChatMessage = {
-              id: Date.now().toString() + '_changes',
-              message: `📝 **Changes Made:**\n${data.changes_explanation}`,
-              isUser: false,
-              timestamp: new Date(),
-            };
-            setChatMessages(prev => [...prev, changeMessage]);
           }
           
           // Clear updating state after a brief delay to show the update

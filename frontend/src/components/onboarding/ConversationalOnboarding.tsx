@@ -251,9 +251,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       // Simulate AI thinking time, then generate final plan
       setTimeout(async () => {
         try {
-          // Get JWT token from Supabase session
-          const { data: { session } } = await supabase.auth.getSession();
-          const jwtToken = session?.access_token;
+          // Get JWT token from AuthContext state
+          const jwtToken = authState.session?.access_token;
           
           if (!jwtToken) {
             throw new Error('JWT token is missing - cannot generate training plan');
@@ -283,70 +282,25 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           logData('Generate Plan', response.success ? 'success' : 'error');
           
           if (response.success && response.data) {
-            // Backend now returns the complete formatted training plan
-            logStep('Plan Generation', 'completed', 'Training plan received from backend');
+            // Backend now returns the complete enriched plan with database IDs
+            // Transform from backend format (snake_case) to frontend format (camelCase)
+            logStep('Plan Generation', 'completed', 'Training plan received from backend with database IDs');
+            console.log('✅ ConversationalOnboarding: Using enriched plan from backend (no refetch needed)');
             
-            // CRITICAL: Fetch plan from database while spinner is still showing
-            // This ensures AuthContext is populated before we stop loading
-            console.log('📍 ConversationalOnboarding: Fetching plan from database after generation...');
-            
-            if (!authState.userProfile?.id) {
-              throw new Error('No user profile ID available to fetch training plan');
-            }
-            
-            try {
-              // Import TrainingService to fetch the plan from database
-              const { TrainingService } = await import('../../services/trainingService');
-              
-              // Fetch plan from database - keep spinner running during this
-              const freshPlanResult = await TrainingService.getTrainingPlan(authState.userProfile.id);
-              
-              if (freshPlanResult.success && freshPlanResult.data) {
-                console.log('✅ ConversationalOnboarding: Plan loaded from database into AuthContext');
+            // Transform the plan from backend format to frontend format
+            const { transformTrainingPlan } = await import('../../utils/trainingPlanTransformer');
+            const transformedPlan = transformTrainingPlan(response.data);
+            console.log('✅ ConversationalOnboarding: Transformed plan to frontend format');
                 
-                // Set plan in AuthContext - this ensures it's available for PlanPreviewStep
-                setTrainingPlan(freshPlanResult.data);
+            // Set plan in AuthContext - already has all database IDs
+            setTrainingPlan(transformedPlan);
                 
                 // Store exercises in AuthContext for future use
                 if (response.metadata?.exercises) {
                   setExercises(response.metadata.exercises);
                 }
                 
-                // NOW we can stop the spinner - plan is in AuthContext
-                setState(prev => ({
-                  ...prev,
-                  trainingPlan: freshPlanResult.data,
-                  completionMessage: response.completion_message || "🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨",
-                  planGenerationLoading: false,
-                  planMetadata: {
-                    formattedInitialResponses: response.metadata?.formatted_initial_responses,
-                    formattedFollowUpResponses: response.metadata?.formatted_follow_up_responses,
-                  },
-                }));
-              } else {
-                console.error('❌ ConversationalOnboarding: Failed to fetch plan from database');
-                // Still stop spinner, but log warning
-                setState(prev => ({
-                  ...prev,
-                  trainingPlan: response.data, // Fallback to response data
-                  completionMessage: response.completion_message || "🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨",
-                  planGenerationLoading: false,
-                  planMetadata: {
-                    formattedInitialResponses: response.metadata?.formatted_initial_responses,
-                    formattedFollowUpResponses: response.metadata?.formatted_follow_up_responses,
-                  },
-                }));
-                setTrainingPlan(response.data); // Fallback: still set in AuthContext
-              }
-            } catch (fetchError) {
-              console.error('❌ ConversationalOnboarding: Error fetching plan from DB:', fetchError);
-              // Fallback: Use response data and stop spinner
-              const transformedPlan = response.data;
-              setTrainingPlan(transformedPlan);
-              if (response.metadata?.exercises) {
-                setExercises(response.metadata.exercises);
-              }
-              
+            // Stop spinner and show plan
               setState(prev => ({
                 ...prev,
                 trainingPlan: transformedPlan,
@@ -357,10 +311,9 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
                   formattedFollowUpResponses: response.metadata?.formatted_follow_up_responses,
                 },
               }));
-            }
             
-            // Stay in generation step to show completion message
-            // The PlanGenerationStep will handle showing the completion message
+            // Automatically transition to preview/feedback step (skip completion message)
+            setCurrentStep('preview');
           } else {
             logError('Plan generation failed', response.message);
             throw new Error(response.message || 'Failed to generate training plan');
@@ -485,8 +438,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         experience_level: state.experienceLevel,
       };
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const jwtToken = session?.access_token;
+      const jwtToken = authState.session?.access_token;
       
       const response = await trainingService.getInitialQuestions(
         fullPersonalInfo,
@@ -526,8 +478,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
     try {
       const responsesObject = Object.fromEntries(state.initialResponses);
-      const { data: { session } } = await supabase.auth.getSession();
-      const jwtToken = session?.access_token;
+      const jwtToken = authState.session?.access_token;
       
       const fullPersonalInfo = {
         ...state.personalInfo,
@@ -616,9 +567,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           const responsesObject = Object.fromEntries(state.initialResponses);
           
           
-          // Get JWT token from Supabase session
-          const { data: { session } } = await supabase.auth.getSession();
-          const jwtToken = session?.access_token;
+          // Get JWT token from AuthContext state
+          const jwtToken = authState.session?.access_token;
           
           const fullPersonalInfo = {
             ...state.personalInfo!,
