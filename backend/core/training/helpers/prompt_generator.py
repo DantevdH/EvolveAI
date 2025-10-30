@@ -571,6 +571,13 @@ class PromptGenerator:
         Returns:
             Formatted string section for prompts
         """
+
+        equipment_list = metadata_options.get('equipment', [])
+        main_muscle_list = metadata_options.get('main_muscles', [])
+        equipment_str = ', '.join(equipment_list)
+        main_muscle_str = ', '.join(main_muscle_list)
+
+
         if not metadata_options:
             return """
             **NO METADATA OPTIONS PROVIDED:**
@@ -578,13 +585,13 @@ class PromptGenerator:
             • If updating existing strength_exercises, preserve exercise_id and only adjust sets/reps/intensity.
             """
         
-        return """
+        return f"""
             **EXERCISE METADATA REQUIREMENTS:**
             
             When creating or modifying STRENGTH exercises, you must provide:
             - exercise_name: A descriptive name for the exercise WITHOUT equipment type (e.g., "Bench Press", "Shoulder Press", "Push-ups", "Lateral Raise", "Farmer Carry")
-            - main_muscle: MUST be a valid MainMuscleEnum value (exact case-sensitive match required)
-            - equipment: MUST be a valid EquipmentEnum value (exact case-sensitive match required)
+            - main_muscle: MUST be a valid main_muscle value (exact case-sensitive match required). Pick one of the following: {main_muscle_str}
+            - equipment: MUST be a valid equipment value (exact case-sensitive match required). Pick one of the following: {equipment_str}
             
             **IMPORTANT FIELD DESCRIPTIONS:**
             • exercise_name: A clear, descriptive name that identifies the exercise WITHOUT including equipment type
@@ -715,7 +722,7 @@ class PromptGenerator:
         • Prefer adjusting endurance_sessions, schedule, or intensity when no metadata is provided
         """
 
-        return f"""
+        prompt = f"""
         You are an expert training coach designing personalized training plans..
         Your role: Safely and effectively update the user's training plan based on their feedback while preserving the plan's structure and philosophy.
 
@@ -734,7 +741,7 @@ class PromptGenerator:
         Follow-up Questions with their responses:
         {formatted_follow_up_responses}
 
-        {metadata_section}
+        {PromptGenerator._format_exercise_metadata_section(metadata_options)}
 
         **CONVERSATION CONTEXT:**
         {conversation_context}
@@ -784,3 +791,93 @@ class PromptGenerator:
 
         Now return ONLY the updated TrainingPlan JSON. Do not include any extra commentary outside the JSON object.
         """
+        # Always append the canonical sample at the end.
+        return PromptGenerator.append_trainingplan_json_example(prompt)
+
+    @staticmethod
+    def append_trainingplan_json_example(prompt: str) -> str:
+        json_example = (
+            """
+            IMPORTANT: Return ONLY valid JSON matching this schema.
+            Do NOT include any markdown/code/text/explanations outside the JSON.
+            All arrays must be present (even if empty). Use [null, null, ...] for missing weight values.
+            
+            Field meanings:
+            - title (string): brief title of the plan
+            - summary (string): short text summarizing plan focus
+            - weekly_schedules (array): list of weekly blocks. Has only one element.
+            - week_number (int): week index (1-based)
+            - justification (string): brief explanation of this week's focus and why choices are made.
+            - daily_trainings (array): list of daily plans. Include all 7 days of the week.
+                - day_of_week (string): e.g., "Monday"
+                - is_rest_day (bool): true if no training that day
+                - training_type (string): one of ["rest", "strength", "endurance"]
+                - justification (string): reason for this day's focus
+                - strength_exercises (array):
+                    - sets (int)
+                    - reps (array of int)
+                    - weight (array of null). Leave empty as the user will fill in the weights later.
+                    - weight_1rm (array of float)
+                    - main_muscle (string)
+                    - equipment (string)
+                    - completed (bool)
+                - endurance_sessions (array):
+                    - name (string)
+                    - sport_type (string)
+                    - training_volume (float)
+                    - unit (string)
+                    - heart_rate_zone (int)
+                    - description (string)
+                    - completed (bool)
+            - justification (string): overall justification for the training phase
+            - ai_message (string): friendly message to the user
+
+            Notes: The fields id and user_profile_id are always set automatically by backend logic and must NOT be set by the AI.
+
+            Example (keep structure, replace content):
+
+            {
+                "title": "Sample Title",
+                "summary": "One week focused on progressive overload.",
+                "weekly_schedules": [
+                    {
+                        "week_number": 1,
+                        "justification": "Gradual increase in lower-body strength.",
+                        "daily_trainings": [
+                            {
+                                "day_of_week": "Monday",
+                                "is_rest_day": false,
+                                "training_type": "strength",
+                                "justification": "Lower body compound focus.",
+                                "strength_exercises": [
+                                    {
+                                        "sets": 3,
+                                        "reps": [10, 8, 6],
+                                        "weight": [null, null, null],
+                                        "weight_1rm": [90, 90, 90],
+                                        "main_muscle": "Quadriceps",
+                                        "equipment": "Barbell",
+                                        "completed": false
+                                    }
+                                ],
+                                "endurance_sessions": []
+                            },
+                            {
+                                "day_of_week": "Tuesday",
+                                "is_rest_day": true,
+                                "training_type": "rest",
+                                "justification": "Full rest day.",
+                                "strength_exercises": [],
+                                "endurance_sessions": []
+                            }
+                        ]
+                    }
+                ],
+                "justification": "Designed to build foundational strength before higher-intensity phases.",
+                "ai_message": "Here's your personalized one-week strength plan!"
+            }
+            """
+        )
+        marker = '\nIMPORTANT: Return ONLY valid JSON matching this schema.'
+        base = prompt.split(marker)[0]
+        return base.strip() + json_example

@@ -42,9 +42,6 @@ def _create_exercise_metadata_enums():
         "Self-assisted", "Suspended", "Barbell", "Dumbbell", "Cable", "Sled", "Body Weight"
     ]
     
-    fallback_target_areas = [
-        "Upper Arms", "Neck", "Chest", "Shoulder", "Calves", "Back", "Hips", "Forearm", "Thighs"
-    ]
     
     try:
         from core.training.helpers.exercise_selector import ExerciseSelector
@@ -52,7 +49,6 @@ def _create_exercise_metadata_enums():
         metadata = selector.get_metadata_options()
         
         equipment_list = metadata.get("equipment", [])
-        target_areas_list = metadata.get("target_areas", [])
         main_muscles_list = metadata.get("main_muscles", [])
         
         # Use database values if available, otherwise use fallback
@@ -61,12 +57,6 @@ def _create_exercise_metadata_enums():
             logger.warning("Using fallback equipment list (method: default)")
         else:
             logger.info(f"Using Supabase equipment list with {len(equipment_list)} items (method: supabase)")
-        
-        if not target_areas_list:
-            target_areas_list = fallback_target_areas
-            logger.warning("Using fallback target_areas list (method: default)")
-        else:
-            logger.info(f"Using Supabase target_areas list with {len(target_areas_list)} items (method: supabase)")
         
         if not main_muscles_list:
             main_muscles_list = fallback_main_muscles
@@ -90,15 +80,6 @@ def _create_exercise_metadata_enums():
                 equipment_unique.append(eq)
         equipment_list = equipment_unique
         
-        # Deduplicate target areas
-        target_areas_seen = {}
-        target_areas_unique = []
-        for ta in target_areas_list:
-            normalized = normalize_for_dedup(ta)
-            if normalized and normalized not in target_areas_seen:
-                target_areas_seen[normalized] = True
-                target_areas_unique.append(ta)
-        target_areas_list = target_areas_unique
         
         # Deduplicate main muscles
         main_muscles_seen = {}
@@ -125,21 +106,7 @@ def _create_exercise_metadata_enums():
             equipment_dict[key] = eq
         
         EquipmentEnum = Enum("EquipmentEnum", equipment_dict, type=str)
-        
-        # Target Area Enum
-        target_area_dict = {}
-        for ta in target_areas_list:
-            key = ta.upper().replace(" ", "_").replace("-", "_").strip()
-            # Handle duplicates
-            original_key = key
-            counter = 1
-            while key in target_area_dict:
-                key = f"{original_key}_{counter}"
-                counter += 1
-            target_area_dict[key] = ta
-        
-        TargetAreaEnum = Enum("TargetAreaEnum", target_area_dict, type=str)
-        
+
         # Main Muscle Enum
         main_muscle_dict = {}
         for mm in main_muscles_list:
@@ -154,7 +121,7 @@ def _create_exercise_metadata_enums():
         
         MainMuscleEnum = Enum("MainMuscleEnum", main_muscle_dict, type=str)
         
-        return EquipmentEnum, TargetAreaEnum, MainMuscleEnum
+        return EquipmentEnum, MainMuscleEnum
         
     except Exception as e:
         # Fallback to comprehensive default lists if database access fails
@@ -171,16 +138,6 @@ def _create_exercise_metadata_enums():
                 counter += 1
             equipment_dict[key] = eq
         
-        target_area_dict = {}
-        for ta in fallback_target_areas:
-            key = ta.upper().replace(" ", "_").replace("-", "_").strip()
-            original_key = key
-            counter = 1
-            while key in target_area_dict:
-                key = f"{original_key}_{counter}"
-                counter += 1
-            target_area_dict[key] = ta
-        
         main_muscle_dict = {}
         for mm in fallback_main_muscles:
             key = mm.upper().replace(" ", "_").replace("-", "_").replace("'", "").strip()
@@ -192,14 +149,13 @@ def _create_exercise_metadata_enums():
             main_muscle_dict[key] = mm
         
         EquipmentEnum = Enum("EquipmentEnum", equipment_dict, type=str)
-        TargetAreaEnum = Enum("TargetAreaEnum", target_area_dict, type=str)
         MainMuscleEnum = Enum("MainMuscleEnum", main_muscle_dict, type=str)
         
-        return EquipmentEnum, TargetAreaEnum, MainMuscleEnum
+        return EquipmentEnum, MainMuscleEnum
 
 
 # Create the Enums at module load
-EquipmentEnum, TargetAreaEnum, MainMuscleEnum = _create_exercise_metadata_enums()
+EquipmentEnum, MainMuscleEnum = _create_exercise_metadata_enums()
 
 
 class DayOfWeek(str, Enum):
@@ -464,9 +420,9 @@ class DailyTraining(BaseModel):
     endurance_sessions: List[EnduranceSession] = Field(
         default=[], description="Endurance sessions for this day"
     )
-    motivation: str = Field(
+    justification: str = Field(
         ...,
-        description="AI-generated motivation explaining the training choices for this day",
+        description="AI-generated justification explaining the training choices for this day",
     )
     created_at: Optional[datetime] = Field(
         default=None, description="Creation timestamp"
@@ -485,9 +441,9 @@ class WeeklySchedule(BaseModel):
     daily_trainings: List[DailyTraining] = Field(
         default=[], description="Daily training sessions"
     )
-    motivation: str = Field(
+    justification: str = Field(
         ...,
-        description="AI motivation: this week's purpose and how it progresses toward the goal",
+        description="AI justification: this week's purpose and how it progresses toward the goal",
     )
     created_at: Optional[datetime] = Field(
         default=None, description="Creation timestamp"
@@ -498,10 +454,13 @@ class WeeklySchedule(BaseModel):
 
 
 class TrainingPlan(BaseModel):
-    """Schema for training plans (1-week schedule duplicated to 4 weeks)."""
+    """
+    Schema for training plans (1-week schedule duplicated to 4 weeks).
+    id and user_profile_id are always set by the backend/database and must never be set by the AI/LLM.
+    """
 
-    id: Optional[int] = Field(default=None, description="Database ID")
-    user_profile_id: int = Field(..., description="ID of the user profile")
+    id: Optional[int] = Field(default=None, description="Database-assigned ID; backend only")
+    user_profile_id: Optional[int] = Field(default=None, description="Database-assigned user ID; backend only")
     title: str = Field(
         ..., 
         description="Descriptive phase title (e.g., 'Foundation Building', 'Base Endurance Development')"
@@ -513,13 +472,11 @@ class TrainingPlan(BaseModel):
     weekly_schedules: List[WeeklySchedule] = Field(
         default=[], description="Weekly schedules (1-week template duplicated to 4 weeks)"
     )
-    motivation: str = Field(
-        ...,
-        description="AI motivation: phase name, what this training accomplishes, how next phase will adapt based on progress",
+    justification: str = Field(
+        ..., description="AI justification: phase name, what this training accomplishes, how next phase will adapt based on progress"
     )
     ai_message: Optional[str] = Field(
-        default=None, 
-        description="AI message explaining the plan or recent changes"
+        default=None, description="AI message explaining the plan or recent changes"
     )
     created_at: Optional[datetime] = Field(
         default=None, description="Creation timestamp"

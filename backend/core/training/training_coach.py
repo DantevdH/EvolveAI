@@ -7,7 +7,7 @@ import os
 import json
 import openai
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable, Type
 from datetime import datetime
 
 from core.base.base_agent import BaseAgent
@@ -36,6 +36,7 @@ from core.training.schemas.question_schemas import (
     QuestionType,
     AIQuestion,
     QuestionOption,
+    FeedbackClassification,
 )
 from core.training.helpers.response_formatter import ResponseFormatter
 from core.training.helpers.prompt_generator import PromptGenerator
@@ -51,6 +52,9 @@ from core.base.schemas.playbook_schemas import (
 )
 from core.base.reflector import Reflector, ReflectorAnalysisList
 from core.base.curator import Curator
+
+import logging
+from pydantic import BaseModel, ValidationError
 
 
 class TrainingCoach(BaseAgent):
@@ -221,20 +225,20 @@ class TrainingCoach(BaseAgent):
             self.logger.error(f"Error processing training request: {e}")
             return self._generate_error_response(user_request)
 
-    def generate_initial_questions(
+    async def generate_initial_questions(
         self, personal_info: PersonalInfo
     ) -> AIQuestionResponse:
         """Generate initial questions for onboarding based on personal information."""
+        if os.getenv("DEBUG", "false").lower() == "true":
+            from core.training.helpers.mock_data import (
+                create_mock_initial_questions,
+            )
+
+            initial_questions = create_mock_initial_questions()
+            return initial_questions
+
+        start = time.monotonic()
         try:
-            # Check if debug mode is enabled
-            if os.getenv("DEBUG", "false").lower() == "true":
-                from core.training.helpers.mock_data import (
-                    create_mock_initial_questions,
-                )
-
-                initial_questions = create_mock_initial_questions()
-                return initial_questions
-
             # Create a comprehensive prompt for initial questions
             prompt = PromptGenerator.generate_initial_questions_prompt(personal_info)
 
@@ -272,6 +276,8 @@ class TrainingCoach(BaseAgent):
                             f"Successfully generated questions after {attempt + 1} attempts"
                         )
 
+                    elapsed = time.monotonic() - start
+                    await db_service.log_latency(initial_questions=elapsed)
                     return questions_response
 
                 except ValueError as ve:
@@ -294,6 +300,7 @@ class TrainingCoach(BaseAgent):
         except Exception as e:
             self.logger.error(f"Error generating initial questions: {e}")
             # Return a fallback response
+
             return AIQuestionResponse(
                 questions=[
                     AIQuestion(
@@ -325,32 +332,32 @@ class TrainingCoach(BaseAgent):
                 ai_message="I'm here to help you create the perfect training plan! Let's start with understanding your goals. 💪",
             )
 
-    def generate_follow_up_questions(
+    async def generate_follow_up_questions(
         self,
         personal_info: PersonalInfo,
         formatted_responses: str,
         initial_questions: List[AIQuestion] = None,
     ) -> AIQuestionResponseWithFormatted:
         """Generate follow-up questions based on initial responses."""
+        if os.getenv("DEBUG", "false").lower() == "true":
+            from core.training.helpers.mock_data import (
+                create_mock_follow_up_questions,
+            )
+
+            follow_up_questions = create_mock_follow_up_questions()
+            self.logger.debug(
+                f"DEBUG MODE: User responses for follow-up questions: {formatted_responses}"
+            )
+            return AIQuestionResponseWithFormatted(
+                questions=follow_up_questions.questions,
+                total_questions=follow_up_questions.total_questions,
+                estimated_time_minutes=follow_up_questions.estimated_time_minutes,
+                formatted_responses=formatted_responses,
+                ai_message=follow_up_questions.ai_message,
+            )
+
+        start = time.monotonic()
         try:
-            # Check if debug mode is enabled
-            if os.getenv("DEBUG", "false").lower() == "true":
-                from core.training.helpers.mock_data import (
-                    create_mock_follow_up_questions,
-                )
-
-                follow_up_questions = create_mock_follow_up_questions()
-                self.logger.debug(
-                    f"DEBUG MODE: User responses for follow-up questions: {formatted_responses}"
-                )
-                return AIQuestionResponseWithFormatted(
-                    questions=follow_up_questions.questions,
-                    total_questions=follow_up_questions.total_questions,
-                    estimated_time_minutes=follow_up_questions.estimated_time_minutes,
-                    formatted_responses=formatted_responses,
-                    ai_message=follow_up_questions.ai_message,
-                )
-
             # Create a comprehensive prompt for follow-up questions
             prompt = PromptGenerator.generate_followup_questions_prompt(
                 personal_info, formatted_responses
@@ -388,6 +395,8 @@ class TrainingCoach(BaseAgent):
                         )
 
                     # Return with formatted responses and AI message
+                    elapsed = time.monotonic() - start
+                    await db_service.log_latency(followup_questions=elapsed)
                     return AIQuestionResponseWithFormatted(
                         questions=valid_questions,
                         total_questions=len(valid_questions),
@@ -416,6 +425,7 @@ class TrainingCoach(BaseAgent):
         except Exception as e:
             self.logger.error(f"Error generating follow-up questions: {e}")
             # Return a fallback response
+
             return AIQuestionResponseWithFormatted(
                 questions=[
                     AIQuestion(
@@ -456,6 +466,7 @@ class TrainingCoach(BaseAgent):
             user_profile_id: Database ID of the user profile
             jwt_token: JWT token for database authentication
         """
+        start = time.monotonic()
         # Load current playbook from database
         playbook = await db_service.load_user_playbook(user_profile_id, jwt_token)
         
@@ -468,7 +479,7 @@ class TrainingCoach(BaseAgent):
             )
         
         # Pass the playbook to internal method (AI will generate exercises with metadata for matching)
-        return await self._generate_training_plan_internal(
+        result_dict = await self._generate_training_plan_internal(
             personal_info=personal_info,
             formatted_initial_responses=formatted_initial_responses,
             formatted_follow_up_responses=formatted_follow_up_responses,
@@ -476,6 +487,9 @@ class TrainingCoach(BaseAgent):
             jwt_token=jwt_token,
             is_regeneration=False,
         )
+        elapsed = time.monotonic() - start
+        await db_service.log_latency(initial_plan=elapsed)
+        return result_dict
     
     async def regenerate_training_plan(
         self,
@@ -498,6 +512,7 @@ class TrainingCoach(BaseAgent):
             user_profile_id: Database ID of the user profile
             jwt_token: JWT token for database authentication
         """
+        start = time.monotonic()
         # Load current playbook from database
         playbook = await db_service.load_user_playbook(user_profile_id, jwt_token)
         
@@ -510,7 +525,7 @@ class TrainingCoach(BaseAgent):
             )
         
         # Pass the playbook to internal method
-        return await self._generate_training_plan_internal(
+        result_dict = await self._generate_training_plan_internal(
             personal_info=personal_info,
             formatted_initial_responses=formatted_initial_responses,
             formatted_follow_up_responses=formatted_follow_up_responses,
@@ -518,6 +533,9 @@ class TrainingCoach(BaseAgent):
             jwt_token=jwt_token,
             is_regeneration=True,
         )
+        elapsed = time.monotonic() - start
+        await db_service.log_latency(regenerate_plan=elapsed)
+        return result_dict
     
     async def _generate_training_plan_internal(
         self,
@@ -614,15 +632,19 @@ class TrainingCoach(BaseAgent):
             model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
             self.logger.info(f"🤖 Generating training plan with AI model: {model_name} (AI will generate exercise name + metadata)...")
             
-            completion = self.openai_client.chat.completions.parse(
-                model=model_name,
-                messages=[{"role": "system", "content": prompt}],
-                response_format=TrainingPlan,
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
-            )
+            def llm_plan_call(malformed_flag: str = '') -> str:
+                prompt_with_example = PromptGenerator.append_trainingplan_json_example(prompt)
+                full_prompt = malformed_flag + prompt_with_example
+                response = self.openai_client.chat.completions.create(
+                    model=model_name,
+                    messages=[{"role": "system", "content": full_prompt}],
+                    response_format={"type": "json_object"},
+                    temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
+                )
+                return response.choices[0].message.content
 
-            training_plan = completion.choices[0].message.parsed
-            training_dict = training_plan.model_dump()
+            training_plan_obj = self.llm_json_retry(llm_plan_call, TrainingPlan, max_retries=3, logger=self.logger)
+            training_dict = training_plan_obj.model_dump()
 
             # Step 5: Post-process strength exercises (match AI-generated metadata to database)
             self.logger.info("Post-processing strength exercises (matching to database)...")
@@ -753,11 +775,7 @@ class TrainingCoach(BaseAgent):
             Please try rephrasing your request or contact support if the issue persists.
         """
     
-    # ============================================================================
-    # ACE PATTERN METHODS (Adaptive Context Engine)
-    # ============================================================================
-    
-    def extract_initial_lessons_from_onboarding(
+    async def extract_initial_lessons_from_onboarding(
         self,
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
@@ -777,11 +795,15 @@ class TrainingCoach(BaseAgent):
         Returns:
             List of PlaybookLesson objects representing initial constraints/preferences
         """
-        return self.reflector.extract_initial_lessons(
+        start = time.monotonic()
+        lessons = self.reflector.extract_initial_lessons(
             personal_info=personal_info,
             formatted_initial_responses=formatted_initial_responses,
             formatted_follow_up_responses=formatted_follow_up_responses,
         )
+        elapsed = time.monotonic() - start
+        await db_service.log_latency(extract_initial_lessons=elapsed)
+        return lessons
         
     async def process_training_feedback(
         self, outcome: TrainingOutcome, personal_info: PersonalInfo, plan_context: str
@@ -799,6 +821,7 @@ class TrainingCoach(BaseAgent):
         Returns:
             Dictionary with results of the feedback processing
         """
+        start = time.monotonic()
         try:
             self.logger.info(
                 f"Processing feedback for plan {outcome.plan_id}, week {outcome.week_number} [[memory:8636680]]"
@@ -859,6 +882,8 @@ class TrainingCoach(BaseAgent):
                 user_profile_id, updated_playbook.model_dump()
             )
 
+            elapsed = time.monotonic() - start
+            await db_service.log_latency(process_training_feedback=elapsed)
             return {
                 "success": True,
                 "lessons_generated": len(analyses),
@@ -915,7 +940,7 @@ class TrainingCoach(BaseAgent):
         Returns:
             Dictionary with results of the feedback processing
         """
-        start_time = time.time()  # Track processing time
+        start = time.monotonic()
         
         try:
             from core.base.schemas.playbook_schemas import DailyTrainingOutcome
@@ -1018,7 +1043,7 @@ class TrainingCoach(BaseAgent):
             lessons_updated_count = sum(
                 1 for d, _ in decisions if d.action in ["merge_with_existing", "update_existing"]
             )
-            duration_ms = int((time.time() - start_time) * 1000)
+            duration_ms = int((time.time() - start) * 1000)
 
             # Track telemetry - feedback session
             ACETelemetry.track_feedback_session(
@@ -1049,6 +1074,8 @@ class TrainingCoach(BaseAgent):
                         most_applied_lesson_times=max_applied
                     )
 
+            elapsed = time.monotonic() - start
+            await db_service.log_latency(process_daily_training_feedback=elapsed)
             return {
                 "success": True,
                 "lessons_generated": len(analyses),
@@ -1086,6 +1113,7 @@ class TrainingCoach(BaseAgent):
         Returns:
             PlaybookStats object or None if no playbook exists
         """
+        start = time.monotonic()
         try:
             # Get user_profile_id from user_id
             user_profile = await db_service.get_user_profile_by_user_id(user_id)
@@ -1130,6 +1158,8 @@ class TrainingCoach(BaseAgent):
                 else:
                     priority_dist["low"] += 1
 
+            elapsed = time.monotonic() - start
+            await db_service.log_latency(get_playbook_stats=elapsed)
             return PlaybookStats(
                 total_lessons=len(playbook.lessons),
                 positive_lessons=positive_count,
@@ -1155,6 +1185,7 @@ class TrainingCoach(BaseAgent):
         Returns:
             Classification result with intent, confidence, and action needed
         """
+        start = time.monotonic()
         try:
             # Build conversation context
             context = self._build_conversation_context(conversation_history)
@@ -1165,7 +1196,6 @@ class TrainingCoach(BaseAgent):
             )
 
             # Use structured parsing with Pydantic model
-            from core.training.schemas.question_schemas import FeedbackClassification
             completion = self.openai_client.chat.completions.parse(
                 model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4o"),
                 messages=[{"role": "user", "content": prompt}],
@@ -1177,11 +1207,15 @@ class TrainingCoach(BaseAgent):
             result = parsed_obj.model_dump() if hasattr(parsed_obj, 'model_dump') else parsed_obj
             self.logger.info(f"Feedback classified as: {result['intent']} (confidence: {result['confidence']})")
             
+            elapsed = time.monotonic() - start
+            await db_service.log_latency(classify_feedback_intent=elapsed)
             return result
             
         except Exception as e:
             self.logger.error(f"Error classifying feedback: {str(e)}")
             # Default to safe response
+            elapsed = time.monotonic() - start
+            await db_service.log_latency(classify_feedback_intent=elapsed)
             return {
                 "intent": "general",
                 "confidence": 0.5,
@@ -1206,6 +1240,7 @@ class TrainingCoach(BaseAgent):
         
         Uses the same structured completion approach as plan generation.
         """
+        start = time.monotonic()
         try:
             # Convert plan to dict for context (use mode='json' to serialize datetimes)
             plan_dict = current_plan.model_dump(mode='json') if hasattr(current_plan, 'model_dump') else current_plan
@@ -1233,15 +1268,18 @@ class TrainingCoach(BaseAgent):
             model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
             self.logger.info(f"🤖 Updating training plan with AI model: {model_name}...")
             
-            completion = self.openai_client.chat.completions.parse(
-                model=model_name,
-                messages=[{"role": "system", "content": full_prompt}],
-                response_format=TrainingPlan,
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
-            )
-            
-            updated_plan = completion.choices[0].message.parsed
-            # Use mode='json' to ensure datetime objects are serialized as strings
+            def llm_update_call(malformed_flag: str = '') -> str:
+                # (full_prompt built as before, possibly needs to append the schema example if initial is needed)
+                full_prompt_ = malformed_flag + full_prompt
+                response = self.openai_client.chat.completions.create(
+                    model=model_name,
+                    messages=[{"role": "system", "content": full_prompt_}],
+                    response_format={"type": "json_object"},
+                    temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
+                )
+                return response.choices[0].message.content
+
+            updated_plan = self.llm_json_retry(llm_update_call, TrainingPlan, max_retries=3, logger=self.logger)
             updated_plan_dict = updated_plan.model_dump(mode='json')
             
             # Post-process strength exercises (match AI-generated metadata to database)
@@ -1265,6 +1303,8 @@ class TrainingCoach(BaseAgent):
             if classification_result.get('specific_changes'):
                 explanation += f" Specific changes: {', '.join(classification_result['specific_changes'])}"
             
+            elapsed = time.monotonic() - start
+            await db_service.log_latency(update_plan_from_feedback=elapsed)
             return {
                 "updated_plan": updated_plan_dict,
                 "explanation": explanation,
@@ -1277,6 +1317,8 @@ class TrainingCoach(BaseAgent):
             current_plan_dict = current_plan.model_dump(mode='json') if hasattr(current_plan, 'model_dump') else current_plan
             current_plan_dict = self._clean_for_json_serialization(current_plan_dict)
             
+            elapsed = time.monotonic() - start
+            await db_service.log_latency(update_plan_from_feedback=elapsed)
             return {
                 "updated_plan": current_plan_dict,
                 "explanation": "I encountered an error updating your plan. Please try again with more specific feedback.",
@@ -1318,3 +1360,33 @@ class TrainingCoach(BaseAgent):
         else:
             # Convert other types to string as fallback
             return str(data)
+
+    @staticmethod
+    def llm_json_retry(
+        llm_call_fn: Callable[[], str],
+        model_schema: Type[BaseModel],
+        max_retries: int = 3,
+        logger: Optional[logging.Logger] = None
+    ) -> BaseModel:
+        malformed_flag = ''
+        attempt = 0
+        last_error = None
+        result = None
+        logger = logger or logging.getLogger(__name__)
+        while attempt < max_retries:
+            content = llm_call_fn() if attempt == 0 else llm_call_fn(malformed_flag)
+            try:
+                result = model_schema.model_validate_json(content)
+                return result
+            except ValidationError as e:
+                logger.error("==== LLM JSON VALIDATION ERROR ====")
+                logger.error(f"Raw LLM content (truncated to 500 chars): {content[:500] if content else '<<empty>>'}")
+                logger.error(f"ValidationError (type={type(e)}): {str(e)}")
+                logger.error(f"Request context: model={model_name if 'model_name' in locals() else 'N/A'}")
+                last_error = str(e)
+                attempt += 1
+                malformed_flag = "Last response was malformed. Please try again and return valid JSON only. "
+                if attempt == max_retries:
+                    logger.error(f"Failed to generate valid plan after {max_retries} attempts. Last error: {last_error}")
+                    raise
+        return result

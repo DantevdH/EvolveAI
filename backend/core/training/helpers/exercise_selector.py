@@ -327,18 +327,6 @@ class ExerciseSelector:
                         elif isinstance(eq, str):
                             equipment_set.add(eq)
             
-            # Get distinct target_area values
-            target_areas_result = (
-                self.supabase.table("exercises")
-                .select("target_area")
-                .execute()
-            )
-            target_areas_set = set()
-            if target_areas_result.data:
-                for ex in target_areas_result.data:
-                    ta = ex.get("target_area")
-                    if ta:
-                        target_areas_set.add(ta)
             
             # Get all exercises to extract muscles from both main_muscles and secondary_muscles
             # We'll process in Python since Supabase client doesn't support complex SQL with UNION and unnest
@@ -368,7 +356,6 @@ class ExerciseSelector:
             
             return {
                 "equipment": sorted(list(equipment_set)),
-                "target_areas": sorted(list(target_areas_set)),
                 "main_muscles": sorted(list(muscles_set))  # Actually includes all muscles from both columns
             }
         except Exception as e:
@@ -380,38 +367,5 @@ class ExerciseSelector:
                     "Body weight", "Band Resistive", "Suspension", "Sled",
                     "Weighted", "Plyometric", "Isometric", "Self-assisted"
                 ],
-                "target_areas": [],
                 "main_muscles": []
             }
-
-    def _format_exercises_for_ai(self, exercises: List[Dict]) -> str:
-        """
-        Format exercises grouped by target_area for AI prompt.
-
-        Args:
-            exercises: List of exercises with target_area field
-
-        Returns:
-            Formatted string for AI prompt, grouped by target_area
-        """
-        if not exercises:
-            return "No exercises available"
-
-        # Group exercises by target_area
-        target_areas = {}
-        for exercise in exercises:
-            target_area = exercise.get("target_area", "Unknown")
-            if target_area not in target_areas:
-                target_areas[target_area] = []
-            target_areas[target_area].append(exercise)
-
-        # Format each target area
-        formatted_groups = []
-        for target_area, area_exercises in target_areas.items():
-            group_info = [f"  {target_area}:"]
-            for exercise in area_exercises:
-                exercise_line = f"    - {exercise['name']} (ID: {exercise['id']}): Tier = {exercise.get('tier', 'Unknown')} - Main muscles = {exercise.get('main_muscles', 'Unknown')} - Equipment = {exercise.get('equipment', 'Unknown equipment')}"
-                group_info.append(exercise_line)
-            formatted_groups.append("\n".join(group_info))
-
-        return "\n\n".join(formatted_groups)

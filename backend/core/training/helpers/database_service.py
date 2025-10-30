@@ -1002,6 +1002,28 @@ class DatabaseService:
             self.logger.error(f"Error updating training plan {plan_id}: {e}")
             return False
 
+    async def log_latency(self, 
+                     initial_questions: float = None,
+                     followup_questions: float = None,
+                     initial_plan: float = None,
+                     feedback_plan: list = None,
+                     regenerate_plan: list = None,
+                     playbook: float = None) -> None:
+        """Store latencies in the public.latency table."""
+        try:
+            latency_record = {
+                "initial_questions": initial_questions,
+                "followup_questions": followup_questions,
+                "initial_plan": initial_plan,
+                "feedback_plan": feedback_plan,
+                "regenerate_plan": regenerate_plan,
+                "playbook": playbook
+            }
+            self.logger.info(f"Logging latency: {latency_record}")
+            self.supabase.table("latency").insert(latency_record).execute()
+        except Exception as e:
+            self.logger.error(f"Failed to log latency: {e}")
+
 
 # Global database service instance
 db_service = DatabaseService()
