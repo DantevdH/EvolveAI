@@ -51,6 +51,7 @@ from core.base.schemas.playbook_schemas import (
 )
 from core.base.reflector import Reflector, ReflectorAnalysisList
 from core.base.curator import Curator
+from core.training.helpers.llm_client import LLMClient
 
 
 class TrainingCoach(BaseAgent):
@@ -79,6 +80,8 @@ class TrainingCoach(BaseAgent):
         # Initialize ACE pattern components
         self.reflector = Reflector(self.openai_client)
         self.curator = Curator(self.openai_client)
+        # Unified LLM client (OpenAI or Gemini based on env)
+        self.llm = LLMClient()
 
     def _get_capabilities(self) -> List[str]:
         """Get the agent's capabilities."""
@@ -244,20 +247,18 @@ class TrainingCoach(BaseAgent):
 
             for attempt in range(max_retries):
                 try:
-                    # Generate questions using OpenAI - TRACK AI LATENCY
+                    # Generate questions via unified LLM - TRACK AI LATENCY
                     ai_start = time.time()
-                    completion = self.openai_client.chat.completions.parse(
-                        model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4"),
-                        messages=[{"role": "system", "content": prompt}],
-                        response_format=AIQuestionResponse,
-                        temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
+                    from core.training.schemas.question_schemas import GeminiAIQuestionResponse
+                    parsed_obj, completion = self.llm.parse_structured(
+                        prompt, AIQuestionResponse, GeminiAIQuestionResponse
                     )
+                    # Coerce to domain model (works for both providers)
+                    questions_response = AIQuestionResponse.model_validate(parsed_obj.model_dump())
                     ai_duration = time.time() - ai_start
                     
-                    # Track AI latency and token usage (tokens extracted automatically from completion)
+                    # Track AI latency
                     await db_service.log_latency_event("initial_questions", ai_duration, completion)
-
-                    questions_response = completion.choices[0].message.parsed
                     
                     # Filter out invalid questions instead of failing
                     valid_questions = self._filter_valid_questions(questions_response.questions)
@@ -368,21 +369,17 @@ class TrainingCoach(BaseAgent):
 
             for attempt in range(max_retries):
                 try:
-                    # Generate questions using OpenAI - TRACK AI LATENCY
+                    # Generate questions via unified LLM - TRACK AI LATENCY
                     ai_start = time.time()
-                    completion = self.openai_client.chat.completions.parse(
-                        model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4"),
-                        messages=[{"role": "system", "content": prompt}],
-                        response_format=AIQuestionResponse,
-                        temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
+                    from core.training.schemas.question_schemas import GeminiAIQuestionResponse
+                    parsed_obj, completion = self.llm.parse_structured(
+                        prompt, AIQuestionResponse, GeminiAIQuestionResponse
                     )
+                    question_response = AIQuestionResponse.model_validate(parsed_obj.model_dump())
                     ai_duration = time.time() - ai_start
                     
-                    # Track AI latency and token usage (tokens extracted automatically from completion)
+                    # Track AI latency
                     await db_service.log_latency_event("followup_questions", ai_duration, completion)
-
-                    # Get the parsed response
-                    question_response = completion.choices[0].message.parsed
                     
                     # Filter out invalid questions instead of failing
                     valid_questions = self._filter_valid_questions(question_response.questions)
@@ -628,22 +625,27 @@ class TrainingCoach(BaseAgent):
             )
 
             # Step 4: Get the training plan - TRACK AI LATENCY
-            model_name = os.getenv("OPENAI_MODEL", "gpt-4o")
+            model_name = os.getenv("LLM_MODEL_CHAT", os.getenv("LLM_MODEL", "gpt-4o"))
             self.logger.info(f"🤖 Generating training plan with AI model: {model_name} (AI will generate exercise name + metadata)...")
             
             ai_start_plan = time.time()
             # Note: No max_completion_tokens - structured output requires complete JSON.
-            # Token reduction comes from prompt word limits (MAX 40/30/20 words per justification)
-            completion = self.openai_client.chat.completions.parse(
-                model=model_name,
-                messages=[{"role": "system", "content": prompt}],
-                response_format=TrainingPlan,
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
-            )
-            plan_gen_duration = time.time() - ai_start_plan
-
-            training_plan = completion.choices[0].message.parsed
-            training_dict = training_plan.model_dump()
+            # Use DTO for Gemini to avoid enum refs; coerce to domain model afterward
+            if self.llm.provider == "gemini":
+                from core.training.schemas.training_schemas import GeminiTrainingPlan
+                parsed_obj, completion = self.llm.parse_structured(
+                    prompt, TrainingPlan, GeminiTrainingPlan
+                )
+                tp_input = parsed_obj.model_dump()
+                tp_input["user_profile_id"] = user_profile_id
+                tp_input = self._normalize_gemini_training_plan_input(tp_input)
+                training_plan = TrainingPlan.model_validate(tp_input)
+                plan_gen_duration = time.time() - ai_start_plan
+                training_dict = training_plan.model_dump()
+            else:
+                training_plan, completion = self.llm.chat_parse(prompt, TrainingPlan)
+                plan_gen_duration = time.time() - ai_start_plan
+                training_dict = training_plan.model_dump()
             
             # Verify plan structure (should be exactly 1 week)
             num_weeks = len(training_dict.get("weekly_schedules", []))
@@ -1285,16 +1287,13 @@ class TrainingCoach(BaseAgent):
             )
             
             # Use structured parsing with Pydantic model - TRACK AI CALL
-            from core.training.schemas.question_schemas import FeedbackIntentClassification
+            from core.training.schemas.question_schemas import FeedbackIntentClassification, GeminiFeedbackIntentClassification
             ai_start = time.time()
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4o"),
-                messages=[{"role": "user", "content": prompt}],
-                response_format=FeedbackIntentClassification
+            parsed_any, completion = self.llm.parse_structured(
+                prompt, FeedbackIntentClassification, GeminiFeedbackIntentClassification
             )
+            parsed_obj = FeedbackIntentClassification.model_validate(parsed_any.model_dump())
             duration = time.time() - ai_start
-            
-            parsed_obj = completion.choices[0].message.parsed
             result = parsed_obj.model_dump() if hasattr(parsed_obj, 'model_dump') else parsed_obj
             result['_classify_duration'] = duration
             
@@ -1360,16 +1359,13 @@ class TrainingCoach(BaseAgent):
             )
             
             # Use structured parsing with Pydantic model - TRACK AI CALL
-            from core.training.schemas.question_schemas import FeedbackOperations
+            from core.training.schemas.question_schemas import FeedbackOperations, GeminiFeedbackOperations
             ai_start = time.time()
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_CHAT_MODEL", "gpt-4o"),
-                messages=[{"role": "user", "content": prompt}],
-                response_format=FeedbackOperations
+            parsed_any, completion = self.llm.parse_structured(
+                prompt, FeedbackOperations, GeminiFeedbackOperations
             )
+            parsed_obj = FeedbackOperations.model_validate(parsed_any.model_dump())
             duration = time.time() - ai_start
-            
-            parsed_obj = completion.choices[0].message.parsed
             # Use mode='json' to properly serialize Enums to string values
             result = parsed_obj.model_dump(mode='json') if hasattr(parsed_obj, 'model_dump') else parsed_obj
             result['_parse_duration'] = duration
@@ -1527,3 +1523,68 @@ class TrainingCoach(BaseAgent):
         else:
             # Convert other types to string as fallback
             return str(data)
+
+    @staticmethod
+    def _extract_json_text(text: str) -> str:
+        """
+        Extract a JSON string from possible markdown-fenced output.
+        - Removes ```json ... ``` fences
+        - If extra prose surrounds JSON, slice from first '{' to last '}'
+        """
+        if not text:
+            return text
+        cleaned = text.strip()
+        # Remove triple backtick fences
+        if cleaned.startswith("```"):
+            cleaned = cleaned.lstrip("`")
+            # Drop optional language label like json\n
+            newline_idx = cleaned.find("\n")
+            if newline_idx != -1:
+                cleaned = cleaned[newline_idx + 1 :]
+            # Remove trailing closing fence if present
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+        # If there is still surrounding prose, extract outermost JSON object
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            return cleaned[start : end + 1]
+        return cleaned
+
+    @staticmethod
+    def _normalize_gemini_training_plan_input(tp: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Normalize a GeminiTrainingPlan dict to satisfy domain TrainingPlan requirements:
+        - Inject training_plan_id=0 for each weekly_schedule (placeholder before DB save)
+        - Inject weekly_schedule_id=0 for each daily_training
+        - Normalize training_type to expected enum lowercase; map synonyms
+        """
+        schedules = tp.get("weekly_schedules") or []
+        weekday_map = {
+            "monday": "Monday",
+            "tuesday": "Tuesday",
+            "wednesday": "Wednesday",
+            "thursday": "Thursday",
+            "friday": "Friday",
+            "saturday": "Saturday",
+            "sunday": "Sunday",
+        }
+        for ws in schedules:
+            # Ensure required FK placeholder
+            ws.setdefault("training_plan_id", 0)
+            dailies = ws.get("daily_trainings") or []
+            for dt in dailies:
+                dt.setdefault("weekly_schedule_id", 0)
+                tt = dt.get("training_type")
+                if isinstance(tt, str):
+                    tt_norm = tt.strip().lower()
+                    # Map common synonyms to enum values
+                    if tt_norm in {"active recovery", "active_recovery", "recovery", "rest day", "rest_day"}:
+                        tt_norm = "rest"
+                    dt["training_type"] = tt_norm
+                # Normalize day_of_week capitalization
+                dow = dt.get("day_of_week")
+                if isinstance(dow, str):
+                    dt["day_of_week"] = weekday_map.get(dow.strip().lower(), dow)
+        return tp

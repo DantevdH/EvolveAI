@@ -107,6 +107,38 @@ class AIQuestionResponse(BaseModel):
     )
 
 
+# ===== Gemini-friendly DTOs (Enums flattened to str) =====
+class GeminiAIQuestion(BaseModel):
+    """
+    Gemini-friendly question model: replaces Enum fields with plain strings.
+    This avoids $ref/allOf in JSON Schema that the Gemini SDK rejects.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: str
+    text: str
+    help_text: str = ""
+    # Enum flattened to string
+    response_type: str
+
+    options: Optional[List[QuestionOption]] = None
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    step: Optional[float] = None
+    unit: Optional[str] = None
+    min_description: Optional[str] = None
+    max_length: Optional[int] = Field(default=None, ge=1, le=5000)
+    placeholder: Optional[str] = None
+
+
+class GeminiAIQuestionResponse(BaseModel):
+    questions: List[GeminiAIQuestion]
+    total_questions: int
+    estimated_time_minutes: int
+    ai_message: Optional[str] = None
+
+
 class AIQuestionResponseWithFormatted(BaseModel):
     """Response from AI containing generated questions and formatted responses."""
 
@@ -238,11 +270,11 @@ class PlanGenerationResponse(BaseModel):
 class PlanFeedbackRequest(BaseModel):
     """Request schema for plan feedback processing."""
     
-    user_profile_id: int = Field(..., description="User profile ID")
-    plan_id: int = Field(..., description="Training plan ID")
+    user_profile_id: Union[int, str] = Field(..., description="User profile ID")
+    plan_id: Union[int, str] = Field(..., description="Training plan ID")
     feedback_message: str = Field(..., description="User feedback message")
     current_plan: Dict[str, Any] = Field(..., description="Current training plan data (sent from frontend)")
-    conversation_history: Optional[List[Dict[str, str]]] = Field(
+    conversation_history: Optional[List[Dict[str, Any]]] = Field(
         default=[], 
         description="Previous conversation messages for context"
     )
@@ -254,7 +286,7 @@ class PlanFeedbackRequest(BaseModel):
         None, 
         description="Formatted follow-up question responses for context"
     )
-    jwt_token: str = Field(..., description="JWT token for authentication")
+    jwt_token: Optional[str] = Field(default=None, description="JWT token for authentication")
 
 
 class PlanFeedbackResponse(BaseModel):
@@ -432,6 +464,44 @@ class FeedbackOperations(BaseModel):
         default=None,
         description="Confirmation message about what changes will be made"
     )
+
+
+# ===== Gemini-friendly DTOs for feedback (Enums flattened to str) =====
+class GeminiFeedbackIntentClassification(BaseModel):
+    intent: str
+    action: str
+    confidence: float
+    needs_plan_update: bool
+    navigate_to_main_app: bool
+    reasoning: str
+    ai_message: str
+
+
+class GeminiPlanOperation(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: str
+    old_exercise_name: Optional[str] = None
+    new_exercise_name: Optional[str] = None
+    new_main_muscle: Optional[str] = None
+    new_equipment: Optional[str] = None
+    scope: Optional[str] = None
+    direction: Optional[str] = None
+    change_type: Optional[str] = None
+    adjustment: Optional[int] = None
+    source_day: Optional[str] = None
+    target_day: Optional[str] = None
+    swap: Optional[bool] = None
+    sets: Optional[int] = None
+    reps: Optional[List[int]] = None
+    weight_1rm: Optional[List[float]] = None
+    day_of_week: Optional[str] = None
+    exercise_name: Optional[str] = None
+
+
+class GeminiFeedbackOperations(BaseModel):
+    operations: List[GeminiPlanOperation]
+    ai_message: Optional[str] = None
 
 
 class FeedbackClassification(BaseModel):

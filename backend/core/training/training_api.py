@@ -916,7 +916,7 @@ async def get_playbook_stats(
 
 @router.post("/plan-feedback", response_model=PlanFeedbackResponse)
 async def process_plan_feedback(
-    request: PlanFeedbackRequest,
+    request: dict,
     coach: TrainingCoach = Depends(get_training_coach)
 ):
     """
@@ -929,20 +929,75 @@ async def process_plan_feedback(
     - Change explanations
     """
     try:
-        logger.info(f"Processing plan feedback for user {request.user_profile_id}, plan {request.plan_id}")
+        # Manually validate and coerce inputs to avoid pre-handler 422s
+        jwt_token = request.get("jwt_token")
+        if not jwt_token:
+            raise HTTPException(status_code=401, detail="Missing JWT token")
+
+        # Basic logging of incoming keys to diagnose client payloads
+        try:
+            logger.info(f"📥 plan-feedback payload keys: {list(request.keys())}")
+        except Exception:
+            pass
+
+        # Coerce IDs with fallbacks
+        user_profile_id = request.get("user_profile_id")
+        plan_id = request.get("plan_id")
+        current_plan_data = request.get("current_plan")
+
+        # Try to parse ints if present as strings
+        try:
+            if user_profile_id is not None:
+                user_profile_id = int(user_profile_id)
+        except Exception:
+            user_profile_id = None
+        try:
+            if plan_id is not None:
+                plan_id = int(plan_id)
+        except Exception:
+            plan_id = None
+
+        # If user_profile_id missing, try to resolve from JWT
+        if user_profile_id is None:
+            try:
+                token_user_id = extract_user_id_from_jwt(jwt_token)
+                profile_res = await db_service.get_user_profile_by_user_id(token_user_id, jwt_token)
+                if profile_res and profile_res.get("success") and profile_res.get("data"):
+                    user_profile_id = profile_res["data"].get("id")
+            except Exception as e:
+                logger.warning(f"Could not resolve user_profile_id from JWT: {e}")
+
+        # If plan_id missing, try to resolve from current_plan
+        if plan_id is None and isinstance(current_plan_data, dict):
+            try:
+                # Direct id at root
+                if isinstance(current_plan_data.get("id"), (int, str)):
+                    plan_id = int(current_plan_data.get("id"))
+                # Or from first weekly_schedule
+                elif current_plan_data.get("weekly_schedules"):
+                    ws0 = (current_plan_data.get("weekly_schedules") or [])[0] or {}
+                    tp_id = ws0.get("training_plan_id")
+                    if tp_id is not None:
+                        plan_id = int(tp_id)
+            except Exception as e:
+                logger.warning(f"Could not resolve plan_id from current_plan: {e}")
+
+        if user_profile_id is None or plan_id is None:
+            raise HTTPException(status_code=400, detail="Invalid or missing user_profile_id/plan_id")
+
+        feedback_message = request.get("feedback_message")
+        if not feedback_message:
+            raise HTTPException(status_code=400, detail="Missing feedback_message")
+        if not current_plan_data:
+            raise HTTPException(status_code=400, detail="Current plan data is required")
+        logger.info(f"Processing plan feedback for user {user_profile_id}, plan {plan_id}")
         
         # Use current plan sent from frontend (no database fetch needed!)
-        current_plan_data = request.current_plan
-        if not current_plan_data:
-            raise HTTPException(
-                status_code=400, 
-                detail="Current plan data is required"
-            )
         
         logger.info(f"✅ Using plan from frontend (no DB fetch) - {len(current_plan_data.get('weekly_schedules', []))} week(s)")
         
         # Get user profile to extract personal info (by integer ID)
-        profile_response = await db_service.get_user_profile_by_id(request.user_profile_id)
+        profile_response = await db_service.get_user_profile_by_id(user_profile_id)
         if not profile_response or not profile_response.get("success"):
             raise HTTPException(
                 status_code=404,
@@ -973,8 +1028,8 @@ async def process_plan_feedback(
         # STAGE 1: Lightweight intent classification (FAST: 2-3s)
         logger.info("🔍 Stage 1: Classifying feedback intent (lightweight)...")
         classification_result = await coach.classify_feedback_intent_lightweight(
-            feedback_message=request.feedback_message,
-            conversation_history=request.conversation_history
+            feedback_message=feedback_message,
+            conversation_history=request.get("conversation_history") or []
         )
         
         logger.info(f"✅ Stage 1 complete: intent={classification_result.get('intent')}, confidence={classification_result.get('confidence')}")
@@ -984,11 +1039,11 @@ async def process_plan_feedback(
         if classification_result.get("intent") == "update_request" and classification_result.get("needs_plan_update"):
             logger.info("⚙️ Stage 2: Parsing operations (full context)...")
             operations_result = await coach.parse_feedback_operations(
-                feedback_message=request.feedback_message,
+                feedback_message=feedback_message,
                 current_plan=current_plan_data,
                 personal_info=personal_info,
-                formatted_initial_responses=request.formatted_initial_responses or "",
-                formatted_follow_up_responses=request.formatted_follow_up_responses or ""
+                formatted_initial_responses=request.get("formatted_initial_responses") or "",
+                formatted_follow_up_responses=request.get("formatted_follow_up_responses") or ""
             )
             
             # Log parsed operations
@@ -1011,7 +1066,7 @@ async def process_plan_feedback(
                     db_service.update_user_profile,
                     user_id=user_id,
                     data={"plan_accepted": True},
-                    jwt_token=request.jwt_token
+                    jwt_token=jwt_token
                 )
                 logger.info("✅ Set plan_accepted=True - user satisfied with plan")
             
@@ -1142,9 +1197,9 @@ async def process_plan_feedback(
                     plan_to_save = dict(updated_plan_data)
                     plan_to_save.pop('ai_message', None)
                     complete_updated_plan = await db_service.update_training_plan(
-                        request.plan_id,
+                        plan_id,
                         plan_to_save,
-                        jwt_token=request.jwt_token
+                        jwt_token=jwt_token
                     )
                     
                     # Returns None on failure, otherwise returns the updated_plan_data
@@ -1179,11 +1234,15 @@ async def process_plan_feedback(
             
             logger.info(f"Responding to '{classification_result.get('intent')}' intent without plan update")
             
+            # Ensure frontend shows the AI answer: mirror ai_response into plan ai_message (response only)
+            plan_response = dict(current_plan_data or {})
+            if ai_response:
+                plan_response['ai_message'] = ai_response
             return PlanFeedbackResponse(
                 success=True,
                 ai_response=ai_response,
                 plan_updated=False,
-                updated_plan=current_plan_data,  # Return current plan even if not updated
+                updated_plan=plan_response,  # safe to return; contains ai_message matching ai_response
                 navigate_to_main_app=False
             )
         

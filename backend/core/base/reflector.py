@@ -13,7 +13,6 @@ consistency and enable the ACE learning loop.
 
 import os
 import uuid
-import openai
 from typing import List, Optional, Dict, Any
 from logging_config import get_logger
 
@@ -24,6 +23,9 @@ from core.base.schemas.playbook_schemas import (
 )
 from core.training.schemas.question_schemas import PersonalInfo
 from pydantic import BaseModel, Field
+
+
+from core.training.helpers.llm_client import LLMClient
 
 
 class Reflector:
@@ -40,7 +42,7 @@ class Reflector:
     and enable the full ACE learning loop.
     """
 
-    def __init__(self, openai_client: Optional[openai.OpenAI] = None):
+    def __init__(self, openai_client: Optional[Any] = None):
         """
         Initialize the Reflector.
 
@@ -48,9 +50,10 @@ class Reflector:
             openai_client: OpenAI client instance (creates new one if not provided)
         """
         self.logger = get_logger(__name__)
-        self.openai_client = openai_client or openai.OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY")
-        )
+        # Keep for backward compatibility if explicitly passed
+        self.openai_client = openai_client
+        # Unified LLM client (OpenAI or Gemini)
+        self.llm = LLMClient()
 
     def analyze_outcome(
         self,
@@ -81,22 +84,8 @@ class Reflector:
                 outcome, personal_info, plan_context, previous_lessons
             )
 
-            # Call OpenAI to analyze the outcome
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert training coach analyzing training outcomes to generate actionable lessons for athletic development.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                response_format=ReflectorAnalysisList,
-                temperature=os.getenv("OPENAI_TEMPERATURE", 1.0),  # Lower temperature for consistent analysis
-            )
-
-            # Parse the response
-            analysis_list = completion.choices[0].message.parsed
+            # Call LLM to analyze the outcome
+            analysis_list, _ = self.llm.chat_parse(prompt, ReflectorAnalysisList)
 
             self.logger.info(
                 f"Generated {len(analysis_list.analyses)} lessons from outcome"
@@ -141,22 +130,8 @@ class Reflector:
                 outcome, personal_info, session_context, modifications_summary, previous_lessons
             )
 
-            # Call OpenAI to analyze the outcome
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert training coach analyzing daily training outcomes to generate actionable, personalized lessons.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                response_format=ReflectorAnalysisList,
-                temperature=0.3,
-            )
-
-            # Parse the response
-            analysis_list = completion.choices[0].message.parsed
+            # Call LLM to analyze the daily outcome
+            analysis_list, _ = self.llm.chat_parse(prompt, ReflectorAnalysisList)
 
             self.logger.info(
                 f"Generated {len(analysis_list.analyses)} lessons from daily session"
@@ -670,20 +645,8 @@ class Reflector:
                 Each lesson must include: lesson (text), tags (array), confidence (0.0-1.0), positive (boolean), reasoning (why extracted), priority (string).
             """
 
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert at extracting actionable training constraints and preferences from user responses.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                response_format=ReflectorAnalysisList,
-                temperature=0.3,
-            )
-
-            analyses = completion.choices[0].message.parsed.analyses
+            analyses_list, _ = self.llm.chat_parse(prompt, ReflectorAnalysisList)
+            analyses = analyses_list.analyses
 
             # Convert analyses to PlaybookLessons
             lessons = []
@@ -819,20 +782,7 @@ class Reflector:
                 Include: lesson, tags, confidence, positive, reasoning, priority.
             """
 
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert at extracting actionable training preferences from user feedback.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                response_format=ReflectorAnalysis,
-                temperature=0.3,
-            )
-
-            analysis = completion.choices[0].message.parsed
+            analysis, _ = self.llm.chat_parse(prompt, ReflectorAnalysis)
 
             # Check if we got a valid lesson
             if not analysis.lesson or analysis.lesson.strip() == "":
@@ -1134,20 +1084,13 @@ class Reflector:
                 Return the comma-separated list of applied lesson IDs or "none".
             """
 
-            completion = self.openai_client.chat.completions.create(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert at analyzing training plans and identifying which constraints/preferences were applied.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.2,
-                max_tokens=500,
-            )
-
-            response = completion.choices[0].message.content.strip()
+            response = self.llm.chat_text([
+                {
+                    "role": "system",
+                    "content": "You are an expert at analyzing training plans and identifying which constraints/preferences were applied.",
+                },
+                {"role": "user", "content": prompt},
+            ]).strip()
 
             if response.lower() == "none":
                 self.logger.info("No lessons were identified as applied")

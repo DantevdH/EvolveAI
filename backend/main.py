@@ -44,4 +44,16 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    # Restrict reload watching to app source dirs to avoid .venv churn
+    config = uvicorn.Config(
+        "main:app",
+        host="127.0.0.1",
+        port=8000,
+        reload=True,
+        reload_dirs=[
+            "core",           # backend/core/**
+            "logging_config.py",
+            "main.py",
+        ],
+    )
+    uvicorn.Server(config).run()

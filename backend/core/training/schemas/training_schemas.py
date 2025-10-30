@@ -4,7 +4,7 @@ This replaces the old training-focused schemas with sports-agnostic training sch
 """
 
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import List, Optional, Union
+from typing import List, Optional, Union, Literal
 from datetime import datetime
 from enum import Enum
 
@@ -494,3 +494,29 @@ class TrainingPlanResponse(BaseModel):
         default=None, description="Error message if unsuccessful"
     )
     message: Optional[str] = Field(default=None, description="Success message")
+
+
+# ===== Gemini-friendly DTOs (Enums flattened to str, omit server fields) =====
+class GeminiDailyTraining(BaseModel):
+    day_of_week: Literal[
+        "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
+    ]
+    is_rest_day: bool = False
+    training_type: Literal["strength", "endurance", "mixed", "rest"]
+    strength_exercises: List[StrengthExercise] = []
+    endurance_sessions: List[EnduranceSession] = []
+    justification: str
+
+
+class GeminiWeeklySchedule(BaseModel):
+    week_number: int
+    daily_trainings: List[GeminiDailyTraining]
+    justification: str
+
+
+class GeminiTrainingPlan(BaseModel):
+    title: str
+    summary: str
+    weekly_schedules: List[GeminiWeeklySchedule]
+    justification: str
+    ai_message: Optional[str] = None
