@@ -417,6 +417,23 @@ async def generate_training_plan(
         user_profile = user_profile_result.get("data", {})
         logger.info(f"✅ Found user profile ID: {user_profile_id}")
         
+        # IDEMPOTENCY CHECK: If plan already exists for this user, return existing plan
+        existing_plan_result = await db_service.get_training_plan(user_profile_id)
+        if existing_plan_result.get("success") and existing_plan_result.get("data"):
+            logger.info(f"⚠️ Training plan already exists for user_profile_id {user_profile_id} - returning existing plan (idempotency)")
+            existing_plan = existing_plan_result.get("data")
+            
+            return {
+                "success": True,
+                "data": existing_plan,
+                "message": "Training plan already exists (returning existing plan)",
+                "metadata": {
+                    "idempotency": True,
+                    "plan_id": existing_plan.get("id"),
+                    "reason": "Plan already generated for this user"
+                }
+            }
+        
         # Format responses
         from core.training.helpers.response_formatter import ResponseFormatter
         formatted_initial_responses = ResponseFormatter.format_responses(
@@ -1034,27 +1051,18 @@ async def process_plan_feedback(
         
         logger.info(f"✅ Stage 1 complete: intent={classification_result.get('intent')}, confidence={classification_result.get('confidence')}")
         
-        # STAGE 2: Parse operations if update_request (CONDITIONAL: only if needed)
+        # For update_request intents, regenerate the full plan using the same flow as initial generation
         operations_result = None
+        regen_result = None
         if classification_result.get("intent") == "update_request" and classification_result.get("needs_plan_update"):
-            logger.info("⚙️ Stage 2: Parsing operations (full context)...")
-            operations_result = await coach.parse_feedback_operations(
-                feedback_message=feedback_message,
-                current_plan=current_plan_data,
+            logger.info("🔁 Regenerating full training plan (fast whole-plan update)...")
+            regen_result = await coach.regenerate_training_plan(
                 personal_info=personal_info,
-                formatted_initial_responses=request.get("formatted_initial_responses") or "",
-                formatted_follow_up_responses=request.get("formatted_follow_up_responses") or ""
+                feedback_message=feedback_message,
+                user_profile_id=user_profile_id,
+                jwt_token=jwt_token,
+                current_plan=current_plan_data,
             )
-            
-            # Log parsed operations
-            operations = operations_result.get("operations", [])
-            if operations:
-                ops_summary = [op.get('type', 'unknown') for op in operations if op.get('type')]
-                logger.info(f"✅ Stage 2 complete: {len(operations)} operation(s) parsed: {', '.join(ops_summary)}")
-            else:
-                logger.warning("⚠️ Stage 2: No operations parsed - will ask for clarification")
-        else:
-            logger.info(f"⏭️ Stage 2 skipped (intent: {classification_result.get('intent')})")
         
         # Step 2: Handle based on intent/action
         if classification_result.get("intent") == "satisfied" or classification_result.get("action") == "navigate_to_main_app":
@@ -1078,94 +1086,35 @@ async def process_plan_feedback(
                 navigate_to_main_app=True
             )
         
-        if classification_result["needs_plan_update"] and operations_result:
-            logger.info("📝 Plan update triggered by feedback")
+        if classification_result["needs_plan_update"] and regen_result:
+            logger.info("📝 Plan update triggered by feedback (full regeneration)")
+            # Log the feedback message for traceability (truncate to 500 chars)
+            try:
+                fb_msg = (request.get("feedback_message") if isinstance(request, dict) else None) or ""
+                if fb_msg:
+                    logger.info(f"🗒️ User feedback_message: {fb_msg[:500]}")
+                else:
+                    logger.info("🗒️ No feedback_message provided")
+            except Exception as e:
+                logger.error(f"Error logging feedback message: {str(e)}")
             
             # Extract durations for latency tracking
             classify_duration = classification_result.get('_classify_duration', 0.0)
-            parse_duration = operations_result.get('_parse_duration', 0.0)
+            # Regeneration latency already tracked inside coach; we can still log an aggregate marker
+            await db_service.log_latency_event("feedback_plan_intent", classify_duration)
             
-            # Get operations from Stage 2 result
-            operations = operations_result.get("operations", [])
+            # Pull regenerated plan and AI message
+            regenerated_plan = regen_result.get("training_plan")
+            ai_message = regen_result.get("completion_message") or \
+                         classification_result.get("ai_message") or \
+                         "I've updated your plan based on your feedback! Take a look and let me know if you'd like any other changes. 💪"
             
-            # Filter out empty or invalid operations
-            valid_operations = [op for op in operations if op and op.get('type')]
-            if len(valid_operations) < len(operations):
-                logger.warning(f"⚠️ Filtered out {len(operations) - len(valid_operations)} empty/invalid operations")
-            
-            operations = valid_operations
-            
-            if operations:
-                # Log each operation for debugging
-                for idx, op in enumerate(operations):
-                    logger.info(f"  Operation {idx+1}: type={op.get('type')}, keys={list(op.keys())}")
-                
-                # Apply operations deterministically (FAST: 2-3s, no AI call!)
-                logger.info(f"🔧 Applying {len(operations)} parsed operations deterministically...")
-                
-                import time
-                start_apply = time.time()
-                
-                # Import at top level for better performance
-                from core.training.helpers.operation_applier import OperationApplier
-                from core.training.helpers.exercise_validator import ExerciseValidator
-                
-                operation_applier = OperationApplier()
-                updated_plan_data = await operation_applier.apply_operations(
-                    current_plan=current_plan_data,
-                    operations=operations
-                )
-                
-                # Validate updated plan with existing validator
-                exercise_validator = ExerciseValidator()
-                updated_plan_data = exercise_validator.post_process_strength_exercises(updated_plan_data)
-                updated_plan_data, validation_messages = exercise_validator.validate_training_plan(updated_plan_data)
-                
-                apply_duration = time.time() - start_apply
-                total_duration = classify_duration + parse_duration + apply_duration
-                
-                # Log E2E latency for intent-based update (classify + parse + apply)
-                # Note: feedback_classify and feedback_parse_operations are logged separately with tokens
-                await db_service.log_latency_event("feedback_plan_intent", total_duration)
-                
-                logger.info(f"✅ Two-stage update completed in {total_duration:.2f}s "
-                           f"(classify: {classify_duration:.2f}s, parse: {parse_duration:.2f}s, apply: {apply_duration:.2f}s)")
-                
-                # Generate operation summary for explanation
-                op_types = [op.get('type', 'unknown') for op in operations if op.get('type')]
-                if op_types:
-                    explanation = f"Applied {len(operations)} operation(s): {', '.join(op_types)}"
-                else:
-                    explanation = f"Applied {len(operations)} operation(s)"
-                
-                # Use AI message from operations result, or fallback to classification, or default
-                ai_message = operations_result.get("ai_message") or \
-                            classification_result.get("ai_message") or \
-                            "I've updated your plan based on your feedback! Take a look and let me know if you'd like any other changes. 💪"
-                
-                update_result = {
-                    "updated_plan": updated_plan_data,
-                    "ai_message": ai_message,
-                    "explanation": explanation,
-                    "update_method": "intent_based"
-                }
-            else:
-                # Fallback: Return current plan with a message asking for more specific feedback
-                logger.warning("⚠️ Stage 2 returned no operations. Asking user for clarification.")
-                
-                # Try to get message from operations_result, then classification, then default
-                ai_message = operations_result.get("ai_message") if operations_result else None
-                if not ai_message:
-                    ai_message = classification_result.get("ai_message")
-                if not ai_message:
-                    ai_message = "I need more details to make your changes. Could you specify which day or exercise you'd like me to adjust? 💪"
-                
-                update_result = {
-                    "updated_plan": current_plan_data,
-                    "ai_message": ai_message,
-                    "explanation": "Unable to parse specific operations from feedback",
-                    "update_method": "no_change"
-                }
+            update_result = {
+                "updated_plan": regenerated_plan,
+                "ai_message": ai_message,
+                "explanation": "Plan regenerated using the same pipeline as initial generation",
+                "update_method": "full_regeneration"
+            }
             
             # Ensure updated_plan is a dictionary, not a Pydantic object
             updated_plan_data = update_result["updated_plan"]
@@ -1188,45 +1137,50 @@ async def process_plan_feedback(
                     updated_plan_response = dict(updated_plan_data)
                     updated_plan_response['ai_message'] = ai_msg
                 else:
-                    updated_plan_response = updated_plan_data
+                    updated_plan_response = dict(updated_plan_data)
+                    updated_plan_response['ai_message'] = "I've updated your plan based on your feedback!"
             
-            # Save updated plan to database (returns the same data we passed in on success)
-            try:
-                if updated_plan_data:
-                    # Prepare a copy to save WITHOUT ai_message (never persist)
-                    plan_to_save = dict(updated_plan_data)
-                    plan_to_save.pop('ai_message', None)
-                    complete_updated_plan = await db_service.update_training_plan(
-                        plan_id,
-                        plan_to_save,
-                        jwt_token=jwt_token
-                    )
-                    
-                    # Returns None on failure, otherwise returns the updated_plan_data
-                    if complete_updated_plan is None:
-                        raise Exception("Failed to update plan in database")
-                    
-                    logger.info(f"✅ Plan updated successfully (no redundant fetch needed)")
-                    
-                    # Return the response copy that includes ai_message for UI display
-                    return PlanFeedbackResponse(
-                        success=True,
-                        ai_response=update_result.get("ai_message", "Thank you for your feedback! I've updated your plan based on your input. Take a look and let me know if you'd like any other changes! 💪"),
-                        plan_updated=True,
-                        updated_plan=updated_plan_response
-                    )
-                else:
-                    raise Exception("No updated plan data to save")
-                    
-            except Exception as e:
-                logger.error(f"Error saving updated plan: {str(e)}")
-                return PlanFeedbackResponse(
-                    success=False,
-                    ai_response="I updated your plan but encountered an error saving it. Please try again.",
-                    plan_updated=False,
-                    updated_plan=None,
-                    error=f"Plan updated but failed to save: {str(e)}"
+                # Prepare a copy to save WITHOUT ai_message (never persist)
+                plan_to_save = dict(updated_plan_data)
+                plan_to_save.pop('ai_message', None)
+                
+                update_result_db = await db_service.update_training_plan(
+                    plan_id,
+                    plan_to_save,
+                    jwt_token=jwt_token
                 )
+                
+                if update_result_db is None:
+                    raise Exception("Failed to update plan in database")
+                
+                logger.info(f"✅ Plan updated successfully")
+                
+                # Use the enriched plan returned directly by update_training_plan (IDs injected into dict)
+                enriched_plan = update_result_db
+                logger.info("✅ Using enriched training plan returned by update (IDs present, no refetch)")
+
+                # Get completion message from result (generated during plan regeneration)
+                completion_message = update_result.get("completion_message")
+                ai_msg_fallback = update_result.get("ai_message")
+
+                # Add ai_message for frontend display (not persisted)
+                if completion_message:
+                    try:
+                        enriched_plan['ai_message'] = completion_message
+                    except Exception:
+                        pass
+
+                response_payload = PlanFeedbackResponse(
+                    success=True,
+                    ai_response=completion_message or ai_msg_fallback or "",
+                    plan_updated=True,
+                    updated_plan=enriched_plan
+                )
+                logger.info("🚀 Returning enriched updated_plan to frontend (contains DB IDs)")
+                return response_payload
+            else:
+                raise Exception("No updated plan data to save")
+                    
         else:
             # Respond without updating plan (question, unclear, other intents)
             # Use the AI's actual response from the classification result
@@ -1250,12 +1204,11 @@ async def process_plan_feedback(
         raise
     except Exception as e:
         logger.error(f"Error processing plan feedback: {str(e)}")
-        # Try to return current plan if available, otherwise None
-        fallback_plan = request.current_plan if hasattr(request, 'current_plan') else None
+        # No fallback plan in update flow; surface error cleanly for tracing
         return PlanFeedbackResponse(
             success=False,
-            ai_response="I apologize, but I encountered an error processing your feedback. Please try again.",
+            ai_response="",
             plan_updated=False,
-            updated_plan=fallback_plan,  # Return current plan if available
+            updated_plan=None,
             error=str(e)
         )

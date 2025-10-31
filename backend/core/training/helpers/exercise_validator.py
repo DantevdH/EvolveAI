@@ -651,22 +651,43 @@ class ExerciseValidator:
                             logger.warning(f"Could not fetch existing exercise names: {e}")
                     
                     for exercise in strength_exercises:
-                        # If already has exercise_id (from previous processing or user data), keep it
-                        if exercise.get("exercise_id"):
-                            exercises_to_keep.append(exercise)
-                            continue
+                        exercise_name = exercise.get("exercise_name", "Unknown")
+                        exercise_id = exercise.get("exercise_id")
+                        
+                        # If already has exercise_id (from previous processing or user data), validate it before keeping
+                        if exercise_id is not None:
+                            # Validate that the exercise_id still exists in database
+                            try:
+                                valid_ids, invalid_ids = self.exercise_selector.validate_exercise_ids([str(exercise_id)])
+                                if str(exercise_id) in valid_ids:
+                                    logger.debug(f"✅ Exercise '{exercise_name}' has valid exercise_id={exercise_id}, keeping it")
+                                    exercises_to_keep.append(exercise)
+                                    continue
+                                else:
+                                    logger.warning(
+                                        f"⚠️ Exercise '{exercise_name}' has invalid exercise_id={exercise_id} (not in database). "
+                                        f"Will attempt to rematch or remove."
+                                    )
+                                    # Don't continue - fall through to rematch logic
+                                    # Clear the invalid exercise_id so it can be rematched
+                                    exercise.pop("exercise_id", None)
+                            except Exception as e:
+                                logger.error(f"Error validating exercise_id {exercise_id} for '{exercise_name}': {e}")
+                                # Clear invalid exercise_id and fall through to rematch
+                                exercise.pop("exercise_id", None)
                         
                         # Check if this exercise has AI-generated metadata
-                        exercise_name = exercise.get("exercise_name")
                         main_muscle = exercise.get("main_muscle")
                         equipment = exercise.get("equipment")
                         
                         if not all([exercise_name, main_muscle, equipment]):
                             logger.warning(
-                                f"Skipping exercise with incomplete metadata: "
-                                f"name={exercise_name}, main_muscle={main_muscle}, equipment={equipment}"
+                                f"⚠️ Skipping exercise with incomplete metadata: "
+                                f"name={exercise_name}, main_muscle={main_muscle}, equipment={equipment}. "
+                                f"Exercise will be removed from plan."
                             )
-                            # Don't keep exercises with incomplete metadata
+                            # Mark for removal instead of silently skipping
+                            exercise["_remove_from_plan"] = True
                             continue
                         
                         stats["exercises_processed"] += 1
@@ -794,16 +815,63 @@ class ExerciseValidator:
                                 "status": status
                             })
                         
-                        # Only keep exercises that have exercise_id set (successfully matched)
-                        if not exercise.get("_remove_from_plan", False):
+                        # CRITICAL: Only keep exercises that have exercise_id set AND are not marked for removal
+                        # This ensures no exercises with null/missing exercise_id make it to the frontend
+                        final_exercise_id = exercise.get("exercise_id")
+                        is_marked_for_removal = exercise.get("_remove_from_plan", False)
+                        
+                        if is_marked_for_removal:
+                            logger.warning(
+                                f"🗑️ Exercise '{exercise_name}' marked for removal (no match/fallback found). "
+                                f"Will be filtered out from plan."
+                            )
+                        elif final_exercise_id is None:
+                            logger.error(
+                                f"❌ CRITICAL: Exercise '{exercise_name}' has no exercise_id after matching. "
+                                f"Marking for removal to prevent frontend errors."
+                            )
+                            exercise["_remove_from_plan"] = True
+                        else:
+                            # Exercise has valid exercise_id and is not marked for removal
+                            logger.debug(
+                                f"✅ Keeping exercise '{exercise_name}' with exercise_id={final_exercise_id}"
+                            )
                             exercises_to_keep.append(exercise)
                     
                     # Preserve all existing exercises unless explicitly marked for removal
                     # Only drop exercises that are flagged with _remove_from_plan
                     if exercises_to_keep:
-                        daily_training["strength_exercises"] = exercises_to_keep
+                        # FINAL SAFETY CHECK: Ensure all kept exercises have valid exercise_id
+                        # This prevents any exercises with null exercise_id from reaching the frontend
+                        final_exercises = []
+                        removed_count = 0
+                        for ex in exercises_to_keep:
+                            ex_id = ex.get("exercise_id")
+                            ex_name = ex.get("exercise_name", "Unknown")
+                            if ex_id is None:
+                                logger.error(
+                                    f"❌ FINAL SAFETY CHECK FAILED: Exercise '{ex_name}' in kept list has null exercise_id! "
+                                    f"This should never happen. Removing exercise to prevent frontend crash."
+                                )
+                                removed_count += 1
+                            else:
+                                final_exercises.append(ex)
+                        
+                        if removed_count > 0:
+                            logger.error(
+                                f"⚠️ Removed {removed_count} exercise(s) with null exercise_id during final safety check. "
+                                f"This indicates a bug in the matching logic above."
+                            )
+                        
+                        daily_training["strength_exercises"] = final_exercises
+                        logger.info(
+                            f"✅ Filtered exercises for {daily_training.get('day_of_week', 'Unknown')}: "
+                            f"kept {len(final_exercises)} exercise(s), removed {len(strength_exercises) - len(final_exercises)} exercise(s)"
+                        )
                     else:
-                        # If no filtering happened, keep original list
+                        # If no filtering happened, keep original list (but still check for null exercise_id)
+                        # This can happen if all exercises already had valid exercise_id
+                        logger.debug(f"No filtering needed for {daily_training.get('day_of_week', 'Unknown')} - all exercises valid")
                         daily_training["strength_exercises"] = strength_exercises
             
             # Bulk log all exercises at once (non-critical monitoring operation)

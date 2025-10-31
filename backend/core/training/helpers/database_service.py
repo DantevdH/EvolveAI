@@ -318,6 +318,7 @@ class DatabaseService:
             # Save weekly schedules and their details
             weekly_schedules = plan_dict.get("weekly_schedules", [])
 
+            self.logger.info(f"Recreating weekly_schedules: count={len(weekly_schedules)}")
             for week_index, week_data in enumerate(weekly_schedules):
                 week_number = week_data.get("week_number", 1)
 
@@ -350,6 +351,7 @@ class DatabaseService:
 
                 # Save daily trainings
                 daily_trainings = week_data.get("daily_trainings", [])
+                self.logger.info(f"Week {week_index} (id={weekly_schedule_id}) daily_trainings: count={len(daily_trainings)}")
 
                 for daily_index, daily_data in enumerate(daily_trainings):
                     day_of_week = daily_data.get("day_of_week", "Monday")
@@ -389,21 +391,18 @@ class DatabaseService:
                     # Save exercises and endurance sessions if not a rest day
                     if not is_rest_day:
                         # Save strength exercises
-                        strength_exercises = daily_data.get("strength_exercises", [])
+                        raw_strength_exercises = daily_data.get("strength_exercises", [])
+                        # Filter out any exercises without exercise_id (data hygiene)
+                        strength_exercises = [ex for ex in raw_strength_exercises if ex and ex.get("exercise_id") is not None]
+                        dropped_count = len(raw_strength_exercises) - len(strength_exercises)
+                        self.logger.info(
+                            f"Week {week_index} Day {daily_index} strength_exercises: kept={len(strength_exercises)}, dropped_without_id={dropped_count}"
+                        )
 
                         for exercise_index, exercise_data in enumerate(
                             strength_exercises
                         ):
                             exercise_id = exercise_data.get("exercise_id")
-                            
-                            # CRITICAL: Validate exercise_id exists before saving
-                            if exercise_id is None:
-                                self.logger.warning(
-                                    f"Skipping strength exercise with missing exercise_id "
-                                    f"(daily_training_id: {daily_training_id}, exercise_index: {exercise_index}). "
-                                    f"This usually indicates a failed exercise matching. Exercise data: {exercise_data}"
-                                )
-                                continue
                             
                             sets = exercise_data.get("sets", 3)
                             reps = exercise_data.get("reps", [10, 10, 10])
@@ -880,6 +879,22 @@ class DatabaseService:
             else:
                 plan_dict = updated_plan_data
 
+            # Debug: log incoming structure sanity
+            try:
+                pd_type = type(plan_dict).__name__
+                ws_len = len(plan_dict.get("weekly_schedules", [])) if isinstance(plan_dict, dict) else -1
+                self.logger.info(f"update_training_plan: cleaned plan_dict type={pd_type}, weeks={ws_len}")
+            except Exception:
+                self.logger.warning("update_training_plan: failed to inspect plan_dict")
+
+            # Ensure top-level plan ID is present in the dict for downstream consumers
+            if isinstance(plan_dict, dict):
+                plan_dict["id"] = plan_id
+            else:
+                # If the input is not dict, bail out with a clear log and return original
+                self.logger.error("update_training_plan: plan_dict is not a dict after cleaning; returning original updated_plan_data")
+                return updated_plan_data
+
             # Update the main training plan record (without plan_data column)
             plan_record = {
                 "title": plan_dict.get("title", "Personalized Training Plan"),
@@ -898,6 +913,15 @@ class DatabaseService:
             
             # Recreate weekly schedules and their details
             weekly_schedules = plan_dict.get("weekly_schedules", [])
+            
+            # CRITICAL: Log weekly_schedules structure before processing
+            self.logger.info(f"Recreating weekly_schedules: count={len(weekly_schedules)}, plan_dict keys={list(plan_dict.keys())[:10]}")
+            if len(weekly_schedules) == 0:
+                self.logger.error(f"⚠️ CRITICAL: weekly_schedules is EMPTY! This means no plan structure will be saved.")
+                self.logger.error(f"Plan dict structure: {type(plan_dict)}, has weekly_schedules key: {'weekly_schedules' in plan_dict}")
+                if isinstance(plan_dict, dict):
+                    # Try to find where the structure might be
+                    self.logger.error(f"All keys in plan_dict: {list(plan_dict.keys())}")
             
             for week_index, week_data in enumerate(weekly_schedules):
                 week_number = week_data.get("week_number", 1)
@@ -921,6 +945,8 @@ class DatabaseService:
                     continue
                 
                 weekly_schedule_id = weekly_result.data[0]["id"]
+                # Enrich plan dict with generated weekly schedule ID
+                week_data["id"] = weekly_schedule_id
                 
                 # Save daily trainings
                 daily_trainings = week_data.get("daily_trainings", [])
@@ -952,6 +978,8 @@ class DatabaseService:
                         continue
                     
                     daily_training_id = daily_result.data[0]["id"]
+                    # Enrich plan dict with generated daily training ID
+                    daily_data["id"] = daily_training_id
                     
                     # Save exercises and endurance sessions if not a rest day
                     if not is_rest_day:
@@ -989,10 +1017,21 @@ class DatabaseService:
                                 "updated_at": datetime.utcnow().isoformat(),
                             }
                             
-                            supabase_client.table("strength_exercise").insert(strength_exercise_record).execute()
+                            se_result = (
+                                supabase_client.table("strength_exercise")
+                                .insert(strength_exercise_record)
+                                .execute()
+                            )
+                            if se_result.data:
+                                # Enrich plan dict with generated strength exercise ID and parent linkage
+                                exercise_data["id"] = se_result.data[0]["id"]
+                                exercise_data["daily_training_id"] = daily_training_id
                         
                         # Save endurance sessions
                         endurance_sessions = daily_data.get("endurance_sessions", [])
+                        self.logger.info(
+                            f"Week {week_index} Day {daily_index} endurance_sessions: count={len(endurance_sessions)}"
+                        )
                         
                         for session_index, session_data in enumerate(endurance_sessions):
                             name = session_data.get("name", "Endurance Session")
@@ -1016,14 +1055,38 @@ class DatabaseService:
                                 "updated_at": datetime.utcnow().isoformat(),
                             }
                             
-                            supabase_client.table("endurance_session").insert(endurance_session_record).execute()
+                            es_result = (
+                                supabase_client.table("endurance_session")
+                                .insert(endurance_session_record)
+                                .execute()
+                            )
+                            if es_result.data:
+                                # Enrich plan dict with generated endurance session ID and parent linkage
+                                session_data["id"] = es_result.data[0]["id"]
+                                session_data["daily_training_id"] = daily_training_id
 
             self.logger.info(f"Successfully updated training plan {plan_id}")
+            # Summarize enriched IDs before returning
+            try:
+                first_week_id = weekly_schedules and weekly_schedules[0].get("id")
+                first_day_id = (
+                    weekly_schedules and weekly_schedules[0].get("daily_trainings")
+                )
+                first_day_id = first_day_id and first_day_id and first_day_id[0].get("id")
+                first_exs = (
+                    weekly_schedules
+                    and weekly_schedules[0].get("daily_trainings")
+                    and weekly_schedules[0].get("daily_trainings")[0].get("strength_exercises")
+                ) or []
+                first_ex_id = first_exs and first_exs[0] and first_exs[0].get("id")
+                self.logger.info(
+                    f"Enriched plan IDs: plan_id={plan_dict.get('id')}, week_id={first_week_id}, day_id={first_day_id}, strength_exercise_id={first_ex_id}"
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to summarize enriched IDs: {e}")
             
-            # Return the updated plan data that was passed in
-            # It's already validated and enriched before being passed to this method
-            # No need to fetch from database - we just saved it!
-            return updated_plan_data
+            # Return enriched plan dict that now contains all generated IDs
+            return plan_dict
 
         except Exception as e:
             self.logger.error(f"Error updating training plan {plan_id}: {e}")
