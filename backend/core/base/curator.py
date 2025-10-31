@@ -12,10 +12,9 @@ The Curator manages the user's playbook by:
 
 import os
 import uuid
-import openai
 import asyncio
 import numpy as np
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any
 from datetime import datetime
 from logging_config import get_logger
 from core.base.ace_telemetry import ACETelemetry
@@ -27,6 +26,7 @@ from core.base.schemas.playbook_schemas import (
     CuratorDecision,
 )
 from pydantic import BaseModel, Field
+from core.training.helpers.llm_client import LLMClient
 
 
 class Curator:
@@ -51,7 +51,7 @@ class Curator:
     EMBEDDING_LOW_SIMILARITY = 0.75  # Possibly similar (needs LLM verification)
     EMBEDDING_CONTRADICTION = -0.3  # Potential contradiction (needs LLM analysis)
 
-    def __init__(self, openai_client: Optional[openai.OpenAI] = None):
+    def __init__(self, openai_client: Optional[Any] = None):
         """
         Initialize the Curator.
 
@@ -59,9 +59,8 @@ class Curator:
             openai_client: OpenAI client instance (creates new one if not provided)
         """
         self.logger = get_logger(__name__)
-        self.openai_client = openai_client or openai.OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY")
-        )
+        self.openai_client = openai_client  # Optional; only used for embeddings if available
+        self.llm = LLMClient()
         self._embedding_cache = {}  # Cache embeddings to reduce API calls
 
     def process_new_lesson(
@@ -336,6 +335,9 @@ class Curator:
             return self._embedding_cache[cache_key]
 
         try:
+            if self.openai_client is None:
+                # No embeddings available; return zero vector
+                return np.zeros(1536)
             response = self.openai_client.embeddings.create(
                 model="text-embedding-3-small", input=text  # Cost-effective model
             )
@@ -536,20 +538,7 @@ class Curator:
         • reasoning: Brief explanation (1 sentence)
         """
 
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert at detecting contradictions in training guidance, especially those indicating user evolution.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                response_format=ContradictionCheck,
-                temperature=0.2,
-            )
-
-            result = completion.choices[0].message.parsed
+            result, _ = self.llm.chat_parse(prompt, ContradictionCheck)
 
             if result.lesson_id == "none":
                 return None, 0.0
@@ -645,20 +634,7 @@ class Curator:
         • reasoning: Brief explanation (1 sentence)
         """
 
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert at identifying similar training lessons and determining how closely they align.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                response_format=SimilarityCheck,
-                temperature=0.2,
-            )
-
-            result = completion.choices[0].message.parsed
+            result, _ = self.llm.chat_parse(prompt, SimilarityCheck)
 
             if result.lesson_id == "none":
                 return None, 0.0

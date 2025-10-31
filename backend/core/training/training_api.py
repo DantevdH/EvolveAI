@@ -19,6 +19,8 @@ from core.training.schemas.question_schemas import (
     FollowUpQuestionsRequest,
     PlanGenerationRequest,
     PlanGenerationResponse,
+    PlanFeedbackRequest,
+    PlanFeedbackResponse,
     PersonalInfo,
 )
 from core.training.training_coach import TrainingCoach
@@ -102,6 +104,8 @@ async def _fetch_complete_training_plan(user_profile_id: int) -> Dict[str, Any]:
                     strength_exercises = strength_exercises_response.data or []
 
                     # Get exercise details for each strength exercise
+                    # Store as "exercises" (plural) to match Supabase relational query format
+                    # Frontend TrainingService expects se.exercises from Supabase queries
                     for strength_exercise in strength_exercises:
                         exercise_response = (
                             supabase.table("exercises")
@@ -111,10 +115,12 @@ async def _fetch_complete_training_plan(user_profile_id: int) -> Dict[str, Any]:
                             .execute()
                         )
                         if exercise_response.data:
-                            strength_exercise["exercise"] = exercise_response.data
+                            strength_exercise["exercises"] = exercise_response.data  # Plural to match Supabase format
                         else:
-                            strength_exercise["exercise"] = None
+                            strength_exercise["exercises"] = None
 
+                    # Store as strength_exercise (singular) to match Supabase relational query format
+                    # Frontend TrainingService expects this format from Supabase queries
                     daily_training["strength_exercise"] = strength_exercises
 
                     # Get endurance sessions
@@ -124,6 +130,7 @@ async def _fetch_complete_training_plan(user_profile_id: int) -> Dict[str, Any]:
                         .eq("daily_training_id", daily_training["id"])
                         .execute()
                     )
+                    # Store as endurance_session (singular) to match Supabase relational query format
                     daily_training["endurance_session"] = (
                         endurance_sessions_response.data or []
                     )
@@ -240,11 +247,16 @@ async def get_initial_questions(
             jwt_token=request.jwt_token
         )
         
+        user_profile_id = None
         if create_result.get("success"):
-            logger.info(f"Profile ID: {create_result.get('data', {}).get('id')}")
+            user_profile_id = create_result.get('data', {}).get('id')
+            logger.info(f"Profile ID: {user_profile_id}")
         
-        # Generate questions
-        questions_response = coach.generate_initial_questions(request.personal_info)
+        # Generate questions (with latency tracking)
+        questions_response = await coach.generate_initial_questions(
+            request.personal_info, 
+            user_profile_id=user_profile_id
+        )
         
         # Store questions (non-critical - log but continue)
         await safe_db_update(
@@ -306,7 +318,7 @@ async def get_follow_up_questions(
             request.initial_questions
         )
         
-        # Store initial responses
+        # Store initial responses and get user_profile_id
         await safe_db_update(
             "Store initial responses",
             db_service.update_user_profile,
@@ -315,11 +327,21 @@ async def get_follow_up_questions(
             jwt_token=request.jwt_token
         )
         
-        # Generate follow-up questions
-        questions_response = coach.generate_follow_up_questions(
+        # Get user_profile_id for latency tracking
+        user_profile_id = None
+        try:
+            profile_result = await db_service.get_user_profile(user_id, request.jwt_token)
+            if profile_result and profile_result.get("id"):
+                user_profile_id = profile_result["id"]
+        except Exception as e:
+            logger.warning(f"Could not retrieve user_profile_id: {e}")
+        
+        # Generate follow-up questions (with latency tracking)
+        questions_response = await coach.generate_follow_up_questions(
             request.personal_info,
             formatted_responses,
-            request.initial_questions
+            request.initial_questions,
+            user_profile_id=user_profile_id
         )
         
         # Store follow-up questions
@@ -392,7 +414,25 @@ async def generate_training_plan(
             )
         
         user_profile_id = user_profile_result.get("data", {}).get("id")
+        user_profile = user_profile_result.get("data", {})
         logger.info(f"✅ Found user profile ID: {user_profile_id}")
+        
+        # IDEMPOTENCY CHECK: If plan already exists for this user, return existing plan
+        existing_plan_result = await db_service.get_training_plan(user_profile_id)
+        if existing_plan_result.get("success") and existing_plan_result.get("data"):
+            logger.info(f"⚠️ Training plan already exists for user_profile_id {user_profile_id} - returning existing plan (idempotency)")
+            existing_plan = existing_plan_result.get("data")
+            
+            return {
+                "success": True,
+                "data": existing_plan,
+                "message": "Training plan already exists (returning existing plan)",
+                "metadata": {
+                    "idempotency": True,
+                    "plan_id": existing_plan.get("id"),
+                    "reason": "Plan already generated for this user"
+                }
+            }
         
         # Format responses
         from core.training.helpers.response_formatter import ResponseFormatter
@@ -417,40 +457,60 @@ async def generate_training_plan(
             update={"user_id": user_id}
         )
         
-        # Extract initial lessons from onboarding Q&A (ACE pattern seed lessons)
-        logger.info("📘 Extracting initial lessons from onboarding responses...")
-        initial_lessons = coach.extract_initial_lessons_from_onboarding(
-            personal_info=personal_info_with_user_id,
-            formatted_initial_responses=formatted_initial_responses,
-            formatted_follow_up_responses=formatted_follow_up_responses,
+        # Check if playbook already exists - if so, skip lesson extraction (performance optimization)
+        logger.info("📘 Checking if playbook already exists...")
+        existing_playbook = await db_service.load_user_playbook(user_profile_id, request.jwt_token)
+        
+        # Check if playbook exists in database by comparing user_id
+        # If user_id matches, it means playbook was loaded from DB (exists), not newly created
+        playbook_exists = (
+            existing_playbook 
+            and existing_playbook.user_id 
+            and existing_playbook.user_id == user_id
         )
         
-        # Create initial playbook with onboarding lessons
-        from core.base.schemas.playbook_schemas import UserPlaybook
-        initial_playbook = UserPlaybook(
-            user_id=user_id,
-            lessons=initial_lessons,
-            total_lessons=len(initial_lessons),
-        )
-        
-        logger.info(f"📘 Created initial playbook with {len(initial_lessons)} lessons from onboarding")
-        
-        # Store initial playbook
-        await safe_db_update(
-            "Store initial playbook",
-            db_service.update_user_profile,
-            user_id=user_id,
-            data={"user_playbook": initial_playbook.model_dump()},
-            jwt_token=request.jwt_token
-        )
+        if playbook_exists:
+            logger.info(f"📘 Playbook already exists (user_id: {existing_playbook.user_id}) with {len(existing_playbook.lessons)} lessons - skipping lesson extraction")
+        else:
+            # Extract initial lessons from onboarding Q&A (ACE pattern seed lessons) - only if playbook doesn't exist
+            logger.info("📘 Extracting initial lessons from onboarding responses...")
+            initial_lessons = coach.extract_initial_lessons_from_onboarding(
+                personal_info=personal_info_with_user_id,
+                formatted_initial_responses=formatted_initial_responses,
+                formatted_follow_up_responses=formatted_follow_up_responses,
+            )
+            
+            # Create initial playbook with onboarding lessons
+            from core.base.schemas.playbook_schemas import UserPlaybook
+            initial_playbook = UserPlaybook(
+                user_id=user_id,
+                lessons=initial_lessons,
+                total_lessons=len(initial_lessons),
+            )
+            
+            logger.info(f"📘 Created initial playbook with {len(initial_lessons)} lessons from onboarding")
+            
+            # Store initial playbook
+            await safe_db_update(
+                "Store initial playbook",
+                db_service.update_user_profile,
+                user_id=user_id,
+                data={"user_playbook": initial_playbook.model_dump()},
+                jwt_token=request.jwt_token
+            )
+            
+            # Use the newly created playbook for plan generation
+            existing_playbook = initial_playbook
         
         # Generate initial training plan (onboarding - uses initial playbook)
+        # Pass already-loaded playbook to avoid duplicate DB call
         result = await coach.generate_initial_training_plan(
             personal_info=personal_info_with_user_id,
             formatted_initial_responses=formatted_initial_responses,
             formatted_follow_up_responses=formatted_follow_up_responses,
             user_profile_id=user_profile_id,
-            jwt_token=request.jwt_token
+            jwt_token=request.jwt_token,
+            playbook=existing_playbook  # Pass pre-loaded playbook
         )
         
         if not result.get("success"):
@@ -484,32 +544,56 @@ async def generate_training_plan(
             )
         
         training_plan_id = save_result.get("data", {}).get("training_plan_id")
+        enriched_plan = save_result.get("data", {}).get("training_plan")
         logger.info(f"✅ Training plan saved (ID: {training_plan_id})")
         
-        # Fetch complete training plan with real IDs from database
+        # Set plan_accepted=False since this is a new plan that needs user approval
+        await safe_db_update(
+            "Set plan_accepted=False for new plan",
+            db_service.update_user_profile,
+            user_id=user_id,
+            data={"plan_accepted": False},
+            jwt_token=request.jwt_token
+        )
+        logger.info("✅ Set plan_accepted=False for new training plan")
+        
+        # Get completion message from result (generated during plan creation)
+        completion_message = result.get("completion_message")
+        
+        # Use the enriched plan with database IDs (no need to refetch!)
+        if enriched_plan:
+            logger.info("✅ Using enriched training plan with database IDs (no refetch needed)")
+            return {
+                "success": True,
+                "data": enriched_plan,
+                "message": "Training plan generated and saved successfully",
+                "completion_message": completion_message,
+                "metadata": result.get("metadata", {}),  # Include metadata for frontend
+            }
+        else:
+            # Fallback: fetch if enriched plan not available (shouldn't happen)
+            logger.warning("⚠️ Enriched plan not available, falling back to database fetch")
         try:
             complete_plan = await _fetch_complete_training_plan(user_profile_id)
-            
             if complete_plan:
-                logger.info("✅ Complete training plan fetched with real IDs")
                 return {
                     "success": True,
                     "data": complete_plan,
                     "message": "Training plan generated and saved successfully",
-                }
-            else:
-                logger.warning("⚠️ Could not fetch complete plan, returning original data")
-                return {
+                    "completion_message": completion_message,
+                        "metadata": result.get("metadata", {}),
+                    }
+        except Exception as fetch_error:
+            logger.error(f"❌ Error fetching complete training plan: {str(fetch_error)}")
+            
+            # Final fallback
+            return {
                     "success": True,
                     "data": training_plan_data,
                     "message": "Training plan generated and saved successfully",
+                    "completion_message": completion_message,
+                "metadata": result.get("metadata", {}),
                 }
-        except Exception as fetch_error:
-            logger.error(f"❌ Error fetching complete training plan: {str(fetch_error)}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Training plan saved but failed to fetch complete data: {str(fetch_error)}"
-            )
         
     except HTTPException:
         raise
@@ -845,3 +929,286 @@ async def get_playbook_stats(
             "data": None,
             "message": f"Failed to get playbook stats: {str(e)}",
         }
+
+
+@router.post("/plan-feedback", response_model=PlanFeedbackResponse)
+async def process_plan_feedback(
+    request: dict,
+    coach: TrainingCoach = Depends(get_training_coach)
+):
+    """
+    Process user feedback on their training plan and provide real-time updates.
+    
+    This endpoint handles:
+    - Feedback classification (clarification, modification, approval, etc.)
+    - AI response generation
+    - Plan updates when needed
+    - Change explanations
+    """
+    try:
+        # Manually validate and coerce inputs to avoid pre-handler 422s
+        jwt_token = request.get("jwt_token")
+        if not jwt_token:
+            raise HTTPException(status_code=401, detail="Missing JWT token")
+
+        # Basic logging of incoming keys to diagnose client payloads
+        try:
+            logger.info(f"📥 plan-feedback payload keys: {list(request.keys())}")
+        except Exception:
+            pass
+
+        # Coerce IDs with fallbacks
+        user_profile_id = request.get("user_profile_id")
+        plan_id = request.get("plan_id")
+        current_plan_data = request.get("current_plan")
+
+        # Try to parse ints if present as strings
+        try:
+            if user_profile_id is not None:
+                user_profile_id = int(user_profile_id)
+        except Exception:
+            user_profile_id = None
+        try:
+            if plan_id is not None:
+                plan_id = int(plan_id)
+        except Exception:
+            plan_id = None
+
+        # If user_profile_id missing, try to resolve from JWT
+        if user_profile_id is None:
+            try:
+                token_user_id = extract_user_id_from_jwt(jwt_token)
+                profile_res = await db_service.get_user_profile_by_user_id(token_user_id, jwt_token)
+                if profile_res and profile_res.get("success") and profile_res.get("data"):
+                    user_profile_id = profile_res["data"].get("id")
+            except Exception as e:
+                logger.warning(f"Could not resolve user_profile_id from JWT: {e}")
+
+        # If plan_id missing, try to resolve from current_plan
+        if plan_id is None and isinstance(current_plan_data, dict):
+            try:
+                # Direct id at root
+                if isinstance(current_plan_data.get("id"), (int, str)):
+                    plan_id = int(current_plan_data.get("id"))
+                # Or from first weekly_schedule
+                elif current_plan_data.get("weekly_schedules"):
+                    ws0 = (current_plan_data.get("weekly_schedules") or [])[0] or {}
+                    tp_id = ws0.get("training_plan_id")
+                    if tp_id is not None:
+                        plan_id = int(tp_id)
+            except Exception as e:
+                logger.warning(f"Could not resolve plan_id from current_plan: {e}")
+
+        if user_profile_id is None or plan_id is None:
+            raise HTTPException(status_code=400, detail="Invalid or missing user_profile_id/plan_id")
+
+        feedback_message = request.get("feedback_message")
+        if not feedback_message:
+            raise HTTPException(status_code=400, detail="Missing feedback_message")
+        if not current_plan_data:
+            raise HTTPException(status_code=400, detail="Current plan data is required")
+        logger.info(f"Processing plan feedback for user {user_profile_id}, plan {plan_id}")
+        
+        # Use current plan sent from frontend (no database fetch needed!)
+        
+        logger.info(f"✅ Using plan from frontend (no DB fetch) - {len(current_plan_data.get('weekly_schedules', []))} week(s)")
+        
+        # Get user profile to extract personal info (by integer ID)
+        profile_response = await db_service.get_user_profile_by_id(user_profile_id)
+        if not profile_response or not profile_response.get("success"):
+            raise HTTPException(
+                status_code=404,
+                detail="User profile not found"
+            )
+        
+        # Extract the actual profile data
+        user_profile = profile_response.get("data", {})
+        
+        # Create PersonalInfo object from user profile
+        personal_info = PersonalInfo(
+            user_id=user_profile.get("user_id"),
+            username=user_profile.get("username", "User"),
+            age=user_profile.get("age"),
+            weight=user_profile.get("weight"),
+            weight_unit=user_profile.get("weight_unit", "kg"),
+            height=user_profile.get("height"),
+            height_unit=user_profile.get("height_unit", "cm"),
+            gender=user_profile.get("gender"),
+            experience_level=user_profile.get("experience_level", "beginner"),
+            goal_description=user_profile.get("goal_description", "improve fitness"),
+            measurement_system=user_profile.get("measurement_system", "metric"),
+        )
+        
+        # No Pydantic validation needed - we work with the plan as a dict for operations
+        # The plan will be validated only when saving to the database
+        
+        # STAGE 1: Lightweight intent classification (FAST: 2-3s)
+        logger.info("🔍 Stage 1: Classifying feedback intent (lightweight)...")
+        classification_result = await coach.classify_feedback_intent_lightweight(
+            feedback_message=feedback_message,
+            conversation_history=request.get("conversation_history") or []
+        )
+        
+        logger.info(f"✅ Stage 1 complete: intent={classification_result.get('intent')}, confidence={classification_result.get('confidence')}")
+        
+        # For update_request intents, regenerate the full plan using the same flow as initial generation
+        operations_result = None
+        regen_result = None
+        if classification_result.get("intent") == "update_request" and classification_result.get("needs_plan_update"):
+            logger.info("🔁 Regenerating full training plan (fast whole-plan update)...")
+            regen_result = await coach.regenerate_training_plan(
+                personal_info=personal_info,
+                feedback_message=feedback_message,
+                user_profile_id=user_profile_id,
+                jwt_token=jwt_token,
+                current_plan=current_plan_data,
+            )
+        
+        # Step 2: Handle based on intent/action
+        if classification_result.get("intent") == "satisfied" or classification_result.get("action") == "navigate_to_main_app":
+            # User is satisfied; set plan_accepted=True and navigate to main app
+            user_id = user_profile.get("user_id")
+            if user_id:
+                await safe_db_update(
+                    "Set plan_accepted=True for satisfied user",
+                    db_service.update_user_profile,
+                    user_id=user_id,
+                    data={"plan_accepted": True},
+                    jwt_token=jwt_token
+                )
+                logger.info("✅ Set plan_accepted=True - user satisfied with plan")
+            
+            return PlanFeedbackResponse(
+                success=True,
+                ai_response="Amazing! You're all set. I'll take you to your main dashboard now. 🚀",
+                plan_updated=False,
+                updated_plan=current_plan_data,  # Return current plan even if not updated
+                navigate_to_main_app=True
+            )
+        
+        if classification_result["needs_plan_update"] and regen_result:
+            logger.info("📝 Plan update triggered by feedback (full regeneration)")
+            # Log the feedback message for traceability (truncate to 500 chars)
+            try:
+                fb_msg = (request.get("feedback_message") if isinstance(request, dict) else None) or ""
+                if fb_msg:
+                    logger.info(f"🗒️ User feedback_message: {fb_msg[:500]}")
+                else:
+                    logger.info("🗒️ No feedback_message provided")
+            except Exception as e:
+                logger.error(f"Error logging feedback message: {str(e)}")
+            
+            # Extract durations for latency tracking
+            classify_duration = classification_result.get('_classify_duration', 0.0)
+            # Regeneration latency already tracked inside coach; we can still log an aggregate marker
+            await db_service.log_latency_event("feedback_plan_intent", classify_duration)
+            
+            # Pull regenerated plan and AI message
+            regenerated_plan = regen_result.get("training_plan")
+            ai_message = regen_result.get("completion_message") or \
+                         classification_result.get("ai_message") or \
+                         "I've updated your plan based on your feedback! Take a look and let me know if you'd like any other changes. 💪"
+            
+            update_result = {
+                "updated_plan": regenerated_plan,
+                "ai_message": ai_message,
+                "explanation": "Plan regenerated using the same pipeline as initial generation",
+                "update_method": "full_regeneration"
+            }
+            
+            # Ensure updated_plan is a dictionary, not a Pydantic object
+            updated_plan_data = update_result["updated_plan"]
+            if not isinstance(updated_plan_data, dict):
+                # If it's still a Pydantic model, convert it
+                if hasattr(updated_plan_data, 'model_dump'):
+                    updated_plan_data = updated_plan_data.model_dump()
+                elif hasattr(updated_plan_data, 'dict'):
+                    updated_plan_data = updated_plan_data.dict()
+                else:
+                    logger.error(f"Updated plan is not serializable: {type(updated_plan_data)}")
+                    updated_plan_data = None
+            
+            # Set the AI message only for the response (do NOT persist to DB)
+            if updated_plan_data:
+                ai_msg = update_result.get("ai_message")
+                if ai_msg:
+                    logger.info(f"📝 Using plan ai_message for response (not persisted): '{ai_msg[:50]}...'")
+                    # Keep the AI message in-memory for the response only
+                    updated_plan_response = dict(updated_plan_data)
+                    updated_plan_response['ai_message'] = ai_msg
+                else:
+                    updated_plan_response = dict(updated_plan_data)
+                    updated_plan_response['ai_message'] = "I've updated your plan based on your feedback!"
+            
+                # Prepare a copy to save WITHOUT ai_message (never persist)
+                plan_to_save = dict(updated_plan_data)
+                plan_to_save.pop('ai_message', None)
+                
+                update_result_db = await db_service.update_training_plan(
+                    plan_id,
+                    plan_to_save,
+                    jwt_token=jwt_token
+                )
+                
+                if update_result_db is None:
+                    raise Exception("Failed to update plan in database")
+                
+                logger.info(f"✅ Plan updated successfully")
+                
+                # Use the enriched plan returned directly by update_training_plan (IDs injected into dict)
+                enriched_plan = update_result_db
+                logger.info("✅ Using enriched training plan returned by update (IDs present, no refetch)")
+
+                # Get completion message from result (generated during plan regeneration)
+                completion_message = update_result.get("completion_message")
+                ai_msg_fallback = update_result.get("ai_message")
+
+                # Add ai_message for frontend display (not persisted)
+                if completion_message:
+                    try:
+                        enriched_plan['ai_message'] = completion_message
+                    except Exception:
+                        pass
+
+                response_payload = PlanFeedbackResponse(
+                    success=True,
+                    ai_response=completion_message or ai_msg_fallback or "",
+                    plan_updated=True,
+                    updated_plan=enriched_plan
+                )
+                logger.info("🚀 Returning enriched updated_plan to frontend (contains DB IDs)")
+                return response_payload
+            else:
+                raise Exception("No updated plan data to save")
+                    
+        else:
+            # Respond without updating plan (question, unclear, other intents)
+            # Use the AI's actual response from the classification result
+            ai_response = classification_result.get("ai_message", "Thanks for your question! Let me know if you need anything else.")
+            
+            logger.info(f"Responding to '{classification_result.get('intent')}' intent without plan update")
+            
+            # Ensure frontend shows the AI answer: mirror ai_response into plan ai_message (response only)
+            plan_response = dict(current_plan_data or {})
+            if ai_response:
+                plan_response['ai_message'] = ai_response
+            return PlanFeedbackResponse(
+                success=True,
+                ai_response=ai_response,
+                plan_updated=False,
+                updated_plan=plan_response,  # safe to return; contains ai_message matching ai_response
+                navigate_to_main_app=False
+            )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing plan feedback: {str(e)}")
+        # No fallback plan in update flow; surface error cleanly for tracing
+        return PlanFeedbackResponse(
+            success=False,
+            ai_response="",
+            plan_updated=False,
+            updated_plan=None,
+            error=str(e)
+        )

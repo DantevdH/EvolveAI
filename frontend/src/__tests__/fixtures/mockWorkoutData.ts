@@ -6,7 +6,7 @@ export const mockTrainingPlanData = {
   id: 1,
   user_profile_id: 1,
   title: "Beginner Strength Program",
-  summary: "A comprehensive 4-week strength training program",
+  summary: "A comprehensive strength training program",
   plan_data: {
     weekly_schedules: [
       {
@@ -174,7 +174,7 @@ export const mockAuthState = {
     id: 1,
     userProfileId: 1,
     title: "Beginner Strength Program",
-    summary: "A comprehensive 4-week strength training program",
+    summary: "A comprehensive strength training program",
     createdAt: new Date("2024-01-01"),
     updatedAt: new Date("2024-01-01"),
     planData: mockTrainingPlanData.plan_data

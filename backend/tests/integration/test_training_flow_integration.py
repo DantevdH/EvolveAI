@@ -129,7 +129,7 @@ class TestTrainingFlowIntegration:
             "training_periods": [
                 {
                     "period_name": "Foundation Phase",
-                    "duration_weeks": 4,
+                    "duration_weeks": 1,  # 1-week schedule duplicated to 4 weeks
                     "explanation": "Build base strength and technique",
                     "daily_trainings": [
                         {

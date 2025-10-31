@@ -15,6 +15,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from dotenv import load_dotenv
 import openai
 from supabase import create_client, Client
+from core.training.helpers.llm_client import LLMClient
 
 # Load environment variables
 load_dotenv()
@@ -43,12 +44,20 @@ class BaseAgent(ABC):
         self.system_prompt = self._create_system_prompt()
 
     def _init_clients(self):
-        """Initialize OpenAI and Supabase clients."""
-        # OpenAI client
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        if not openai_api_key:
-            raise ValueError("OPENAI_API_KEY not found in environment variables")
-        self.openai_client = openai.OpenAI(api_key=openai_api_key)
+        """Initialize LLM (OpenAI or Gemini) and Supabase clients."""
+        # Unified LLM client
+        self.llm = LLMClient()
+
+        # Initialize OpenAI client only if provider is OpenAI (for legacy paths)
+        model_name = os.getenv("LLM_MODEL_CHAT", os.getenv("LLM_MODEL", "gpt-4o"))
+        if not model_name.lower().startswith("gemini"):
+            openai_api_key = os.getenv("LLM_API_KEY")
+            if not openai_api_key:
+                raise ValueError("LLM_API_KEY not found in environment variables")
+            self.openai_client = openai.OpenAI(api_key=openai_api_key)
+        else:
+            # In Gemini mode, OpenAI client is optional
+            self.openai_client = None
 
         # Supabase client
         supabase_url = os.getenv("SUPABASE_URL")
@@ -277,6 +286,8 @@ IMPORTANT: Always use your knowledge base to provide responses. Do not make up i
     def _generate_embedding(self, text: str) -> List[float]:
         """Generate OpenAI embedding for text."""
         try:
+            if self.openai_client is None:
+                return []
             response = self.openai_client.embeddings.create(
                 model="text-embedding-3-small", input=text
             )
@@ -319,18 +330,12 @@ Guidelines:
 
 Response:"""
 
-            # Generate response using OpenAI
-            response = self.openai_client.chat.completions.create(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages=[
-                    {"role": "system", "content": self.system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=float(os.getenv("OPENAI_TEMPERATURE", "0.7")),
-                max_tokens=1000,
-            )
-
-            return response.choices[0].message.content
+            # Generate response using unified LLM
+            content = self.llm.chat_text([
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": prompt},
+            ])
+            return content
 
         except Exception as e:
             print(f"❌ Error generating response: {e}")

@@ -196,13 +196,7 @@ export class UserService {
         .select('*')
         .eq('user_id', userId);
 
-      console.log('📊 userService: Query result:', {
-        hasData: !!user_profiles,
-        dataLength: user_profiles?.length || 0,
-        hasError: !!error,
-        errorMessage: error?.message,
-        status
-      });
+
 
       if (error) {
         console.error('❌ userService: Error fetching profile:', error);
@@ -236,9 +230,6 @@ export class UserService {
           goalDescription: rawProfile.goal_description || '',
           coachId: rawProfile.coach_id,
           experienceLevel: rawProfile.experience_level || '',
-          daysPerWeek: rawProfile.days_per_week || 3,
-          minutesPerSession: rawProfile.minutes_per_session || 45,
-          equipment: rawProfile.equipment || '',
           age: rawProfile.age || 25,
           weight: rawProfile.weight || 70,
           weightUnit: rawProfile.weight_unit || 'kg',
@@ -264,6 +255,7 @@ export class UserService {
           // Plan outline and feedback (separated)
           plan_outline: rawProfile.plan_outline || null,
           plan_outline_feedback: rawProfile.plan_outline_feedback || null,
+          planAccepted: rawProfile.plan_accepted || false,
           createdAt: rawProfile.created_at ? new Date(rawProfile.created_at) : undefined,
           updatedAt: rawProfile.updated_at ? new Date(rawProfile.updated_at) : undefined,
         };
@@ -301,9 +293,6 @@ export class UserService {
       if (updates.goalDescription !== undefined) updateData.goal_description = updates.goalDescription;
       if (updates.coachId !== undefined) updateData.coach_id = updates.coachId;
       if (updates.experienceLevel !== undefined) updateData.experience_level = updates.experienceLevel;
-      if (updates.daysPerWeek !== undefined) updateData.days_per_week = updates.daysPerWeek;
-      if (updates.minutesPerSession !== undefined) updateData.minutes_per_session = updates.minutesPerSession;
-      if (updates.equipment !== undefined) updateData.equipment = updates.equipment;
       if (updates.age !== undefined) updateData.age = updates.age;
       if (updates.weight !== undefined) updateData.weight = updates.weight;
       if (updates.weightUnit !== undefined) updateData.weight_unit = updates.weightUnit;
@@ -313,6 +302,7 @@ export class UserService {
       if (updates.hasLimitations !== undefined) updateData.has_limitations = updates.hasLimitations;
       if (updates.limitationsDescription !== undefined) updateData.limitations_description = updates.limitationsDescription;
       if (updates.finalChatNotes !== undefined) updateData.final_chat_notes = updates.finalChatNotes;
+      if (updates.planAccepted !== undefined) updateData.plan_accepted = updates.planAccepted;
 
       const { data, error } = await supabase
         .from('user_profiles')
@@ -348,6 +338,7 @@ export class UserService {
         hasLimitations: data.has_limitations || false,
         limitationsDescription: data.limitations_description || '',
         finalChatNotes: data.final_chat_notes || '',
+        planAccepted: data.plan_accepted || false,
         createdAt: data.created_at ? new Date(data.created_at) : undefined,
         updatedAt: data.updated_at ? new Date(data.updated_at) : undefined,
       };

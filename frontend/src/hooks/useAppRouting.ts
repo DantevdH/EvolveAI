@@ -75,6 +75,7 @@ export const useAppRouting = (): AppRoutingState => {
     const hasFollowUpQuestions = !!state.userProfile.follow_up_questions;
     const hasFollowUpResponses = !!state.userProfile.follow_up_responses;
     const hasTrainingPlan = !!state.trainingPlan;
+    const isPlanAccepted = !!state.userProfile.planAccepted;
 
     // Granular routing based on what's missing
     if (!hasInitialQuestions || !hasInitialResponses) {
@@ -104,7 +105,17 @@ export const useAppRouting = (): AppRoutingState => {
       };
     }
 
-    // Step 5: Everything exists - go to main app
+    // Step 5: Check if plan is accepted - if not, show plan preview for feedback
+    if (!isPlanAccepted) {
+      return {
+        targetRoute: '/onboarding',
+        isLoading: false,
+        hasError: false,
+        routingReason: 'Plan Preview - Awaiting Acceptance'
+      };
+    }
+
+    // Step 6: Everything exists and plan is accepted - go to main app
     return {
       targetRoute: '/(tabs)',
       isLoading: false,

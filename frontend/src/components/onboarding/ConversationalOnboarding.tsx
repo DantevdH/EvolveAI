@@ -7,6 +7,7 @@ import { GoalDescriptionStep } from '../../screens/onboarding/GoalDescriptionSte
 import { ExperienceLevelStep } from '../../screens/onboarding/ExperienceLevelStep';
 import { QuestionsStep } from '../../screens/onboarding/QuestionsStep';
 import { PlanGenerationStep } from '../../screens/onboarding/PlanGenerationStep';
+import PlanPreviewStep from '../../screens/onboarding/PlanPreviewStep';
 import { ErrorDisplay } from '../ui/ErrorDisplay';
 import { trainingService } from '../../services/onboardingService';
 import { 
@@ -20,98 +21,6 @@ import { UserService } from '../../services/userService';
 import { cleanUserProfileForResume, isValidFormattedResponse } from '../../utils/validation';
 import { logStep, logData, logError, logNavigation } from '../../utils/logger';
 
-// Transform backend data structure to frontend format
-const transformBackendToFrontend = (backendData: any) => {
-  if (!backendData) return null;
-  
-  return {
-    id: backendData.id?.toString(),
-    title: backendData.title,
-    description: backendData.summary,
-    totalWeeks: backendData.weekly_schedules?.length || 1,
-    currentWeek: 1, // Default to week 1
-    weeklySchedules: backendData.weekly_schedules?.map((schedule: any) => {
-      // Sort daily trainings by day order (Monday = 0, Tuesday = 1, etc.)
-      const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-      const sortedDailyTrainings = schedule.daily_training?.sort((a: any, b: any) => {
-        const aIndex = dayOrder.indexOf(a.day_of_week);
-        const bIndex = dayOrder.indexOf(b.day_of_week);
-        return aIndex - bIndex;
-      }) || [];
-
-      return {
-        id: schedule.id?.toString(),
-        weekNumber: schedule.week_number,
-        dailyTrainings: sortedDailyTrainings.map((daily: any) => {
-          // Combine strength exercises and endurance sessions into exercises array
-          const exercises: any[] = [];
-          
-          // Add strength exercises
-          if (daily.strength_exercise && daily.strength_exercise.length > 0) {
-            daily.strength_exercise.forEach((se: any) => {
-              exercises.push({
-                id: se.id?.toString(),
-                exerciseId: se.exercise_id?.toString(),
-                exercise: se.exercise || null,
-                sets: Array.from({ length: se.sets || 0 }, (_, index) => ({
-                  id: `set-${index}`,
-                  reps: se.reps?.[index] || 0,
-                  weight: se.weight?.[index] || 0,
-                  completed: false,
-                  restTime: 60
-                })),
-                completed: se.completed || false,
-                order: exercises.length
-              });
-            });
-          }
-          
-          // Add endurance sessions
-          if (daily.endurance_session && daily.endurance_session.length > 0) {
-            daily.endurance_session.forEach((es: any) => {
-              exercises.push({
-                id: es.id?.toString(),
-                exerciseId: `endurance_${es.id}`,
-                exercise: {
-                  id: `endurance_${es.id}`,
-                  name: `${es.sport_type} - ${es.training_volume} ${es.unit}`,
-                  instructions: `${es.sport_type} session`,
-                  target_area: 'Endurance',
-                  force: null,
-                  equipment: null,
-                  secondary_muscles: [],
-                  main_muscles: [],
-                  difficulty: null,
-                  exercise_tier: null,
-                  imageUrl: null,
-                  videoUrl: null
-                },
-                sets: [],
-                completed: es.completed || false,
-                order: exercises.length
-              });
-            });
-          }
-
-          return {
-            id: daily.id?.toString(),
-            dayOfWeek: daily.day_of_week,
-            isRestDay: daily.is_rest_day || false,
-            exercises,
-            completed: daily.completed || false
-          };
-        }),
-        completed: false,
-        completedAt: undefined
-      };
-    }) || [],
-    createdAt: backendData.created_at ? new Date(backendData.created_at) : new Date(),
-    updatedAt: backendData.updated_at ? new Date(backendData.updated_at) : new Date(),
-    completed: false,
-    completedAt: undefined
-  };
-};
-
 interface ConversationalOnboardingProps {
   onComplete: (trainingPlan: any) => Promise<void>;
   onError: (error: string) => void;
@@ -123,7 +32,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   onError,
   startFromStep = 'welcome',
 }) => {
-  const { state: authState, refreshUserProfile, setTrainingPlan } = useAuth();
+  const { state: authState, refreshUserProfile, setTrainingPlan, setExercises } = useAuth();
   const [state, setState] = useState<OnboardingState>({
     username: '',
     usernameValid: false,
@@ -145,9 +54,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     followUpAiMessage: undefined,
     planGenerationLoading: false,
     trainingPlan: null,
+    completionMessage: null,
+    hasSeenCompletionMessage: false,
     error: null,
     aiHasQuestions: false,
     aiAnalysisPhase: null,
+    planMetadata: undefined,
   });
 
   // Add retry state for error recovery
@@ -164,7 +76,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   // Determine starting step - either from prop or default to welcome
   const initialStep = startFromStep || 'welcome';
-  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial' | 'followup' | 'generation'>(initialStep);
+  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial' | 'followup' | 'generation' | 'preview'>(initialStep);
 
   // Track if we've initialized from profile (run only once per component mount)
   const hasInitializedFromProfileRef = useRef(false);
@@ -233,6 +145,37 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     }
   }, [authState.userProfile, startFromStep, onError]);
 
+  // Check if user has a plan but hasn't accepted it yet - show preview step
+  useEffect(() => {
+    if (authState.userProfile && authState.trainingPlan && !authState.userProfile.planAccepted) {
+      console.log('📍 Onboarding: User has plan but not accepted - showing preview step');
+      
+      // Extract AI message from training plan
+      const aiMessageFromPlan = (authState.trainingPlan as any)?.aiMessage || 
+        (authState.trainingPlan as any)?.ai_message;
+      
+      console.log(`📍 Onboarding: AI message from plan: ${aiMessageFromPlan ? aiMessageFromPlan.substring(0, 50) + '...' : 'NONE - using fallback'}`);
+      
+      setCurrentStep('preview');
+      
+      // Load the training plan into state
+      setState(prev => ({
+        ...prev,
+        trainingPlan: authState.trainingPlan,
+        planMetadata: {
+          formattedInitialResponses: authState.userProfile?.initial_responses ? 
+            Object.entries(authState.userProfile.initial_responses)
+              .map(([key, value]) => `${key}: ${value}`)
+              .join('\n') : '',
+          formattedFollowUpResponses: authState.userProfile?.follow_up_responses ? 
+            Object.entries(authState.userProfile.follow_up_responses)
+              .map(([key, value]) => `${key}: ${value}`)
+              .join('\n') : '',
+        },
+      }));
+    }
+  }, [authState.userProfile, authState.trainingPlan]);
+
   // Track if we've already triggered loading for each step
   const hasTriggeredInitialQuestionsRef = useRef(false);
   const hasTriggeredFollowUpQuestionsRef = useRef(false);
@@ -290,80 +233,131 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, state.personalInfo, state.planGenerationLoading, state.trainingPlan, state.error]);
 
+  // Track plan generation in progress to prevent race conditions
+  const planGenerationRef = useRef<{ inProgress: boolean; timeoutId?: ReturnType<typeof setTimeout> }>({ inProgress: false });
+
   // Handle plan generation (extracted from handleOutlineNext)
-  const handlePlanGeneration = useCallback(async () => {
+  const handlePlanGeneration = useCallback(() => {
     logStep('Plan Generation', 'started');
     
     if (!state.personalInfo) {
       logError('Plan Generation: Missing personal info');
       return;
     }
+
+    // Prevent duplicate calls
+    if (planGenerationRef.current.inProgress) {
+      logError('Plan Generation: Already in progress');
+      return;
+    }
+
     setState(prev => ({ 
       ...prev, 
       planGenerationLoading: true,
       aiAnalysisPhase: 'generation'
     }));
 
-    try {
-      // Simulate AI thinking time, then generate final plan
-      setTimeout(async () => {
-        try {
-          // Get JWT token from Supabase session
-          const { data: { session } } = await supabase.auth.getSession();
-          const jwtToken = session?.access_token;
+    // Mark as in progress
+    planGenerationRef.current.inProgress = true;
+  }, [state.personalInfo]);
+
+  // useEffect to handle plan generation with proper cleanup
+  useEffect(() => {
+    if (!state.planGenerationLoading || !planGenerationRef.current.inProgress) {
+      return;
+    }
+
+    // Clear any existing timeout
+    if (planGenerationRef.current.timeoutId) {
+      clearTimeout(planGenerationRef.current.timeoutId);
+    }
+
+    // Set timeout for AI thinking simulation
+    const timeoutId = setTimeout(async () => {
+      try {
+        // Check if component is still mounted and still in loading state
+        if (!planGenerationRef.current.inProgress) {
+          return;
+        }
+
+        // Get JWT token from AuthContext state
+        const jwtToken = authState.session?.access_token;
+        
+        if (!jwtToken) {
+          throw new Error('JWT token is missing - cannot generate training plan');
+        }
+        
+        // Get raw responses - backend will handle formatting
+        const initialResponses = Object.fromEntries(state.initialResponses);
+        const followUpResponses = Object.fromEntries(state.followUpResponses);
+        
+        const fullPersonalInfo = {
+          ...state.personalInfo!,
+          username: state.username,
+          goal_description: state.goalDescription,
+          experience_level: state.experienceLevel,
+        };
+        
+        const response = await trainingService.generateTrainingPlan(
+          fullPersonalInfo,
+          initialResponses,
+          followUpResponses,
+          state.initialQuestions,
+          state.followUpQuestions,
+          authState.userProfile?.id,
+          jwtToken
+        );
+        
+        // Check again if still in progress (component might have unmounted)
+        if (!planGenerationRef.current.inProgress) {
+          return;
+        }
+        
+        logData('Generate Plan', response.success ? 'success' : 'error');
+        
+        if (response.success && response.data) {
+          // Backend now returns the complete enriched plan with database IDs
+          // Transform from backend format (snake_case) to frontend format (camelCase)
+          logStep('Plan Generation', 'completed', 'Training plan received from backend with database IDs');
+          console.log('✅ ConversationalOnboarding: Using enriched plan from backend (no refetch needed)');
           
-          if (!jwtToken) {
-            throw new Error('JWT token is missing - cannot generate training plan');
+          // Transform the plan from backend format to frontend format
+          const { transformTrainingPlan } = await import('../../utils/trainingPlanTransformer');
+          const transformedPlan = transformTrainingPlan(response.data);
+          console.log('✅ ConversationalOnboarding: Transformed plan to frontend format');
+              
+          // Set plan in AuthContext - already has all database IDs
+          setTrainingPlan(transformedPlan);
+              
+          // Store exercises in AuthContext for future use
+          if (response.metadata?.exercises) {
+            setExercises(response.metadata.exercises);
           }
+              
+          // Stop spinner and show plan
+          setState(prev => ({
+            ...prev,
+            trainingPlan: transformedPlan,
+            completionMessage: response.completion_message || "🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨",
+            planGenerationLoading: false,
+            planMetadata: {
+              formattedInitialResponses: response.metadata?.formatted_initial_responses,
+              formattedFollowUpResponses: response.metadata?.formatted_follow_up_responses,
+            },
+          }));
           
-          // Get raw responses - backend will handle formatting
-          const initialResponses = Object.fromEntries(state.initialResponses);
-          const followUpResponses = Object.fromEntries(state.followUpResponses);
+          // Automatically transition to preview/feedback step (skip completion message)
+          setCurrentStep('preview');
           
-          const fullPersonalInfo = {
-            ...state.personalInfo!,
-            username: state.username,
-            goal_description: state.goalDescription,
-            experience_level: state.experienceLevel,
-          };
-          
-          const response = await trainingService.generateTrainingPlan(
-            fullPersonalInfo,
-            initialResponses,
-            followUpResponses,
-            state.initialQuestions,
-            state.followUpQuestions,
-            authState.userProfile?.id,
-            jwtToken
-          );
-          
-          logData('Generate Plan', response.success ? 'success' : 'error');
-          
-          if (response.success && response.data) {
-            // Backend now returns the complete formatted training plan
-            logStep('Plan Generation', 'completed', 'Training plan received from backend');
-            
-            // Transform backend data to frontend format before setting
-            const transformedPlan = transformBackendToFrontend(response.data);
-            if (transformedPlan) {
-              setTrainingPlan(transformedPlan);
-            } else {
-              throw new Error('Failed to transform training plan data');
-            }
-            
-            setState(prev => ({
-              ...prev,
-              trainingPlan: transformedPlan,
-              planGenerationLoading: false,
-            }));
-            
-            // Navigate to main app with the transformed plan
-            onComplete(transformedPlan!);
-          } else {
-            logError('Plan generation failed', response.message);
-            throw new Error(response.message || 'Failed to generate training plan');
-          }
-        } catch (error) {
+          // Reset in progress flag
+          planGenerationRef.current.inProgress = false;
+        } else {
+          logError('Plan generation failed', response.message);
+          throw new Error(response.message || 'Failed to generate training plan');
+        }
+      } catch (error) {
+        // Only update state if still in progress (component still mounted)
+        if (planGenerationRef.current.inProgress) {
           logError('Plan generation error', error);
           const errorMessage = error instanceof Error ? error.message : 'Failed to generate training plan';
           setState(prev => ({
@@ -373,20 +367,22 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             error: errorMessage,
           }));
           onError(errorMessage);
+          planGenerationRef.current.inProgress = false;
         }
-      }, AI_DELAYS.planGeneration);
-    } catch (error) {
-      logError('Error in plan generation setup', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to generate training plan';
-      setState(prev => ({
-        ...prev,
-        planGenerationLoading: false,
-        aiAnalysisPhase: null,
-        error: errorMessage,
-      }));
-      onError(errorMessage);
-    }
-  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.followUpResponses, state.trainingPlanOutline, state.outlineFeedback, state.initialQuestions, state.followUpQuestions, authState.userProfile, onComplete, onError]);
+      }
+    }, AI_DELAYS.planGeneration);
+
+    planGenerationRef.current.timeoutId = timeoutId;
+
+    // Cleanup function
+    return () => {
+      if (planGenerationRef.current.timeoutId) {
+        clearTimeout(planGenerationRef.current.timeoutId);
+        planGenerationRef.current.timeoutId = undefined;
+      }
+      planGenerationRef.current.inProgress = false;
+    };
+  }, [state.planGenerationLoading, state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, authState.userProfile, authState.userProfile?.id, authState.session?.access_token, setTrainingPlan, setExercises, onError]);
 
   // Step 1: Username
   const handleUsernameChange = useCallback((username: string) => {
@@ -483,8 +479,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         experience_level: state.experienceLevel,
       };
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const jwtToken = session?.access_token;
+      const jwtToken = authState.session?.access_token;
       
       const response = await trainingService.getInitialQuestions(
         fullPersonalInfo,
@@ -524,8 +519,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
     try {
       const responsesObject = Object.fromEntries(state.initialResponses);
-      const { data: { session } } = await supabase.auth.getSession();
-      const jwtToken = session?.access_token;
+      const jwtToken = authState.session?.access_token;
       
       const fullPersonalInfo = {
         ...state.personalInfo,
@@ -597,8 +591,17 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     });
   }, []);
 
-  const handleInitialQuestionsNext = useCallback(async () => {
+  // Track follow-up questions loading to prevent race conditions
+  const followUpQuestionsRef = useRef<{ inProgress: boolean; timeoutId?: ReturnType<typeof setTimeout> }>({ inProgress: false });
+
+  const handleInitialQuestionsNext = useCallback(() => {
     if (!state.personalInfo) return;
+
+    // Prevent duplicate calls
+    if (followUpQuestionsRef.current.inProgress) {
+      logError('Follow-up questions: Already in progress');
+      return;
+    }
 
     setState(prev => ({ 
       ...prev, 
@@ -606,43 +609,68 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       aiAnalysisPhase: 'initial'
     }));
     setCurrentStep('initial');
+    followUpQuestionsRef.current.inProgress = true;
+  }, [state.personalInfo]);
 
-    try {
-      // Simulate AI thinking time, then get follow-up questions
-      setTimeout(async () => {
-        try {
-          const responsesObject = Object.fromEntries(state.initialResponses);
-          
-          
-          // Get JWT token from Supabase session
-          const { data: { session } } = await supabase.auth.getSession();
-          const jwtToken = session?.access_token;
-          
-          const fullPersonalInfo = {
-            ...state.personalInfo!,
-            username: state.username,
-            goal_description: state.goalDescription,
-            experience_level: state.experienceLevel,
-          };
-          
-          const response = await trainingService.getFollowUpQuestions(
-            fullPersonalInfo, 
-            responsesObject, // Send raw responses - backend will format them
-            state.initialQuestions, // Send initial questions
-            authState.userProfile?.id,
-            jwtToken
-          );
-          
-          setState(prev => ({
-            ...prev,
-            followUpQuestions: response.questions,
-            initialQuestions: response.initial_questions || prev.initialQuestions, // Use returned questions
-            planGenerationLoading: false,
-            currentFollowUpQuestionIndex: 0,
-            aiHasQuestions: true,
-            followUpAiMessage: response.ai_message,
-          }));
-        } catch (error) {
+  // useEffect to handle follow-up questions with proper cleanup
+  useEffect(() => {
+    if (currentStep !== 'initial' || !state.planGenerationLoading || !followUpQuestionsRef.current.inProgress) {
+      return;
+    }
+
+    // Clear any existing timeout
+    if (followUpQuestionsRef.current.timeoutId) {
+      clearTimeout(followUpQuestionsRef.current.timeoutId);
+    }
+
+    // Set timeout for AI thinking simulation
+    const timeoutId = setTimeout(async () => {
+      try {
+        // Check if component is still mounted and still in progress
+        if (!followUpQuestionsRef.current.inProgress) {
+          return;
+        }
+
+        const responsesObject = Object.fromEntries(state.initialResponses);
+        
+        // Get JWT token from AuthContext state
+        const jwtToken = authState.session?.access_token;
+        
+        const fullPersonalInfo = {
+          ...state.personalInfo!,
+          username: state.username,
+          goal_description: state.goalDescription,
+          experience_level: state.experienceLevel,
+        };
+        
+        const response = await trainingService.getFollowUpQuestions(
+          fullPersonalInfo, 
+          responsesObject, // Send raw responses - backend will format them
+          state.initialQuestions, // Send initial questions
+          authState.userProfile?.id,
+          jwtToken
+        );
+        
+        // Check again if still in progress (component might have unmounted)
+        if (!followUpQuestionsRef.current.inProgress) {
+          return;
+        }
+        
+        setState(prev => ({
+          ...prev,
+          followUpQuestions: response.questions,
+          initialQuestions: response.initial_questions || prev.initialQuestions, // Use returned questions
+          planGenerationLoading: false,
+          currentFollowUpQuestionIndex: 0,
+          aiHasQuestions: true,
+          followUpAiMessage: response.ai_message,
+        }));
+        
+        // Reset in progress flag
+        followUpQuestionsRef.current.inProgress = false;
+      } catch (error) {
+        // Only update state if still in progress (component still mounted)
+        if (followUpQuestionsRef.current.inProgress) {
           const errorMessage = error instanceof Error ? error.message : 'Failed to load follow-up questions';
           setState(prev => ({
             ...prev,
@@ -653,18 +681,22 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           // Set retry step for error recovery
           setRetryStep('followup');
           onError(errorMessage);
+          followUpQuestionsRef.current.inProgress = false;
         }
-      }, AI_DELAYS.followUpQuestions); // Configurable delay to show AI thinking
-      
-    } catch (error) {
-      setState(prev => ({
-        ...prev,
-        planGenerationLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to start AI analysis',
-      }));
-      onError(error instanceof Error ? error.message : 'Failed to start AI analysis');
-    }
-  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.initialQuestions, authState.userProfile?.id, onError]);
+      }
+    }, AI_DELAYS.followUpQuestions);
+
+    followUpQuestionsRef.current.timeoutId = timeoutId;
+
+    // Cleanup function
+    return () => {
+      if (followUpQuestionsRef.current.timeoutId) {
+        clearTimeout(followUpQuestionsRef.current.timeoutId);
+        followUpQuestionsRef.current.timeoutId = undefined;
+      }
+      followUpQuestionsRef.current.inProgress = false;
+    };
+  }, [currentStep, state.planGenerationLoading, state.initialResponses, state.initialQuestions, state.personalInfo, state.username, state.goalDescription, state.experienceLevel, authState.userProfile?.id, authState.session?.access_token, onError]);
 
   // Step 3: Follow-up Questions
   const handleFollowUpResponseChange = useCallback((questionId: string, value: any) => {
@@ -765,6 +797,14 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     setState(prev => ({ ...prev, error: null }));
     setCurrentStep('welcome');
   }, []);
+
+  // Handle completion of onboarding
+  const handleComplete = useCallback(() => {
+    console.log('📍 Onboarding: Completing onboarding flow');
+    if (state.trainingPlan) {
+      onComplete(state.trainingPlan);
+    }
+  }, [state.trainingPlan, onComplete]);
 
 
   const renderCurrentStep = () => {
@@ -887,6 +927,25 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             onRetry={handleRetry}
             onStartGeneration={handlePlanGeneration}
             username={state.username}
+            isCompleted={!!state.trainingPlan && !state.planGenerationLoading}
+            completionMessage={state.completionMessage || undefined}
+            onContinue={() => {
+              setState(prev => ({ ...prev, hasSeenCompletionMessage: true }));
+              handleComplete();
+            }}
+            onViewPlan={() => {
+              setState(prev => ({ ...prev, hasSeenCompletionMessage: true }));
+              setCurrentStep('preview');
+            }}
+          />
+        );
+      
+      case 'preview':
+        return (
+          <PlanPreviewStep
+            onContinue={handleComplete}
+            onBack={() => setCurrentStep('generation')}
+            planMetadata={state.planMetadata}
           />
         );
       

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../constants/designSystem';
-import { IconSymbol } from '../../../components/ui/IconSymbol';
 
 interface AIChatMessageProps {
   username?: string;
@@ -10,7 +11,60 @@ interface AIChatMessageProps {
   aiMessage?: string; // AI message from backend
   onTypingComplete?: () => void;
   skipAnimation?: boolean;
+  isLoading?: boolean; // Show loading dots while waiting for backend response
 }
+
+// Animated typing dots component
+const TypingDots: React.FC = () => {
+  const dot1 = useRef(new Animated.Value(0.4)).current;
+  const dot2 = useRef(new Animated.Value(0.4)).current;
+  const dot3 = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    const createPulseAnimation = (dot: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, {
+            toValue: 1,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(dot, {
+            toValue: 0.4,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+    };
+
+    // Start animations with staggered delays
+    const animation1 = createPulseAnimation(dot1, 0);
+    const animation2 = createPulseAnimation(dot2, 200);
+    const animation3 = createPulseAnimation(dot3, 400);
+
+    // Start all animations
+    animation1.start();
+    animation2.start();
+    animation3.start();
+
+    // Cleanup function
+    return () => {
+      animation1.stop();
+      animation2.stop();
+      animation3.stop();
+    };
+  }, []);
+
+  return (
+    <View style={styles.typingContainer}>
+      <Animated.Text style={[styles.typingDot, { opacity: dot1 }]}>•</Animated.Text>
+      <Animated.Text style={[styles.typingDot, { opacity: dot2 }]}>•</Animated.Text>
+      <Animated.Text style={[styles.typingDot, { opacity: dot3 }]}>•</Animated.Text>
+    </View>
+  );
+};
 
 export const AIChatMessage: React.FC<AIChatMessageProps> = ({
   username,
@@ -19,6 +73,7 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
   aiMessage,
   onTypingComplete,
   skipAnimation = false,
+  isLoading = false,
 }) => {
   const [displayedText, setDisplayedText] = useState('');
   const [showTypingIndicator, setShowTypingIndicator] = useState(true);
@@ -115,7 +170,7 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
     <View style={styles.container}>
       <Animated.View style={[styles.messageWrapper, { opacity: fadeAnim }]}>
         <View style={styles.aiAvatar}>
-          <IconSymbol name="brain" size={18} color="white" />
+          <MaterialIcons name="psychology" size={18} color="white" />
         </View>
         <View style={styles.chatBubble}>
           <View style={styles.chatHeader}>
@@ -129,10 +184,14 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
           </View>
           
           <View style={styles.messageContent}>
-            <Text style={styles.messageText}>
-              {displayedText}
-              {showTypingIndicator && <Text style={styles.cursor}>|</Text>}
-            </Text>
+            {isLoading && !displayedText ? (
+              <TypingDots />
+            ) : (
+              <Text style={styles.messageText}>
+                {displayedText}
+                {showTypingIndicator && !isLoading && <Text style={styles.cursor}>|</Text>}
+              </Text>
+            )}
           </View>
           
           {/* Chat bubble tail */}
@@ -248,5 +307,17 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  typingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  typingDot: {
+    fontSize: 24,
+    color: colors.primary,
+    marginHorizontal: 3,
+    fontWeight: 'bold',
   },
 });

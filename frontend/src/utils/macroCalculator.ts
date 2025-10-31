@@ -115,36 +115,39 @@ export const WORKOUT_INTENSITY = {
 } as const;
 
 /**
- * Helper function to estimate base activity level from user profile
- * This is a simplified estimation - ideally would come from onboarding
+ * Helper function to get base activity level
+ * Default to sedentary as a safe, conservative baseline
+ * Training activity is added separately via training boost
  */
-export function estimateBaseActivityFromProfile(daysPerWeek: number, minutesPerSession: number): "sedentary" | "light" | "moderate" | "high" {
-  // For now, we'll make assumptions based on training frequency
-  // In the future, this should come from onboarding questions about job type, daily steps, etc.
-  
-  if (daysPerWeek <= 2) {
-    return "sedentary"; // Assumes desk job, minimal daily activity
-  } else if (daysPerWeek <= 4) {
-    return "light"; // Assumes some daily movement, standing job
-  } else if (daysPerWeek <= 5) {
-    return "moderate"; // Assumes active lifestyle, on feet often
-  } else {
-    return "high"; // Assumes very active lifestyle
-  }
+export function estimateBaseActivityFromProfile(): "sedentary" | "light" | "moderate" | "high" {
+  // Default to sedentary (desk job, minimal daily activity outside training)
+  // This is conservative and safe - training activity is added separately
+  return "sedentary";
 }
 
 /**
- * Helper function to estimate training intensity from user profile
+ * Helper function to estimate training intensity from training plan data
+ * Based on training frequency and experience level
  */
-export function estimateTrainingIntensity(daysPerWeek: number, minutesPerSession: number): "low" | "medium" | "high" {
-  const totalMinutesPerWeek = daysPerWeek * minutesPerSession;
+export function estimateTrainingIntensity(
+  daysPerWeek: number, 
+  experienceLevel: string
+): "low" | "medium" | "high" {
+  // Experience multiplier - advanced athletes train with higher intensity
+  const experienceMultiplier = 
+    experienceLevel.toLowerCase().includes('advanced') ? 1.2 :
+    experienceLevel.toLowerCase().includes('intermediate') ? 1.0 : 0.8;
   
-  if (totalMinutesPerWeek <= 200) {
-    return "low"; // Light trainings
-  } else if (totalMinutesPerWeek <= 400) {
-    return "medium"; // Moderate intensity
+  // Adjust frequency by experience
+  const adjustedFrequency = daysPerWeek * experienceMultiplier;
+  
+  // Classify intensity based on training frequency and experience
+  if (adjustedFrequency <= 3) {
+    return "low";      // 1-3 days/week (or beginner)
+  } else if (adjustedFrequency <= 5) {
+    return "medium";   // 4-5 days/week (or intermediate)
   } else {
-    return "high"; // High intensity
+    return "high";     // 6+ days/week (or advanced)
   }
 }
 

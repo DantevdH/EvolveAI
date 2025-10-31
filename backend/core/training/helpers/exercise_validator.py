@@ -8,12 +8,16 @@ in the database and provides fallback alternatives when needed using cosine simi
 import re
 from typing import List, Dict, Any, Optional, Tuple
 from .exercise_selector import ExerciseSelector
+from .exercise_matcher import ExerciseMatcher
+from .ai_exercise_logger import ai_exercise_logger
 import logging
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
 logger = logging.getLogger(__name__)
+# Reduce log verbosity - only show warnings and errors
+logger.setLevel(logging.WARNING)
 
 
 class ExerciseValidator:
@@ -22,6 +26,7 @@ class ExerciseValidator:
     def __init__(self):
         """Initialize the exercise validator."""
         self.exercise_selector = ExerciseSelector()
+        self.exercise_matcher = ExerciseMatcher()
         self.vectorizer = TfidfVectorizer(
             max_features=1000, stop_words="english", ngram_range=(1, 2)
         )
@@ -136,9 +141,10 @@ class ExerciseValidator:
 
                 for day_idx, day in enumerate(days):
                     if not day.get("is_rest_day", False):
-                        exercises = day.get("exercises", [])
+                        # Use strength_exercises (user-specific exercises with reps/sets)
+                        strength_exercises = day.get("strength_exercises", [])
 
-                        for exercise_idx, exercise in enumerate(exercises):
+                        for exercise_idx, exercise in enumerate(strength_exercises):
                             exercise_id = exercise.get("exercise_id")
                             if exercise_id:
                                 exercise_id_str = exercise_id
@@ -238,10 +244,11 @@ class ExerciseValidator:
                         week = weeks[location["week_idx"]]
                         days = week.get(days_key, [])
                         day = days[location["day_idx"]]
-                        exercises = day.get("exercises", [])
+                        # Use strength_exercises (user-specific exercises with reps/sets)
+                        strength_exercises = day.get("strength_exercises", [])
 
                         # Update exercise with replacement data
-                        exercises[location["exercise_idx"]].update(replacement)
+                        strength_exercises[location["exercise_idx"]].update(replacement)
                         logger.info(
                             f"Replaced invalid exercise {exercise_id} with {replacement['id']}"
                         )
@@ -250,10 +257,11 @@ class ExerciseValidator:
                         week = weeks[location["week_idx"]]
                         days = week.get(days_key, [])
                         day = days[location["day_idx"]]
-                        exercises = day.get("exercises", [])
+                        # Use strength_exercises (user-specific exercises with reps/sets)
+                        strength_exercises = day.get("strength_exercises", [])
 
                         # Mark for removal (we'll remove them in reverse order to maintain indices)
-                        exercises[location["exercise_idx"]] = None
+                        strength_exercises[location["exercise_idx"]] = None
                         logger.warning(
                             f"Marked invalid exercise {exercise_id} for removal - no replacement found"
                         )
@@ -263,8 +271,9 @@ class ExerciseValidator:
                 days = week.get(days_key, [])
                 for day in days:
                     if not day.get("is_rest_day", False):
-                        exercises = day.get("exercises", [])
-                        day["exercises"] = [ex for ex in exercises if ex is not None]
+                        # Use strength_exercises (user-specific exercises with reps/sets)
+                        strength_exercises = day.get("strength_exercises", [])
+                        day["strength_exercises"] = [ex for ex in strength_exercises if ex is not None]
 
             return fixed_training
 
@@ -444,8 +453,8 @@ class ExerciseValidator:
             # Prepare text for vectorization
             texts = [target_description]
             for candidate in candidates:
-                # Combine exercise name, description, and muscle group for better matching
-                candidate_text = f"{candidate.get('name', '')} {candidate.get('description', '')} {candidate.get('target_area', '')}"
+                # Combine exercise name and description for better matching
+                candidate_text = f"{candidate.get('name', '')} {candidate.get('description', '')}"
                 texts.append(candidate_text)
 
             # Create TF-IDF vectors
@@ -534,14 +543,16 @@ class ExerciseValidator:
                 # Batch process all days in this week
                 for day_idx, day in enumerate(days):
                     if not day.get("is_rest_day", False):
-                        exercises = day.get("exercises", [])
-                        total_exercises += len(exercises)
+                        # Use strength_exercises (user-specific exercises with reps/sets)
+                        # Note: 'exercises' table contains all exercises, 'strength_exercise' table is user-specific
+                        strength_exercises = day.get("strength_exercises", [])
+                        total_exercises += len(strength_exercises)
 
-                        if not exercises:
+                        if not strength_exercises:
                             empty_training_days += 1
                         else:
                             # Quick scan for missing exercise_ids
-                            for exercise in exercises:
+                            for exercise in strength_exercises:
                                 if not exercise.get("exercise_id"):
                                     missing_exercise_ids += 1
 
@@ -568,3 +579,325 @@ class ExerciseValidator:
         except Exception as e:
             logger.error(f"Error validating training structure: {e}")
             return [f"Structure validation error: {e}"]
+
+    def post_process_strength_exercises(
+        self,
+        training_plan_dict: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Post-process strength exercises: match AI-generated exercises to database.
+        
+        This function:
+        1. Finds all strength exercises with AI-generated metadata (exercise_name, main_muscle, equipment)
+        2. Matches each to database using ExerciseMatcher
+        3. Replaces metadata with exercise_id
+        4. Logs all AI exercises to ai_exercises table for monitoring
+        
+        Args:
+            training_plan_dict: Training plan dictionary (can be Pydantic model or dict)
+        
+        Returns:
+            Updated training plan dictionary with exercise_id set for all strength exercises
+        """
+        try:
+            # Convert Pydantic model to dict if needed
+            if hasattr(training_plan_dict, 'model_dump'):
+                plan_dict = training_plan_dict.model_dump()
+            else:
+                plan_dict = training_plan_dict.copy()
+            
+            stats = {
+                "exercises_processed": 0,
+                "exercises_matched": 0,
+                "exercises_logged": 0,
+                "low_similarity_count": 0
+            }
+            
+            # Collect all exercises to log in bulk
+            exercises_to_log = []
+            
+            # Iterate through weekly_schedules -> daily_trainings -> strength_exercises
+            weekly_schedules = plan_dict.get("weekly_schedules", [])
+            
+            for week in weekly_schedules:
+                daily_trainings = week.get("daily_trainings", [])
+                
+                for daily_training in daily_trainings:
+                    if daily_training.get("is_rest_day", False):
+                        continue
+                    
+                    strength_exercises = daily_training.get("strength_exercises", [])
+                    
+                    # CRITICAL: Filter out exercises without matches after processing
+                    exercises_to_keep = []
+                    
+                    # Track exercise names already in this day's plan (for fallback diversity)
+                    # First, collect exercise_ids from exercises that already have them
+                    existing_exercise_ids = [
+                        ex.get("exercise_id") 
+                        for ex in strength_exercises 
+                        if ex.get("exercise_id")
+                    ]
+                    
+                    # Fetch exercise names for existing exercise_ids
+                    existing_exercise_names = []
+                    if existing_exercise_ids:
+                        try:
+                            # Get exercise details for existing IDs using existing selector
+                            exercises_data = self.exercise_selector.supabase.table("exercises").select("id, name").in_("id", existing_exercise_ids).execute()
+                            if exercises_data.data:
+                                existing_exercise_names = [ex.get("name", "") for ex in exercises_data.data if ex.get("name")]
+                        except Exception as e:
+                            logger.warning(f"Could not fetch existing exercise names: {e}")
+                    
+                    for exercise in strength_exercises:
+                        exercise_name = exercise.get("exercise_name", "Unknown")
+                        exercise_id = exercise.get("exercise_id")
+                        
+                        # If already has exercise_id (from previous processing or user data), validate it before keeping
+                        if exercise_id is not None:
+                            # Validate that the exercise_id still exists in database
+                            try:
+                                valid_ids, invalid_ids = self.exercise_selector.validate_exercise_ids([str(exercise_id)])
+                                if str(exercise_id) in valid_ids:
+                                    logger.debug(f"✅ Exercise '{exercise_name}' has valid exercise_id={exercise_id}, keeping it")
+                                    exercises_to_keep.append(exercise)
+                                    continue
+                                else:
+                                    logger.warning(
+                                        f"⚠️ Exercise '{exercise_name}' has invalid exercise_id={exercise_id} (not in database). "
+                                        f"Will attempt to rematch or remove."
+                                    )
+                                    # Don't continue - fall through to rematch logic
+                                    # Clear the invalid exercise_id so it can be rematched
+                                    exercise.pop("exercise_id", None)
+                            except Exception as e:
+                                logger.error(f"Error validating exercise_id {exercise_id} for '{exercise_name}': {e}")
+                                # Clear invalid exercise_id and fall through to rematch
+                                exercise.pop("exercise_id", None)
+                        
+                        # Check if this exercise has AI-generated metadata
+                        main_muscle = exercise.get("main_muscle")
+                        equipment = exercise.get("equipment")
+                        
+                        if not all([exercise_name, main_muscle, equipment]):
+                            logger.warning(
+                                f"⚠️ Skipping exercise with incomplete metadata: "
+                                f"name={exercise_name}, main_muscle={main_muscle}, equipment={equipment}. "
+                                f"Exercise will be removed from plan."
+                            )
+                            # Mark for removal instead of silently skipping
+                            exercise["_remove_from_plan"] = True
+                            continue
+                        
+                        stats["exercises_processed"] += 1
+                        
+                        # Match to database
+                        matched_exercise, similarity_score, status = (
+                            self.exercise_matcher.match_ai_exercise_to_database(
+                                ai_exercise_name=exercise_name,
+                                main_muscle=main_muscle,
+                                equipment=equipment,
+                                max_popularity=2
+                            )
+                        )
+                        
+                        # Set exercise_id if matched
+                        matched_exercise_id = matched_exercise.get("id") if matched_exercise else None
+                        matched_exercise_name = matched_exercise.get("name") if matched_exercise else None
+                        
+                        if matched_exercise:
+                            # CRITICAL: Validate exercise_id exists before using
+                            matched_exercise_id = matched_exercise.get("id")
+                            if matched_exercise_id:
+                                # Verify the exercise ID still exists in database (edge case: exercise deleted between match and save)
+                                valid_ids, _ = self.exercise_selector.validate_exercise_ids([str(matched_exercise_id)])
+                                if str(matched_exercise_id) in valid_ids:
+                                    exercise["exercise_id"] = matched_exercise_id
+                                    # Keep exercise_name for frontend display, update with matched name
+                                    exercise["exercise_name"] = matched_exercise_name
+                                    # Update other metadata with matched values
+                                    exercise["main_muscle"] = matched_exercise.get("main_muscle")
+                                    exercise["equipment"] = matched_exercise.get("equipment")
+                                    stats["exercises_matched"] += 1
+                                    
+                                    if similarity_score < 0.70:
+                                        stats["low_similarity_count"] += 1
+                                    
+                                    logger.info(
+                                        f"Matched exercise: '{exercise_name}' -> "
+                                        f"'{matched_exercise_name}' (ID: {matched_exercise_id}, "
+                                        f"score: {similarity_score:.3f}, status: {status})"
+                                    )
+                                    # Add to existing names for fallback diversity tracking
+                                    existing_exercise_names.append(matched_exercise_name)
+                                else:
+                                    # Exercise was deleted between match and validation
+                                    logger.warning(
+                                        f"Matched exercise ID {matched_exercise_id} no longer exists in database. "
+                                        f"Exercise '{exercise_name}' will be removed from plan."
+                                    )
+                                    exercise["_remove_from_plan"] = True
+                            else:
+                                logger.warning(
+                                    f"Matched exercise has no ID. Exercise '{exercise_name}' will be removed from plan."
+                                )
+                                exercise["_remove_from_plan"] = True
+                        else:
+                            # CRITICAL: Try to find a fallback replacement instead of removing
+                            logger.warning(
+                                f"No match found for exercise: '{exercise_name}' "
+                                f"(main_muscle: {main_muscle}, equipment: {equipment}). "
+                                f"Attempting to find fallback replacement..."
+                            )
+                            
+                            # Find fallback replacement (same equipment, main_muscle, popularity <= 2, different from existing)
+                            fallback_exercise = self.exercise_matcher.find_fallback_replacement(
+                                main_muscle=main_muscle,
+                                equipment=equipment,
+                                existing_exercise_names=existing_exercise_names,
+                                max_popularity=2
+                            )
+                            
+                            if fallback_exercise:
+                                fallback_exercise_id = fallback_exercise.get("id")
+                                fallback_exercise_name = fallback_exercise.get("name")
+                                
+                                # Verify the exercise ID still exists in database
+                                if fallback_exercise_id:
+                                    valid_ids, _ = self.exercise_selector.validate_exercise_ids([str(fallback_exercise_id)])
+                                    if str(fallback_exercise_id) in valid_ids:
+                                        # Replace with fallback exercise
+                                        exercise["exercise_id"] = fallback_exercise_id
+                                        # Keep exercise_name for frontend display, update with fallback name
+                                        exercise["exercise_name"] = fallback_exercise_name
+                                        # Update other metadata with fallback values
+                                        exercise["main_muscle"] = fallback_exercise.get("main_muscle")
+                                        exercise["equipment"] = fallback_exercise.get("equipment")
+                                        stats["exercises_matched"] += 1
+                                        
+                                        logger.info(
+                                            f"✅ Fallback replacement: '{exercise_name}' -> "
+                                            f"'{fallback_exercise_name}' (ID: {fallback_exercise_id})"
+                                        )
+                                        
+                                        # Add to existing names for next iterations
+                                        existing_exercise_names.append(fallback_exercise_name)
+                                    else:
+                                        logger.warning(
+                                            f"Fallback exercise ID {fallback_exercise_id} no longer exists. "
+                                            f"Exercise '{exercise_name}' will be removed from plan."
+                                        )
+                                        exercise["_remove_from_plan"] = True
+                                else:
+                                    logger.warning(
+                                        f"Fallback exercise has no ID. Exercise '{exercise_name}' will be removed from plan."
+                                    )
+                                    exercise["_remove_from_plan"] = True
+                            else:
+                                # No fallback found, remove exercise
+                                logger.error(
+                                    f"CRITICAL: No fallback replacement found for exercise: '{exercise_name}' "
+                                    f"(main_muscle: {main_muscle}, equipment: {equipment}). "
+                                    f"Exercise will be removed from plan to prevent database errors."
+                                )
+                                exercise["_remove_from_plan"] = True
+                        
+                        # Collect exercise data for bulk logging (only if status != "matched" - matched exercises don't need monitoring)
+                        if status != "matched":
+                            exercises_to_log.append({
+                                "ai_exercise_name": exercise_name,
+                                "main_muscle": main_muscle,
+                                "equipment": equipment,
+                                "similarity_score": similarity_score,
+                                "matched_exercise_id": matched_exercise_id,
+                                "matched_exercise_name": matched_exercise_name,
+                                "status": status
+                            })
+                        
+                        # CRITICAL: Only keep exercises that have exercise_id set AND are not marked for removal
+                        # This ensures no exercises with null/missing exercise_id make it to the frontend
+                        final_exercise_id = exercise.get("exercise_id")
+                        is_marked_for_removal = exercise.get("_remove_from_plan", False)
+                        
+                        if is_marked_for_removal:
+                            logger.warning(
+                                f"🗑️ Exercise '{exercise_name}' marked for removal (no match/fallback found). "
+                                f"Will be filtered out from plan."
+                            )
+                        elif final_exercise_id is None:
+                            logger.error(
+                                f"❌ CRITICAL: Exercise '{exercise_name}' has no exercise_id after matching. "
+                                f"Marking for removal to prevent frontend errors."
+                            )
+                            exercise["_remove_from_plan"] = True
+                        else:
+                            # Exercise has valid exercise_id and is not marked for removal
+                            logger.debug(
+                                f"✅ Keeping exercise '{exercise_name}' with exercise_id={final_exercise_id}"
+                            )
+                            exercises_to_keep.append(exercise)
+                    
+                    # Preserve all existing exercises unless explicitly marked for removal
+                    # Only drop exercises that are flagged with _remove_from_plan
+                    if exercises_to_keep:
+                        # FINAL SAFETY CHECK: Ensure all kept exercises have valid exercise_id
+                        # This prevents any exercises with null exercise_id from reaching the frontend
+                        final_exercises = []
+                        removed_count = 0
+                        for ex in exercises_to_keep:
+                            ex_id = ex.get("exercise_id")
+                            ex_name = ex.get("exercise_name", "Unknown")
+                            if ex_id is None:
+                                logger.error(
+                                    f"❌ FINAL SAFETY CHECK FAILED: Exercise '{ex_name}' in kept list has null exercise_id! "
+                                    f"This should never happen. Removing exercise to prevent frontend crash."
+                                )
+                                removed_count += 1
+                            else:
+                                final_exercises.append(ex)
+                        
+                        if removed_count > 0:
+                            logger.error(
+                                f"⚠️ Removed {removed_count} exercise(s) with null exercise_id during final safety check. "
+                                f"This indicates a bug in the matching logic above."
+                            )
+                        
+                        daily_training["strength_exercises"] = final_exercises
+                        logger.info(
+                            f"✅ Filtered exercises for {daily_training.get('day_of_week', 'Unknown')}: "
+                            f"kept {len(final_exercises)} exercise(s), removed {len(strength_exercises) - len(final_exercises)} exercise(s)"
+                        )
+                    else:
+                        # If no filtering happened, keep original list (but still check for null exercise_id)
+                        # This can happen if all exercises already had valid exercise_id
+                        logger.debug(f"No filtering needed for {daily_training.get('day_of_week', 'Unknown')} - all exercises valid")
+                        daily_training["strength_exercises"] = strength_exercises
+            
+            # Bulk log all exercises at once (non-critical monitoring operation)
+            if exercises_to_log:
+                try:
+                    bulk_stats = ai_exercise_logger.log_ai_exercises_bulk(exercises_to_log)
+                    stats["exercises_logged"] = bulk_stats["inserted"] + bulk_stats["updated"]
+                    logger.info(
+                        f"Bulk logged {stats['exercises_logged']} exercises "
+                        f"({bulk_stats['inserted']} inserted, {bulk_stats['updated']} updated)"
+                    )
+                except Exception as e:
+                    # Log error but don't fail plan save - logging is for monitoring, not core functionality
+                    logger.error(
+                        f"Failed to log AI exercises to monitoring table (non-critical): {e}. "
+                        f"Plan save will continue but monitoring data may be incomplete."
+                    )
+                    stats["exercises_logged"] = 0
+            
+            logger.info(
+                f"Post-processing complete: {stats['exercises_processed']} processed, "
+                f"{stats['exercises_matched']} matched, {stats['low_similarity_count']} low similarity"
+            )
+            
+            return plan_dict
+            
+        except Exception as e:
+            logger.error(f"Error in post-processing strength exercises: {e}")
+            return training_plan_dict  # Return original on error

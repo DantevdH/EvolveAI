@@ -39,6 +39,10 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
     setIsExpanded(!isExpanded);
   };
 
+  // Display helpers
+  const equipmentLabel = exercise.exercise?.equipment || (exercise as any).equipment || 'Bodyweight';
+  const numSets = (exercise.sets || []).length;
+
   return (
     <View style={styles.container}>
       {/* Main exercise row */}
@@ -66,18 +70,19 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
 
         <View style={styles.exerciseInfo}>
           <View style={styles.exerciseHeader}>
-            <Text style={styles.exerciseName}>
-              {exercise.exerciseId?.startsWith('endurance_') 
-                ? (exercise.enduranceSession?.name || 'Endurance Session')
-                : (exercise.exercise?.name || 'Exercise')
-              }
+            <Text style={styles.exerciseName} numberOfLines={1}>
+              {exercise.exercise?.name || 'Exercise'}
             </Text>
           </View>
           
           <View style={styles.exerciseDetails}>
-            <Text style={styles.setsText}>
-              {exercise.exerciseId?.startsWith('endurance_') ? 'Endurance' : `${exercise.sets?.length || 0} sets`}
-            </Text>
+            {exercise.exerciseId?.startsWith('endurance_') ? (
+              <Text style={styles.setsText}>Endurance</Text>
+            ) : (
+              <Text style={styles.setsText}>
+                {equipmentLabel} • {numSets} {numSets === 1 ? 'set' : 'sets'}
+              </Text>
+            )}
             
             <TouchableOpacity
               style={[styles.expandButton, isLocked && styles.expandButtonLocked]}
@@ -360,7 +365,8 @@ const styles = StyleSheet.create({
   exerciseRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     gap: 12
   },
   completionButton: {
@@ -389,16 +395,25 @@ const styles = StyleSheet.create({
   },
   exerciseInfo: {
     flex: 1,
-    gap: 4
+    gap: 4,
+    padding: 4
   },
   exerciseHeader: {
     flexDirection: 'row',
-    alignItems: 'center'
+    alignItems: 'center',
+    flex: 1,
+    width: '100%',
+    minHeight: 32
   },
   exerciseName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.text
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
+    marginRight: 8,
+    flexShrink: 1,
+    flexGrow: 1,
+    minWidth: 100,
+    maxWidth: '100%'
   },
   actionButtons: {
     flexDirection: 'row',
@@ -423,7 +438,7 @@ const styles = StyleSheet.create({
     gap: 8
   },
   setsText: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.muted
   },
   expandButton: {

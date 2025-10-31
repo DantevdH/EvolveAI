@@ -215,4 +215,44 @@ export class trainingService {
       throw new Error(error instanceof Error ? error.message : 'Failed to generate training plan');
     }
   }
+
+  /**
+   * Send feedback about the training plan
+   */
+  static async sendPlanFeedback(
+    userProfileId: number,
+    planId: number,
+    feedbackMessage: string,
+    currentPlan: any,  // Current plan data from frontend
+    conversationHistory: Array<{ role: string; content: string }> = [],
+    formattedInitialResponses?: string,
+    formattedFollowUpResponses?: string,
+    jwtToken?: string
+  ): Promise<any> {
+    try {
+      console.log('📍 Onboarding Service: Sending plan feedback with current plan data');
+
+      const request = {
+        user_profile_id: userProfileId,
+        plan_id: planId,
+        feedback_message: feedbackMessage,
+        current_plan: currentPlan,  // Send current plan to backend
+        conversation_history: conversationHistory,
+        formatted_initial_responses: formattedInitialResponses,
+        formatted_follow_up_responses: formattedFollowUpResponses,
+        jwt_token: jwtToken,
+      };
+
+      const response = await apiClient.post<any>(
+        `${this.BASE_URL}/plan-feedback`,
+        request
+      );
+
+      console.log('📍 Onboarding Service: Plan feedback sent successfully');
+      return response;
+    } catch (error) {
+      console.error(`❌ Onboarding Service: Plan feedback failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(error instanceof Error ? error.message : 'Failed to send plan feedback');
+    }
+  }
 }

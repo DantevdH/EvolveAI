@@ -67,7 +67,7 @@ const CalorieRing: React.FC<CalorieRingProps> = ({ calories, goal }) => (
 
 export const NutritionScreen: React.FC = () => {
   const { state } = useAuth();
-  const { userProfile } = state;
+  const { userProfile, trainingPlan } = state;
 
   const macroCalculation = useMemo((): MacroCalculationResult | null => {
     if (!userProfile) return null;
@@ -77,15 +77,23 @@ export const NutritionScreen: React.FC = () => {
       const weightKg = convertWeightToKg(userProfile.weight, userProfile.weightUnit);
       const heightCm = convertHeightToCm(userProfile.height, userProfile.heightUnit);
       
-      // Estimate parameters from user profile
-      const baseActivity = estimateBaseActivityFromProfile(
-        userProfile.daysPerWeek,
-        userProfile.minutesPerSession
-      );
+      // Extract training frequency from training plan
+      let trainingDaysPerWeek = 3; // Default fallback
+      if (trainingPlan?.weeklySchedules?.[0]?.dailyTrainings) {
+        trainingDaysPerWeek = trainingPlan.weeklySchedules[0].dailyTrainings
+          .filter((day: any) => !day.isRestDay).length;
+      }
+      
+      // Base activity level (conservative default - training is added separately)
+      const baseActivity = estimateBaseActivityFromProfile();
+      
+      // Estimate training intensity from plan and experience
       const trainingIntensity = estimateTrainingIntensity(
-        userProfile.daysPerWeek,
-        userProfile.minutesPerSession
+        trainingDaysPerWeek,
+        userProfile.experienceLevel || 'novice'
       );
+      
+      // Estimate weight goal from goal description
       const weightGoal = estimateWeightGoalFromProfile(
         userProfile.goalDescription || '',
         weightKg
@@ -100,7 +108,7 @@ export const NutritionScreen: React.FC = () => {
         height: heightCm,
         age: userProfile.age,
         baseActivity,
-        trainingsPerWeek: userProfile.daysPerWeek,
+        trainingsPerWeek: trainingDaysPerWeek,
         trainingIntensity,
         targetWeight: weightGoal.targetWeight,
         timeframeWeeks: weightGoal.timeframeWeeks,
@@ -109,7 +117,7 @@ export const NutritionScreen: React.FC = () => {
       console.error('Error calculating macros:', error);
       return null;
     }
-  }, [userProfile]);
+  }, [userProfile, trainingPlan]);
 
   if (!userProfile) {
     return (
@@ -218,38 +226,6 @@ export const NutritionScreen: React.FC = () => {
           </View>
         </View>
       </View>
-
-      <View style={styles.infoSection}>
-        <Text style={styles.sectionTitle}>Based on Your Profile</Text>
-        <View style={styles.infoCard}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Goal:</Text>
-            <Text style={styles.infoValue}>{userProfile.goalDescription}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Activity Level:</Text>
-            <Text style={styles.infoValue}>
-              {userProfile.daysPerWeek} days/week, {userProfile.minutesPerSession} min/session
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Weight:</Text>
-            <Text style={styles.infoValue}>
-              {userProfile.weight} {userProfile.weightUnit}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Height:</Text>
-            <Text style={styles.infoValue}>
-              {userProfile.height} {userProfile.heightUnit}
-            </Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Age:</Text>
-            <Text style={styles.infoValue}>{userProfile.age} years</Text>
-          </View>
-        </View>
-      </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -298,7 +274,7 @@ const styles = StyleSheet.create({
   },
   calorieRingContainer: {
     alignItems: 'center',
-    paddingVertical: 30,
+    paddingVertical: 24,
     backgroundColor: colors.card,
     margin: 20,
     borderRadius: 16,
@@ -309,27 +285,27 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   calorieRing: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 6,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 5,
     borderColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 12,
   },
   calorieValue: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     color: colors.primary,
   },
   calorieUnit: {
-    fontSize: 12,
+    fontSize: 11,
     color: colors.muted,
     marginTop: 2,
   },
   goalText: {
-    fontSize: 16,
+    fontSize: 14,
     color: colors.text,
     fontWeight: '600',
   },
@@ -367,7 +343,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   macroValue: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 2,
   },

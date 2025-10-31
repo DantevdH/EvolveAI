@@ -9,8 +9,10 @@ import { NotificationService } from '@/src/services/NotificationService';
 // Simplified auth state interface
 interface SimpleAuthState {
   user: any | null;
+  session: any | null;  // Store full session (includes access_token)
   userProfile: UserProfile | null;
   trainingPlan: TrainingPlan | null;
+  exercises: any[] | null;
   isLoading: boolean;
   trainingPlanLoading: boolean;
   error: string | null;
@@ -22,8 +24,10 @@ type SimpleAuthAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_WORKOUT_PLAN_LOADING'; payload: boolean }
   | { type: 'SET_USER'; payload: any | null }
+  | { type: 'SET_SESSION'; payload: any | null }
   | { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
   | { type: 'SET_WORKOUT_PLAN'; payload: TrainingPlan | null }
+  | { type: 'SET_EXERCISES'; payload: any[] | null }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_INITIALIZED'; payload: boolean }
   | { type: 'CLEAR_AUTH' };
@@ -31,8 +35,10 @@ type SimpleAuthAction =
 // Simplified initial state
 const initialState: SimpleAuthState = {
   user: null,
+  session: null,
   userProfile: null,
   trainingPlan: null,
+  exercises: null,
   isLoading: false,
   trainingPlanLoading: false,
   error: null,
@@ -57,6 +63,11 @@ const authReducer = (state: SimpleAuthState, action: SimpleAuthAction): SimpleAu
         ...state,
         user: action.payload,
       };
+    case 'SET_SESSION':
+      return {
+        ...state,
+        session: action.payload,
+      };
     case 'SET_USER_PROFILE':
       return {
         ...state,
@@ -66,6 +77,11 @@ const authReducer = (state: SimpleAuthState, action: SimpleAuthAction): SimpleAu
       return {
         ...state,
         trainingPlan: action.payload,
+      };
+    case 'SET_EXERCISES':
+      return {
+        ...state,
+        exercises: action.payload,
       };
     case 'SET_ERROR':
       return {
@@ -112,6 +128,10 @@ interface AuthContextType {
   // generateTrainingPlan: () => Promise<boolean>; // REMOVED: Use GeneratePlanScreen instead
   refreshTrainingPlan: () => Promise<void>;
   setTrainingPlan: (trainingPlan: TrainingPlan) => void;
+  
+  // Exercise methods
+  setExercises: (exercises: any[]) => void;
+  clearExercises: () => void;
   
   // Utility methods
   clearError: () => void;
@@ -212,6 +232,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         } else if (session) {
           console.log('✅ User session found');
           dispatch({ type: 'SET_USER', payload: session.user });
+          dispatch({ type: 'SET_SESSION', payload: session });
           
           // Load user profile if we have a session
           if (session.user) {
@@ -237,6 +258,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (event === 'SIGNED_IN' && session) {
         console.log('✅ User signed in');
         dispatch({ type: 'SET_USER', payload: session.user });
+        dispatch({ type: 'SET_SESSION', payload: session });
         
         // Check if OAuth user needs email verification (not for email signup)
         if (session.user && !session.user.email_confirmed_at && session.user.app_metadata?.provider !== 'email') {
@@ -599,6 +621,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     dispatch({ type: 'SET_WORKOUT_PLAN', payload: trainingPlan });
   };
 
+  // Set exercises directly (for use after plan generation)
+  const setExercises = (exercises: any[]): void => {
+    console.log('🏋️ Exercises set');
+    dispatch({ type: 'SET_EXERCISES', payload: exercises });
+  };
+
+  // Clear exercises
+  const clearExercises = (): void => {
+    console.log('🧹 Exercises cleared');
+    dispatch({ type: 'SET_EXERCISES', payload: null });
+  };
 
   const contextValue: AuthContextType = {
     state,
@@ -618,6 +651,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // generateTrainingPlan, // REMOVED: Use GeneratePlanScreen instead
     refreshTrainingPlan,
     setTrainingPlan,
+    setExercises,
+    clearExercises,
     clearError,
     checkAuthState,
     getCurrentUser,
