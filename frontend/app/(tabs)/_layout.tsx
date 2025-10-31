@@ -61,6 +61,7 @@ export default function TabLayout() {
           ),
         }}
       />
+      {/* Nutrition tab commented out
       <Tabs.Screen
         name="nutrition"
         options={{
@@ -74,6 +75,7 @@ export default function TabLayout() {
           ),
         }}
       />
+      */}
       <Tabs.Screen
         name="insights"
         options={{

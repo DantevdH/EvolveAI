@@ -11,6 +11,7 @@ import ConfirmationDialog from '../components/shared/ConfirmationDialog';
 import ExerciseDetailView from '../components/training/ExerciseDetailView';
 import OneRMCalculatorView from '../components/training/OneRMCalculatorView';
 import ExerciseSwapModal from '../components/training/ExerciseSwapModal';
+import SessionRPEModal from '../components/training/SessionRPEModal';
 import { DailyFeedbackModal, DailyFeedbackData } from '../components/training/DailyFeedbackModal';
 import { useDailyFeedback } from '../hooks/useDailyFeedback';
 
@@ -38,6 +39,8 @@ const TrainingScreen: React.FC = () => {
     reopenTraining,
     confirmReopenTraining,
     cancelReopenTraining,
+    handleRPESelection,
+    handleRPEModalClose,
     showExerciseSwapModal,
     hideExerciseSwapModal,
     swapExercise,
@@ -81,16 +84,9 @@ const TrainingScreen: React.FC = () => {
     }
   }, [selectedDayTraining, captureOriginalTraining]);
 
-  // Show feedback modal when training is completed
+  // Daily feedback on single-day completion disabled per request
   useEffect(() => {
-    if (selectedDayTraining?.completed && !selectedDayTraining.isRestDay) {
-      // Small delay to let the completion animation finish
-      const timer = setTimeout(() => {
-        setShowFeedbackModal(true);
-      }, 800);
-      
-      return () => clearTimeout(timer);
-    }
+    // Intentionally no-op: feedback will be triggered after full week completion in a future step
   }, [selectedDayTraining?.completed, selectedDayTraining?.isRestDay, setShowFeedbackModal]);
 
   const handleOneRMCalculator = (exerciseName: string) => {
@@ -301,6 +297,12 @@ const TrainingScreen: React.FC = () => {
           scheduledExerciseNames={selectedDayTraining?.exercises.map(ex => ex.exercise?.name).filter(Boolean) || []}
         />
       )}
+
+      {/* Session RPE Modal */}
+      <SessionRPEModal
+        visible={trainingState.showRPEModal}
+        onSelect={handleRPESelection}
+      />
 
       {/* Reopen Training Confirmation Dialog */}
       <ConfirmationDialog

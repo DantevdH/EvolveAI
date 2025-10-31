@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
 import { Svg, Line, Polyline, Circle, Text as SvgText, G, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { colors } from '@/src/constants/colors';
+import { VolumeTrendExplanation } from './VolumeTrendExplanation';
 
 interface VolumeTrendChartProps {
   data: Array<{
@@ -11,6 +12,9 @@ interface VolumeTrendChartProps {
     exercises: number;
   }>;
   height?: number;
+  hideTitle?: boolean;
+  selectedPeriod?: TimePeriod;
+  onPeriodChange?: (period: TimePeriod) => void;
 }
 
 type TimePeriod = '1M' | '3M' | '6M' | '1Y' | 'ALL';
@@ -22,9 +26,15 @@ const padding = 40;
 
 export const VolumeTrendChart: React.FC<VolumeTrendChartProps> = ({ 
   data, 
-  height = chartHeight 
+  height = chartHeight,
+  hideTitle = false,
+  selectedPeriod: propSelectedPeriod,
+  onPeriodChange: propOnPeriodChange
 }) => {
-  const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('3M');
+  // Use prop if provided (shared filter), otherwise use internal state
+  const [internalPeriod, setInternalPeriod] = useState<TimePeriod>('3M');
+  const selectedPeriod = propSelectedPeriod ?? internalPeriod;
+  const setSelectedPeriod = propOnPeriodChange ?? setInternalPeriod;
 
   const filteredData = useMemo(() => {
     if (!data || data.length === 0) return [];
@@ -54,10 +64,12 @@ export const VolumeTrendChart: React.FC<VolumeTrendChartProps> = ({
 
   if (!data || data.length === 0) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Volume Trend</Text>
-        </View>
+      <View style={hideTitle ? styles.chartOnlyContainer : styles.container}>
+        {!hideTitle && (
+          <View style={styles.header}>
+            <Text style={styles.title}>Volume Trend</Text>
+          </View>
+        )}
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>No data available</Text>
         </View>
@@ -68,7 +80,7 @@ export const VolumeTrendChart: React.FC<VolumeTrendChartProps> = ({
   // Calculate chart dimensions with validation
   const volumes = filteredData.map(d => d.volume).filter(v => !isNaN(v) && isFinite(v));
   const maxVolume = volumes.length > 0 ? Math.max(...volumes) : 1000;
-  const minVolume = volumes.length > 0 ? Math.min(...volumes) : 0;
+  const minVolume = Math.max(0, volumes.length > 0 ? Math.min(...volumes) : 0); // Never below zero
   const volumeRange = maxVolume - minVolume || 1000;
   
   const chartInnerWidth = chartWidth - (padding * 2);
@@ -93,38 +105,57 @@ export const VolumeTrendChart: React.FC<VolumeTrendChartProps> = ({
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  // Format volume labels
-  const formatVolume = (volume: number) => {
-    if (volume >= 1000) {
-      return `${(volume / 1000).toFixed(1)}k`;
+  // Format volume labels (always as integers for main chart, keep original for exercise detail)
+  const formatVolume = (volume: number, roundToInteger: boolean = false) => {
+    const roundedVolume = roundToInteger ? Math.round(volume) : volume;
+    if (roundedVolume >= 1000) {
+      const thousands = roundToInteger 
+        ? Math.round(roundedVolume / 1000) 
+        : (roundedVolume / 1000).toFixed(1);
+      return `${thousands}k`;
     }
-    return volume.toString();
+    return roundToInteger ? Math.round(roundedVolume).toString() : roundedVolume.toString();
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Volume Trend</Text>
-        <View style={styles.periodToggle}>
-          {(['1M', '3M', '6M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
-            <TouchableOpacity
-              key={period}
-              style={[
-                styles.periodButton,
-                selectedPeriod === period && styles.periodButtonActive
-              ]}
-              onPress={() => setSelectedPeriod(period)}
-            >
-              <Text style={[
-                styles.periodButtonText,
-                selectedPeriod === period && styles.periodButtonTextActive
-              ]}>
-                {period}
-              </Text>
-            </TouchableOpacity>
-          ))}
+    <View style={hideTitle ? styles.chartOnlyContainer : styles.container}>
+      {!hideTitle && (
+        <View style={styles.header}>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>Volume Trend</Text>
+            <VolumeTrendExplanation />
+          </View>
+          <View style={styles.periodToggle}>
+            {(['1M', '3M', '6M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
+              <TouchableOpacity
+                key={period}
+                style={[
+                  styles.periodButton,
+                  selectedPeriod === period && styles.periodButtonActive
+                ]}
+                onPress={() => setSelectedPeriod(period)}
+              >
+                <Text style={[
+                  styles.periodButtonText,
+                  selectedPeriod === period && styles.periodButtonTextActive
+                ]}>
+                  {period}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
-      </View>
+      )}
+
+      {/* This Week's Value */}
+      {!hideTitle && filteredData.length > 0 && (
+        <View style={styles.weeklyValueContainer}>
+          <Text style={styles.weeklyValueLabel}>This Week's Volume</Text>
+          <Text style={styles.weeklyValue}>
+            {formatVolume(filteredData[filteredData.length - 1].volume, !hideTitle)}
+          </Text>
+        </View>
+      )}
       
       <View style={styles.chartContainer}>
         <Svg width={chartWidth} height={height}>
@@ -139,7 +170,7 @@ export const VolumeTrendChart: React.FC<VolumeTrendChartProps> = ({
           <G>
             {[0, 0.25, 0.5, 0.75, 1].map((ratio, index) => {
               const y = padding + ratio * chartInnerHeight;
-              const volume = maxVolume - (ratio * volumeRange);
+              const volume = Math.max(0, maxVolume - (ratio * volumeRange)); // Never below zero
               return (
                 <G key={index}>
                   <Line
@@ -158,7 +189,7 @@ export const VolumeTrendChart: React.FC<VolumeTrendChartProps> = ({
                     fill={colors.muted}
                     textAnchor="end"
                   >
-                    {formatVolume(Math.round(volume))}
+                    {formatVolume(volume, !hideTitle)}
                   </SvgText>
                 </G>
               );
@@ -190,16 +221,17 @@ export const VolumeTrendChart: React.FC<VolumeTrendChartProps> = ({
 
           {/* Week labels */}
           {points.map((point, index) => (
-            <SvgText
-              key={index}
-              x={point.x}
-              y={height - 10}
-              fontSize="10"
-              fill={colors.muted}
-              textAnchor="middle"
-            >
-              {formatWeekLabel(point.week)}
-            </SvgText>
+            <G key={index} transform={`translate(${point.x}, ${height - 10}) rotate(-45)`}>
+              <SvgText
+                x={0}
+                y={0}
+                fontSize="10"
+                fill={colors.muted}
+                textAnchor="middle"
+              >
+                {formatWeekLabel(point.week)}
+              </SvgText>
+            </G>
           ))}
         </Svg>
       </View>
@@ -208,23 +240,23 @@ export const VolumeTrendChart: React.FC<VolumeTrendChartProps> = ({
       <View style={styles.statsContainer}>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>
-            {formatVolume(Math.round(maxVolume))}
+            {formatVolume(maxVolume, !hideTitle)}
           </Text>
           <Text style={styles.statLabel}>Peak Volume</Text>
         </View>
         <View style={styles.statItem}>
           <Text style={styles.statValue}>
-            {formatVolume(Math.round(filteredData.reduce((sum, d) => sum + d.volume, 0) / filteredData.length))}
+            {formatVolume(filteredData.reduce((sum, d) => sum + d.volume, 0) / filteredData.length, !hideTitle)}
           </Text>
           <Text style={styles.statLabel}>Average</Text>
         </View>
         <View style={styles.statItem}>
           <Text style={[
             styles.statValue,
-            { color: filteredData.length > 1 && filteredData[filteredData.length - 1].volume > filteredData[0].volume ? colors.success : colors.error }
+            { color: filteredData.length > 1 && filteredData[filteredData.length - 1].volume > filteredData[filteredData.length - 2].volume ? colors.success : colors.error }
           ]}>
-            {filteredData.length > 1 && filteredData[filteredData.length - 1].volume > filteredData[0].volume ? '+' : ''}
-            {filteredData.length > 1 ? Math.round(((filteredData[filteredData.length - 1].volume - filteredData[0].volume) / filteredData[0].volume) * 100) : 0}%
+            {filteredData.length > 1 && filteredData[filteredData.length - 1].volume > filteredData[filteredData.length - 2].volume ? '+' : ''}
+            {filteredData.length > 1 ? Math.round(((filteredData[filteredData.length - 1].volume - filteredData[filteredData.length - 2].volume) / filteredData[filteredData.length - 2].volume) * 100) : 0}%
           </Text>
           <Text style={styles.statLabel}>Change</Text>
         </View>
@@ -238,13 +270,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
+    marginHorizontal: 16,
     marginVertical: 8,
+  },
+  chartOnlyContainer: {
+    // No extra padding/margin when used within existing container
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 24,
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   title: {
     fontSize: 18,
@@ -307,5 +347,22 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     color: colors.muted,
+  },
+  weeklyValueContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.background,
+  },
+  weeklyValueLabel: {
+    fontSize: 12,
+    color: colors.muted,
+    marginBottom: 4,
+  },
+  weeklyValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.primary,
   },
 });

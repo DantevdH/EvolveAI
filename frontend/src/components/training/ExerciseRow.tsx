@@ -1,5 +1,5 @@
 // Exercise Row Component - Individual exercise with sets/reps tracking
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
@@ -17,22 +17,31 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
   isLocked = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [localIntensity, setLocalIntensity] = useState(exercise.enduranceSession?.intensity || 3);
   
-  // Use local state for immediate UI updates, sync with prop changes
-  const currentIntensity = localIntensity;
-
-  // Sync local state with prop changes (only on mount or when prop actually changes)
-  useEffect(() => {
-    const propIntensity = exercise.enduranceSession?.intensity || 3;
-    if (propIntensity !== localIntensity) {
-      setLocalIntensity(propIntensity);
-    }
-  }, [exercise.enduranceSession?.intensity]);
 
 
   const handleSetUpdate = async (setIndex: number, reps: number, weight: number) => {
-    await onSetUpdate(setIndex, reps, weight);
+    try {
+      await onSetUpdate(setIndex, reps, weight);
+    } catch (error) {
+      console.error('Error updating set:', error);
+    }
+  };
+
+  const handleAddSet = async () => {
+    try {
+      await onSetUpdate(-1, 0, 0); // -1 indicates add set
+    } catch (error) {
+      console.error('Error adding set:', error);
+    }
+  };
+
+  const handleRemoveSet = async () => {
+    try {
+      await onSetUpdate(-2, 0, 0); // -2 indicates remove set
+    } catch (error) {
+      console.error('Error removing set:', error);
+    }
   };
 
   const toggleExpanded = () => {
@@ -40,6 +49,10 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
   };
 
   // Display helpers
+  const isEndurance = !!exercise.exerciseId?.startsWith('endurance_');
+  const displayName = isEndurance
+    ? (exercise.enduranceSession?.name || (exercise as any)?.name || 'Endurance Session')
+    : (exercise.exercise?.name || 'Exercise');
   const equipmentLabel = exercise.exercise?.equipment || (exercise as any).equipment || 'Bodyweight';
   const numSets = (exercise.sets || []).length;
 
@@ -71,7 +84,7 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
         <View style={styles.exerciseInfo}>
           <View style={styles.exerciseHeader}>
             <Text style={styles.exerciseName} numberOfLines={1}>
-              {exercise.exercise?.name || 'Exercise'}
+              {displayName}
             </Text>
           </View>
           
@@ -111,6 +124,8 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
           )}
 
           {/* 1RM Calculator Button - only for strength exercises */}
+          {/* COMMENTED OUT - 1RM calculator */}
+          {/*
           {!exercise.exerciseId?.startsWith('endurance_') && (
             <TouchableOpacity
               style={[styles.calculatorButton, isLocked && styles.calculatorButtonLocked]}
@@ -120,6 +135,7 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
               <Ionicons name="calculator-outline" size={20} color={isLocked ? colors.muted : colors.primary} />
             </TouchableOpacity>
           )}
+          */}
 
           <TouchableOpacity
             style={styles.detailButton}
@@ -166,19 +182,7 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
                 )}
               </View>
               
-              {/* Intensity Slider */}
-              <View style={styles.setsHeader}>
-                <Text style={styles.setsTitle}>Session Intensity</Text>
-              </View>
-              <IntensitySlider 
-                exerciseId={exercise.id}
-                currentIntensity={currentIntensity}
-                onIntensityChange={(intensity) => {
-                  setLocalIntensity(intensity); // Update local state immediately for UI
-                  onIntensityUpdate?.(exercise.id, intensity); // Update parent state
-                }}
-                disabled={isLocked}
-              />
+              {/* Intensity UI removed per request */}
             </View>
           ) : (
             // Strength exercise sets
@@ -190,14 +194,14 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
                 <View style={styles.setControls}>
                   <TouchableOpacity
                     style={styles.setButton}
-                    onPress={() => onSetUpdate(-1, 0, 0)} // -1 indicates add set
+                    onPress={handleAddSet}
                   >
                     <Ionicons name="add-circle" size={20} color={colors.primary} />
                   </TouchableOpacity>
                   
                   <TouchableOpacity
                     style={styles.setButton}
-                    onPress={() => onSetUpdate(-2, 0, 0)} // -2 indicates remove set
+                    onPress={handleRemoveSet}
                     disabled={(exercise.sets?.length || 0) <= 1}
                   >
                     <Ionicons 
@@ -216,6 +220,7 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
                   setIndex={index}
                   onUpdate={(reps, weight) => handleSetUpdate(index, reps, weight)}
                   weight1RMPercentages={exercise.weight1RM}
+                  // allSets={exercise.sets || []} // COMMENTED OUT - 1RM calculator
                 />
               ))}
             </>
@@ -283,15 +288,77 @@ interface SetRowProps {
   setIndex: number;
   onUpdate: (reps: number, weight: number) => Promise<void>;
   weight1RMPercentages?: number[];
+  // allSets?: any[]; // All sets to estimate 1RM from - COMMENTED OUT
 }
 
 const SetRow: React.FC<SetRowProps> = ({ set, setIndex, onUpdate, weight1RMPercentages }) => {
   const [reps, setReps] = useState(set.reps);
   const [weight, setWeight] = useState(set.weight);
 
-  // Get the weight_1rm percentage for this set as placeholder
-  const weight1RMPercentage = weight1RMPercentages?.[setIndex] || 0;
-  const placeholderText = weight1RMPercentage > 0 ? `${weight1RMPercentage}%` : '0';
+  // Get the weight_1rm percentage for this set to calculate advised weight
+  // If setIndex exceeds array length, use the last value (or cycle through)
+  const getWeight1RMPercentage = () => {
+    if (!weight1RMPercentages || weight1RMPercentages.length === 0) return 0;
+    
+    // If index is within array bounds, use that value
+    if (setIndex < weight1RMPercentages.length) {
+      return weight1RMPercentages[setIndex];
+    }
+    
+    // Otherwise, use the last value in the array (fallback)
+    return weight1RMPercentages[weight1RMPercentages.length - 1];
+  };
+  
+  const weight1RMPercentage = getWeight1RMPercentage();
+  
+  // Calculate advised weight based on weight_1rm percentage
+  // Estimate 1RM from other sets with weight > 0
+  // COMMENTED OUT - 1RM calculator
+  /*
+  const calculateAdvisedWeight = () => {
+    if (!allSets || allSets.length === 0 || weight1RMPercentage === 0) return null;
+    
+    // Find sets with weight > 0 to estimate 1RM (excluding current set)
+    const setsWithWeight = allSets.filter((s, idx) => 
+      s.weight > 0 && s.reps > 0 && idx !== setIndex
+    );
+    
+    if (setsWithWeight.length === 0) return null;
+    
+    // Use the set with highest weight for better 1RM estimate
+    const maxWeightSet = setsWithWeight.reduce((max, s) => 
+      s.weight > max.weight ? s : max
+    );
+    
+    // Calculate 1RM using Epley formula: 1RM = weight * (1 + reps/30)
+    let estimated1RM: number;
+    if (maxWeightSet.reps === 1) {
+      estimated1RM = maxWeightSet.weight;
+    } else {
+      estimated1RM = maxWeightSet.weight * (1 + maxWeightSet.reps / 30);
+    }
+    
+    // Calculate advised weight: (estimated1RM * percentage) / 100
+    const advisedWeight = Math.round((estimated1RM * weight1RMPercentage) / 100);
+    
+    return {
+      estimated1RM: Math.round(estimated1RM),
+      advisedWeight,
+      percentage: weight1RMPercentage
+    };
+  };
+  
+  const advisedWeightData = calculateAdvisedWeight();
+  
+  // Log the calculation
+  if (advisedWeightData) {
+    console.log(`[SetRow] setIndex=${setIndex}, weight1RMPercentage=${advisedWeightData.percentage}%, estimated1RM=${advisedWeightData.estimated1RM}kg, advisedWeight=${advisedWeightData.advisedWeight}kg`);
+  } else if (weight1RMPercentage > 0) {
+    console.log(`[SetRow] setIndex=${setIndex}, weight1RMPercentage=${weight1RMPercentage}%, no 1RM estimate available (need completed sets with weight)`);
+  }
+  */
+  
+  const placeholderText = '0';
 
   const handleRepsChange = (newReps: number) => {
     setReps(newReps);

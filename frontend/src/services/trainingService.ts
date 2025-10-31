@@ -3,6 +3,7 @@ import { supabase } from '../config/supabase';
 import { UserProfile, TrainingPlan } from '../types';
 import { API_CONFIG } from '../constants/api';
 import { mapProfileToBackendRequest } from '../utils/profileDataMapping';
+import { ENV } from '../config/env';
 import { 
   GenerateTrainingPlanRequest, 
   GenerateTrainingPlanResponse,
@@ -218,7 +219,7 @@ export class TrainingService {
       }
 
       // Transform the relational data to match our TrainingTrainingPlan interface
-      const trainingPlan: TrainingTrainingPlan = {
+      let trainingPlan: TrainingTrainingPlan = {
         id: data.id.toString(),
         title: data.title,
         description: data.summary,
@@ -295,7 +296,11 @@ export class TrainingService {
                   dayOfWeek: daily.day_of_week,
                   isRestDay: daily.is_rest_day,
                   exercises: allExercises,
-                  completed: allExercises.every((ex: any) => ex.completed) || daily.is_rest_day
+                  completed: allExercises.every((ex: any) => ex.completed) || daily.is_rest_day,
+                  // Use updated_at as completedAt since daily_training table doesn't have completed_at column
+                  // This represents when the training was last updated/completed
+                  completedAt: daily.updated_at ? new Date(daily.updated_at) : undefined,
+                  sessionRPE: daily.session_rpe || undefined
                 };
             }) || [],
             completed: schedule.daily_training?.every((daily: any) => {
@@ -312,6 +317,12 @@ export class TrainingService {
         completed: data.completed || false,
         completedAt: data.completed_at ? new Date(data.completed_at) : undefined
       };
+
+      // DEBUG MODE: Auto-fill and duplicate plan for insights preview
+      if (ENV.DEBUG?.toLowerCase() === 'true') {
+        console.log('🐛 DEBUG MODE: Enriching training plan with sample data...');
+        trainingPlan = this.enrichPlanForDebug(trainingPlan);
+      }
 
       return {
         success: true,
@@ -362,12 +373,14 @@ export class TrainingService {
 
   /**
    * Update set details (reps, weight) for a specific exercise
+   * Handles adding sets (setIndex = -1) and removing sets (setIndex = -2)
    */
   static async updateSetDetails(
     exerciseId: string, 
     setIndex: number, 
     reps: number, 
-    weight: number
+    weight: number,
+    updatedSets?: TrainingSet[] // Optional: if provided, use this to update arrays
   ): Promise<UpdateSetResponse> {
     try {
       // First, get the current strength exercise data
@@ -382,12 +395,38 @@ export class TrainingService {
         return { success: false, error: fetchError.message };
       }
 
-      // Update the reps and weight arrays
-      const updatedReps = [...strengthExercise.reps];
-      const updatedWeight = [...strengthExercise.weight];
+      let updatedReps: number[];
+      let updatedWeight: number[];
       
-      updatedReps[setIndex] = reps;
-      updatedWeight[setIndex] = weight;
+      // If updatedSets is provided, use it to build arrays
+      if (updatedSets) {
+        updatedReps = updatedSets.map(set => set.reps);
+        updatedWeight = updatedSets.map(set => set.weight);
+      } else {
+        // Otherwise, work with the existing arrays
+        updatedReps = [...(strengthExercise.reps || [])];
+        updatedWeight = [...(strengthExercise.weight || [])];
+        
+        // Handle special cases: -1 = add set, -2 = remove set
+        if (setIndex === -1) {
+          // Add a new set: append default values
+          const lastReps = updatedReps.length > 0 ? updatedReps[updatedReps.length - 1] : 10;
+          const lastWeight = updatedWeight.length > 0 ? updatedWeight[updatedWeight.length - 1] : 0;
+          updatedReps.push(lastReps);
+          updatedWeight.push(lastWeight);
+        } else if (setIndex === -2) {
+          // Remove the last set (if there's more than one)
+          if (updatedReps.length <= 1) {
+            return { success: false, error: 'Cannot remove the last set' };
+          }
+          updatedReps.pop();
+          updatedWeight.pop();
+        } else {
+          // Normal update: update a specific set
+          updatedReps[setIndex] = reps;
+          updatedWeight[setIndex] = weight;
+        }
+      }
 
       // Update the database
       const { data, error } = await supabase
@@ -395,6 +434,7 @@ export class TrainingService {
         .update({
           reps: updatedReps,
           weight: updatedWeight,
+          sets: updatedReps.length, // Update sets count
           updated_at: new Date().toISOString()
         })
         .eq('id', exerciseId)
@@ -406,11 +446,12 @@ export class TrainingService {
         return { success: false, error: error.message };
       }
 
-      // Create the updated TrainingSet object
+      // Create the updated TrainingSet object for the last modified set
+      const finalSetIndex = setIndex === -1 ? updatedReps.length - 1 : (setIndex === -2 ? updatedReps.length - 1 : setIndex);
       const updatedSet: TrainingSet = {
-        id: `${exerciseId}-${setIndex}`,
-        reps: reps,
-        weight: weight,
+        id: `${exerciseId}-${finalSetIndex}`,
+        reps: updatedReps[finalSetIndex] || reps,
+        weight: updatedWeight[finalSetIndex] || weight,
         completed: true,
         restTime: 60 // Default rest time
       };
@@ -509,14 +550,22 @@ export class TrainingService {
    * Complete a daily training
    */
   static async completeDailyTraining(
-    dailyTrainingId: string
+    dailyTrainingId: string,
+    sessionRPE?: number
   ): Promise<CompleteTrainingResponse> {
     try {
+      const updateData: any = {
+        updated_at: new Date().toISOString()
+      };
+
+      // Add session_rpe if provided
+      if (sessionRPE !== undefined && sessionRPE !== null) {
+        updateData.session_rpe = sessionRPE;
+      }
+
       const { data, error } = await supabase
         .from('daily_training')
-        .update({
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', dailyTrainingId)
         .select()
         .single();
@@ -535,6 +584,40 @@ export class TrainingService {
     } catch (error) {
       console.error('Error in completeDailyTraining:', error);
       return { success: false, error: 'Failed to complete daily training' };
+    }
+  }
+
+  /**
+   * Reopen a daily training (mark as incomplete)
+   */
+  static async reopenDailyTraining(
+    dailyTrainingId: string
+  ): Promise<CompleteTrainingResponse> {
+    try {
+      const { data, error } = await supabase
+        .from('daily_training')
+        .update({
+          updated_at: new Date().toISOString(),
+          session_rpe: null // Clear session RPE when reopening
+        })
+        .eq('id', dailyTrainingId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error reopening daily training:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { 
+        success: true, 
+        data: {
+          trainingId: dailyTrainingId
+        }
+      };
+    } catch (error) {
+      console.error('Error in reopenDailyTraining:', error);
+      return { success: false, error: 'Failed to reopen daily training' };
     }
   }
 
@@ -1003,7 +1086,7 @@ export class TrainingService {
             id: training.id?.toString() || training.day_of_week,
             type: 'training' as const,
             title: `${training.day_of_week} Training`,
-            subtitle: `${exerciseCount} exercises • 45 minutes • 320 calories`, // Dummy data as requested
+            subtitle: `${exerciseCount} exercises`,
             date: index === 0 ? 'Yesterday' : index === 1 ? '2 days ago' : '3 days ago',
             duration: '45 min',
             calories: 320,
@@ -1036,6 +1119,203 @@ export class TrainingService {
       });
     }
     return sets;
+  }
+
+  /**
+   * DEBUG MODE: Enrich training plan with sample data (auto-fill weights, duplicate to 4 weeks)
+   */
+  private static enrichPlanForDebug(plan: TrainingTrainingPlan): TrainingTrainingPlan {
+    console.log('🐛 DEBUG MODE: Starting plan enrichment...');
+    
+    // Get the first week as template
+    const templateWeek = plan.weeklySchedules[0];
+    if (!templateWeek) {
+      console.warn('🐛 DEBUG MODE: No weeks found in plan, skipping enrichment');
+      return plan;
+    }
+
+    // Create 24 weeks total (6 months) for better analysis
+    const enrichedWeeks = [templateWeek];
+    for (let weekNum = 2; weekNum <= 24; weekNum++) {
+      const duplicatedWeek = {
+        ...templateWeek,
+        id: `${templateWeek.id}_debug_${weekNum}`,
+        weekNumber: weekNum,
+              completed: weekNum < 24, // Mark weeks 1-23 as completed, week 24 as in progress
+              completedAt: weekNum < 24 ? new Date(Date.now() - (24 - weekNum) * 7 * 24 * 60 * 60 * 1000) : undefined,
+        dailyTrainings: templateWeek.dailyTrainings.map((day, dayIndex) => {
+          // For past weeks, set the daily completedAt to different days within the week
+          // This ensures each day gets grouped into the correct week bucket
+          const weeksInPastMs = (24 - weekNum) * 7 * 24 * 60 * 60 * 1000;
+          // Add dayIndex days to vary the timestamp within the week (0 = Sunday/Monday start, add days)
+          const daysOffsetMs = dayIndex * 24 * 60 * 60 * 1000;
+          const dailyCompletedAt = weekNum < 24 
+            ? new Date(Date.now() - weeksInPastMs - daysOffsetMs)
+            : undefined;
+
+          // Generate realistic session-RPE values (1-5 scale, progressive weeks get slightly higher)
+          const baseRPE = 2.5 + (weekNum * 0.05) + (dayIndex * 0.05); // Progressive RPE: weeks 1-24 get 2.6-3.7 range on 1-5 scale
+          const sessionRPE = !day.isRestDay && weekNum < 24 
+            ? Math.round(Math.min(5, Math.max(1, baseRPE + (Math.random() * 0.8 - 0.4)))) // Add slight variance (-0.4 to +0.4), clamp to 1-5
+            : undefined;
+
+          return ({
+            ...day,
+            id: `${day.id}_debug_w${weekNum}_d${dayIndex}`,
+            completed: !day.isRestDay && weekNum < 24, // Auto-complete training days in past weeks
+            completedAt: !day.isRestDay && weekNum < 24 ? dailyCompletedAt : day.completedAt,
+            sessionRPE: sessionRPE,
+            exercises: day.exercises.map((exercise, exIndex) => {
+            // Auto-fill weights for strength exercises
+            if (exercise.exercise && !exercise.exerciseId?.startsWith('endurance_')) {
+              // Create variation based on exercise/muscle group to generate different MWS scores
+              const muscleGroup = exercise.exercise?.main_muscles?.[0] || exercise.exercise?.target_area || 'Unknown';
+              const exerciseName = exercise.exercise?.name || '';
+              
+              // Create hash-like value from muscle group/exercise for consistent variation
+              let hash = 0;
+              for (let i = 0; i < muscleGroup.length; i++) {
+                hash = ((hash << 5) - hash) + muscleGroup.charCodeAt(i);
+                hash = hash & hash; // Convert to 32bit integer
+              }
+              const patternSeed = Math.abs(hash) % 5; // 0-4 patterns
+              
+              let baseWeight = 50;
+              let shouldIncludeWeek = true; // For frequency patterns
+              // Pattern 0: Plateau - same weight across weeks (low MWS, high strength score)
+              // Pattern 1: Progressive - increasing weight (good MWS, high strength score)
+              // Pattern 2: Declining - decreasing weight (bad MWS, low strength score)
+              // Pattern 3: Inconsistent - varied weights, some missing (medium MWS, medium strength score)
+              
+              if (patternSeed === 0) {
+                // Plateau pattern - same weight across all weeks (creates plateau signal)
+                baseWeight = 60 + (exIndex * 10);
+              } else if (patternSeed === 1) {
+                // Progressive pattern - good progression (best performance)
+                baseWeight = 45 + (weekNum * 2.5) + (exIndex * 10);
+              } else if (patternSeed === 2) {
+                // Declining pattern - decreasing weight (worst performance, very low strength)
+                baseWeight = 90 - (weekNum * 3.5) + (exIndex * 10);
+                baseWeight = Math.max(20, baseWeight); // Decline to very low
+              } else if (patternSeed === 3) {
+                // Inconsistent pattern - varied progression with fluctuations
+                const weekVariance = (weekNum % 3 === 0) ? 15 : ((weekNum % 2 === 0) ? -10 : 5);
+                baseWeight = 55 + (weekNum * 1.5) + (exIndex * 10) + weekVariance;
+              } else {
+                // Low frequency pattern - only trained every 4th week
+                shouldIncludeWeek = (weekNum % 4 === 0) || (weekNum <= 4);
+                baseWeight = 50 + (Math.floor(weekNum / 4) * 3) + (exIndex * 10);
+              }
+              
+              const filledSets = exercise.sets?.map((set, setIndex) => ({
+                ...set,
+                weight: baseWeight + (setIndex * 2.5), // Slight progression per set
+                completed: shouldIncludeWeek && weekNum < 24, // Only complete if should be included in past weeks
+              })) || [];
+              
+              return {
+                ...exercise,
+                id: `${exercise.id}_debug_w${weekNum}_ex${exIndex}`,
+                completed: shouldIncludeWeek && weekNum < 24 && filledSets.length > 0 && filledSets.every(s => s.weight > 0),
+                sets: filledSets,
+              };
+            }
+            // Endurance sessions - mark as completed if in past weeks
+            return {
+              ...exercise,
+              id: `${exercise.id}_debug_w${weekNum}_ex${exIndex}`,
+              completed: weekNum < 24,
+            };
+          }),
+          });
+        }),
+      };
+      enrichedWeeks.push(duplicatedWeek);
+    }
+
+    // Auto-fill the first week as well (week 1, completed 23 weeks ago)
+    const week1WeeksInPastMs = 3 * 7 * 24 * 60 * 60 * 1000; // 23 weeks ago
+    enrichedWeeks[0] = {
+      ...enrichedWeeks[0],
+      dailyTrainings: enrichedWeeks[0].dailyTrainings.map((day, dayIndex) => {
+        // Set completedAt for week 1 days (23 weeks ago + day offset)
+        const daysOffsetMs = dayIndex * 24 * 60 * 60 * 1000;
+        const dailyCompletedAt = !day.isRestDay 
+          ? new Date(Date.now() - week1WeeksInPastMs - daysOffsetMs)
+          : day.completedAt;
+
+        // Generate realistic session-RPE for week 1 (2-4 range on 1-5 scale)
+        const week1RPE = !day.isRestDay 
+          ? Math.round(2 + Math.random() * 2) // Random between 2-4
+          : undefined;
+
+        return {
+          ...day,
+          completed: !day.isRestDay && day.exercises.length > 0 && day.exercises.every(ex => ex.completed),
+          completedAt: dailyCompletedAt,
+          sessionRPE: week1RPE,
+          exercises: day.exercises.map((exercise) => {
+            if (exercise.exercise && !exercise.exerciseId?.startsWith('endurance_')) {
+              // Use same variation pattern for week 1 to maintain consistency
+              const muscleGroup = exercise.exercise?.main_muscles?.[0] || exercise.exercise?.target_area || 'Unknown';
+              let hash = 0;
+              for (let i = 0; i < muscleGroup.length; i++) {
+                hash = ((hash << 5) - hash) + muscleGroup.charCodeAt(i);
+                hash = hash & hash;
+              }
+              const patternSeed = Math.abs(hash) % 5; // 0-4 patterns
+              
+              let baseWeight = 50;
+              let shouldIncludeWeek = true;
+              
+              if (patternSeed === 0) {
+                // Plateau
+                baseWeight = 60;
+              } else if (patternSeed === 1) {
+                // Progressive (week 1 start)
+                baseWeight = 45;
+              } else if (patternSeed === 2) {
+                // Severe declining (week 1 was higher)
+                baseWeight = 80;
+              } else if (patternSeed === 3) {
+                // Inconsistent
+                baseWeight = 55;
+              } else {
+                // Low frequency (include week 1)
+                shouldIncludeWeek = true;
+                baseWeight = 50;
+              }
+              
+              const filledSets = exercise.sets?.map((set, setIndex) => ({
+                ...set,
+                weight: baseWeight + (setIndex * 2.5),
+                completed: shouldIncludeWeek,
+              })) || [];
+              
+              return {
+                ...exercise,
+                completed: shouldIncludeWeek && filledSets.length > 0 && filledSets.every(s => s.weight > 0),
+                sets: filledSets,
+              };
+            }
+            return {
+              ...exercise,
+              completed: true,
+            };
+          }),
+        };
+      }),
+      completed: enrichedWeeks[0].dailyTrainings.every(day => day.completed || day.isRestDay),
+      completedAt: enrichedWeeks[0].dailyTrainings.find(d => d.completedAt)?.completedAt,
+    };
+
+    console.log(`🐛 DEBUG MODE: Enriched plan with ${enrichedWeeks.length} weeks (6 months)`);
+    
+    return {
+      ...plan,
+      totalWeeks: 24,
+      weeklySchedules: enrichedWeeks,
+    };
   }
 
   /**
@@ -1231,7 +1511,105 @@ export class TrainingService {
 }
 
 // Get historical training data for a specific exercise
-export const getExerciseHistory = async (exerciseId: number, userProfileId: number): Promise<{
+/**
+ * Extract exercise history from local training plan
+ */
+function extractExerciseHistoryFromLocalPlan(
+  exerciseId: number,
+  localPlan: TrainingTrainingPlan | null
+): Array<{
+  date: string;
+  volume: number;
+  maxWeight: number;
+  sets: number;
+  reps: number[];
+  weights: number[];
+  updated_at: string;
+}> {
+  if (!localPlan) return [];
+
+  const history: Array<{
+    date: string;
+    volume: number;
+    maxWeight: number;
+    sets: number;
+    reps: number[];
+    weights: number[];
+    updated_at: string;
+  }> = [];
+
+  localPlan.weeklySchedules.forEach(week => {
+    week.dailyTrainings.forEach(dailyTraining => {
+      // Use daily training completedAt (which maps to updated_at from database) or skip
+      const completedDate = dailyTraining.completedAt;
+      if (!completedDate) return;
+
+      dailyTraining.exercises.forEach((exercise: any) => {
+        // Only include completed strength exercises matching the exercise ID
+        const exerciseIdStr = exercise.exerciseId?.toString() || '';
+        const exerciseIdNum = parseInt(exerciseIdStr.replace(/\D/g, ''), 10);
+        
+        if (!exercise.completed || 
+            !exercise.exercise || 
+            !exercise.sets || 
+            exercise.sets.length === 0 ||
+            exerciseIdNum !== exerciseId ||
+            exercise.enduranceSession) {
+          return;
+        }
+
+        // Extract weight and reps arrays from sets
+        const weights: number[] = [];
+        const reps: number[] = [];
+
+        exercise.sets.forEach((set: any) => {
+          if (set.completed) {
+            weights.push(set.weight || 0);
+            reps.push(set.reps || 0);
+          }
+        });
+
+        // Only include if we have at least one completed set
+        if (weights.length === 0 || reps.length === 0) {
+          return;
+        }
+
+        // Calculate volume and max weight
+        let volume = 0;
+        let maxWeight = 0;
+        for (let i = 0; i < Math.min(weights.length, reps.length); i++) {
+          const weight = weights[i] || 0;
+          const rep = reps[i] || 0;
+          volume += weight * rep;
+          maxWeight = Math.max(maxWeight, weight);
+        }
+
+        if (volume > 0) {
+          history.push({
+            date: completedDate.toISOString().split('T')[0],
+            volume,
+            maxWeight,
+            sets: weights.length,
+            reps,
+            weights,
+            updated_at: completedDate.toISOString()
+          });
+        }
+      });
+    });
+  });
+
+  // Sort by date (most recent first)
+  history.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  
+  return history;
+}
+
+export const getExerciseHistory = async (
+  exerciseId: number, 
+  userProfileId: number,
+  localPlan?: TrainingTrainingPlan | null
+): Promise<{
   success: boolean;
   data?: {
     volumeData: Array<{ date: string; volume: number }>;
@@ -1251,28 +1629,46 @@ export const getExerciseHistory = async (exerciseId: number, userProfileId: numb
   try {
     console.log(`📊 Fetching exercise history for exercise ${exerciseId}, user ${userProfileId}`);
     
-    // Get all COMPLETED strength exercises for this specific exercise and user
-    const { data, error } = await supabase
-      .from('strength_exercise')
-      .select(`
-        *,
-        daily_training!inner(
+    let data: any[] = [];
+
+    if (localPlan) {
+      // Use local plan data
+      const localHistory = extractExerciseHistoryFromLocalPlan(exerciseId, localPlan);
+      // Transform to database-like format
+      data = localHistory.map(h => ({
+        exercise_id: exerciseId,
+        completed: true,
+        weight: h.weights,
+        reps: h.reps,
+        sets: h.sets,
+        updated_at: h.updated_at
+      }));
+    } else {
+      // Get all COMPLETED strength exercises for this specific exercise and user from database
+      const { data: dbData, error } = await supabase
+        .from('strength_exercise')
+        .select(`
           *,
-          weekly_schedules!inner(
-            training_plans!inner(
-              user_profile_id
+          daily_training!inner(
+            *,
+            weekly_schedules!inner(
+              training_plans!inner(
+                user_profile_id
+              )
             )
           )
-        )
-      `)
-      .eq('exercise_id', exerciseId)
-      .eq('completed', true)
-      .eq('daily_training.weekly_schedules.training_plans.user_profile_id', userProfileId)
-      .order('updated_at', { ascending: false });
+        `)
+        .eq('exercise_id', exerciseId)
+        .eq('completed', true)
+        .eq('daily_training.weekly_schedules.training_plans.user_profile_id', userProfileId)
+        .order('updated_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching exercise history:', error);
-      return { success: false, error: error.message };
+      if (error) {
+        console.error('Error fetching exercise history:', error);
+        return { success: false, error: error.message };
+      }
+
+      data = dbData || [];
     }
 
     if (!data || data.length === 0) {

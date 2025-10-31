@@ -5,7 +5,7 @@ import { colors } from '../../constants/colors';
 
 interface ConfirmationDialogProps {
   visible: boolean;
-  title: string;
+  title?: string;
   message: string;
   confirmText: string;
   cancelText: string;
@@ -24,7 +24,7 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   onConfirm,
   onCancel,
   confirmButtonColor = colors.primary,
-  icon = 'warning'
+  icon
 }) => {
   return (
     <Modal
@@ -35,10 +35,12 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
     >
       <View style={styles.overlay}>
         <View style={styles.dialog}>
-          <View style={styles.header}>
-            <Ionicons name={icon} size={32} color={confirmButtonColor} />
-            <Text style={styles.title}>{title}</Text>
-          </View>
+          {(!!title || !!icon) && (
+            <View style={styles.header}>
+              {!!icon && <Ionicons name={icon} size={32} color={confirmButtonColor} />}
+              {!!title && <Text style={styles.title}>{title}</Text>}
+            </View>
+          )}
           
           <Text style={styles.message}>{message}</Text>
           

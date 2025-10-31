@@ -2,7 +2,7 @@
  * Enhanced Home Screen - Main dashboard with Swift HomeView structure
  */
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { SafeAreaView, StyleSheet, ScrollView, View, Text, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -10,6 +10,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { colors } from '@/src/constants/colors';
 import { ExpoNavigation } from '@/src/utils/expoNavigationHelpers';
 import { useHomeData } from '@/src/hooks/useHomeData';
+import { InsightsAnalyticsService } from '@/src/services/insightsAnalyticsService';
 
 // Home Components
 import { WelcomeHeader } from '@/src/components/home/WelcomeHeader';
@@ -22,7 +23,56 @@ export const HomeScreen: React.FC = () => {
   const { state: authState } = useAuth();
   const homeData = useHomeData();
   const router = useRouter();
+  const [insightsData, setInsightsData] = useState<{
+    weeklyVolume: number | undefined;
+    eti: number | undefined;
+    msi: number | undefined;
+  }>({
+    weeklyVolume: undefined,
+    eti: undefined,
+    msi: undefined,
+  });
 
+  const loadInsights = useCallback(async () => {
+    if (!authState.userProfile?.id) return;
+
+    try {
+      const localPlan = authState.trainingPlan;
+      
+      const [
+        weeklyVolumeResult,
+        performanceScoreResult,
+        weakPointsResult,
+      ] = await Promise.all([
+        InsightsAnalyticsService.getWeeklyVolumeTrend(authState.userProfile.id, localPlan),
+        InsightsAnalyticsService.getPerformanceScoreTrend(authState.userProfile.id, localPlan),
+        InsightsAnalyticsService.getWeakPointsAnalysis(authState.userProfile.id, localPlan),
+      ]);
+
+      const weeklyVolume = weeklyVolumeResult.success && weeklyVolumeResult.data && weeklyVolumeResult.data.length > 0
+        ? weeklyVolumeResult.data[weeklyVolumeResult.data.length - 1]?.volume
+        : undefined;
+
+      const eti = performanceScoreResult.success && performanceScoreResult.data && performanceScoreResult.data.length > 0
+        ? performanceScoreResult.data[performanceScoreResult.data.length - 1]?.score
+        : undefined;
+
+      const msi = weakPointsResult.success && weakPointsResult.data && weakPointsResult.data.length > 0
+        ? weakPointsResult.data.reduce((sum, item) => {
+            const strengthScore = 100 - item.metrics.current;
+            return sum + strengthScore;
+          }, 0) / weakPointsResult.data.length
+        : undefined;
+
+      setInsightsData({ weeklyVolume, eti, msi });
+    } catch (error) {
+      console.error('Error loading insights:', error);
+    }
+  }, [authState.userProfile?.id, authState.trainingPlan]);
+
+  useEffect(() => {
+    loadInsights();
+  }, [loadInsights]);
 
   const handleStartTraining = () => {
     console.log('Starting training...');
@@ -80,7 +130,12 @@ export const HomeScreen: React.FC = () => {
           training={homeData.todaysTraining}
           onStartTraining={handleStartTraining}
         />
-        <AIInsightsCard onViewInsights={handleViewInsights} />
+        <AIInsightsCard 
+          weeklyVolume={insightsData.weeklyVolume}
+          eti={insightsData.eti}
+          msi={insightsData.msi}
+          onViewInsights={handleViewInsights} 
+        />
         <RecentActivity activities={homeData.recentActivity} />
       </ScrollView>
     </SafeAreaView>

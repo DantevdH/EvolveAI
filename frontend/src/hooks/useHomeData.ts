@@ -223,7 +223,7 @@ export const useHomeData = (): HomeData => {
       .map((training, index) => ({
         id: training.id || 'unknown',
         title: `${training.dayOfWeek} Training`,
-        subtitle: `${training.exercises?.length || 0} exercises • 45 minutes • 320 calories`,
+        subtitle: `${training.exercises?.length || 0} exercises`,
         date: index === 0 ? 'Yesterday' : index === 1 ? '2 days ago' : index === 2 ? '3 days ago' : `${index + 1} days ago`,
         type: 'training' as const,
         duration: '45 min',
