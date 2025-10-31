@@ -225,6 +225,31 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
 
         // Always sync plan with backend response (updated or not)
         if (data.updated_plan) {
+          // Debug: scan backend plan for any null IDs before transform
+          const scanNullIds = (plan: any) => {
+            try {
+              if (plan?.id == null) console.error('[Feedback] Null plan id in updated_plan');
+              plan?.weekly_schedules?.forEach((w: any, wi: number) => {
+                if (w?.id == null) console.error(`[Feedback] Null weekly_schedule id at [${wi}]`);
+                w?.daily_trainings?.forEach((d: any, di: number) => {
+                  if (d?.id == null) console.error(`[Feedback] Null daily_training id at [${wi}][${di}]`);
+                  d?.strength_exercises?.forEach((se: any, ei: number) => {
+                    if (se == null) console.error(`[Feedback] strength_exercises[${wi}][${di}][${ei}] is null`);
+                    else {
+                      if (se?.id == null) console.error(`[Feedback] Null strength_exercise id at [${wi}][${di}][${ei}]`);
+                      if (se?.exercise_id == null) console.error(`[Feedback] Null exercise_id at [${wi}][${di}][${ei}]`);
+                    }
+                  });
+                  d?.endurance_sessions?.forEach((es: any, si: number) => {
+                    if (es?.id == null) console.error(`[Feedback] Null endurance_session id at [${wi}][${di}][${si}]`);
+                  });
+                });
+              });
+            } catch (e) {
+              console.warn('[Feedback] scanNullIds exception', e);
+            }
+          };
+          scanNullIds(data.updated_plan);
           console.log(`🎯 PlanPreviewStep: ${data.plan_updated ? 'Plan updated' : 'Plan synced'}, updating local state with backend response`);
           
           // Set updating state to show visual feedback (only if actually updated)

@@ -206,7 +206,7 @@ class ExerciseMatcher:
         ai_exercise_name: str,
         main_muscle: str,
         max_popularity: int = 2,
-        min_similarity: float = 0.85
+        min_similarity: float = 0.70
     ) -> Tuple[Optional[Dict[str, Any]], float, str]:
         """
         Fallback matching strategy: Match ONLY on main_muscle + fuzzy name.
@@ -251,7 +251,13 @@ class ExerciseMatcher:
             
             # Only accept if similarity is above threshold
             if best_match and score >= min_similarity:
-                status = "matched" if score >= 0.50 else "low_confidence"
+                # Map score to status
+                if score >= 0.85:
+                    status = "matched"
+                elif score >= 0.70:
+                    status = "low_confidence"
+                else:
+                    status = "pending_review"
                 logger.info(
                     f"Fallback match accepted: {ai_exercise_name} -> {best_match.get('name')} "
                     f"(score: {score:.3f}, min_required: {min_similarity})"

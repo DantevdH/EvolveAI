@@ -59,6 +59,9 @@ export interface BackendEnduranceSession {
  * Transform a training plan from backend format to frontend format
  */
 export function transformTrainingPlan(backendPlan: BackendTrainingPlan): any {
+  // Debug logging to trace null IDs before toString conversions
+  if (backendPlan.id == null) console.error('[PlanTransform] Null plan id detected');
+  if (!backendPlan.weekly_schedules) console.warn('[PlanTransform] weekly_schedules missing');
   return {
     id: backendPlan.id.toString(),
     title: backendPlan.title,
@@ -74,6 +77,7 @@ export function transformTrainingPlan(backendPlan: BackendTrainingPlan): any {
 }
 
 function transformWeeklySchedule(backendWeek: BackendWeeklySchedule): any {
+  if (backendWeek.id == null) console.error('[PlanTransform] Null weekly_schedule id', backendWeek);
   return {
     id: backendWeek.id.toString(),
     weekNumber: backendWeek.week_number,
@@ -83,6 +87,7 @@ function transformWeeklySchedule(backendWeek: BackendWeeklySchedule): any {
 }
 
 function transformDailyTraining(backendDaily: BackendDailyTraining): any {
+  if (backendDaily.id == null) console.error('[PlanTransform] Null daily_training id', backendDaily);
   // Transform strength exercises
   const strengthExercises = backendDaily.strength_exercises?.map(transformStrengthExercise) || [];
   
@@ -108,6 +113,8 @@ function transformDailyTraining(backendDaily: BackendDailyTraining): any {
 }
 
 function transformStrengthExercise(backendExercise: BackendStrengthExercise): any {
+  if (backendExercise.id == null) console.error('[PlanTransform] Null strength_exercise id', backendExercise);
+  if (backendExercise.exercise_id == null) console.error('[PlanTransform] Null exercise_id in strength_exercise', backendExercise);
   // Extract exercise name - handle both snake_case and potential camelCase
   const exerciseName = backendExercise.exercise_name || (backendExercise as any).exerciseName || 'Unknown Exercise';
   
@@ -135,6 +142,7 @@ function transformStrengthExercise(backendExercise: BackendStrengthExercise): an
 }
 
 function transformEnduranceSession(backendSession: BackendEnduranceSession): any {
+  if (backendSession.id == null) console.error('[PlanTransform] Null endurance_session id', backendSession);
   return {
     id: backendSession.id.toString(),
     // Use special exerciseId format for endurance (component checks for this)
