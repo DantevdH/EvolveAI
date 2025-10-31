@@ -255,6 +255,7 @@ export class UserService {
           // Plan outline and feedback (separated)
           plan_outline: rawProfile.plan_outline || null,
           plan_outline_feedback: rawProfile.plan_outline_feedback || null,
+          planAccepted: rawProfile.plan_accepted || false,
           createdAt: rawProfile.created_at ? new Date(rawProfile.created_at) : undefined,
           updatedAt: rawProfile.updated_at ? new Date(rawProfile.updated_at) : undefined,
         };
@@ -301,6 +302,7 @@ export class UserService {
       if (updates.hasLimitations !== undefined) updateData.has_limitations = updates.hasLimitations;
       if (updates.limitationsDescription !== undefined) updateData.limitations_description = updates.limitationsDescription;
       if (updates.finalChatNotes !== undefined) updateData.final_chat_notes = updates.finalChatNotes;
+      if (updates.planAccepted !== undefined) updateData.plan_accepted = updates.planAccepted;
 
       const { data, error } = await supabase
         .from('user_profiles')
@@ -336,6 +338,7 @@ export class UserService {
         hasLimitations: data.has_limitations || false,
         limitationsDescription: data.limitations_description || '',
         finalChatNotes: data.final_chat_notes || '',
+        planAccepted: data.plan_accepted || false,
         createdAt: data.created_at ? new Date(data.created_at) : undefined,
         updatedAt: data.updated_at ? new Date(data.updated_at) : undefined,
       };
