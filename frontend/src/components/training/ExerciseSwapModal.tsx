@@ -9,13 +9,13 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Alert,
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { Exercise } from '../../types/training';
 import { ExerciseSwapService, ExerciseRecommendation, ExerciseSearchResult, ExerciseSearchFilters } from '../../services/exerciseSwapService';
+import ConfirmationDialog from '../shared/ConfirmationDialog';
 
 // Constants
 const SEARCH_DEBOUNCE_MS = 300;
@@ -57,6 +57,10 @@ const ExerciseSwapModal: React.FC<ExerciseSwapModalProps> = ({
     equipment: string[];
     difficulties: string[];
   }>({ targetAreas: [], equipment: [], difficulties: [] });
+
+  // Confirm swap dialog
+  const [pendingSwapExercise, setPendingSwapExercise] = useState<Exercise | null>(null);
+  const [showConfirmSwap, setShowConfirmSwap] = useState(false);
 
   // Load AI recommendations when modal opens
   useEffect(() => {
@@ -163,21 +167,8 @@ const ExerciseSwapModal: React.FC<ExerciseSwapModalProps> = ({
   };
 
   const handleSwapExercise = (exercise: Exercise) => {
-    Alert.alert(
-      'Confirm Exercise Swap',
-      `Are you sure you want to replace "${currentExercise.name}" with "${exercise.name}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Swap',
-          style: 'default',
-          onPress: () => {
-            onSwapExercise(exercise);
-            onClose();
-          },
-        },
-      ]
-    );
+    setPendingSwapExercise(exercise);
+    setShowConfirmSwap(true);
   };
 
   const clearFilters = () => {
@@ -417,10 +408,13 @@ const ExerciseSwapModal: React.FC<ExerciseSwapModalProps> = ({
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Swap Exercise</Text>
+          <View style={styles.headerTextBlock}>
+            <Text style={styles.headerTitle}>Swap Exercise</Text>
+            <Text style={styles.headerSubtitle}>Pick a better match or search the library</Text>
+          </View>
           <View style={styles.placeholder} />
         </View>
 
@@ -475,8 +469,34 @@ const ExerciseSwapModal: React.FC<ExerciseSwapModalProps> = ({
         </View>
 
         {/* Tab Content */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionHeaderText}>
+            {activeTab === 'ai' ? 'Suggested alternatives' : 'Browse & filter'}
+          </Text>
+        </View>
         {activeTab === 'ai' ? renderAIRecommendations() : renderSearchTab()}
       </SafeAreaView>
+      <ConfirmationDialog
+        visible={showConfirmSwap}
+        title={undefined}
+        message={`${currentExercise.name}\n↓\n${pendingSwapExercise?.name || ''}`}
+        confirmText="Confirm"
+        cancelText="Cancel"
+        onConfirm={() => {
+          if (pendingSwapExercise) {
+            onSwapExercise(pendingSwapExercise);
+          }
+          setShowConfirmSwap(false);
+          setPendingSwapExercise(null);
+          onClose();
+        }}
+        onCancel={() => {
+          setShowConfirmSwap(false);
+          setPendingSwapExercise(null);
+        }}
+        confirmButtonColor={colors.primary}
+        icon={undefined}
+      />
     </Modal>
   );
 };
@@ -491,17 +511,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+    backgroundColor: colors.card,
+  },
+  headerTextBlock: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
   },
   closeButton: {
     padding: 4,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: colors.text,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    color: colors.muted,
   },
   placeholder: {
     width: 32,
@@ -514,6 +544,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: colors.overlay,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
   },
   currentExerciseLabel: {
     fontSize: 14,
@@ -539,6 +574,11 @@ const styles = StyleSheet.create({
     padding: 4,
     borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: colors.overlay,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
   tabButton: {
     flex: 1,
@@ -591,6 +631,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: colors.overlay,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
   },
   recommendationHeader: {
     flexDirection: 'row',
@@ -750,6 +795,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: colors.border,
+    shadowColor: colors.overlay,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  sectionHeaderRow: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  sectionHeaderText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   resultHeader: {
     flexDirection: 'row',

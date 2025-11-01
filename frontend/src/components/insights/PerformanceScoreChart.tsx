@@ -1,8 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
 import { Svg, Line, Polyline, Circle, Text as SvgText, G } from 'react-native-svg';
 import { colors } from '@/src/constants/colors';
 import { PerformanceExplanation } from './PerformanceExplanation';
+
+type TimePeriod = '1M' | '3M' | '6M' | '1Y' | 'ALL';
 
 interface PerformanceScoreChartProps {
   data: Array<{
@@ -13,6 +15,8 @@ interface PerformanceScoreChartProps {
     improvement: number;
   }>;
   height?: number;
+  selectedPeriod?: TimePeriod;
+  onPeriodChange?: (period: TimePeriod) => void;
 }
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -22,12 +26,51 @@ const padding = 40;
 
 export const PerformanceScoreChart: React.FC<PerformanceScoreChartProps> = ({ 
   data, 
-  height = chartHeight 
+  height = chartHeight,
+  selectedPeriod: propSelectedPeriod,
+  onPeriodChange: propOnPeriodChange
 }) => {
-  if (!data || data.length === 0) {
+  // Use prop if provided (shared filter), otherwise use internal state
+  const [internalPeriod, setInternalPeriod] = useState<TimePeriod>('3M');
+  const selectedPeriod = propSelectedPeriod ?? internalPeriod;
+  const setSelectedPeriod = propOnPeriodChange ?? setInternalPeriod;
+
+  // Filter data based on selected period
+  const filteredData = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    
+    const now = new Date();
+    let cutoffDate: Date;
+    
+    switch (selectedPeriod) {
+      case '1M':
+        cutoffDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case '3M':
+        cutoffDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      case '6M':
+        cutoffDate = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+        break;
+      case '1Y':
+        cutoffDate = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        return data;
+    }
+    
+    return data.filter(item => new Date(item.date) >= cutoffDate);
+  }, [data, selectedPeriod]);
+
+  if (!data || data.length === 0 || filteredData.length === 0) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Performance Score Trend</Text>
+        <View style={styles.header}>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title}>Effective Training Index (ETI)</Text>
+            <PerformanceExplanation />
+          </View>
+        </View>
         <View style={styles.emptyState}>
           <Text style={styles.emptyText}>No data available</Text>
         </View>
@@ -35,19 +78,19 @@ export const PerformanceScoreChart: React.FC<PerformanceScoreChartProps> = ({
     );
   }
 
-  // Calculate chart dimensions with validation
-  const scores = data.map(d => d.score).filter(s => !isNaN(s) && isFinite(s));
+  // Calculate chart dimensions with validation using filtered data
+  const scores = filteredData.map(d => d.score).filter(s => !isNaN(s) && isFinite(s));
   const maxScore = scores.length > 0 ? Math.max(...scores) : 100;
-  const minScore = scores.length > 0 ? Math.min(...scores) : 0;
+  const minScore = Math.max(0, scores.length > 0 ? Math.min(...scores) : 0); // Never below zero
   const scoreRange = maxScore - minScore || 100;
   
   const chartInnerWidth = chartWidth - (padding * 2);
   const chartInnerHeight = height - (padding * 2);
   
-  // Calculate points for the line with validation
-  const points = data.map((point, index) => {
+  // Calculate points for the line with validation using filtered data
+  const points = filteredData.map((point, index) => {
     const score = isNaN(point.score) || !isFinite(point.score) ? 50 : point.score;
-    const x = padding + (index / Math.max(1, data.length - 1)) * chartInnerWidth;
+    const x = padding + (index / Math.max(1, filteredData.length - 1)) * chartInnerWidth;
     const y = padding + ((maxScore - score) / scoreRange) * chartInnerHeight;
     return { x: isNaN(x) ? padding : x, y: isNaN(y) ? padding : y, score, date: point.date };
   });
@@ -65,11 +108,11 @@ export const PerformanceScoreChart: React.FC<PerformanceScoreChartProps> = ({
     return colors.error;
   };
 
-  // Get trend direction
+  // Get trend direction using filtered data
   const getTrendDirection = () => {
-    if (data.length < 2) return 'stable';
-    const firstScore = data[0].score;
-    const lastScore = data[data.length - 1].score;
+    if (filteredData.length < 2) return 'stable';
+    const firstScore = filteredData[0].score;
+    const lastScore = filteredData[filteredData.length - 1].score;
     const change = lastScore - firstScore;
     
     if (change > 5) return 'improving';
@@ -83,20 +126,20 @@ export const PerformanceScoreChart: React.FC<PerformanceScoreChartProps> = ({
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.titleContainer}>
-          <Text style={styles.title}>Performance Analysis</Text>
+          <Text style={styles.title}>Effective Training Index (ETI)</Text>
           <PerformanceExplanation />
         </View>
-        <View style={styles.trendIndicator}>
-          <Text style={[
-            styles.trendText,
-            { color: trend === 'improving' ? colors.success : 
-                     trend === 'declining' ? colors.error : colors.muted }
-          ]}>
-            {trend === 'improving' ? '↗️ Improving' :
-             trend === 'declining' ? '↘️ Declining' : '→ Stable'}
+      </View>
+
+      {/* This Week's Value */}
+      {filteredData.length > 0 && (
+        <View style={styles.weeklyValueContainer}>
+          <Text style={styles.weeklyValueLabel}>This Week's ETI</Text>
+          <Text style={styles.weeklyValue}>
+            {Math.round(filteredData[filteredData.length - 1].score)}
           </Text>
         </View>
-      </View>
+      )}
       
       <View style={styles.chartContainer}>
         <Svg width={chartWidth} height={height}>
@@ -104,7 +147,7 @@ export const PerformanceScoreChart: React.FC<PerformanceScoreChartProps> = ({
           <G>
             {[0, 0.25, 0.5, 0.75, 1].map((ratio, index) => {
               const y = padding + ratio * chartInnerHeight;
-              const score = maxScore - (ratio * scoreRange);
+              const score = Math.max(0, maxScore - (ratio * scoreRange)); // Never below zero
               return (
                 <G key={index}>
                   <Line
@@ -134,7 +177,7 @@ export const PerformanceScoreChart: React.FC<PerformanceScoreChartProps> = ({
           <Polyline
             points={points.map(p => `${p.x},${p.y}`).join(' ')}
             fill="none"
-            stroke={getScoreColor(data[data.length - 1].score)}
+            stroke={colors.primary}
             strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -147,7 +190,7 @@ export const PerformanceScoreChart: React.FC<PerformanceScoreChartProps> = ({
               cx={point.x}
               cy={point.y}
               r="4"
-              fill={getScoreColor(point.score)}
+              fill={colors.primary}
               stroke={colors.background}
               strokeWidth="2"
             />
@@ -155,69 +198,44 @@ export const PerformanceScoreChart: React.FC<PerformanceScoreChartProps> = ({
 
           {/* Date labels */}
           {points.map((point, index) => (
-            <SvgText
-              key={index}
-              x={point.x}
-              y={height - 10}
-              fontSize="10"
-              fill={colors.muted}
-              textAnchor="middle"
-            >
-              {formatDateLabel(point.date)}
-            </SvgText>
+            <G key={index} transform={`translate(${point.x}, ${height - 10}) rotate(-45)`}>
+              <SvgText
+                x={0}
+                y={0}
+                fontSize="10"
+                fill={colors.muted}
+                textAnchor="middle"
+              >
+                {formatDateLabel(point.date)}
+              </SvgText>
+            </G>
           ))}
         </Svg>
       </View>
 
-      {/* Performance breakdown */}
-      <View style={styles.breakdownContainer}>
-        <View style={styles.breakdownItem}>
-          <View style={styles.breakdownHeader}>
-            <Text style={styles.breakdownLabel}>Current Score</Text>
-            <Text style={[
-              styles.breakdownValue,
-              { color: getScoreColor(data[data.length - 1].score) }
-            ]}>
-              {data[data.length - 1].score}
-            </Text>
-          </View>
-          <View style={[
-            styles.scoreBar,
-            { backgroundColor: colors.background }
-          ]}>
-            <View style={[
-              styles.scoreBarFill,
-              { 
-                width: `${data[data.length - 1].score}%`,
-                backgroundColor: getScoreColor(data[data.length - 1].score)
-              }
-            ]} />
-          </View>
+      {/* Stats */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>
+            {Math.round(maxScore)}
+          </Text>
+          <Text style={styles.statLabel}>Peak ETI</Text>
         </View>
-
-        <View style={styles.metricsContainer}>
-          <View style={styles.metricItem}>
-            <Text style={styles.metricLabel}>Volume</Text>
-            <Text style={styles.metricValue}>
-              {Math.round(data[data.length - 1].volume)}
-            </Text>
-          </View>
-          <View style={styles.metricItem}>
-            <Text style={styles.metricLabel}>Consistency</Text>
-            <Text style={styles.metricValue}>
-              {Math.round(data[data.length - 1].consistency)}%
-            </Text>
-          </View>
-          <View style={styles.metricItem}>
-            <Text style={[
-              styles.metricValue,
-              { color: data[data.length - 1].improvement > 0 ? colors.success : colors.error }
-            ]}>
-              {data[data.length - 1].improvement > 0 ? '+' : ''}
-              {Math.round(data[data.length - 1].improvement)}%
-            </Text>
-            <Text style={styles.metricLabel}>Improvement</Text>
-          </View>
+        <View style={styles.statItem}>
+          <Text style={styles.statValue}>
+            {Math.round(filteredData.reduce((sum, d) => sum + d.score, 0) / filteredData.length)}
+          </Text>
+          <Text style={styles.statLabel}>Average</Text>
+        </View>
+        <View style={styles.statItem}>
+          <Text style={[
+            styles.statValue,
+            { color: filteredData.length > 1 && filteredData[filteredData.length - 1].score > filteredData[filteredData.length - 2].score ? colors.success : colors.error }
+          ]}>
+            {filteredData.length > 1 && filteredData[filteredData.length - 1].score > filteredData[filteredData.length - 2].score ? '+' : ''}
+            {filteredData.length > 1 ? Math.round(((filteredData[filteredData.length - 1].score - filteredData[filteredData.length - 2].score) / filteredData[filteredData.length - 2].score) * 100) : 0}%
+          </Text>
+          <Text style={styles.statLabel}>Change</Text>
         </View>
       </View>
     </View>
@@ -229,17 +247,42 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
+    marginHorizontal: 16,
     marginVertical: 8,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 24,
   },
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  periodToggle: {
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    padding: 2,
+  },
+  periodButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    minWidth: 32,
+    alignItems: 'center',
+  },
+  periodButtonActive: {
+    backgroundColor: colors.primary,
+  },
+  periodButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.muted,
+  },
+  periodButtonTextActive: {
+    color: colors.background,
   },
   title: {
     fontSize: 18,
@@ -316,5 +359,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    borderTopWidth: 1,
+    borderTopColor: colors.background,
+    paddingTop: 16,
+    marginBottom: 16,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: colors.muted,
+  },
+  weeklyValueContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.background,
+  },
+  weeklyValueLabel: {
+    fontSize: 12,
+    color: colors.muted,
+    marginBottom: 4,
+  },
+  weeklyValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.primary,
   },
 });

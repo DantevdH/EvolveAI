@@ -1,11 +1,12 @@
 // Exercise Detail View - Modal with tabs like Swift
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Dimensions, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { Exercise } from '../../types/training';
 import { getExerciseHistory } from '../../services/trainingService';
 import { useAuth } from '../../context/AuthContext';
+import { VolumeTrendChart } from '../insights/VolumeTrendChart';
 
 interface ExerciseDetailViewProps {
   exercise: Exercise | null;
@@ -48,7 +49,7 @@ const ExerciseDetailView: React.FC<ExerciseDetailViewProps> = ({
     }
   }, [isVisible]);
 
-  // Fetch historical data when modal opens (not just when History tab is selected)
+  // Fetch historical data when modal opens or when training plan changes
   React.useEffect(() => {
     if (isVisible && exercise && state.userProfile?.id) {
       // Add a small delay to ensure any recent database updates are complete
@@ -58,14 +59,16 @@ const ExerciseDetailView: React.FC<ExerciseDetailViewProps> = ({
       
       return () => clearTimeout(timeoutId);
     }
-  }, [isVisible, exercise, state.userProfile?.id]);
+  }, [isVisible, exercise, state.userProfile?.id, state.trainingPlan]);
 
   const fetchHistoryData = async () => {
     if (!exercise || !state.userProfile?.id) return;
     
     setHistoryLoading(true);
     try {
-      const result = await getExerciseHistory(Number(exercise.id), state.userProfile.id);
+      // Use local training plan from AuthContext for real-time history
+      const localPlan = state.trainingPlan;
+      const result = await getExerciseHistory(Number(exercise.id), state.userProfile.id, localPlan);
       if (result.success && result.data) {
         setHistoryData(result.data);
       }
@@ -358,6 +361,22 @@ const HistoryTab: React.FC<{
     return formatDate(dateString);
   };
 
+  // Transform volumeData to VolumeTrendChart format
+  // VolumeTrendChart expects: { week: string, volume: number, trainings: number, exercises: number }
+  // We have: { date: string, volume: number }
+  const chartData = useMemo(() => {
+    if (!historyData?.volumeData || historyData.volumeData.length === 0) {
+      return [];
+    }
+
+    return historyData.volumeData.map(item => ({
+      week: item.date, // Use date as week identifier
+      volume: item.volume,
+      trainings: 1, // Each entry represents one training session
+      exercises: 1  // Each entry represents one exercise
+    }));
+  }, [historyData]);
+
   if (loading) {
     return (
       <View style={styles.tabContentContainer}>
@@ -423,62 +442,9 @@ const HistoryTab: React.FC<{
               </View>
             </View>
           </View>
-        ) : historyData.volumeData?.length > 0 && historyData.volumeData.some(d => d.volume > 0) ? (
-          <View style={styles.chartContainer}>
-            <View style={styles.chartArea}>
-              <View style={styles.lineChart}>
-                {historyData.volumeData.slice(-7).map((dataPoint, index, array) => {
-                  const maxVolume = Math.max(...historyData.volumeData.map(d => d.volume));
-                  const minVolume = Math.min(...historyData.volumeData.map(d => d.volume));
-                  const volumeRange = maxVolume - minVolume;
-                  
-                  // Calculate position (0-100% from bottom)
-                  const normalizedVolume = volumeRange > 0 
-                    ? ((dataPoint.volume - minVolume) / volumeRange) * 80 + 10 // 10-90% range
-                    : 50; // Center if all volumes are the same
-                  
-                  const isLastPoint = index === array.length - 1;
-                  const nextPoint = array[index + 1];
-                  
-                  return (
-                    <View key={dataPoint.date} style={styles.dataPointContainer}>
-                      <View style={styles.dataPointWrapper}>
-                        <View 
-                          style={[
-                            styles.dataPoint, 
-                            { 
-                              bottom: `${normalizedVolume}%`,
-                              backgroundColor: isLastPoint ? colors.primary : colors.primary + '80'
-                            }
-                          ]} 
-                        />
-                        {/* Line to next point */}
-                        {nextPoint && (
-                          <View 
-                            style={[
-                              styles.lineToNext,
-                              {
-                                bottom: `${normalizedVolume}%`,
-                                height: 2,
-                                backgroundColor: colors.primary + '60',
-                              }
-                            ]} 
-                          />
-                        )}
-                      </View>
-                      <Text style={styles.chartDateLabel}>{formatDate(dataPoint.date)}</Text>
-                      <Text style={styles.chartVolumeLabel}>{Math.round(dataPoint.volume)} kg</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </View>
-          </View>
         ) : (
-          <View style={styles.chartPlaceholder}>
-            <Ionicons name="trending-up" size={48} color={colors.primary} />
-            <Text style={styles.chartTitle}>No Volume Data</Text>
-            <Text style={styles.chartSubtitle}>Complete trainings with weights to see volume trends</Text>
+          <View style={styles.chartContainer}>
+            <VolumeTrendChart data={chartData} height={200} hideTitle={true} />
           </View>
         )}
       </View>

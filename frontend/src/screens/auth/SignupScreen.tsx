@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, ImageBackground, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ImageBackground, Image, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/src/context/AuthContext';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { validateSignupForm } from '@/src/utils/validation';
 import { colors } from '../../constants/designSystem';
+
+// Complete auth session if needed (recommended by Expo)
+WebBrowser.maybeCompleteAuthSession();
 
 // Custom Text Input Component (matching Swift design)
 const CustomTextField: React.FC<{
@@ -48,13 +52,14 @@ const CustomTextField: React.FC<{
 
 // Social Login Button Component (matching Swift design)
 const SocialLoginButton: React.FC<{
-  iconName: string;
+  iconName?: string;
+  imageSource?: any;
   text: string;
   onPress: () => void;
   disabled?: boolean;
   isSystemIcon?: boolean;
   testID?: string;
-}> = ({ iconName, text, onPress, disabled = false, isSystemIcon = false, testID }) => {
+}> = ({ iconName, imageSource, text, onPress, disabled = false, isSystemIcon = false, testID }) => {
   return (
     <TouchableOpacity
       style={[styles.socialButton, disabled && styles.socialButtonDisabled]}
@@ -63,11 +68,19 @@ const SocialLoginButton: React.FC<{
       activeOpacity={0.8}
       testID={testID}>
       <View style={styles.socialButtonContent}>
-        <IconSymbol
-          name={iconName as any}
-          size={20}
-          color="#FFFFFF"
-        />
+        {imageSource ? (
+          <Image
+            source={imageSource}
+            style={styles.socialButtonImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <IconSymbol
+            name={iconName as any}
+            size={20}
+            color="#FFFFFF"
+          />
+        )}
         <Text style={[styles.socialButtonText, disabled && styles.socialButtonTextDisabled]}>
           {text}
         </Text>
@@ -81,7 +94,7 @@ const MainTitleView: React.FC = () => {
   return (
     <View style={styles.titleContainer}>
       <Text style={styles.mainTitle}>Evolve</Text>
-      <Text style={styles.subtitle}>Create Your Account</Text>
+      <Text style={styles.subtitle}></Text>
     </View>
   );
 };
@@ -93,7 +106,7 @@ export const SignupScreen: React.FC = () => {
   const [validationError, setValidationError] = useState<string | null>(null);
   const router = useRouter();
 
-  const { state, signUpWithEmail, signInWithGoogle, signInWithApple, signInWithFacebook } = useAuth();
+  const { state, signUpWithEmail, signInWithGoogle, signInWithApple, /* signInWithFacebook */ } = useAuth();
 
   // Clear validation error when user starts typing
   const handleEmailChange = (text: string) => {
@@ -112,25 +125,48 @@ export const SignupScreen: React.FC = () => {
   };
 
   const handleEmailSignup = async () => {
+    console.log('🔵 [Signup] Create Account button clicked');
+    
     // Clear previous validation error
     setValidationError(null);
     
+    console.log('🔵 [Signup] Validating form...');
     // Validate form with comprehensive checks
     const validation = validateSignupForm(email, password, confirmPassword);
     if (!validation.isValid) {
+      console.log('❌ [Signup] Validation failed:', validation.errorMessage);
       setValidationError(validation.errorMessage!);
       return;
     }
 
-    const success = await signUpWithEmail(email, password, email.split('@')[0]); // Use email prefix as name
-    if (success) {
-      // Navigate to email verification screen with the email address
-      router.push({
-        pathname: '/email-verification',
-        params: { email: email }
-      });
-    } else if (state.error) {
-      Alert.alert('Sign Up Failed', state.error);
+    console.log('✅ [Signup] Validation passed, calling signUpWithEmail...');
+    console.log('🔵 [Signup] Email:', email);
+    console.log('🔵 [Signup] Loading state:', state.isLoading);
+    
+    try {
+      const success = await signUpWithEmail(email, password, email.split('@')[0]); // Use email prefix as name
+      console.log('🔵 [Signup] signUpWithEmail returned:', success);
+      console.log('🔵 [Signup] Error state:', state.error);
+      
+      if (success) {
+        console.log('✅ [Signup] Signup successful, navigating to email verification...');
+        // Navigate to email verification screen with the email address
+        router.push({
+          pathname: '/email-verification',
+          params: { email: email }
+        });
+      } else {
+        console.log('❌ [Signup] Signup failed');
+        if (state.error) {
+          console.log('❌ [Signup] Error:', state.error);
+          Alert.alert('Sign Up Failed', state.error);
+        } else {
+          Alert.alert('Sign Up Failed', 'An error occurred. Please try again.');
+        }
+      }
+    } catch (error) {
+      console.error('❌ [Signup] Unexpected error:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
   };
 
@@ -142,24 +178,27 @@ export const SignupScreen: React.FC = () => {
   };
 
   const handleAppleSignup = async () => {
-    const success = await signInWithApple();
-    if (!success && state.error) {
-      Alert.alert('Apple Sign Up Failed', state.error);
-    }
+    // Apple signup disabled for now
+    // const success = await signInWithApple();
+    // if (!success && state.error) {
+    //   Alert.alert('Apple Sign Up Failed', state.error);
+    // }
+    console.log('🍎 Apple signup clicked - disabled for now');
   };
 
-  const handleFacebookSignup = async () => {
-    const success = await signInWithFacebook();
-    if (!success && state.error) {
-      Alert.alert('Facebook Sign Up Failed', state.error);
-    }
-  };
+  // Facebook signup commented out for now
+  // const handleFacebookSignup = async () => {
+  //   const success = await signInWithFacebook();
+  //   if (!success && state.error) {
+  //     Alert.alert('Facebook Sign Up Failed', state.error);
+  //   }
+  // };
 
   return (
     <View style={styles.container}>
       {/* Background Image */}
       <ImageBackground
-        source={{ uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80' }}
+        source={require('../../../assets/images/background.png')}
         style={styles.backgroundImage}
         resizeMode="cover">
         
@@ -185,26 +224,29 @@ export const SignupScreen: React.FC = () => {
               <View style={styles.socialSection}>
                 <SocialLoginButton
                   iconName="apple.logo"
-                  text="Sign Up with Apple (Coming Soon)"
+                  text="Sign Up with Apple"
                   onPress={handleAppleSignup}
-                  disabled={true}
+                  disabled={state.isLoading}
                   isSystemIcon={true}
                   testID="apple-signup-button"
                 />
                 
                 <SocialLoginButton
-                  iconName="globe"
+                  imageSource={require('../../../assets/images/google-logo.webp')}
                   text="Sign Up with Google"
                   onPress={handleGoogleSignup}
+                  disabled={state.isLoading}
                   testID="google-signup-button"
                 />
                 
-                <SocialLoginButton
+                {/* Facebook signup commented out for now */}
+                {/* <SocialLoginButton
                   iconName="person.2"
                   text="Sign Up with Facebook"
                   onPress={handleFacebookSignup}
+                  disabled={state.isLoading}
                   testID="facebook-signup-button"
-                />
+                /> */}
               </View>
               
               {/* Separator */}
@@ -370,6 +412,12 @@ const styles = StyleSheet.create({
   },
   socialButtonTextDisabled: {
     color: 'rgba(255, 255, 255, 0.6)',
+  },
+  socialButtonImage: {
+    width: 10,
+    height: 10,
+    maxWidth: 10,
+    maxHeight: 10,
   },
   
   // Separator

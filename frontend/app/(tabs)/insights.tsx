@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,10 +19,14 @@ import { WeakPointsAnalysis } from '@/src/components/insights/WeakPointsAnalysis
 import { ForecastAndMilestones } from '@/src/components/insights/ForecastAndMilestones';
 import { colors } from '@/src/constants/colors';
 
+type TimePeriod = '1M' | '3M' | '6M' | '1Y' | 'ALL';
+
 export default function InsightsScreen() {
   const { state } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('3M');
+  const lastPlanUpdateRef = useRef<string | null>(null);
   
   // Data states
   const [weeklyVolumeData, setWeeklyVolumeData] = useState<any[]>([]);
@@ -32,18 +36,15 @@ export default function InsightsScreen() {
   const [forecastData, setForecastData] = useState<any[]>([]);
   const [milestoneData, setMilestoneData] = useState<any[]>([]);
 
-  useEffect(() => {
-    if (state.userProfile?.id) {
-      loadAllInsights();
-    }
-  }, [state.userProfile?.id]);
-
-  const loadAllInsights = async () => {
+  const loadAllInsights = useCallback(async () => {
     if (!state.userProfile?.id) return;
     
     setLoading(true);
     try {
       console.log('Loading comprehensive insights...');
+      
+      // Use local training plan from AuthContext for real-time insights
+      const localPlan = state.trainingPlan;
       
       // Load all insights in parallel for better performance
       const [
@@ -54,12 +55,12 @@ export default function InsightsScreen() {
         forecastResult,
         milestoneResult
       ] = await Promise.all([
-        InsightsAnalyticsService.getWeeklyVolumeTrend(state.userProfile.id),
-        InsightsAnalyticsService.getPerformanceScoreTrend(state.userProfile.id),
-        InsightsAnalyticsService.getTopPerformingExercises(state.userProfile.id),
-        InsightsAnalyticsService.getWeakPointsAnalysis(state.userProfile.id),
-        InsightsAnalyticsService.getFourWeekForecast(state.userProfile.id),
-        InsightsAnalyticsService.getMilestonePredictions(state.userProfile.id)
+        InsightsAnalyticsService.getWeeklyVolumeTrend(state.userProfile.id, localPlan),
+        InsightsAnalyticsService.getPerformanceScoreTrend(state.userProfile.id, localPlan),
+        InsightsAnalyticsService.getTopPerformingExercises(state.userProfile.id, localPlan),
+        InsightsAnalyticsService.getWeakPointsAnalysis(state.userProfile.id, localPlan),
+        InsightsAnalyticsService.getFourWeekForecast(state.userProfile.id, localPlan),
+        InsightsAnalyticsService.getMilestonePredictions(state.userProfile.id, localPlan)
       ]);
 
       // Set data states
@@ -78,7 +79,39 @@ export default function InsightsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [state.userProfile?.id, state.trainingPlan]);
+
+  // Track when to reload insights - reload when training plan changes (new completed trainings)
+  useEffect(() => {
+    if (state.userProfile?.id) {
+      // Create an identifier based on completed trainings count and most recent completion date
+      // This detects when new trainings are completed
+      let planIdentifier: string | number = 'no-plan';
+      
+      if (state.trainingPlan) {
+        const completedTrainings = state.trainingPlan.weeklySchedules
+          .flatMap(w => w.dailyTrainings)
+          .filter(d => d.completed && d.completedAt);
+        
+        if (completedTrainings.length > 0) {
+          const mostRecentCompleted = completedTrainings
+            .map(d => d.completedAt?.getTime() || 0)
+            .sort((a, b) => b - a)[0];
+          
+          // Combine count and most recent date to detect changes
+          planIdentifier = `${completedTrainings.length}-${mostRecentCompleted}`;
+        } else {
+          planIdentifier = 'no-completed';
+        }
+      }
+
+      // Only reload if the plan identifier changed (new completed training)
+      if (lastPlanUpdateRef.current !== planIdentifier) {
+        lastPlanUpdateRef.current = planIdentifier;
+        loadAllInsights();
+      }
+    }
+  }, [state.userProfile?.id, state.trainingPlan, loadAllInsights]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -121,17 +154,6 @@ export default function InsightsScreen() {
           <Text style={styles.emptyText}>
             Complete some trainings to unlock your personalized insights and analytics dashboard.
           </Text>
-          <View style={styles.emptyActions}>
-            <Text style={styles.emptyActionText}>
-              📊 Volume trends and progress charts
-            </Text>
-            <Text style={styles.emptyActionText}>
-              🎯 Performance analysis and weak points
-            </Text>
-            <Text style={styles.emptyActionText}>
-              🔮 Predictive insights and milestones
-            </Text>
-          </View>
         </View>
       </SafeAreaView>
     );
@@ -148,17 +170,25 @@ export default function InsightsScreen() {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Insights Dashboard</Text>
-          <Text style={styles.subtitle}>Advanced training analytics and predictions</Text>
+          <Text style={styles.subtitle}>Advanced training analytics</Text>
         </View>
 
         {/* Volume Trend Chart */}
         {weeklyVolumeData.length > 0 && (
-          <VolumeTrendChart data={weeklyVolumeData} />
+          <VolumeTrendChart 
+            data={weeklyVolumeData} 
+            selectedPeriod={selectedPeriod}
+            onPeriodChange={setSelectedPeriod}
+          />
         )}
 
         {/* Performance Analysis */}
         {performanceScoreData.length > 0 && (
-          <PerformanceScoreChart data={performanceScoreData} />
+          <PerformanceScoreChart 
+            data={performanceScoreData} 
+            selectedPeriod={selectedPeriod}
+            onPeriodChange={setSelectedPeriod}
+          />
         )}
 
 
@@ -251,8 +281,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   header: {
-    padding: 20,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    marginBottom: 8,
   },
   titleContainer: {
     flexDirection: 'row',
@@ -260,13 +291,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '700',
+    fontSize: 24,
+    fontWeight: '600',
     color: colors.text,
-    marginLeft: 8,
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: colors.muted,
   },
   sectionContainer: {
@@ -275,8 +306,8 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
   },
   sectionTitle: {
     fontSize: 18,

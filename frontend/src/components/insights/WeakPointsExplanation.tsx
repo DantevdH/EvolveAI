@@ -25,6 +25,7 @@ export const WeakPointsExplanation: React.FC = () => {
           <View style={styles.dialog}>
             <View style={styles.content}>
               <View style={styles.closeButtonContainer}>
+                <Text style={styles.sectionTitle}>Muscle Strength Index</Text>
                 <TouchableOpacity 
                   onPress={() => setIsVisible(false)}
                   style={styles.closeButton}
@@ -33,14 +34,12 @@ export const WeakPointsExplanation: React.FC = () => {
                 </TouchableOpacity>
               </View>
               
-              <Text style={styles.sectionTitle}>AI Analysis Methodology:</Text>
-              
               <View style={styles.componentItem}>
                 <Ionicons name="trending-up-outline" size={18} color={colors.warning} />
                 <View style={styles.componentText}>
                   <Text style={styles.componentTitle}>Performance Plateau</Text>
                   <Text style={styles.componentDescription}>
-                    AI pattern recognition identifies plateau trends
+                    Your strength or training volume has stayed the same for several weeks. Time to mix things up with new exercises or adjust your routine.
                   </Text>
                 </View>
               </View>
@@ -50,7 +49,7 @@ export const WeakPointsExplanation: React.FC = () => {
                 <View style={styles.componentText}>
                   <Text style={styles.componentTitle}>Declining Performance</Text>
                   <Text style={styles.componentDescription}>
-                    AI detects declining performance patterns
+                    Your training volume or strength has been decreasing over time. This might indicate you need more rest or to adjust your approach.
                   </Text>
                 </View>
               </View>
@@ -60,7 +59,7 @@ export const WeakPointsExplanation: React.FC = () => {
                 <View style={styles.componentText}>
                   <Text style={styles.componentTitle}>Inconsistent Training</Text>
                   <Text style={styles.componentDescription}>
-                    AI analyzes training consistency patterns
+                    You're not training this muscle group regularly enough. More consistent weekly training will lead to better results.
                   </Text>
                 </View>
               </View>
@@ -70,29 +69,41 @@ export const WeakPointsExplanation: React.FC = () => {
                 <View style={styles.componentText}>
                   <Text style={styles.componentTitle}>Low Training Frequency</Text>
                   <Text style={styles.componentDescription}>
-                    AI tracks training frequency patterns
+                    This muscle group hasn't been trained enough in recent weeks. Aim for at least twice per month for better progress.
                   </Text>
                 </View>
               </View>
 
-              <Text style={styles.sectionTitle}>Severity Levels:</Text>
+              <Text style={styles.sectionTitle}>What Your Score Means:</Text>
               
               <View style={styles.scoreItem}>
-                <Ionicons name="warning" size={16} color={colors.error} />
-                <Text style={[styles.scoreRange, { color: colors.error }]}>High</Text>
-                <Text style={styles.scoreDescription}>Immediate attention needed</Text>
+                <Ionicons name="checkmark-circle" size={16} color="#2E7D32" />
+                <Text style={[styles.scoreRange, { color: "#2E7D32" }]}>80+</Text>
+                <Text style={styles.scoreDescription}>Excellent - This muscle group is performing excellently</Text>
+              </View>
+              
+              <View style={styles.scoreItem}>
+                <Ionicons name="checkmark-circle-outline" size={16} color="#81C784" />
+                <Text style={[styles.scoreRange, { color: "#81C784" }]}>60-80</Text>
+                <Text style={styles.scoreDescription}>Good - This muscle group is performing well</Text>
               </View>
               
               <View style={styles.scoreItem}>
                 <Ionicons name="information-circle" size={16} color={colors.warning} />
-                <Text style={[styles.scoreRange, { color: colors.warning }]}>Medium</Text>
-                <Text style={styles.scoreDescription}>Should be addressed soon</Text>
+                <Text style={[styles.scoreRange, { color: colors.warning }]}>40-60</Text>
+                <Text style={styles.scoreDescription}>Fair - Room for improvement in this muscle group</Text>
               </View>
               
               <View style={styles.scoreItem}>
-                <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-                <Text style={[styles.scoreRange, { color: colors.success }]}>Low</Text>
-                <Text style={styles.scoreDescription}>Minor issue to monitor</Text>
+                <Ionicons name="warning" size={16} color="#FF6B6B" />
+                <Text style={[styles.scoreRange, { color: "#FF6B6B" }]}>20-40</Text>
+                <Text style={styles.scoreDescription}>Weak - This muscle group needs attention soon</Text>
+              </View>
+
+              <View style={styles.scoreItem}>
+                <Ionicons name="alert-circle" size={16} color={colors.error} />
+                <Text style={[styles.scoreRange, { color: colors.error }]}>{"<"}20</Text>
+                <Text style={styles.scoreDescription}>Very Weak - This muscle group needs immediate attention</Text>
               </View>
             </View>
           </View>
@@ -133,7 +144,9 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   closeButtonContainer: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
   closeButton: {

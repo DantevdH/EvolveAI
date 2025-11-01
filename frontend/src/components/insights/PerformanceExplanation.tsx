@@ -24,23 +24,22 @@ export const PerformanceExplanation: React.FC = () => {
         <View style={styles.overlay}>
           <View style={styles.dialog}>
             <View style={styles.content}>
-              <View style={styles.closeButtonContainer}>
-                <TouchableOpacity 
-                  onPress={() => setIsVisible(false)}
-                  style={styles.closeButton}
-                >
-                  <Ionicons name="close" size={24} color={colors.muted} />
-                </TouchableOpacity>
-              </View>
-              
-              <Text style={styles.sectionTitle}>AI Performance Analysis:</Text>
+                <View style={styles.closeButtonContainer}>
+                  <Text style={styles.sectionTitle}>Effective Training Index</Text>
+                  <TouchableOpacity 
+                    onPress={() => setIsVisible(false)}
+                    style={styles.closeButton}
+                  >
+                    <Ionicons name="close" size={24} color={colors.muted} />
+                  </TouchableOpacity>
+                </View>
               
               <View style={styles.componentItem}>
                 <Ionicons name="fitness" size={18} color={colors.primary} />
                 <View style={styles.componentText}>
-                  <Text style={styles.componentTitle}>Training Volume</Text>
+                  <Text style={styles.componentTitle}>Training Effort</Text>
                   <Text style={styles.componentDescription}>
-                    AI analyzes total weight volume patterns
+                    Measures how much you lifted compared to your usual amount. Focuses on relative progress, not just total weight.
                   </Text>
                 </View>
               </View>
@@ -50,7 +49,7 @@ export const PerformanceExplanation: React.FC = () => {
                 <View style={styles.componentText}>
                   <Text style={styles.componentTitle}>Training Consistency</Text>
                   <Text style={styles.componentDescription}>
-                    AI monitors training schedule adherence
+                    How many days you trained this week. More consistent training leads to better results.
                   </Text>
                 </View>
               </View>
@@ -58,9 +57,9 @@ export const PerformanceExplanation: React.FC = () => {
               <View style={styles.componentItem}>
                 <Ionicons name="trending-up" size={18} color={colors.primary} />
                 <View style={styles.componentText}>
-                  <Text style={styles.componentTitle}>Progress Rate</Text>
+                  <Text style={styles.componentTitle}>Strength Progress</Text>
                   <Text style={styles.componentDescription}>
-                    AI tracks progressive improvement rates
+                    Tracks if you're actually getting stronger. Compares your current max strength to your previous week's max.
                   </Text>
                 </View>
               </View>
@@ -68,28 +67,28 @@ export const PerformanceExplanation: React.FC = () => {
               <View style={styles.componentItem}>
                 <Ionicons name="warning" size={18} color={colors.primary} />
                 <View style={styles.componentText}>
-                  <Text style={styles.componentTitle}>Plateau Avoidance</Text>
+                  <Text style={styles.componentTitle}>Recovery & Fatigue</Text>
                   <Text style={styles.componentDescription}>
-                    AI identifies plateau prevention patterns
+                    Checks if you're training too hard or if your sessions feel too difficult. Helps prevent overtraining and injury.
                   </Text>
                 </View>
               </View>
 
-              <Text style={styles.sectionTitle}>Score Ranges:</Text>
+              <Text style={styles.sectionTitle}>What Your Score Means:</Text>
               
               <View style={styles.scoreItem}>
                 <Text style={[styles.scoreRange, { color: colors.success }]}>80-100</Text>
-                <Text style={styles.scoreDescription}>Excellent - Consistent progress</Text>
+                <Text style={styles.scoreDescription}>Great week! You're training effectively and making progress.</Text>
               </View>
               
               <View style={styles.scoreItem}>
                 <Text style={[styles.scoreRange, { color: colors.warning }]}>60-79</Text>
-                <Text style={styles.scoreDescription}>Good - Steady progress</Text>
+                <Text style={styles.scoreDescription}>Good week with room for small improvements. Maybe increase intensity or consistency slightly.</Text>
               </View>
               
               <View style={styles.scoreItem}>
                 <Text style={[styles.scoreRange, { color: colors.error }]}>0-59</Text>
-                <Text style={styles.scoreDescription}>Needs Attention</Text>
+                <Text style={styles.scoreDescription}>Needs attention. Consider adjusting your training load, rest days, or workout plan.</Text>
               </View>
             </View>
           </View>
@@ -130,7 +129,9 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   closeButtonContainer: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
   },
   closeButton: {

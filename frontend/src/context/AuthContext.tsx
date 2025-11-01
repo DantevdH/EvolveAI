@@ -227,8 +227,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const { data: { session }, error } = await supabase.auth.getSession();
 
         if (error) {
-          console.error('❌ Session error:', error.message);
-          dispatch({ type: 'SET_ERROR', payload: error.message });
+          // Handle expected refresh token errors gracefully
+          const isRefreshTokenError = 
+            error.message?.includes('Invalid Refresh Token') || 
+            error.message?.includes('Refresh Token Not Found') ||
+            error.message?.includes('refresh_token_not_found');
+          
+          if (isRefreshTokenError) {
+            // This is expected when a user's session has expired or token was cleared
+            // No need to show this as an error - user just needs to sign in again
+            console.log('ℹ️ No valid session - user needs to sign in');
+            dispatch({ type: 'SET_ERROR', payload: null }); // Clear any previous errors
+          } else {
+            // Log actual errors that need attention
+            console.error('❌ Session error:', error.message);
+            dispatch({ type: 'SET_ERROR', payload: error.message });
+          }
         } else if (session) {
           console.log('✅ User session found');
           dispatch({ type: 'SET_USER', payload: session.user });
@@ -362,6 +376,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await AuthService.signInWithGoogle();
 
       if (response.success) {
+        // If user and session are returned immediately (token extraction in authService worked)
+        if (response.user && response.session) {
+          console.log('✅ [AuthContext] User flow: OAuth session set immediately, updating context');
+          dispatch({ type: 'SET_USER', payload: response.user });
+          dispatch({ type: 'SET_SESSION', payload: response.session });
+          
+          // Load user profile
+          await loadUserProfile(response.user.id);
+          
+          console.log('✅ [AuthContext] User flow: Context updated, user authenticated');
+          return true;
+        }
+        
+        // If tokens weren't extracted immediately, auth state listener will handle it
+        // But we return true to indicate OAuth flow initiated successfully
         return true;
       } else {
         dispatch({ type: 'SET_ERROR', payload: response.error || 'Google sign in failed' });

@@ -1,5 +1,5 @@
 /**
- * AI Insights Card Component - AI insights with brain icon
+ * AI Insights Card Component - Shows three KPIs: This Week's Volume, ETI, and MSI
  */
 
 import React from 'react';
@@ -8,18 +8,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 
 interface AIInsightsCardProps {
-  insight?: string;
+  weeklyVolume?: number;
+  eti?: number;
+  msi?: number;
   onViewInsights?: () => void;
 }
 
 export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
-  insight = "Great consistency this week! Your squat strength has improved by 8%. Consider adding more protein to support your muscle growth goals.",
+  weeklyVolume,
+  eti,
+  msi,
   onViewInsights,
 }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        {/* <Ionicons name="bulb" size={20} color={colors.primary} /> */}
         <Text style={styles.title}>AI Insights</Text>
         {onViewInsights && (
           <TouchableOpacity style={styles.viewButton} onPress={onViewInsights}>
@@ -28,7 +31,44 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
           </TouchableOpacity>
         )}
       </View>
-      <Text style={styles.insightText}>{insight}</Text>
+      
+      <View style={styles.kpiContainer}>
+        {/* This Week's Volume */}
+        <View style={styles.kpiItem}>
+          <Text style={styles.kpiLabel}>This Week's Volume</Text>
+          {weeklyVolume !== undefined ? (
+            <Text style={styles.kpiValue}>
+              {weeklyVolume >= 1000 ? `${Math.round(weeklyVolume / 1000)}K` : Math.round(weeklyVolume).toLocaleString()}
+            </Text>
+          ) : (
+            <Text style={styles.noData}>(No data)</Text>
+          )}
+        </View>
+        
+        {/* ETI */}
+        <View style={styles.kpiItem}>
+          <Text style={styles.kpiLabel}>ETI</Text>
+          {eti !== undefined ? (
+            <Text style={styles.kpiValue}>
+              {Math.round(eti)}
+            </Text>
+          ) : (
+            <Text style={styles.noData}>(No data)</Text>
+          )}
+        </View>
+        
+        {/* MSI */}
+        <View style={styles.kpiItem}>
+          <Text style={styles.kpiLabel}>MSI</Text>
+          {msi !== undefined ? (
+            <Text style={styles.kpiValue}>
+              {Math.round(msi)}
+            </Text>
+          ) : (
+            <Text style={styles.noData}>(No data)</Text>
+          )}
+        </View>
+      </View>
     </View>
   );
 };
@@ -69,9 +109,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
-  insightText: {
-    fontSize: 14,
+  kpiContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    gap: 8,
+  },
+  kpiItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  kpiLabel: {
+    fontSize: 11,
+    color: colors.muted,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  kpiValue: {
+    fontSize: 20,
+    fontWeight: '600',
     color: colors.text,
-    lineHeight: 20,
+  },
+  noData: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    color: colors.muted,
   },
 });

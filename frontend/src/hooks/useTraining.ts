@@ -5,6 +5,7 @@ import { TrainingService } from '../services/trainingService';
 import { NotificationService } from '../services/NotificationService';
 import { ExerciseSwapService } from '../services/exerciseSwapService';
 import { supabase } from '../config/supabase';
+import SessionRPEModal from '../components/training/SessionRPEModal';
 import {
   TrainingState,
   TrainingPlan,
@@ -29,7 +30,9 @@ const initialState: TrainingState = {
   selectedExercise: null,
   isLoading: false,
   error: null,
-  showReopenDialog: false
+  showReopenDialog: false,
+  showRPEModal: false,
+  pendingCompletionDailyTrainingId: null
 };
 
 export const useTraining = (): UseTrainingReturn => {
@@ -336,28 +339,26 @@ export const useTraining = (): UseTrainingReturn => {
           const allExercisesCompleted = updatedCurrentDailyTraining.exercises.every(exercise => exercise.completed);
           
           if (allExercisesCompleted && !updatedCurrentDailyTraining.isRestDay) {
-            // All exercises completed - mark daily training as completed
-            console.log('🎉 All exercises completed! Marking daily training as completed...');
+            // All exercises completed - show RPE modal first
+            console.log('🎉 All exercises completed! Showing RPE modal...');
             
-            // Update the daily training completion status
-            updatedPlan.weeklySchedules = updatedPlan.weeklySchedules.map(week => ({
-              ...week,
-              dailyTrainings: week.dailyTrainings.map(daily => 
-                daily.id === updatedCurrentDailyTraining.id 
-                  ? { ...daily, completed: true }
-                  : daily
-              )
-            }));
-
-            // Update database: Mark all exercises as completed and complete the daily training
+            // Update database: Mark all exercises as completed first
             const exerciseUpdatePromises = updatedCurrentDailyTraining.exercises.map(exercise => 
               TrainingService.updateExerciseCompletion(exercise.id, true)
             );
             
             Promise.all(exerciseUpdatePromises).then(() => {
-              return TrainingService.completeDailyTraining(updatedCurrentDailyTraining.id);
+              // Show RPE modal to collect session rating
+              setTrainingState(prev => ({
+                ...prev,
+                showRPEModal: true,
+                pendingCompletionDailyTrainingId: updatedCurrentDailyTraining.id
+              }));
+              
+              // Update local plan to show exercises as completed (but not the daily training yet)
+              updateTrainingPlan(updatedPlan);
             }).catch(error => {
-              console.error('❌ Error updating exercise completion or completing daily training:', error);
+              console.error('❌ Error updating exercise completion:', error);
               setTrainingState(prev => ({
                 ...prev,
                 error: 'Failed to complete training'
@@ -366,12 +367,12 @@ export const useTraining = (): UseTrainingReturn => {
           } else if (!allExercisesCompleted && updatedCurrentDailyTraining.completed) {
             // Some exercises were unchecked - mark training as incomplete
             
-            // Update the daily training completion status
+            // Update the daily training completion status (clear completedAt when incomplete)
             updatedPlan.weeklySchedules = updatedPlan.weeklySchedules.map(week => ({
               ...week,
               dailyTrainings: week.dailyTrainings.map(daily => 
                 daily.id === updatedCurrentDailyTraining.id 
-                  ? { ...daily, completed: false }
+                  ? { ...daily, completed: false, completedAt: undefined }
                   : daily
               )
             }));
@@ -401,43 +402,109 @@ export const useTraining = (): UseTrainingReturn => {
         error: null
       }));
 
-      const result = await TrainingService.updateSetDetails(exerciseId, setIndex, reps, weight);
+      if (!trainingPlan) {
+        setTrainingState(prev => ({
+          ...prev,
+          error: 'Training plan not loaded'
+        }));
+        return;
+      }
+
+      // Find the exercise to get current sets and default values
+      const exercise = trainingPlan.weeklySchedules
+        .flatMap(week => week.dailyTrainings)
+        .flatMap(daily => daily.exercises)
+        .find(ex => ex.id === exerciseId);
+
+      if (!exercise || !exercise.sets) {
+        console.error('Exercise not found:', exerciseId, 'or sets missing:', !exercise?.sets);
+        setTrainingState(prev => ({
+          ...prev,
+          error: 'Exercise not found'
+        }));
+        return;
+      }
+
+      console.log(`Updating set: exerciseId=${exerciseId}, setIndex=${setIndex}, currentSets=${exercise.sets.length}`);
+
+      let updatedSets: typeof exercise.sets;
+      
+      // Handle special cases: -1 = add set, -2 = remove set
+      if (setIndex === -1) {
+        // Add a new set with default values based on last set or defaults
+        const lastSet = exercise.sets[exercise.sets.length - 1];
+        const defaultReps = lastSet?.reps || 10;
+        const defaultWeight = lastSet?.weight || 0;
+        
+        updatedSets = [
+          ...exercise.sets,
+          {
+            id: `${exerciseId}-${exercise.sets.length}`,
+            reps: defaultReps,
+            weight: defaultWeight,
+            completed: false,
+            restTime: 60
+          }
+        ];
+      } else if (setIndex === -2) {
+        // Remove the last set (if there's more than one)
+        if (exercise.sets.length <= 1) {
+          setTrainingState(prev => ({
+            ...prev,
+            error: 'Cannot remove the last set'
+          }));
+          return;
+        }
+        updatedSets = exercise.sets.slice(0, -1);
+      } else {
+        // Normal update: update a specific set
+        updatedSets = exercise.sets.map((set, index) => 
+          index === setIndex 
+            ? { ...set, reps, weight }
+            : set
+        );
+      }
+
+      // Update the database
+      const result = await TrainingService.updateSetDetails(
+        exerciseId, 
+        setIndex, 
+        setIndex === -1 ? updatedSets[updatedSets.length - 1].reps : reps,
+        setIndex === -1 ? updatedSets[updatedSets.length - 1].weight : weight,
+        updatedSets
+      );
       
       if (result.success) {
-        // Update both local and auth context state instead of refetching
+        // Update both local and auth context state
         const updatedPlan = {
-          ...trainingPlan!,
-          weeklySchedules: trainingPlan!.weeklySchedules.map(week => ({
+          ...trainingPlan,
+          weeklySchedules: trainingPlan.weeklySchedules.map(week => ({
             ...week,
             dailyTrainings: week.dailyTrainings.map(daily => ({
               ...daily,
-              exercises: daily.exercises.map(exercise => 
-                exercise.id === exerciseId 
-                  ? {
-                      ...exercise,
-                      sets: exercise.sets.map((set, index) => 
-                        index === setIndex 
-                          ? { ...set, reps, weight }
-                          : set
-                      )
-                    }
-                  : exercise
+              exercises: daily.exercises.map(ex => 
+                ex.id === exerciseId 
+                  ? { ...ex, sets: updatedSets }
+                  : ex
               )
             }))
           }))
         };
         
+        console.log(`Set update successful: newSets=${updatedSets.length}`);
         updateTrainingPlan(updatedPlan);
       } else {
+        console.error('Set update failed:', result.error);
         setTrainingState(prev => ({
           ...prev,
           error: result.error || 'Failed to update set details'
         }));
       }
     } catch (error) {
+      console.error('Error in updateSetDetails:', error);
       setTrainingState(prev => ({
         ...prev,
-        error: 'Failed to update set details'
+        error: error instanceof Error ? error.message : 'Failed to update set details'
       }));
     }
   }, [trainingPlan, updateTrainingPlan]);
@@ -597,26 +664,13 @@ export const useTraining = (): UseTrainingReturn => {
         }
       }
 
-      const result = await TrainingService.completeDailyTraining(
-        selectedDayTraining.id
-      );
-
-      if (result.success) {
-        setTrainingState(prev => ({
-          ...prev,
-          completedTrainings: new Set([...prev.completedTrainings, selectedDayTraining.id]),
-          isLoading: false
-        }));
-
-        // Cancel today's training reminder since training is completed
-        await NotificationService.cancelTrainingReminder();
-      } else {
-        setTrainingState(prev => ({
-          ...prev,
-          error: result.error || 'Failed to complete training',
-          isLoading: false
-        }));
-      }
+      // Show RPE modal instead of completing directly
+      setTrainingState(prev => ({
+        ...prev,
+        showRPEModal: true,
+        pendingCompletionDailyTrainingId: selectedDayTraining.id,
+        isLoading: false
+      }));
     } catch (error) {
       setTrainingState(prev => ({
         ...prev,
@@ -624,7 +678,7 @@ export const useTraining = (): UseTrainingReturn => {
         isLoading: false
       }));
     }
-  }, [selectedDayTraining]);
+  }, [selectedDayTraining, trainingPlan, updateTrainingPlan]);
 
   const reopenTraining = useCallback(() => {
     if (!selectedDayTraining) return;
@@ -636,48 +690,61 @@ export const useTraining = (): UseTrainingReturn => {
     }));
   }, [selectedDayTraining]);
 
-  const confirmReopenTraining = useCallback((resetExercises: boolean = false) => {
+  const confirmReopenTraining = useCallback(async (resetExercises: boolean = false) => {
     if (!selectedDayTraining || !trainingPlan) return;
 
-    // Mark the training as incomplete to unlock exercises
-    const updatedPlan = {
-      ...trainingPlan,
-      weeklySchedules: trainingPlan.weeklySchedules.map(week => ({
-        ...week,
-        dailyTrainings: week.dailyTrainings.map(daily => 
-          daily.id === selectedDayTraining.id 
-            ? { 
-                ...daily, 
-                completed: false,
-                exercises: resetExercises 
-                  ? daily.exercises.map(exercise => ({ ...exercise, completed: false }))
-                  : daily.exercises
-              }
-            : daily
-        )
-      }))
-    };
-    
-    updateTrainingPlan(updatedPlan);
-
-    // Update database if exercises were reset to incomplete
-    if (resetExercises && selectedDayTraining) {
-      const exerciseUpdatePromises = selectedDayTraining.exercises.map(exercise => 
-        TrainingService.updateExerciseCompletion(exercise.id, false)
-      );
+    try {
+      // Mark the training as incomplete to unlock exercises (clear completedAt and sessionRPE)
+      const updatedPlan = {
+        ...trainingPlan,
+        weeklySchedules: trainingPlan.weeklySchedules.map(week => ({
+          ...week,
+          dailyTrainings: week.dailyTrainings.map(daily => 
+            daily.id === selectedDayTraining.id 
+              ? { 
+                  ...daily, 
+                  completed: false,
+                  completedAt: undefined,
+                  sessionRPE: undefined, // Clear session RPE when reopening
+                  exercises: resetExercises 
+                    ? daily.exercises.map(exercise => ({ ...exercise, completed: false }))
+                    : daily.exercises
+                }
+              : daily
+          )
+        }))
+      };
       
-      Promise.all(exerciseUpdatePromises).catch(error => {
-        console.error('Error updating exercise completion to incomplete:', error);
-      });
+      // Update local state
+      updateTrainingPlan(updatedPlan);
+
+      // Update database for daily_training (clear completion and session RPE)
+      await TrainingService.reopenDailyTraining(selectedDayTraining.id);
+
+      // Update database if exercises were reset to incomplete
+      if (resetExercises && selectedDayTraining) {
+        const exerciseUpdatePromises = selectedDayTraining.exercises.map(exercise => 
+          TrainingService.updateExerciseCompletion(exercise.id, false)
+        );
+        
+        await Promise.all(exerciseUpdatePromises);
+      }
+
+      // Hide dialog
+      setTrainingState(prev => ({
+        ...prev,
+        showReopenDialog: false
+      }));
+
+      console.log(`🔓 Training reopened - exercises are now unlocked for editing${resetExercises ? ' (all exercises reset)' : ' (exercise completion preserved)'}`);
+    } catch (error) {
+      console.error('Error reopening training:', error);
+      setTrainingState(prev => ({
+        ...prev,
+        error: 'Failed to reopen training',
+        showReopenDialog: false
+      }));
     }
-
-    // Hide dialog
-    setTrainingState(prev => ({
-      ...prev,
-      showReopenDialog: false
-    }));
-
-    console.log(`🔓 Training reopened - exercises are now unlocked for editing${resetExercises ? ' (all exercises reset)' : ' (exercise completion preserved)'}`);
   }, [selectedDayTraining, trainingPlan, updateTrainingPlan]);
 
   const cancelReopenTraining = useCallback(() => {
@@ -733,13 +800,13 @@ export const useTraining = (): UseTrainingReturn => {
 
       // Update database
       const { error } = await supabase
-        .from('training_exercises')
+        .from('strength_exercise')
         .update({
           exercise_id: parseInt(newExercise.id),
           completed: false,
           updated_at: new Date().toISOString()
         })
-        .eq('id', exerciseId);
+        .eq('id', isNaN(Number(exerciseId)) ? exerciseId : Number(exerciseId));
 
       if (error) {
         console.error('❌ Error updating exercise in database:', error);
@@ -765,6 +832,78 @@ export const useTraining = (): UseTrainingReturn => {
       }));
     }
   }, [trainingPlan, updateTrainingPlan, hideExerciseSwapModal]);
+
+  const handleRPESelection = useCallback(async (rpe: number) => {
+    if (!trainingState.pendingCompletionDailyTrainingId) return;
+
+    try {
+      setTrainingState(prev => ({
+        ...prev,
+        isLoading: true,
+        error: null,
+        showRPEModal: false
+      }));
+
+      const dailyTrainingId = trainingState.pendingCompletionDailyTrainingId;
+      
+      // Complete the daily training with session RPE
+      const result = await TrainingService.completeDailyTraining(
+        dailyTrainingId,
+        rpe
+      );
+
+      if (result.success) {
+        // Update local state with completedAt timestamp and sessionRPE
+        const now = new Date();
+        const updatedPlan = {
+          ...trainingPlan!,
+          weeklySchedules: trainingPlan!.weeklySchedules.map(week => ({
+            ...week,
+            dailyTrainings: week.dailyTrainings.map(daily =>
+              daily.id === dailyTrainingId
+                ? { ...daily, completed: true, completedAt: now, sessionRPE: rpe }
+                : daily
+            )
+          }))
+        };
+        
+        // Update both local and auth context training plans
+        updateTrainingPlan(updatedPlan);
+        
+        setTrainingState(prev => ({
+          ...prev,
+          completedTrainings: new Set([...prev.completedTrainings, dailyTrainingId]),
+          isLoading: false,
+          pendingCompletionDailyTrainingId: null
+        }));
+
+        // Cancel today's training reminder since training is completed
+        await NotificationService.cancelTrainingReminder();
+      } else {
+        setTrainingState(prev => ({
+          ...prev,
+          error: result.error || 'Failed to complete training',
+          isLoading: false,
+          pendingCompletionDailyTrainingId: null
+        }));
+      }
+    } catch (error) {
+      setTrainingState(prev => ({
+        ...prev,
+        error: 'Failed to complete training',
+        isLoading: false,
+        pendingCompletionDailyTrainingId: null
+      }));
+    }
+  }, [trainingState.pendingCompletionDailyTrainingId, trainingPlan, updateTrainingPlan]);
+
+  const handleRPEModalClose = useCallback(() => {
+    setTrainingState(prev => ({
+      ...prev,
+      showRPEModal: false,
+      pendingCompletionDailyTrainingId: null
+    }));
+  }, []);
 
   const refreshTrainingPlan = useCallback(async () => {
     if (!authState.userProfile) return;
@@ -862,6 +1001,8 @@ export const useTraining = (): UseTrainingReturn => {
     confirmReopenTraining,
     cancelReopenTraining,
     refreshTrainingPlan,
+    handleRPESelection,
+    handleRPEModalClose,
     showExerciseSwapModal,
     hideExerciseSwapModal,
     swapExercise,

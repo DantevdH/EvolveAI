@@ -10,6 +10,8 @@ export interface TrainingState {
   isLoading: boolean;
   error: string | null;
   showReopenDialog: boolean;
+  showRPEModal: boolean;
+  pendingCompletionDailyTrainingId: string | null;
 }
 
 export interface Exercise {
@@ -72,6 +74,7 @@ export interface DailyTraining {
   completedAt?: Date;
   duration?: number; // in minutes
   calories?: number;
+  sessionRPE?: number; // Session Rate of Perceived Exertion (1-5 scale)
 }
 
 export interface WeeklySchedule {
@@ -206,6 +209,8 @@ export interface UseTrainingReturn {
   confirmReopenTraining: (resetExercises?: boolean) => void;
   cancelReopenTraining: () => void;
   refreshTrainingPlan: () => Promise<void>;
+  handleRPESelection: (rpe: number) => Promise<void>;
+  handleRPEModalClose: () => void;
   
   // Exercise swap actions
   showExerciseSwapModal: (exercise: Exercise) => void;

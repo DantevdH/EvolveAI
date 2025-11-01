@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/src/constants/colors';
 import { WeakPointsExplanation } from './WeakPointsExplanation';
@@ -14,65 +14,40 @@ export const WeakPointsAnalysis: React.FC<WeakPointsAnalysisProps> = ({
   data, 
   onExercisePress 
 }) => {
+  // Always show the component, even if no data
   if (!data || data.length === 0) {
     return (
       <View style={styles.container}>
         <View style={styles.titleContainer}>
-          <Text style={styles.title}>Weak Points Analysis</Text>
+          <Text style={styles.title}>Muscle Strength Index (MSI)</Text>
           <WeakPointsExplanation />
         </View>
         <View style={styles.emptyState}>
           <Ionicons name="checkmark-circle" size={48} color={colors.success} />
-          <Text style={styles.emptyTitle}>All Good!</Text>
+          <Text style={styles.emptyTitle}>No Data Available</Text>
           <Text style={styles.emptyText}>
-            No major issues detected. Keep up the great work!
+            Complete some training sessions to see your muscle group analysis.
           </Text>
         </View>
       </View>
     );
   }
 
-  const getIssueIcon = (issue: string) => {
-    switch (issue) {
-      case 'plateau': return 'trending-up-outline';
-      case 'declining': return 'trending-down';
-      case 'inconsistent': return 'calendar-outline';
-      case 'low_frequency': return 'time-outline';
-      default: return 'alert-circle';
-    }
-  };
+  // Sort from low to high (ascending) by strength score
+  // Lower strength = higher weakness, so we prioritize showing weaker muscles first
+  const sortedData = [...data].sort((a, b) => {
+    const strengthA = 100 - a.metrics.current;
+    const strengthB = 100 - b.metrics.current;
+    return strengthA - strengthB; // Ascending: weak muscles first
+  });
 
-  const getIssueColor = (issue: string, severity: string) => {
-    const baseColors = {
-      plateau: colors.warning,
-      declining: colors.error,
-      inconsistent: colors.primary,
-      low_frequency: colors.muted,
-    };
-    
-    const baseColor = baseColors[issue as keyof typeof baseColors] || colors.muted;
-    
-    // Adjust opacity based on severity
-    if (severity === 'high') return baseColor;
-    if (severity === 'medium') return baseColor + 'CC';
-    return baseColor + '99';
-  };
-
-  const getSeverityIcon = (severity: string) => {
-    switch (severity) {
-      case 'high': return 'warning';
-      case 'medium': return 'information-circle';
-      default: return 'checkmark-circle';
-    }
-  };
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'high': return colors.error;
-      case 'medium': return colors.warning;
-      default: return colors.success;
-    }
-  };
+  // Calculate average strength across all muscles
+  const averageStrength = data.length > 0
+    ? data.reduce((sum, item) => {
+        const strengthScore = 100 - item.metrics.current;
+        return sum + strengthScore;
+      }, 0) / data.length
+    : 0;
 
   const formatIssueTitle = (issue: string) => {
     switch (issue) {
@@ -84,138 +59,113 @@ export const WeakPointsAnalysis: React.FC<WeakPointsAnalysisProps> = ({
     }
   };
 
-  const formatMetrics = (metrics: WeakPointAnalysis['metrics']) => {
-    if (metrics.change !== 0) {
-      return `${metrics.change > 0 ? '+' : ''}${Math.round(metrics.change)}%`;
-    }
-    return Math.round(metrics.current).toString();
+  const getScoreColor = (score: number) => {
+    // Updated ranges: Excellent >80, Good 60-80, Fair 40-60, Weak 20-40, Very Weak <20
+    if (score > 80) return '#2E7D32'; // Excellent - Dark green
+    if (score >= 60) return '#81C784'; // Good - Light green
+    if (score >= 40) return colors.warning; // Fair - Orange
+    if (score >= 20) return '#FF6B6B'; // Weak - Red-orange
+    return colors.error; // Very Weak - Red
+  };
+
+  const getScoreLabel = (score: number) => {
+    // Updated ranges with clearer naming
+    if (score > 80) return 'Excellent';
+    if (score >= 60) return 'Good';
+    if (score >= 40) return 'Fair';
+    if (score >= 20) return 'Weak';
+    return 'Very Weak';
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.titleContainer}>
-          <Text style={styles.title}>Weak Points Analysis</Text>
+          <Text style={styles.title}>Muscle Strength Index (MSI)</Text>
           <WeakPointsExplanation />
         </View>
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{data.length} Issues</Text>
-        </View>
       </View>
-      
-      <Text style={styles.subtitle}>
-        AI-identified areas that need attention for better results
-      </Text>
 
-      <View style={styles.issuesContainer}>
-        {data.map((weakPoint, index) => (
-          <TouchableOpacity
+      {/* Average Strength Value */}
+      {data.length > 0 && (
+        <View style={styles.weeklyValueContainer}>
+          <Text style={styles.weeklyValueLabel}>Average MSI</Text>
+          <Text style={styles.weeklyValue}>
+            {Math.round(averageStrength)}
+          </Text>
+        </View>
+      )}
+      
+      <ScrollView 
+        style={styles.scrollContainer}
+        showsVerticalScrollIndicator={true}
+      >
+        {sortedData.map((weakPoint, index) => {
+          // Convert weakness score (0-100) to strength score (100-0)
+          // Higher weakness = lower strength, lower weakness = higher strength
+          const weaknessScore = weakPoint.metrics.current;
+          const strengthScore = 100 - weaknessScore;
+          const scoreColor = getScoreColor(strengthScore);
+          const scoreLabel = getScoreLabel(strengthScore);
+          
+          return (
+          <View
             key={index}
-            style={[
-              styles.issueCard,
-              { borderLeftColor: getIssueColor(weakPoint.issue, weakPoint.severity) }
-            ]}
-            onPress={() => onExercisePress?.(weakPoint)}
+            style={styles.muscleCard}
           >
-            <View style={styles.issueHeader}>
-              <View style={styles.issueInfo}>
-                <View style={styles.issueIconContainer}>
-                  <Ionicons 
-                    name={getIssueIcon(weakPoint.issue)} 
-                    size={20} 
-                    color={getIssueColor(weakPoint.issue, weakPoint.severity)} 
-                  />
-                </View>
-                <View style={styles.issueDetails}>
+              <View style={styles.muscleCardHeader}>
+                <View style={styles.muscleInfo}>
                   <Text style={styles.muscleGroupName}>
                     {weakPoint.muscleGroup}
                   </Text>
+                  {strengthScore > 80 ? (
+                    <Text style={styles.issueTitle}>
+                      Performing excellently
+                    </Text>
+                  ) : strengthScore >= 60 ? (
+                    <Text style={styles.issueTitle}>
+                      Performing well
+                    </Text>
+                  ) : (
                   <Text style={styles.issueTitle}>
                     {formatIssueTitle(weakPoint.issue)}
                   </Text>
-                  <Text style={styles.affectedExercises}>
-                    Affects {weakPoint.affectedExercises.length} exercise{weakPoint.affectedExercises.length !== 1 ? 's' : ''}
+                  )}
+                </View>
+                
+                <View style={styles.scoreContainer}>
+                  <View style={[styles.scoreBadge, { backgroundColor: scoreColor + '20' }]}>
+                    <Text style={[styles.scoreValue, { color: scoreColor }]}>
+                      {strengthScore}
+                    </Text>
+                    <Text style={[styles.scoreMax, { color: scoreColor + '80' }]}>
+                      /100
+                    </Text>
+                  </View>
+                  <Text style={[styles.scoreLabel, { color: scoreColor }]}>
+                    {scoreLabel}
                   </Text>
                 </View>
               </View>
               
-              <View style={styles.severityContainer}>
-                <Ionicons 
-                  name={getSeverityIcon(weakPoint.severity)} 
-                  size={16} 
-                  color={getSeverityColor(weakPoint.severity)} 
-                />
-                <Text style={[
-                  styles.severityText,
-                  { color: getSeverityColor(weakPoint.severity) }
-                ]}>
-                  {weakPoint.severity.toUpperCase()}
+              {/* Only show details for muscle groups with issues (strength < 60) */}
+              {strengthScore < 60 && (
+                <View style={styles.detailsContainer}>
+                  {weakPoint.affectedExercises.length > 0 && (
+                    <Text style={styles.affectedExercises}>
+                      {weakPoint.affectedExercises.length} exercise{weakPoint.affectedExercises.length !== 1 ? 's' : ''}
                 </Text>
-              </View>
-            </View>
-
+                  )}
             <Text style={styles.recommendation}>
               {weakPoint.recommendation}
-            </Text>
-
-            <View style={styles.metricsContainer}>
-              <View style={styles.metricItem}>
-                <Text style={styles.metricLabel}>Current</Text>
-                <Text style={styles.metricValue}>
-                  {Math.round(weakPoint.metrics.current)}
-                </Text>
-              </View>
-              
-              {weakPoint.metrics.change !== 0 && (
-                <View style={styles.metricItem}>
-                  <Text style={styles.metricLabel}>Change</Text>
-                  <Text style={[
-                    styles.metricValue,
-                    { color: weakPoint.metrics.change > 0 ? colors.error : colors.success }
-                  ]}>
-                    {formatMetrics(weakPoint.metrics)}
                   </Text>
                 </View>
               )}
-            </View>
+          </View>
+          );
+        })}
+      </ScrollView>
 
-            <View style={styles.actionContainer}>
-              <Text style={styles.actionText}>
-                Tap for detailed analysis and solutions
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.muted} />
-            </View>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      {/* Summary insights */}
-      <View style={styles.summaryContainer}>
-        <View style={styles.summaryHeader}>
-          <Ionicons name="sparkles" size={20} color={colors.primary} />
-          <Text style={styles.summaryTitle}>AI Recommendations</Text>
-        </View>
-        
-        <View style={styles.summaryContent}>
-          {data.filter(wp => wp.issue === 'plateau').length > 0 && (
-            <Text style={styles.summaryText}>
-              • AI detected {data.filter(wp => wp.issue === 'plateau').length} muscle group(s) with plateaus - consider exercise variation
-            </Text>
-          )}
-          
-          {data.filter(wp => wp.issue === 'declining').length > 0 && (
-            <Text style={styles.summaryText}>
-              • AI detected {data.filter(wp => wp.issue === 'declining').length} muscle group(s) declining - focus on recovery and form
-            </Text>
-          )}
-          
-          {data.filter(wp => wp.issue === 'inconsistent').length > 0 && (
-            <Text style={styles.summaryText}>
-              • AI detected {data.filter(wp => wp.issue === 'inconsistent').length} muscle group(s) inconsistent - improve training schedule
-            </Text>
-          )}
-        </View>
-      </View>
     </View>
   );
 };
@@ -225,13 +175,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
+    marginHorizontal: 16,
     marginVertical: 8,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 20,
   },
   titleContainer: {
     flexDirection: 'row',
@@ -242,120 +193,89 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.text,
   },
-  badge: {
-    backgroundColor: colors.error + '20',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  scrollContainer: {
+    maxHeight: 400,
+    marginTop: 8,
+  },
+  muscleCard: {
+    backgroundColor: colors.card,
     borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 4,
+    marginHorizontal: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: colors.overlay,
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 2,
   },
-  badgeText: {
-    fontSize: 12,
-    color: colors.error,
-    fontWeight: '600',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.muted,
-    marginBottom: 16,
-  },
-  issuesContainer: {
-    marginBottom: 16,
-  },
-  issueCard: {
-    backgroundColor: colors.background,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    borderLeftWidth: 4,
-  },
-  issueHeader: {
+  muscleCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  issueInfo: {
-    flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    marginBottom: 4,
   },
-  issueIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  issueDetails: {
+  muscleInfo: {
     flex: 1,
+    marginRight: 8,
   },
   muscleGroupName: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: colors.text,
-    marginBottom: 2,
+    marginBottom: 1,
   },
   issueTitle: {
-    fontSize: 12,
-    color: colors.muted,
-    marginBottom: 2,
-  },
-  affectedExercises: {
     fontSize: 11,
     color: colors.muted,
-    fontStyle: 'italic',
   },
-  severityContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  scoreContainer: {
+    alignItems: 'flex-end',
   },
-  severityText: {
-    fontSize: 10,
-    fontWeight: '600',
-    marginLeft: 4,
-  },
-  recommendation: {
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 20,
-    marginBottom: 12,
-    fontStyle: 'italic',
-  },
-  metricsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.card,
+  scoreBadge: {
     borderRadius: 6,
-  },
-  metricItem: {
-    alignItems: 'center',
-  },
-  metricLabel: {
-    fontSize: 10,
-    color: colors.muted,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexDirection: 'row',
+    alignItems: 'baseline',
     marginBottom: 2,
   },
-  metricValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
+  scoreValue: {
+    fontSize: 16,
+    fontWeight: '700',
   },
-  actionContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 8,
+  scoreMax: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginLeft: 2,
+  },
+  scoreLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  detailsContainer: {
+    marginTop: 6,
+    paddingTop: 6,
     borderTopWidth: 1,
     borderTopColor: colors.card,
   },
-  actionText: {
-    fontSize: 12,
+  affectedExercises: {
+    fontSize: 10,
     color: colors.muted,
-    marginRight: 4,
+    marginBottom: 2,
+  },
+  recommendation: {
+    fontSize: 11,
+    color: colors.text,
+    lineHeight: 16,
+    fontStyle: 'italic',
   },
   emptyState: {
     alignItems: 'center',
@@ -374,29 +294,21 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-  summaryContainer: {
-    backgroundColor: colors.background,
-    borderRadius: 8,
-    padding: 12,
-  },
-  summaryHeader: {
-    flexDirection: 'row',
+  weeklyValueContainer: {
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.background,
   },
-  summaryTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
-    marginLeft: 8,
-  },
-  summaryContent: {
-    marginLeft: 28,
-  },
-  summaryText: {
+  weeklyValueLabel: {
     fontSize: 12,
-    color: colors.text,
-    lineHeight: 18,
+    color: colors.muted,
     marginBottom: 4,
+  },
+  weeklyValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.primary,
   },
 });
