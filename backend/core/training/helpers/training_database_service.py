@@ -168,10 +168,8 @@ class TrainingDatabaseService:
                 "exercise_id": exercise_data.get("exercise_id"),
                 "sets": exercise_data.get("sets", 1),
                 "reps": exercise_data.get("reps", [1]),
-                "weight": exercise_data.get(
-                    "weight_1rm", [0.0]
-                ),  # Using weight_1rm as weight
-                "weight_1rm": exercise_data.get("weight_1rm", [0.0]),
+                "weight": exercise_data.get("weight", [0.0]),
+                "execution_order": exercise_data.get("execution_order", 0),
                 "completed": False,
             }
 
@@ -199,7 +197,8 @@ class TrainingDatabaseService:
                 "sport_type": session_data.get("sport_type", "running"),
                 "training_volume": session_data.get("training_volume", 0),
                 "unit": session_data.get("unit", "minutes"),
-                "heart_rate_zone": session_data.get("heart_rate_zone"),
+                "heart_rate_zone": session_data.get("heart_rate_zone", 3),  # Default to Zone 3 if not provided
+                "execution_order": session_data.get("execution_order", 0),
                 "completed": False,
             }
 

@@ -67,7 +67,6 @@ export interface TrainingExerciseData {
   sets: number;
   reps: number[];
   weight: number[];
-  weight_1rm: number[];
   completed: boolean;
 }
 
@@ -87,21 +86,14 @@ export interface UserProfileData {
   id: number;
   user_id: string;
   username: string;
-  primary_goal: string;
-  primary_goal_description: string;
   coach_id?: number;
   experience_level: string;
-  days_per_week: number;
-  minutes_per_session: number;
-  equipment: string;
   age: number;
   weight: number;
   weight_unit: string;
   height: number;
   height_unit: string;
   gender: string;
-  has_limitations: boolean;
-  limitations_description?: string;
   final_chat_notes?: string;
   created_at: string;
   updated_at: string;

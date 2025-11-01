@@ -2,30 +2,23 @@
 Curator component for the ACE pattern.
 
 The Curator manages the user's playbook by:
-- Adding new lessons from Reflector analysis
-- Detecting and merging duplicate/similar lessons using semantic embeddings
-- Updating confidence scores based on outcomes
-- Managing lesson lifecycle (promotion/demotion/removal)
-- Supporting both lazy and proactive refinement
-- Parallel delta processing for batch updates
+- Analyzing new lessons against existing playbook using LLM
+- Detecting and merging duplicate/similar lessons
+- Handling contradictions (user evolution)
+- Returning a curated, deduplicated playbook
 """
 
-import os
 import uuid
-import asyncio
-import numpy as np
-from typing import List, Optional, Tuple, Any
+from typing import List, Optional, Any
 from datetime import datetime
 from logging_config import get_logger
-from core.base.ace_telemetry import ACETelemetry
 
 from core.base.schemas.playbook_schemas import (
     PlaybookLesson,
     UserPlaybook,
     ReflectorAnalysis,
-    CuratorDecision,
+    UpdatedUserPlaybook,
 )
-from pydantic import BaseModel, Field
 from core.training.helpers.llm_client import LLMClient
 
 
@@ -40,138 +33,30 @@ class Curator:
     - Removing low-value lessons
     """
 
-    # Thresholds for curator decisions
-    HIGH_SIMILARITY_THRESHOLD = 0.85  # Merge if similarity > this
-    MEDIUM_SIMILARITY_THRESHOLD = 0.65  # Update if similarity > this
-    MIN_CONFIDENCE_THRESHOLD = 0.2  # Remove if confidence < this
     MAX_PLAYBOOK_SIZE = 20  # Maximum lessons per user
-
-    # Embedding-based de-duplication thresholds
-    EMBEDDING_HIGH_SIMILARITY = 0.90  # Very similar (likely duplicate)
-    EMBEDDING_LOW_SIMILARITY = 0.75  # Possibly similar (needs LLM verification)
-    EMBEDDING_CONTRADICTION = -0.3  # Potential contradiction (needs LLM analysis)
 
     def __init__(self, openai_client: Optional[Any] = None):
         """
         Initialize the Curator.
 
         Args:
-            openai_client: OpenAI client instance (creates new one if not provided)
+            openai_client: OpenAI client instance (unused - kept for backward compatibility)
         """
         self.logger = get_logger(__name__)
-        self.openai_client = openai_client  # Optional; only used for embeddings if available
         self.llm = LLMClient()
-        self._embedding_cache = {}  # Cache embeddings to reduce API calls
-
-    def process_new_lesson(
-        self,
-        analysis: ReflectorAnalysis,
-        existing_playbook: UserPlaybook,
-        source_plan_id: Optional[str] = None,
-    ) -> Tuple[CuratorDecision, Optional[PlaybookLesson]]:
-        """
-        Process a new lesson from the Reflector and decide how to add it to the playbook.
-
-        Args:
-            analysis: The ReflectorAnalysis containing the new lesson
-            existing_playbook: The user's current playbook
-            source_plan_id: ID of the plan that generated this lesson
-
-        Returns:
-            Tuple of (CuratorDecision, Updated/New PlaybookLesson or None)
-        """
-        try:
-            self.logger.info(f"Processing new lesson: {analysis.lesson[:50]}...")
-
-            # Check similarity with existing lessons (negative = contradiction)
-            most_similar, similarity = self._find_most_similar_lesson(
-                analysis, existing_playbook.lessons
-            )
-
-            self.logger.info(f"Most relevant lesson has score: {similarity:.2f}")
-
-            # Handle contradictions (negative similarity scores)
-            if similarity < 0 and most_similar:
-                decision = self._handle_contradiction(
-                    analysis, most_similar, similarity
-                )
-                
-                # Track telemetry for contradiction resolution
-                ACETelemetry.track_lesson_decision(
-                    user_id=existing_playbook.user_id,
-                    decision_type=decision.action,
-                    similarity_score=similarity,
-                    lesson_tags=analysis.tags,
-                    is_contradiction=True
-                )
-                
-                return decision, decision.merged_lesson
-
-            # Handle similarities (positive scores)
-            elif similarity >= self.HIGH_SIMILARITY_THRESHOLD and most_similar:
-                # Very similar - merge/strengthen existing
-                decision = self._merge_with_existing(analysis, most_similar, similarity)
-                
-                # Track telemetry for merge decision
-                ACETelemetry.track_lesson_decision(
-                    user_id=existing_playbook.user_id,
-                    decision_type=decision.action,
-                    similarity_score=similarity,
-                    lesson_tags=analysis.tags,
-                    is_contradiction=False
-                )
-                
-                return decision, decision.merged_lesson
-
-            elif similarity >= self.MEDIUM_SIMILARITY_THRESHOLD and most_similar:
-                # Somewhat similar - update confidence
-                decision = self._update_existing(analysis, most_similar, similarity)
-                
-                # Track telemetry for update decision
-                ACETelemetry.track_lesson_decision(
-                    user_id=existing_playbook.user_id,
-                    decision_type=decision.action,
-                    similarity_score=similarity,
-                    lesson_tags=analysis.tags,
-                    is_contradiction=False
-                )
-                
-                return decision, decision.merged_lesson
-
-            else:
-                # Different enough - add as new
-                decision = self._add_as_new(analysis, similarity, source_plan_id)
-                new_lesson = self._create_lesson_from_analysis(analysis, source_plan_id)
-                
-                # Track telemetry for new lesson
-                ACETelemetry.track_lesson_decision(
-                    user_id=existing_playbook.user_id,
-                    decision_type=decision.action,
-                    similarity_score=similarity,
-                    lesson_tags=analysis.tags,
-                    is_contradiction=False
-                )
-                
-                return decision, new_lesson
-
-        except Exception as e:
-            self.logger.error(f"Error processing new lesson: {e}")
-            # Return reject decision on error
-            decision = CuratorDecision(
-                action="reject",
-                reasoning=f"Error during processing: {str(e)}",
-                similarity_score=0.0,
-            )
-            return decision, None
 
     async def process_batch_lessons(
         self,
         analyses: List[ReflectorAnalysis],
         existing_playbook: UserPlaybook,
         source_plan_id: Optional[str] = None,
-    ) -> List[Tuple[CuratorDecision, Optional[PlaybookLesson]]]:
+    ) -> UpdatedUserPlaybook:
         """
-        Process multiple new lessons in parallel for batch updates.
+        Process multiple new lessons using a single LLM call.
+        
+        The LLM analyzes all new lessons against the existing playbook,
+        performs deduplication (merging duplicates), handles contradictions,
+        and returns the final curated playbook.
 
         Args:
             analyses: List of ReflectorAnalysis objects to process
@@ -179,91 +64,213 @@ class Curator:
             source_plan_id: ID of the plan that generated these lessons
 
         Returns:
-            List of (CuratorDecision, PlaybookLesson) tuples
+            UpdatedUserPlaybook with all lessons after curation
         """
         try:
-            self.logger.info(f"Processing batch of {len(analyses)} lessons in parallel")
-
-            # Process all lessons in parallel
-            tasks = [
-                asyncio.to_thread(
-                    self.process_new_lesson, analysis, existing_playbook, source_plan_id
+            # Handle empty analyses list
+            if not analyses or len(analyses) == 0:
+                self.logger.warning("No analyses provided - returning existing playbook unchanged")
+                return UpdatedUserPlaybook(
+                    lessons=existing_playbook.lessons,
+                    total_lessons=existing_playbook.total_lessons,
+                    reasoning="No new lessons to process"
                 )
-                for analysis in analyses
-            ]
+            
+            self.logger.info(f"Processing batch of {len(analyses)} lessons with single LLM call")
 
-            results = await asyncio.gather(*tasks)
-            self.logger.info(f"Completed batch processing of {len(results)} lessons")
+            # Convert analyses to proposed lessons (without IDs yet)
+            proposed_lessons = []
+            for i, analysis in enumerate(analyses):
+                lesson = PlaybookLesson(
+                    id=f"new_{i}",  # Temporary ID for reference
+                    text=analysis.lesson,
+                    tags=analysis.tags,
+                    helpful_count=1 if analysis.positive else 0,
+                    harmful_count=0 if analysis.positive else 1,
+                    confidence=analysis.confidence,
+                    positive=analysis.positive,
+                    created_at=datetime.utcnow().isoformat(),
+                    source_plan_id=source_plan_id,
+                )
+                proposed_lessons.append(lesson)
 
-            return results
+            # Format existing lessons for prompt
+            existing_lessons_text = ""
+            if existing_playbook.lessons:
+                existing_lessons_text = "\n".join(
+                    [
+                        f"  [{i+1}] [{lesson.id}] {lesson.text}\n"
+                        f"       Tags: {', '.join(lesson.tags) if lesson.tags else 'none'}\n"
+                        f"       Confidence: {lesson.confidence:.0%} | "
+                        f"Type: {'Positive' if lesson.positive else 'Warning'} | "
+                        f"Applied: {lesson.times_applied}x"
+                        for i, lesson in enumerate(existing_playbook.lessons)
+                    ]
+                )
+            else:
+                existing_lessons_text = "  (No existing lessons)"
+
+            # Format proposed lessons for prompt
+            proposed_lessons_text = "\n".join(
+                [
+                    f"  [{i+1}] {lesson.text}\n"
+                    f"       Tags: {', '.join(lesson.tags) if lesson.tags else 'none'}\n"
+                    f"       Confidence: {lesson.confidence:.0%} | "
+                    f"Type: {'Positive' if lesson.positive else 'Warning'}"
+                    for i, lesson in enumerate(proposed_lessons)
+                ]
+            )
+
+            prompt = f"""
+                **WORKFLOW STATUS:**
+                ✅ New Lessons Generated ({len(proposed_lessons)} lessons)
+                ✅ Existing Playbook Loaded ({len(existing_playbook.lessons)} lessons)
+                🎯 **CURRENT STEP:** Curate Playbook (Deduplication & Integration)
+
+                **YOUR ROLE:**
+                You are the Curator - responsible for maintaining a high-quality, deduplicated playbook of user lessons.
+                Analyze all proposed lessons against the existing playbook and return an updated playbook.
+
+                **EXISTING PLAYBOOK LESSONS ({len(existing_playbook.lessons)}):**
+                {existing_lessons_text}
+
+                **PROPOSED NEW LESSONS ({len(proposed_lessons)}):**
+                {proposed_lessons_text}
+
+                **YOUR TASK:**
+                1. Compare each proposed lesson with ALL existing lessons
+                2. Identify duplicates (same/similar content) - merge them into existing lessons
+                3. Identify contradictions (opposite guidance) - keep the new one if it reflects user evolution
+                4. Add truly unique lessons to the playbook
+                5. Preserve existing lesson IDs when merging/updating
+                6. Generate new IDs only for new lessons (format: "lesson_{{random_hex}}")
+
+                **DEDUPLICATION RULES:**
+                - **Exact duplicates:** Merge into existing (update confidence, combine tags, increment counters)
+                - **Similar lessons (>85% overlap):** Merge into existing (keep original text, combine tags)
+                - **Related lessons (50-85% overlap):** Can merge OR keep separate (use judgment)
+                - **Unique lessons (<50% overlap):** Add as new lesson
+
+                **CONTRADICTION HANDLING:**
+                - If new lesson contradicts existing (opposite guidance):
+                - Remove the contradicted existing lesson
+                - Add the new lesson (new lesson reflects current reality/user evolution)
+                - Example: Old: "Avoid running due to knee pain" ↔ New: "Knee recovered - can include running"
+                → Remove old, add new
+
+                **OUTPUT REQUIREMENTS:**
+                - Return ALL lessons (existing + new, after deduplication)
+                - Each lesson must:
+                - Have a unique ID (preserve existing IDs, generate new for truly new lessons)
+                - Text must start with "The user..."
+                - Include tags, confidence (0.0-1.0), positive (bool), helpful_count, harmful_count
+                - Include created_at, last_used_at (current timestamp if newly used)
+                - Include source_plan_id if provided
+                - Set total_lessons to the count of final lessons
+                - Provide reasoning explaining what was added, merged, removed, and why
+
+                **CRITICAL:**
+                - Preserve existing lesson IDs when merging/updating
+                - Only generate new IDs for truly new lessons
+                - All lesson text must start with "The user..."
+                - Ensure no duplicate lessons in final playbook
+            """
+
+            # Call LLM with schema (returns validated Pydantic model or dict)
+            updated_playbook_result, _ = self.llm.chat_parse(prompt, UpdatedUserPlaybook)
+            
+            # Handle both Pydantic model instance and dict (depending on LLM provider)
+            if updated_playbook_result is None:
+                raise ValueError("LLM returned None - unable to parse playbook")
+            
+            if isinstance(updated_playbook_result, UpdatedUserPlaybook):
+                updated_playbook = updated_playbook_result
+            elif isinstance(updated_playbook_result, dict):
+                # Convert dict to UpdatedUserPlaybook if needed
+                updated_playbook = UpdatedUserPlaybook(**updated_playbook_result)
+            else:
+                # Fallback: try to validate as Pydantic model
+                updated_playbook = UpdatedUserPlaybook.model_validate(updated_playbook_result)
+            
+            # Generate proper IDs for new lessons (those that don't match existing IDs)
+            # Filter out None/empty IDs when building existing_ids set
+            existing_ids = {lesson.id for lesson in existing_playbook.lessons if lesson.id}
+            
+            # Ensure all lessons have valid IDs
+            if not updated_playbook.lessons:
+                self.logger.warning("LLM returned empty lessons list - using existing playbook")
+                updated_playbook.lessons = existing_playbook.lessons
+                updated_playbook.total_lessons = len(existing_playbook.lessons)
+            else:
+                for lesson in updated_playbook.lessons:
+                    # Safety check: ensure lesson has a valid ID (not None, not empty)
+                    if not lesson.id or not str(lesson.id).strip():
+                        lesson.id = f"lesson_{uuid.uuid4().hex[:8]}"
+                    # If lesson has a temporary ID or ID doesn't exist in existing playbook, generate new one
+                    elif str(lesson.id).startswith("new_") or lesson.id not in existing_ids:
+                        lesson.id = f"lesson_{uuid.uuid4().hex[:8]}"
+                
+                # Update total_lessons to match actual lesson count after ID generation
+                updated_playbook.total_lessons = len(updated_playbook.lessons)
+            
+            # Clean up playbook if too large
+            if len(updated_playbook.lessons) > self.MAX_PLAYBOOK_SIZE:
+                self.logger.info(
+                    f"Playbook exceeds max size ({len(updated_playbook.lessons)} > {self.MAX_PLAYBOOK_SIZE}), cleaning up..."
+                )
+                cleaned_lessons = self._cleanup_lessons(updated_playbook.lessons)
+                updated_playbook = UpdatedUserPlaybook(
+                    lessons=cleaned_lessons,
+                    total_lessons=len(cleaned_lessons),
+                    reasoning=f"{updated_playbook.reasoning} (Cleaned up to max size: {self.MAX_PLAYBOOK_SIZE})"
+                )
+            
+            # Ensure total_lessons matches actual lesson count (safety check)
+            if updated_playbook.total_lessons != len(updated_playbook.lessons):
+                self.logger.warning(
+                    f"total_lessons mismatch: {updated_playbook.total_lessons} != {len(updated_playbook.lessons)}. Correcting..."
+                )
+                updated_playbook.total_lessons = len(updated_playbook.lessons)
+            
+            self.logger.info(
+                f"✅ Curated playbook: {len(existing_playbook.lessons)} existing → "
+                f"{len(updated_playbook.lessons)} final ({len(proposed_lessons)} proposed)"
+            )
+            
+            return updated_playbook
 
         except Exception as e:
-            self.logger.error(f"Error in batch processing: {e}")
-            # Fall back to sequential processing
-            return [
-                self.process_new_lesson(analysis, existing_playbook, source_plan_id)
-                for analysis in analyses
-            ]
+            self.logger.error(f"Error in batch processing: {e}", exc_info=True)
+            # Fallback: return existing playbook unchanged
+            return UpdatedUserPlaybook(
+                lessons=existing_playbook.lessons,
+                total_lessons=existing_playbook.total_lessons,
+                reasoning=f"Error during curation, returning existing playbook: {str(e)}"
+            )
 
-    def update_playbook(
+    def update_playbook_from_curated(
         self,
-        playbook: UserPlaybook,
-        decisions: List[Tuple[CuratorDecision, Optional[PlaybookLesson]]],
-        lazy_refine: bool = False,
+        updated_playbook: UpdatedUserPlaybook,
+        user_id: str,
     ) -> UserPlaybook:
         """
-        Apply curator decisions to update the playbook.
+        Convert UpdatedUserPlaybook (from LLM curation) to UserPlaybook format.
+        
+        This is a simple conversion - the LLM already did all the curation work.
 
         Args:
-            playbook: Current user playbook
-            decisions: List of (CuratorDecision, PlaybookLesson) tuples
-            lazy_refine: If True, only cleanup when exceeding max size;
-                        If False, cleanup proactively
+            updated_playbook: The curated playbook from LLM
+            user_id: User ID for the playbook
 
         Returns:
-            Updated UserPlaybook
+            UserPlaybook ready for database storage
         """
-        for decision, lesson in decisions:
-            if decision.action == "add_new" and lesson:
-                playbook.lessons.append(lesson)
-                self.logger.info(f"Added new lesson: {lesson.id}")
-
-            elif (
-                decision.action in ["merge_with_existing", "update_existing"]
-                and decision.merged_lesson
-            ):
-                # Find and replace the existing lesson
-                for i, existing in enumerate(playbook.lessons):
-                    if existing.id == decision.target_lesson_id:
-                        playbook.lessons[i] = decision.merged_lesson
-                        self.logger.info(f"Updated lesson: {decision.target_lesson_id}")
-                        break
-
-            elif decision.action == "reject":
-                self.logger.info(f"Rejected lesson: {decision.reasoning}")
-
-        # Cleanup strategy based on lazy_refine flag
-        if lazy_refine:
-            # Lazy: only cleanup when exceeding maximum size
-            if len(playbook.lessons) > self.MAX_PLAYBOOK_SIZE:
-                self.logger.info(
-                    f"Lazy refinement triggered: {len(playbook.lessons)} > {self.MAX_PLAYBOOK_SIZE}"
-                )
-                playbook = self._cleanup_playbook(playbook)
-        else:
-            # Proactive: cleanup if approaching max size (80% threshold)
-            threshold = int(self.MAX_PLAYBOOK_SIZE * 0.8)
-            if len(playbook.lessons) > threshold:
-                self.logger.info(
-                    f"Proactive refinement at {len(playbook.lessons)} lessons (threshold: {threshold})"
-                )
-                playbook = self._cleanup_playbook(playbook)
-
-        # Update metadata
-        playbook.total_lessons = len(playbook.lessons)
-        playbook.last_updated = datetime.utcnow().isoformat()
-
-        return playbook
+        return UserPlaybook(
+            user_id=user_id,
+            lessons=updated_playbook.lessons,
+            total_lessons=updated_playbook.total_lessons,
+            last_updated=datetime.utcnow().isoformat(),
+        )
 
     def mark_lessons_as_applied(
         self, playbook: UserPlaybook, applied_lesson_ids: List[str]
@@ -318,467 +325,8 @@ class Curator:
 
         return lesson
 
-    def _get_embedding(self, text: str) -> np.ndarray:
-        """
-        Get embedding vector for text using OpenAI's embedding model.
-        Uses caching to reduce API calls.
 
-        Args:
-            text: Text to embed
-
-        Returns:
-            Numpy array of embedding vector
-        """
-        # Check cache first
-        cache_key = hash(text)
-        if cache_key in self._embedding_cache:
-            return self._embedding_cache[cache_key]
-
-        try:
-            if self.openai_client is None:
-                # No embeddings available; return zero vector
-                return np.zeros(1536)
-            response = self.openai_client.embeddings.create(
-                model="text-embedding-3-small", input=text  # Cost-effective model
-            )
-            embedding = np.array(response.data[0].embedding)
-
-            # Cache the embedding
-            self._embedding_cache[cache_key] = embedding
-
-            return embedding
-
-        except Exception as e:
-            self.logger.error(f"Error getting embedding: {e}")
-            # Return zero vector on error
-            return np.zeros(1536)  # text-embedding-3-small dimension
-
-    def _cosine_similarity(self, vec1: np.ndarray, vec2: np.ndarray) -> float:
-        """
-        Calculate cosine similarity between two vectors.
-
-        Args:
-            vec1: First vector
-            vec2: Second vector
-
-        Returns:
-            Similarity score between -1.0 and 1.0
-        """
-        try:
-            dot_product = np.dot(vec1, vec2)
-            norm1 = np.linalg.norm(vec1)
-            norm2 = np.linalg.norm(vec2)
-
-            if norm1 == 0 or norm2 == 0:
-                return 0.0
-
-            return float(dot_product / (norm1 * norm2))
-
-        except Exception as e:
-            self.logger.error(f"Error calculating cosine similarity: {e}")
-            return 0.0
-
-    def _find_most_similar_lesson(
-        self, analysis: ReflectorAnalysis, existing_lessons: List[PlaybookLesson]
-    ) -> Tuple[Optional[PlaybookLesson], float]:
-        """
-        Find the most similar existing lesson using hybrid approach:
-        1. Fast embedding-based similarity for filtering
-        2. LLM-based analysis for borderline cases and contradictions
-
-        This is 80% faster than pure LLM approach while maintaining accuracy.
-
-        Returns:
-            Tuple of (most_similar_lesson, similarity_score)
-            Note: Negative similarity scores indicate contradictions
-        """
-        if not existing_lessons:
-            return None, 0.0
-
-        try:
-            # Step 1: Get embedding for new lesson
-            new_lesson_text = (
-                f"{analysis.lesson} [{'positive' if analysis.positive else 'warning'}]"
-            )
-            new_embedding = self._get_embedding(new_lesson_text)
-
-            # Step 2: Calculate embedding similarities with all existing lessons
-            similarities = []
-            for lesson in existing_lessons:
-                lesson_text = (
-                    f"{lesson.text} [{'positive' if lesson.positive else 'warning'}]"
-                )
-                lesson_embedding = self._get_embedding(lesson_text)
-                similarity = self._cosine_similarity(new_embedding, lesson_embedding)
-                similarities.append((lesson, similarity))
-
-            # Find most similar
-            most_similar_lesson, embedding_similarity = max(
-                similarities, key=lambda x: x[1]
-            )
-
-            self.logger.info(f"Embedding similarity: {embedding_similarity:.3f}")
-
-            # Step 3: Decision logic based on embedding similarity
-
-            # Case 1: Very high similarity -> likely duplicate, merge without LLM
-            if embedding_similarity >= self.EMBEDDING_HIGH_SIMILARITY:
-                self.logger.info(
-                    f"High embedding similarity ({embedding_similarity:.3f}) - treating as duplicate"
-                )
-                return most_similar_lesson, embedding_similarity
-
-            # Case 2: Very low similarity -> clearly different, add as new without LLM
-            elif embedding_similarity < self.EMBEDDING_LOW_SIMILARITY:
-                self.logger.info(
-                    f"Low embedding similarity ({embedding_similarity:.3f}) - treating as unique"
-                )
-                return most_similar_lesson, embedding_similarity
-
-            # Case 3: Borderline (0.75-0.90) -> use LLM for precise analysis
-            else:
-                self.logger.info(
-                    f"Borderline similarity ({embedding_similarity:.3f}) - using LLM verification"
-                )
-                # First check for contradictions
-                contradicting_lesson, contradiction_score = self._check_contradiction(
-                    analysis, existing_lessons
-                )
-                if contradicting_lesson:
-                    return contradicting_lesson, contradiction_score
-                
-                # If no contradiction, check similarity
-                return self._check_similarity(
-                    analysis, most_similar_lesson, existing_lessons
-                )
-
-        except Exception as e:
-            self.logger.error(
-                f"Error in embedding-based similarity, falling back to LLM: {e}"
-            )
-            # Fallback to full LLM analysis
-            contradicting_lesson, contradiction_score = self._check_contradiction(
-                analysis, existing_lessons
-            )
-            if contradicting_lesson:
-                return contradicting_lesson, contradiction_score
-            return self._check_similarity(analysis, None, existing_lessons)
-
-    def _check_contradiction(
-        self,
-        analysis: ReflectorAnalysis,
-        all_lessons: List[PlaybookLesson],
-    ) -> Tuple[Optional[PlaybookLesson], float]:
-        """
-        Check if new lesson contradicts any existing lesson using LLM.
-        
-        Args:
-            analysis: New lesson to check
-            all_lessons: All existing lessons
-            
-        Returns:
-            Tuple of (contradicting_lesson, negative_score) or (None, 0.0) if no contradiction
-        """
-        if not all_lessons:
-            return None, 0.0
-            
-        try:
-            self.logger.info("Checking for contradictions with existing lessons...")
-            
-            # Build lessons list
-            lessons_text = "\n".join(
-                [
-                    f"        {i+1}. [{lesson.id}] {lesson.text}\n           (confidence: {lesson.confidence:.0%}, created: {lesson.created_at[:10]})"
-                    for i, lesson in enumerate(all_lessons)
-                ]
-            )
-
-            prompt = f"""
-        **WORKFLOW STATUS:**
-        ✅ New Lesson Generated → ✅ Existing Playbook Loaded
-        🎯 **CURRENT STEP:** Check for Contradictions (User Evolution Detection)
-        
-        **NEW LESSON TO EVALUATE:**
-        • Text: {analysis.lesson}
-        • Type: {'Positive Guidance' if analysis.positive else 'Warning/Constraint'}
-        
-        **EXISTING PLAYBOOK LESSONS:**
-        {lessons_text}
-        
-        **YOUR TASK:**
-        Check if the new lesson **CONTRADICTS** any existing lesson.
-        Contradictions indicate user evolution (injury healed, fitness improved, capacity increased).
-        
-        **CONTRADICTION DEFINITION:**
-        A contradiction occurs when lessons give **opposite or conflicting guidance**:
-        • Old: "Avoid running due to knee pain" ↔ New: "Knee recovered - can include running"
-        • Old: "Beginner - focus on basics" ↔ New: "Intermediate level - ready for advanced work"
-        • Old: "Limit to 3 days/week" ↔ New: "Can handle 5 training days comfortably"
-        
-        **CONTRADICTION SCORING:**
-        • **-1.0**: Direct contradiction - completely opposite guidance
-        • **-0.8**: Strong conflict - incompatible recommendations
-        • **-0.6**: Moderate conflict - different intensity/volume levels
-        • **-0.4**: Mild conflict - slightly incompatible approaches
-        
-        **NOT CONTRADICTIONS (Don't flag these):**
-        • Complementary lessons on different topics
-        • Same general topic with different specific focus
-        • Similar lessons with slightly different wording
-        
-        **DECISION LOGIC:**
-        1. Scan all existing lessons for contradictions
-        2. If contradiction found → Return lesson_id with NEGATIVE score
-        3. If no contradiction found → Return "none" with 0.0
-        
-        **OUTPUT FORMAT:**
-        Return in ContradictionCheck format:
-        • lesson_id: ID of contradicting lesson, or "none"
-        • contradiction_score: -1.0 to 0.0 (negative = contradiction, 0.0 = no contradiction)
-        • reasoning: Brief explanation (1 sentence)
-        """
-
-            result, _ = self.llm.chat_parse(prompt, ContradictionCheck)
-
-            if result.lesson_id == "none":
-                return None, 0.0
-
-            # Find the matching lesson
-            contradicting_lesson = next(
-                (l for l in all_lessons if l.id == result.lesson_id), None
-            )
-
-            return contradicting_lesson, result.contradiction_score
-
-        except Exception as e:
-            self.logger.error(f"Error checking contradiction: {e}")
-            return None, 0.0
-
-    def _check_similarity(
-        self,
-        analysis: ReflectorAnalysis,
-        candidate_lesson: Optional[PlaybookLesson],
-        all_lessons: List[PlaybookLesson],
-    ) -> Tuple[Optional[PlaybookLesson], float]:
-        """
-        Check similarity between new lesson and existing lessons using LLM.
-        
-        Args:
-            analysis: New lesson to check
-            candidate_lesson: Most similar lesson from embedding search (focus on this if provided)
-            all_lessons: All existing lessons
-            
-        Returns:
-            Tuple of (most_similar_lesson, similarity_score)
-        """
-        if not all_lessons:
-            return None, 0.0
-            
-        try:
-            self.logger.info("Checking similarity with existing lessons...")
-            
-            # Build lessons list
-            lessons_text = "\n".join(
-                [
-                    f"        {i+1}. [{lesson.id}] {lesson.text}\n           (confidence: {lesson.confidence:.0%}, helpful: {lesson.helpful_count}x)"
-                    for i, lesson in enumerate(all_lessons)
-                ]
-            )
-
-            prompt = f"""
-        **WORKFLOW STATUS:**
-        ✅ New Lesson Generated → ✅ No Contradictions Found
-        🎯 **CURRENT STEP:** Find Most Similar Existing Lesson
-        
-        **NEW LESSON TO EVALUATE:**
-        • Text: {analysis.lesson}
-        • Tags: {', '.join(analysis.tags)}
-        • Type: {'Positive Guidance' if analysis.positive else 'Warning/Constraint'}
-        
-        **EXISTING PLAYBOOK LESSONS:**
-        {lessons_text}
-        
-        **YOUR TASK:**
-        Find the most similar existing lesson to the new lesson.
-        
-        **SIMILARITY SCORING GUIDE:**
-        
-        • **0.95-1.0**: Nearly identical - just different wording
-          Example: "Avoid overhead pressing" ↔ "No overhead movements due to shoulder injury"
-        
-        • **0.85-0.95**: Same core concept - minor detail differences
-          Example: "Limited to dumbbells only" ↔ "Can use dumbbells and bodyweight exercises"
-        
-        • **0.70-0.85**: Related concepts - different aspects of same topic
-          Example: "Beginner - focus on technique" ↔ "Start with fundamentals before adding load"
-        
-        • **0.50-0.70**: Same topic area - distinct insights
-          Example: "Can train 3x/week" ↔ "Prefers Monday/Wednesday/Friday schedule"
-        
-        • **0.30-0.50**: Loosely related - different focus
-          Example: "Avoid high-impact movements" ↔ "Prefers strength training over endurance"
-        
-        • **0.00-0.30**: Unrelated - completely different topics
-          Example: "Has dumbbells only" ↔ "Dislikes early morning training"
-        
-        **DECISION LOGIC:**
-        1. Compare new lesson with all existing lessons
-        2. Find the one with highest similarity
-        3. Return lesson_id with similarity score (0.0-1.0)
-        4. If all similarities are very low (<0.3) → Return "none" with 0.0
-        
-        **OUTPUT FORMAT:**
-        Return in SimilarityCheck format:
-        • lesson_id: ID of most similar lesson, or "none"
-        • similarity_score: 0.0 to 1.0 (how similar they are)
-        • reasoning: Brief explanation (1 sentence)
-        """
-
-            result, _ = self.llm.chat_parse(prompt, SimilarityCheck)
-
-            if result.lesson_id == "none":
-                return None, 0.0
-
-            # Find the matching lesson
-            matching_lesson = next(
-                (l for l in all_lessons if l.id == result.lesson_id), None
-            )
-
-            return matching_lesson, result.similarity_score
-
-        except Exception as e:
-            self.logger.error(f"Error checking similarity: {e}")
-            return None, 0.0
-
-    def _handle_contradiction(
-        self,
-        analysis: ReflectorAnalysis,
-        contradicting: PlaybookLesson,
-        similarity: float,
-    ) -> CuratorDecision:
-        """
-        Handle a contradiction between new and existing lesson.
-
-        Strategy: Accept new lesson (represents user evolution).
-        Contradictions typically indicate user progress:
-        - Injury healed
-        - Fitness level increased  
-        - Preferences changed
-        - Capacity evolved
-        
-        The new lesson reflects current reality, so it replaces the old one.
-        """
-        self.logger.info(
-            f"Contradiction detected! Replacing old lesson with new (user evolution)"
-        )
-
-        # New lesson wins - replace the contradicting one
-        new_lesson = PlaybookLesson(
-            id=contradicting.id,  # Keep same ID to replace
-            text=analysis.lesson,  # Use new text
-            tags=list(set(contradicting.tags + analysis.tags)),  # Merge tags
-            helpful_count=0,  # Reset counters for new lesson
-            harmful_count=0,
-            confidence=analysis.confidence,
-            positive=analysis.positive,
-            created_at=datetime.utcnow().isoformat(),  # New creation date
-            last_used_at=datetime.utcnow().isoformat(),
-            source_plan_id=contradicting.source_plan_id,
-        )
-
-        return CuratorDecision(
-            action="merge_with_existing",  # This will replace via update_playbook
-            target_lesson_id=contradicting.id,
-            similarity_score=similarity,
-            reasoning=f"CONTRADICTION RESOLVED: New lesson replaces old (user evolution). Old: '{contradicting.text[:50]}...' → New: '{analysis.lesson[:50]}...'",
-            merged_lesson=new_lesson,
-        )
-
-    def _merge_with_existing(
-        self, analysis: ReflectorAnalysis, existing: PlaybookLesson, similarity: float
-    ) -> CuratorDecision:
-        """Merge a new lesson with a very similar existing one."""
-        # Strengthen the existing lesson
-        merged = PlaybookLesson(
-            id=existing.id,
-            text=existing.text,  # Keep original wording
-            tags=list(set(existing.tags + analysis.tags)),  # Merge tags
-            helpful_count=existing.helpful_count + 1,  # Increment as reinforcement
-            harmful_count=existing.harmful_count,
-            confidence=min(1.0, existing.confidence + 0.1),  # Boost confidence
-            positive=existing.positive,
-            created_at=existing.created_at,
-            last_used_at=datetime.utcnow().isoformat(),
-            source_plan_id=existing.source_plan_id,
-        )
-
-        return CuratorDecision(
-            action="merge_with_existing",
-            target_lesson_id=existing.id,
-            similarity_score=similarity,
-            reasoning=f"Very similar to existing lesson (similarity: {similarity:.2f}). Reinforcing existing lesson.",
-            merged_lesson=merged,
-        )
-
-    def _update_existing(
-        self, analysis: ReflectorAnalysis, existing: PlaybookLesson, similarity: float
-    ) -> CuratorDecision:
-        """Update an existing lesson with new evidence."""
-        # Update the lesson with new information
-        merged = PlaybookLesson(
-            id=existing.id,
-            text=existing.text,  # Keep original text
-            tags=list(set(existing.tags + analysis.tags)),
-            helpful_count=existing.helpful_count,
-            harmful_count=existing.harmful_count,
-            confidence=min(
-                1.0, (existing.confidence + analysis.confidence) / 2
-            ),  # Average confidence
-            positive=existing.positive,
-            created_at=existing.created_at,
-            last_used_at=datetime.utcnow().isoformat(),
-            source_plan_id=existing.source_plan_id,
-        )
-
-        return CuratorDecision(
-            action="update_existing",
-            target_lesson_id=existing.id,
-            similarity_score=similarity,
-            reasoning=f"Related to existing lesson (similarity: {similarity:.2f}). Updating confidence.",
-            merged_lesson=merged,
-        )
-
-    def _add_as_new(
-        self,
-        analysis: ReflectorAnalysis,
-        similarity: float,
-        source_plan_id: Optional[str],
-    ) -> CuratorDecision:
-        """Add as a new lesson."""
-        return CuratorDecision(
-            action="add_new",
-            target_lesson_id=None,
-            similarity_score=similarity,
-            reasoning=f"Sufficiently unique (max similarity: {similarity:.2f}). Adding as new lesson.",
-        )
-
-    def _create_lesson_from_analysis(
-        self, analysis: ReflectorAnalysis, source_plan_id: Optional[str]
-    ) -> PlaybookLesson:
-        """Create a PlaybookLesson from ReflectorAnalysis."""
-        return PlaybookLesson(
-            id=f"lesson_{uuid.uuid4().hex[:8]}",
-            text=analysis.lesson,
-            tags=analysis.tags,
-            helpful_count=1 if analysis.positive else 0,
-            harmful_count=0 if analysis.positive else 1,
-            confidence=analysis.confidence,
-            positive=analysis.positive,
-            created_at=datetime.utcnow().isoformat(),
-            source_plan_id=source_plan_id,
-        )
-
-    def _cleanup_playbook(self, playbook: UserPlaybook) -> UserPlaybook:
+    def _cleanup_lessons(self, lessons: List[PlaybookLesson]) -> List[PlaybookLesson]:
         """Remove low-value lessons when playbook is too large."""
         # Sort by confidence * usage (helpful + harmful counts)
         scored_lessons = [
@@ -786,69 +334,17 @@ class Curator:
                 lesson,
                 lesson.confidence * (lesson.helpful_count + lesson.harmful_count + 1),
             )
-            for lesson in playbook.lessons
+            for lesson in lessons
         ]
 
         # Sort by score descending
         scored_lessons.sort(key=lambda x: x[1], reverse=True)
 
         # Keep top MAX_PLAYBOOK_SIZE lessons
-        playbook.lessons = [
+        cleaned_lessons = [
             lesson for lesson, _ in scored_lessons[: self.MAX_PLAYBOOK_SIZE]
         ]
 
-        self.logger.info(f"Cleaned up playbook, kept {len(playbook.lessons)} lessons")
+        self.logger.info(f"Cleaned up lessons, kept {len(cleaned_lessons)} out of {len(lessons)}")
 
-        return playbook
-
-
-class ContradictionCheck(BaseModel):
-    """Result of checking for contradictions between new and existing lessons."""
-
-    lesson_id: str = Field(
-        ..., description="ID of contradicting existing lesson, or 'none'"
-    )
-    contradiction_score: float = Field(
-        ...,
-        ge=-1.0,
-        le=0.0,
-        description="Contradiction score: -1.0 (direct contradiction) to 0.0 (no contradiction)",
-    )
-    reasoning: str = Field(
-        ..., description="Brief explanation of the contradiction (1 sentence)"
-    )
-
-
-class SimilarityCheck(BaseModel):
-    """Result of checking similarity between new and existing lessons."""
-
-    lesson_id: str = Field(
-        ..., description="ID of most similar existing lesson, or 'none'"
-    )
-    similarity_score: float = Field(
-        ...,
-        ge=0.0,
-        le=1.0,
-        description="Similarity score: 0.0 (unrelated) to 1.0 (identical)",
-    )
-    reasoning: str = Field(
-        ..., description="Brief explanation of the similarity (1 sentence)"
-    )
-
-
-class SimilarityComparison(BaseModel):
-    """[DEPRECATED] Result of comparing a new lesson with existing lessons."""
-
-    lesson_id: str = Field(
-        ..., description="ID of most similar/contradicting existing lesson, or 'none'"
-    )
-    similarity_score: float = Field(
-        ...,
-        ge=-1.0,
-        le=1.0,
-        description="Similarity score: -1.0 (direct contradiction) to 1.0 (identical). Negative = contradiction, Positive = similar",
-    )
-    reasoning: str = Field(
-        ...,
-        description="Brief explanation of the relationship (similarity or contradiction)",
-    )
+        return cleaned_lessons

@@ -158,10 +158,17 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       
       setCurrentStep('preview');
       
-      // Load the training plan into state
+      // Load the training plan AND questions/responses from profile into state
       setState(prev => ({
         ...prev,
         trainingPlan: authState.trainingPlan,
+        // Load questions and responses from user profile (Option 2: user resumes later)
+        initialQuestions: authState.userProfile?.initial_questions || prev.initialQuestions,
+        followUpQuestions: authState.userProfile?.follow_up_questions || prev.followUpQuestions,
+        initialResponses: authState.userProfile?.initial_responses ? 
+          new Map(Object.entries(authState.userProfile.initial_responses)) : prev.initialResponses,
+        followUpResponses: authState.userProfile?.follow_up_responses ? 
+          new Map(Object.entries(authState.userProfile.follow_up_responses)) : prev.followUpResponses,
         planMetadata: {
           formattedInitialResponses: authState.userProfile?.initial_responses ? 
             Object.entries(authState.userProfile.initial_responses)
@@ -946,6 +953,10 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             onContinue={handleComplete}
             onBack={() => setCurrentStep('generation')}
             planMetadata={state.planMetadata}
+            initialQuestions={state.initialQuestions}
+            initialResponses={state.initialResponses}
+            followUpQuestions={state.followUpQuestions}
+            followUpResponses={state.followUpResponses}
           />
         );
       

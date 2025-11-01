@@ -23,7 +23,7 @@ export const AIInsightsCard: React.FC<AIInsightsCardProps> = ({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>AI Insights</Text>
+        <Text style={styles.title}>Insights</Text>
         {onViewInsights && (
           <TouchableOpacity style={styles.viewButton} onPress={onViewInsights}>
             <Text style={styles.viewButtonText}>View All</Text>

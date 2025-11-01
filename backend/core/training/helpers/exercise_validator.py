@@ -508,6 +508,42 @@ class ExerciseValidator:
 
         return None
 
+    def post_process_rest_days(self, daily_trainings: List[Dict[str, Any]]) -> None:
+        """
+        Post-process daily trainings to auto-set is_rest_day = true when there are no 
+        strength_exercises AND no endurance_sessions.
+        
+        This ensures data consistency even if the AI doesn't explicitly set is_rest_day.
+        Can be used in generate, update, and create flows.
+        
+        Args:
+            daily_trainings: List of daily training dictionaries to process
+        """
+        for daily_training in daily_trainings:
+            strength_exercises_final = daily_training.get("strength_exercises", [])
+            endurance_sessions_final = daily_training.get("endurance_sessions", [])
+            
+            # Filter out None or empty exercises/sessions
+            has_strength = bool([ex for ex in strength_exercises_final if ex and ex.get("exercise_id")])
+            has_endurance = bool([sess for sess in endurance_sessions_final if sess])
+            
+            if not has_strength and not has_endurance:
+                # No exercises and no sessions - this is a rest day
+                if not daily_training.get("is_rest_day", False):
+                    logger.info(
+                        f"🔄 Auto-setting is_rest_day=true for {daily_training.get('day_of_week', 'Unknown')} "
+                        f"(no strength exercises and no endurance sessions)"
+                    )
+                daily_training["is_rest_day"] = True
+                daily_training["training_type"] = "rest"
+            elif daily_training.get("is_rest_day", False) and (has_strength or has_endurance):
+                # Rest day flag was set but there are exercises/sessions - clear the flag
+                logger.warning(
+                    f"⚠️ Clearing is_rest_day flag for {daily_training.get('day_of_week', 'Unknown')} "
+                    f"(has exercises or sessions)"
+                )
+                daily_training["is_rest_day"] = False
+
     def _validate_training_structure(self, training_plan: Dict[str, Any]) -> List[str]:
         """Validate the overall structure of the training plan with optimized checks."""
         messages = []
@@ -873,6 +909,9 @@ class ExerciseValidator:
                         # This can happen if all exercises already had valid exercise_id
                         logger.debug(f"No filtering needed for {daily_training.get('day_of_week', 'Unknown')} - all exercises valid")
                         daily_training["strength_exercises"] = strength_exercises
+                    
+                    # Post-process rest days (set is_rest_day based on exercises/sessions)
+                    self.post_process_rest_days([daily_training])
             
             # Bulk log all exercises at once (non-critical monitoring operation)
             if exercises_to_log:

@@ -75,9 +75,9 @@ export class AuthService {
     
     // Always use Supabase callback URL for email verification/password reset
     // This is the safest approach and works for both web and mobile
-    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-    
-    if (!supabaseUrl) {
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+      
+      if (!supabaseUrl) {
       console.error('❌ [AuthService] EXPO_PUBLIC_SUPABASE_URL not set!');
       // Fallback - but this should never happen
       if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
@@ -126,7 +126,7 @@ export class AuthService {
     
     // Fallback (should never reach here)
     console.warn('⚠️ [AuthService] Unknown platform, using Supabase callback as fallback');
-    return `${supabaseUrl}/auth/v1/callback`;
+        return `${supabaseUrl}/auth/v1/callback`;
   }
   /**
    * Sign in with email and password

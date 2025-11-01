@@ -218,33 +218,39 @@ export class trainingService {
 
   /**
    * Send feedback about the training plan
+   * 
+   * Same pattern as generateTrainingPlan - sends initial and follow-up responses/questions in request.
    */
   static async sendPlanFeedback(
     userProfileId: number,
     planId: number,
     feedbackMessage: string,
-    currentPlan: any,  // Current plan data from frontend
+    trainingPlan: any,  // Full training plan data from frontend
+    initialQuestions: any[],  // Initial questions from frontend
+    initialResponses: Record<string, any>,  // Raw responses to initial questions
+    followUpQuestions: any[],  // Follow-up questions from frontend
+    followUpResponses: Record<string, any>,  // Raw responses to follow-up questions
     conversationHistory: Array<{ role: string; content: string }> = [],
-    formattedInitialResponses?: string,
-    formattedFollowUpResponses?: string,
     jwtToken?: string
   ): Promise<any> {
     try {
-      console.log('📍 Onboarding Service: Sending plan feedback with current plan data');
+      console.log('📍 Onboarding Service: Sending plan feedback with training plan data');
 
       const request = {
         user_profile_id: userProfileId,
         plan_id: planId,
         feedback_message: feedbackMessage,
-        current_plan: currentPlan,  // Send current plan to backend
+        training_plan: trainingPlan,  // Send training plan to backend
+        initial_responses: initialResponses,  // Send raw responses (same as generate-plan)
+        follow_up_responses: followUpResponses,  // Send raw responses (same as generate-plan)
+        initial_questions: initialQuestions,  // Send initial questions (same as generate-plan)
+        follow_up_questions: followUpQuestions,  // Send follow-up questions (same as generate-plan)
         conversation_history: conversationHistory,
-        formatted_initial_responses: formattedInitialResponses,
-        formatted_follow_up_responses: formattedFollowUpResponses,
         jwt_token: jwtToken,
       };
 
       const response = await apiClient.post<any>(
-        `${this.BASE_URL}/plan-feedback`,
+        `${this.BASE_URL}/update-week`,
         request
       );
 

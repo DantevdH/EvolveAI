@@ -53,10 +53,12 @@ export const SimplePlanPreview: React.FC<SimplePlanPreviewProps> = ({
       scrollIndicatorInsets={{ right: 2 }}
     >
       <View style={styles.card}>
-        {selectedDay.exercises?.map((exercise, index) => {
+        {selectedDay.exercises
+          ?.sort((a, b) => (a.executionOrder || a.order || 0) - (b.executionOrder || b.order || 0))
+          .map((exercise, index) => {
           const exerciseName = exercise.exerciseId?.startsWith('endurance_')
             ? exercise.enduranceSession?.name || 'Endurance Session'
-            : exercise.exerciseName || exercise.exercise?.name || `Exercise ${index + 1}`;
+            : exercise.exercise?.name || (exercise as any)?.exerciseName || `Exercise ${index + 1}`;
 
           return (
             <View key={exercise.id} style={styles.exerciseCard}>
@@ -66,9 +68,13 @@ export const SimplePlanPreview: React.FC<SimplePlanPreviewProps> = ({
                 </View>
                 <View style={styles.exerciseNameContainer}>
                   <Text style={styles.exerciseName}>{exerciseName}</Text>
-                  {!exercise.exerciseId?.startsWith('endurance_') && exercise.sets && (
+                  {exercise.exerciseId?.startsWith('endurance_') ? (
                     <Text style={styles.setsInfo}>
-                      {exercise.equipment || 'Bodyweight'} • [{exercise.sets.map(set => set.reps).join(', ')}]
+                      {exercise.enduranceSession?.trainingVolume || 'N/A'} {exercise.enduranceSession?.unit || ''} • zone {exercise.enduranceSession?.heartRateZone || 'N/A'}
+                    </Text>
+                  ) : exercise.sets && (
+                    <Text style={styles.setsInfo}>
+                      {exercise.exercise?.equipment || (exercise as any)?.equipment || 'Bodyweight'} • [{exercise.sets.map(set => set.reps).join(', ')}]
                     </Text>
                   )}
                 </View>

@@ -38,8 +38,8 @@ export interface BackendStrengthExercise {
   exercise_name: string;
   sets: number;
   reps: number[];
-  weight: number[];  // Actual weight used (may be null during planning)
-  weight_1rm: number[];
+  weight: number[];  // Actual weight values (in kg or lbs)
+  execution_order: number;  // Order in which to execute this exercise (1-based)
   main_muscle?: string;
   equipment?: string;
 }
@@ -52,6 +52,7 @@ export interface BackendEnduranceSession {
   sport_type: string;
   training_volume: number;
   unit: string;
+  execution_order: number;  // Order in which to execute this session (1-based)
   heart_rate_zone?: number;
 }
 
@@ -94,8 +95,9 @@ function transformDailyTraining(backendDaily: BackendDailyTraining): any {
   // Transform endurance sessions
   const enduranceSessions = backendDaily.endurance_sessions?.map(transformEnduranceSession) || [];
   
-  // Combine into a single exercises array (expected by SimplePlanPreview)
-  const exercises = [...strengthExercises, ...enduranceSessions];
+  // Combine into a single exercises array and sort by execution_order (expected by SimplePlanPreview)
+  const exercises = [...strengthExercises, ...enduranceSessions]
+    .sort((a, b) => (a.executionOrder || 0) - (b.executionOrder || 0));
   
   return {
     id: backendDaily.id.toString(),
@@ -104,10 +106,10 @@ function transformDailyTraining(backendDaily: BackendDailyTraining): any {
     trainingType: backendDaily.training_type,
     justification: backendDaily.justification,
     completed: false,
-    // Keep separate arrays for compatibility with other components
-    strengthExercises: strengthExercises,
-    enduranceSessions: enduranceSessions,
-    // Combined array for SimplePlanPreview
+    // Keep separate arrays for compatibility with other components (sorted by execution_order)
+    strengthExercises: strengthExercises.sort((a, b) => (a.executionOrder || 0) - (b.executionOrder || 0)),
+    enduranceSessions: enduranceSessions.sort((a, b) => (a.executionOrder || 0) - (b.executionOrder || 0)),
+    // Combined array for SimplePlanPreview (sorted by execution_order)
     exercises: exercises,
   };
 }
@@ -124,10 +126,11 @@ function transformStrengthExercise(backendExercise: BackendStrengthExercise): an
     exerciseName: exerciseName,
     sets: Array.from({ length: backendExercise.sets }, (_, i) => ({
       reps: backendExercise.reps?.[i] || 10,
-      weight: null,
-      weight1rm: backendExercise.weight_1rm?.[i] || 70,
+      weight: backendExercise.weight?.[i] || 0,
       completed: false,
     })),
+    executionOrder: backendExercise.execution_order || 0,
+    order: backendExercise.execution_order || 0, // Legacy field for backward compatibility
     // Add nested exercise object for SimplePlanPreview compatibility
     exercise: {
       id: backendExercise.exercise_id?.toString(),
@@ -152,6 +155,8 @@ function transformEnduranceSession(backendSession: BackendEnduranceSession): any
     sportType: backendSession.sport_type,
     trainingVolume: backendSession.training_volume,
     unit: backendSession.unit,
+    executionOrder: backendSession.execution_order || 0,
+    order: backendSession.execution_order || 0, // Legacy field for backward compatibility
     heartRateZone: backendSession.heart_rate_zone,
     // Add nested enduranceSession object for SimplePlanPreview compatibility
     enduranceSession: {
@@ -161,6 +166,7 @@ function transformEnduranceSession(backendSession: BackendEnduranceSession): any
       trainingVolume: backendSession.training_volume,
       unit: backendSession.unit,
       heartRateZone: backendSession.heart_rate_zone,
+      executionOrder: backendSession.execution_order || 0,
     },
     completed: false,
   };
@@ -199,13 +205,32 @@ function reverseTransformWeeklySchedule(frontendWeek: any): BackendWeeklySchedul
 }
 
 function reverseTransformDailyTraining(frontendDaily: any): BackendDailyTraining {
-  // Extract strength exercises from either the separate array or combined exercises array
-  const strengthExercises = (frontendDaily.strengthExercises || [])
-    .map(reverseTransformStrengthExercise);
+  // Extract strength exercises: prefer separate array, fall back to combined exercises array
+  // The combined array is created during transformDailyTraining (line 98) for SimplePlanPreview compatibility
+  let strengthExercises: any[] = [];
+  if (frontendDaily.strengthExercises && frontendDaily.strengthExercises.length > 0) {
+    // Use separate array if available (preferred)
+    strengthExercises = frontendDaily.strengthExercises.map(reverseTransformStrengthExercise);
+  } else if (frontendDaily.exercises && frontendDaily.exercises.length > 0) {
+    // Fallback: filter from combined exercises array
+    // Strength exercises have numeric exerciseId (not starting with 'endurance_') and no enduranceSession property
+    strengthExercises = frontendDaily.exercises
+      .filter((ex: any) => ex && !ex.enduranceSession && !ex.exerciseId?.toString().startsWith('endurance_'))
+      .map(reverseTransformStrengthExercise);
+  }
   
-  // Extract endurance sessions from either the separate array or combined exercises array
-  const enduranceSessions = (frontendDaily.enduranceSessions || [])
-    .map(reverseTransformEnduranceSession);
+  // Extract endurance sessions: prefer separate array, fall back to combined exercises array
+  let enduranceSessions: any[] = [];
+  if (frontendDaily.enduranceSessions && frontendDaily.enduranceSessions.length > 0) {
+    // Use separate array if available (preferred)
+    enduranceSessions = frontendDaily.enduranceSessions.map(reverseTransformEnduranceSession);
+  } else if (frontendDaily.exercises && frontendDaily.exercises.length > 0) {
+    // Fallback: filter from combined exercises array
+    // Endurance sessions have exerciseId starting with 'endurance_' or have enduranceSession property
+    enduranceSessions = frontendDaily.exercises
+      .filter((ex: any) => ex && (ex.enduranceSession || ex.exerciseId?.toString().startsWith('endurance_')))
+      .map(reverseTransformEnduranceSession);
+  }
   
   return {
     id: typeof frontendDaily.id === 'string' ? parseInt(frontendDaily.id, 10) : frontendDaily.id,
@@ -220,10 +245,9 @@ function reverseTransformDailyTraining(frontendDaily: any): BackendDailyTraining
 }
 
 function reverseTransformStrengthExercise(frontendExercise: any): BackendStrengthExercise {
-  // Extract reps, weight, and weight_1rm from sets array
+  // Extract reps and weight from sets array
   const reps = frontendExercise.sets?.map((set: any) => set.reps) || [];
   const weight = frontendExercise.sets?.map((set: any) => set.weight ?? 0) || [];  // Use 0 for null weights
-  const weight_1rm = frontendExercise.sets?.map((set: any) => set.weight1rm) || [];
   
   return {
     id: typeof frontendExercise.id === 'string' ? parseInt(frontendExercise.id, 10) : frontendExercise.id,
@@ -235,7 +259,7 @@ function reverseTransformStrengthExercise(frontendExercise: any): BackendStrengt
     sets: frontendExercise.sets?.length || 0,
     reps: reps,
     weight: weight,
-    weight_1rm: weight_1rm,
+    execution_order: frontendExercise.executionOrder || frontendExercise.order || 0,
     main_muscle: frontendExercise.mainMuscle || frontendExercise.exercise?.mainMuscle,
     equipment: frontendExercise.equipment || frontendExercise.exercise?.equipment,
   };
@@ -253,6 +277,7 @@ function reverseTransformEnduranceSession(frontendSession: any): BackendEnduranc
     sport_type: session.sportType,
     training_volume: session.trainingVolume,
     unit: session.unit,
+    execution_order: session.executionOrder || frontendSession.executionOrder || frontendSession.order || 0,
     heart_rate_zone: session.heartRateZone,
   };
 }

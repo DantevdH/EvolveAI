@@ -47,8 +47,8 @@ export interface EnduranceSession {
   sportType: string;
   trainingVolume: number;
   unit: string;
-  heartRateZone?: number;
-  intensity?: number;
+  heartRateZone: number; // Target heart rate zone (1-5), required
+  executionOrder: number; // Order in which to execute this session within the day's training (1-based)
   completed: boolean;
 }
 
@@ -56,11 +56,12 @@ export interface TrainingExercise {
   id: string;
   exerciseId: string;
   completed: boolean;
-  order: number;
+  order: number; // Legacy field, kept for backward compatibility
+  executionOrder: number; // Order in which to execute this exercise/session within the day's training (1-based)
   // For strength exercises
   exercise?: Exercise;
   sets?: TrainingSet[];
-  weight1RM?: number[]; // Weight as percentage of 1RM for each set (e.g., [80, 75, 70])
+  weight?: number[]; // Actual weight values (in kg or lbs) for each set
   // For endurance sessions
   enduranceSession?: EnduranceSession;
 }
@@ -196,7 +197,6 @@ export interface UseTrainingReturn {
   selectDay: (dayIndex: number) => void;
   toggleExerciseCompletion: (exerciseId: string) => void;
   updateSetDetails: (exerciseId: string, setIndex: number, reps: number, weight: number) => Promise<void>;
-  updateIntensity: (exerciseId: string, intensity: number) => Promise<void>;
   showExerciseDetail: (exercise: Exercise) => void;
   hideExerciseDetail: () => void;
   switchExerciseDetailTab: (tab: keyof ExerciseDetailTabs) => void;
@@ -264,7 +264,6 @@ export interface DailyTrainingDetailProps {
   onOneRMCalculator: (exerciseName: string) => void;
   onSwapExercise?: (exercise: Exercise) => void;
   onReopenTraining?: () => void;
-  onIntensityUpdate?: (exerciseId: string, intensity: number) => void;
 }
 
 export interface ExerciseRowProps {
@@ -274,7 +273,6 @@ export interface ExerciseRowProps {
   onShowDetail: () => void;
   onOneRMCalculator: (exerciseName: string) => void;
   onSwapExercise?: () => void;
-  onIntensityUpdate?: (exerciseId: string, intensity: number) => void;
   isLocked?: boolean;
 }
 

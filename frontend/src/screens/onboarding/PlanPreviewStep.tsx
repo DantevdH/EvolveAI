@@ -20,6 +20,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { TrainingPlan, DailyTraining } from '../../types/training';
 import { trainingService } from '../../services/onboardingService';
 import { reverseTransformTrainingPlan, transformTrainingPlan } from '../../utils/trainingPlanTransformer';
+import { supabase } from '@/src/config/supabase';
 
 interface PlanPreviewStepProps {
   onContinue: () => void;
@@ -28,6 +29,10 @@ interface PlanPreviewStepProps {
     formattedInitialResponses?: string;
     formattedFollowUpResponses?: string;
   };
+  initialQuestions?: any[];
+  initialResponses?: Record<string, any>;
+  followUpQuestions?: any[];
+  followUpResponses?: Record<string, any>;
 }
 
 interface ChatMessage {
@@ -41,7 +46,11 @@ interface ChatMessage {
 const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
   onContinue,
   onBack,
-  planMetadata
+  planMetadata,
+  initialQuestions = [],
+  initialResponses = {},
+  followUpQuestions = [],
+  followUpResponses = {},
 }) => {
   const { state, refreshUserProfile, setTrainingPlan } = useAuth();
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
@@ -174,24 +183,55 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
     try {
       const planId = typeof currentPlan?.id === 'string' ? parseInt(currentPlan.id, 10) : currentPlan?.id!;
       
-      // Get JWT token from session in AuthContext state
-      const jwtToken = state.session?.access_token;
+      // Get JWT token from session in AuthContext state (ensure available in both scenarios)
+      let jwtToken = state.session?.access_token;
+      
+      // Fallback: Get session directly from Supabase if not in state (for resume scenario)
+      if (!jwtToken) {
+        const { data: { session } } = await supabase.auth.getSession();
+        jwtToken = session?.access_token;
+      }
+      
+      if (!jwtToken) {
+        throw new Error('JWT token not available. Please sign in again.');
+      }
       
       // Convert plan from camelCase (frontend) to snake_case (backend) before sending
       const backendFormatPlan = reverseTransformTrainingPlan(currentPlan);
       console.log('🔄 PlanPreviewStep: Converted plan to backend format (snake_case)');
       
+      // Convert Map to Record for responses (same as generate-plan)
+      const initialResponsesRecord: Record<string, any> = {};
+      if (initialResponses instanceof Map) {
+        initialResponses.forEach((value, key) => {
+          initialResponsesRecord[key] = value;
+        });
+      } else {
+        Object.assign(initialResponsesRecord, initialResponses);
+      }
+
+      const followUpResponsesRecord: Record<string, any> = {};
+      if (followUpResponses instanceof Map) {
+        followUpResponses.forEach((value, key) => {
+          followUpResponsesRecord[key] = value;
+        });
+      } else {
+        Object.assign(followUpResponsesRecord, followUpResponses);
+      }
+      
       const data = await trainingService.sendPlanFeedback(
         state.userProfile?.id!,
         planId,
         userMessage.message,
-        backendFormatPlan,  // Send plan in backend format (snake_case)
+        backendFormatPlan,  // Send training plan in backend format (snake_case)
+        initialQuestions || [],
+        initialResponsesRecord,
+        followUpQuestions || [],
+        followUpResponsesRecord,
         chatMessages.map(msg => ({
           role: msg.isUser ? 'user' : 'assistant',
           content: msg.message,
         })),
-        planMetadata?.formattedInitialResponses,
-        planMetadata?.formattedFollowUpResponses,
         jwtToken
       );
 

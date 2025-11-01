@@ -509,55 +509,6 @@ export const useTraining = (): UseTrainingReturn => {
     }
   }, [trainingPlan, updateTrainingPlan]);
 
-  const updateIntensity = useCallback(async (exerciseId: string, intensity: number) => {
-    try {
-      setTrainingState(prev => ({
-        ...prev,
-        error: null
-      }));
-
-      // Update local state immediately for better UX
-      const updatedPlan = {
-        ...trainingPlan!,
-        weeklySchedules: trainingPlan!.weeklySchedules.map(week => ({
-          ...week,
-          dailyTrainings: week.dailyTrainings.map(daily => ({
-            ...daily,
-            exercises: daily.exercises.map(exercise => {
-              if (exercise.id === exerciseId) {
-                return { ...exercise, intensity };
-              }
-              return exercise;
-            })
-          }))
-        }))
-      };
-
-      updateTrainingPlan(updatedPlan);
-      
-      // Save intensity to database for endurance sessions
-      const updatedExercise = updatedPlan.weeklySchedules
-        .flatMap(week => week.dailyTrainings)
-        .flatMap(daily => daily.exercises)
-        .find(ex => ex.id === exerciseId);
-      
-      if (updatedExercise?.exerciseId?.startsWith('endurance_')) {
-        const dbResult = await TrainingService.updateEnduranceIntensity(exerciseId, intensity);
-        if (!dbResult.success) {
-          setTrainingState(prev => ({
-            ...prev,
-            error: `Failed to save intensity: ${dbResult.error}`
-          }));
-        }
-      }
-    } catch (error) {
-      console.error('Error updating intensity:', error);
-      setTrainingState(prev => ({
-        ...prev,
-        error: 'Failed to update intensity'
-      }));
-    }
-  }, [trainingPlan, updateTrainingPlan]);
 
   const showExerciseDetail = useCallback((exercise: Exercise) => {
     setTrainingState(prev => ({
@@ -633,36 +584,6 @@ export const useTraining = (): UseTrainingReturn => {
         isLoading: true,
         error: null
       }));
-
-      // Save intensity values for endurance sessions before completing
-      const enduranceSessions = selectedDayTraining.exercises.filter(ex => 
-        ex.exerciseId?.startsWith('endurance_') && ex.intensity
-      );
-      
-      if (enduranceSessions.length > 0) {
-        console.log('💾 Saving intensity values for endurance sessions:', enduranceSessions.length);
-        for (const session of enduranceSessions) {
-          try {
-            const { data, error } = await supabase
-              .from('endurance_session')
-              .update({
-                intensity: session.intensity,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', session.id)
-              .select()
-              .single();
-
-            if (error) {
-              console.error('Error saving intensity for session', session.id, ':', error);
-            } else {
-              console.log('✅ Intensity saved for session', session.id, ':', session.intensity);
-            }
-          } catch (error) {
-            console.error('Error saving intensity for session', session.id, ':', error);
-          }
-        }
-      }
 
       // Show RPE modal instead of completing directly
       setTrainingState(prev => ({
@@ -785,12 +706,12 @@ export const useTraining = (): UseTrainingReturn => {
                     // Reset completion status when swapping exercises
                     completed: false,
                     // Reset sets to default values based on new exercise
-                    sets: exercise.sets.map((set, index) => ({
+                    sets: exercise.sets?.map((set, index) => ({
                       ...set,
                       reps: newExercise.main_muscles?.includes('Chest') ? 12 : 10, // Default reps
                       weight: 0,
                       completed: false
-                    }))
+                    })) || []
                   }
                 : exercise
             )
@@ -988,7 +909,6 @@ export const useTraining = (): UseTrainingReturn => {
     selectDay,
     toggleExerciseCompletion,
     updateSetDetails,
-    updateIntensity,
     showExerciseDetail,
     hideExerciseDetail,
     switchExerciseDetailTab,

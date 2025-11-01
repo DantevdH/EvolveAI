@@ -17,7 +17,6 @@ import {
   calculateMacros,
   estimateBaseActivityFromProfile,
   estimateTrainingIntensity,
-  estimateWeightGoalFromProfile,
   convertWeightToKg,
   convertHeightToCm,
   MacroCalculationResult,
@@ -93,11 +92,8 @@ export const NutritionScreen: React.FC = () => {
         userProfile.experienceLevel || 'novice'
       );
       
-      // Estimate weight goal from goal description
-      const weightGoal = estimateWeightGoalFromProfile(
-        userProfile.goalDescription || '',
-        weightKg
-      );
+      // Default to maintenance goal (goalDescription removed from profile)
+      const weightGoal = { targetWeight: weightKg, timeframeWeeks: 6 };
       
       // Determine sex from gender
       const sex = userProfile.gender.toLowerCase().includes('male') ? 'male' : 'female';
@@ -146,15 +142,13 @@ export const NutritionScreen: React.FC = () => {
   const carbsPercentage = Math.round((carbsCalories / calories) * 100);
   const fatPercentage = Math.round((fatCalories / calories) * 100);
 
-  // Get goal description
+  // Get goal description based on calorie difference from TDEE
   const getGoalDescription = () => {
     if (!macroCalculation || !userProfile) return 'Maintenance';
     
     const weightChange = macroCalculation.calories - macroCalculation.tdee;
-    const weightKg = convertWeightToKg(userProfile.weight, userProfile.weightUnit);
-    const weightGoal = estimateWeightGoalFromProfile(userProfile.goalDescription || '', weightKg);
     
-    if (weightGoal.targetWeight && weightChange !== 0) {
+    if (Math.abs(weightChange) > 50) { // Only show goal if meaningful calorie difference
       const weeklyChange = Math.abs(weightChange * 7 / 7700); // Convert daily kcal to weekly kg
       if (weightChange > 0) {
         return `Muscle Gain (${weeklyChange.toFixed(1)}kg/week)`;

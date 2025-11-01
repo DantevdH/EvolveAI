@@ -216,11 +216,14 @@ class EnduranceSession(BaseModel):
     unit: Union[VolumeUnit, str] = Field(
         ..., description="Unit for training_volume (use VolumeUnit enum: minutes, km, miles, meters)"
     )
-    heart_rate_zone: Optional[int] = Field(
-        default=None, description="Target heart rate zone (1-5)"
+    heart_rate_zone: int = Field(
+        ..., description="Target heart rate zone (1-5)"
     )
     description: Optional[str] = Field(
         default=None, description="Description of the context of the endurance session"
+    )
+    execution_order: int = Field(
+        ..., description="Order in which to execute this session within the day's training (1-based: 1, 2, 3, etc.)"
     )
     completed: bool = Field(
         default=False, description="Whether the session was completed"
@@ -288,8 +291,10 @@ class AIStrengthExercise(BaseModel):
     
     sets: int = Field(..., description="Number of sets")
     reps: List[int] = Field(..., description="Reps for each set")
-    weight: List[float] = Field(..., description="Weight for each set")
-    weight_1rm: List[float] = Field(..., description="1-rep max estimates for each set")
+    weight: List[float] = Field(..., description="Actual weight (in kg or lbs) for each set")
+    execution_order: int = Field(
+        ..., description="Order in which to execute this exercise within the day's training (1-based: 1, 2, 3, etc.)"
+    )
     
     # AI-generated metadata (required, validated against database via Enum)
     exercise_name: str = Field(
@@ -336,7 +341,7 @@ class AIStrengthExercise(BaseModel):
             sets=self.sets,
             reps=self.reps,
             weight=self.weight,
-            weight_1rm=self.weight_1rm,
+            execution_order=self.execution_order,
             completed=self.completed
         )
 
@@ -376,8 +381,10 @@ class StrengthExercise(BaseModel):
     
     sets: int = Field(..., description="Number of sets")
     reps: List[int] = Field(..., description="Reps for each set")
-    weight: List[float] = Field(..., description="Weight for each set")
-    weight_1rm: List[float] = Field(..., description="1-rep max estimates for each set")
+    weight: List[float] = Field(..., description="Actual weight (in kg or lbs) for each set")
+    execution_order: int = Field(
+        ..., description="Order in which to execute this exercise within the day's training (1-based: 1, 2, 3, etc.)"
+    )
     completed: bool = Field(
         default=False, description="Whether the exercise was completed"
     )
@@ -512,6 +519,42 @@ class GeminiWeeklySchedule(BaseModel):
     week_number: int
     daily_trainings: List[GeminiDailyTraining]
     justification: str
+
+
+class WeeklyScheduleResponse(BaseModel):
+    """
+    Response schema for WeeklySchedule generation with AI message.
+    
+    Used when AI generates a WeeklySchedule and includes an ai_message.
+    The ai_message is extracted and handled separately - it's never persisted to the database.
+    """
+    id: Optional[int] = Field(default=None, description="Database ID")
+    training_plan_id: int = Field(..., description="ID of the training plan")
+    week_number: int = Field(..., description="Week number in the plan")
+    daily_trainings: List[DailyTraining] = Field(
+        default=[], description="Daily training sessions"
+    )
+    justification: str = Field(
+        ...,
+        description="AI justification: this week's purpose and how it progresses toward the goal",
+    )
+    ai_message: str = Field(
+        ..., 
+        description="AI message explaining the changes made to the week (required, but never persisted)"
+    )
+    created_at: Optional[datetime] = Field(
+        default=None, description="Creation timestamp"
+    )
+    updated_at: Optional[datetime] = Field(
+        default=None, description="Last update timestamp"
+    )
+
+
+class GeminiWeeklyScheduleResponse(BaseModel):
+    """Gemini-compatible version of WeeklyScheduleResponse."""
+    daily_trainings: List[GeminiDailyTraining]
+    justification: str
+    ai_message: str
 
 
 class GeminiTrainingPlan(BaseModel):

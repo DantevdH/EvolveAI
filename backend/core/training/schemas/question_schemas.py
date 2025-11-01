@@ -77,6 +77,9 @@ class AIQuestion(BaseModel):
         default=None, description="Unit of measurement - REQUIRED for slider ONLY (must be a single string, not array)"
     )
     min_description: Optional[str] = Field(
+        default=None, description="Minimum value label - REQUIRED for rating ONLY"
+    )
+    max_description: Optional[str] = Field(
         default=None, description="Maximum value label - REQUIRED for rating ONLY"
     )
     max_length: Optional[int] = Field(
@@ -128,6 +131,7 @@ class GeminiAIQuestion(BaseModel):
     step: Optional[float] = None
     unit: Optional[str] = None
     min_description: Optional[str] = None
+    max_description: Optional[str] = None
     max_length: Optional[int] = Field(default=None, ge=1, le=5000)
     placeholder: Optional[str] = None
 
@@ -273,18 +277,22 @@ class PlanFeedbackRequest(BaseModel):
     user_profile_id: Union[int, str] = Field(..., description="User profile ID")
     plan_id: Union[int, str] = Field(..., description="Training plan ID")
     feedback_message: str = Field(..., description="User feedback message")
-    current_plan: Dict[str, Any] = Field(..., description="Current training plan data (sent from frontend)")
+    training_plan: Dict[str, Any] = Field(..., description="Full training plan data (sent from frontend)")
+    initial_responses: Dict[str, Any] = Field(
+        ..., description="Raw responses to initial questions"
+    )
+    follow_up_responses: Dict[str, Any] = Field(
+        ..., description="Raw responses to follow-up questions"
+    )
+    initial_questions: List[AIQuestion] = Field(
+        ..., description="Initial questions from frontend"
+    )
+    follow_up_questions: List[AIQuestion] = Field(
+        ..., description="Follow-up questions from frontend"
+    )
     conversation_history: Optional[List[Dict[str, Any]]] = Field(
         default=[], 
         description="Previous conversation messages for context"
-    )
-    formatted_initial_responses: Optional[str] = Field(
-        None, 
-        description="Formatted initial question responses for context"
-    )
-    formatted_follow_up_responses: Optional[str] = Field(
-        None, 
-        description="Formatted follow-up question responses for context"
     )
     jwt_token: Optional[str] = Field(default=None, description="JWT token for authentication")
 

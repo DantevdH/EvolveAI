@@ -406,7 +406,7 @@ class DatabaseService:
                             
                             sets = exercise_data.get("sets", 3)
                             reps = exercise_data.get("reps", [10, 10, 10])
-                            weight_1rm = exercise_data.get("weight_1rm", [80, 80, 80])
+                            weight = exercise_data.get("weight", [0.0] * sets)
 
                             # Create strength exercise record
                             strength_exercise_record = {
@@ -414,8 +414,8 @@ class DatabaseService:
                                 "exercise_id": exercise_id,
                                 "sets": sets,
                                 "reps": reps,
-                                "weight": [None] * sets,
-                                "weight_1rm": weight_1rm,
+                                "weight": weight,
+                                "execution_order": exercise_data.get("execution_order", 0),
                                 "completed": False,
                                 "created_at": datetime.utcnow().isoformat(),
                                 "updated_at": datetime.utcnow().isoformat(),
@@ -443,7 +443,7 @@ class DatabaseService:
                             sport_type = session_data.get("sport_type", "running")
                             training_volume = session_data.get("training_volume", 30.0)
                             unit = session_data.get("unit", "minutes")
-                            heart_rate_zone = session_data.get("heart_rate_zone")
+                            heart_rate_zone = session_data.get("heart_rate_zone", 3)  # Default to Zone 3 if not provided
 
                             # Create endurance session record
                             endurance_session_record = {
@@ -454,6 +454,7 @@ class DatabaseService:
                                 "training_volume": training_volume,
                                 "unit": unit,
                                 "heart_rate_zone": heart_rate_zone,
+                                "execution_order": session_data.get("execution_order", 0),
                                 "completed": False,
                                 "created_at": datetime.utcnow().isoformat(),
                                 "updated_at": datetime.utcnow().isoformat(),
@@ -1002,7 +1003,7 @@ class DatabaseService:
                             
                             sets = exercise_data.get("sets", 3)
                             reps = exercise_data.get("reps", [10, 10, 10])
-                            weight_1rm = exercise_data.get("weight_1rm", [80, 80, 80])
+                            weight = exercise_data.get("weight", [0.0] * sets)
                             
                             # Create strength exercise record
                             strength_exercise_record = {
@@ -1010,8 +1011,8 @@ class DatabaseService:
                                 "exercise_id": exercise_id,
                                 "sets": sets,
                                 "reps": reps,
-                                "weight": [None] * sets,
-                                "weight_1rm": weight_1rm,
+                                "weight": weight,
+                                "execution_order": exercise_data.get("execution_order", 0),
                                 "completed": False,
                                 "created_at": datetime.utcnow().isoformat(),
                                 "updated_at": datetime.utcnow().isoformat(),
@@ -1039,7 +1040,7 @@ class DatabaseService:
                             sport_type = session_data.get("sport_type", "running")
                             training_volume = session_data.get("training_volume", 30.0)
                             unit = session_data.get("unit", "minutes")
-                            heart_rate_zone = session_data.get("heart_rate_zone")
+                            heart_rate_zone = session_data.get("heart_rate_zone", 3)  # Default to Zone 3 if not provided
                             
                             # Create endurance session record
                             endurance_session_record = {
@@ -1050,6 +1051,7 @@ class DatabaseService:
                                 "training_volume": training_volume,
                                 "unit": unit,
                                 "heart_rate_zone": heart_rate_zone,
+                                "execution_order": session_data.get("execution_order", 0),
                                 "completed": False,
                                 "created_at": datetime.utcnow().isoformat(),
                                 "updated_at": datetime.utcnow().isoformat(),
