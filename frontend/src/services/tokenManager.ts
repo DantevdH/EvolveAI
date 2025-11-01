@@ -111,7 +111,17 @@ export class TokenManager {
       });
 
       if (error) {
-        console.error('Error refreshing token:', error);
+        // Handle expected refresh token errors gracefully
+        const isRefreshTokenError = 
+          error.message?.includes('Invalid Refresh Token') || 
+          error.message?.includes('Refresh Token Not Found') ||
+          error.message?.includes('refresh_token_not_found');
+        
+        if (!isRefreshTokenError) {
+          // Only log actual errors that need attention (not expected refresh token errors)
+          console.error('Error refreshing token:', error);
+        }
+        // Return null for both expected and unexpected errors
         return null;
       }
 

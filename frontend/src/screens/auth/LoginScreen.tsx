@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { ActivityIndicator, Alert, ImageBackground, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ImageBackground, Image, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/src/context/AuthContext';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { supabase } from '@/src/config/supabase';
 import { validateLoginForm } from '@/src/utils/validation';
 import { colors } from '../../constants/designSystem';
+
+// Complete auth session if needed (recommended by Expo)
+WebBrowser.maybeCompleteAuthSession();
 
 // Custom Text Input Component (matching Swift design)
 const CustomTextField: React.FC<{
@@ -49,13 +53,14 @@ const CustomTextField: React.FC<{
 
 // Social Login Button Component (matching Swift design)
 const SocialLoginButton: React.FC<{
-  iconName: string;
+  iconName?: string;
+  imageSource?: any;
   text: string;
   onPress: () => void;
   disabled?: boolean;
   isSystemIcon?: boolean;
   testID?: string;
-}> = ({ iconName, text, onPress, disabled = false, isSystemIcon = false, testID }) => {
+}> = ({ iconName, imageSource, text, onPress, disabled = false, isSystemIcon = false, testID }) => {
   return (
     <TouchableOpacity
       style={[styles.socialButton, disabled && styles.socialButtonDisabled]}
@@ -64,11 +69,19 @@ const SocialLoginButton: React.FC<{
       activeOpacity={0.8}
       testID={testID}>
       <View style={styles.socialButtonContent}>
-        <IconSymbol
-          name={iconName as any}
-          size={20}
-          color="#FFFFFF"
-        />
+        {imageSource ? (
+          <Image
+            source={imageSource}
+            style={styles.socialButtonImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <IconSymbol
+            name={iconName as any}
+            size={20}
+            color="#FFFFFF"
+          />
+        )}
         <Text style={[styles.socialButtonText, disabled && styles.socialButtonTextDisabled]}>
           {text}
         </Text>
@@ -82,7 +95,11 @@ const MainTitleView: React.FC = () => {
   return (
     <View style={styles.titleContainer}>
       <Text style={styles.mainTitle}>Evolve</Text>
-      <Text style={styles.subtitle}>Your Personal training Journey</Text>
+      <Text style={styles.subtitle} numberOfLines={1} adjustsFontSizeToFit>
+        <Text style={styles.subtitleRegular}>DESTROY EXCUSES, </Text>
+        <Text style={styles.subtitleRegular}>EVOLVE </Text>
+        <Text style={styles.subtitleAccent}>YOURSELF</Text>
+      </Text>
     </View>
   );
 };
@@ -94,7 +111,7 @@ export const LoginScreen: React.FC = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
 
-  const { state, signInWithEmail, signInWithGoogle, signInWithApple, signInWithFacebook, clearError } = useAuth();
+  const { state, signInWithEmail, signInWithGoogle, signInWithApple, /* signInWithFacebook */ clearError } = useAuth();
 
   // Handle email verification from deep link
   useEffect(() => {
@@ -154,34 +171,63 @@ export const LoginScreen: React.FC = () => {
   };
 
   const handleGoogleLogin = async () => {
-    clearError();
-    const success = await signInWithGoogle();
-    if (!success && state.error) {
-      Alert.alert('Google Sign In Failed', state.error);
+    console.log('🔵 Google login button clicked');
+    try {
+      clearError();
+      console.log('🔵 Calling signInWithGoogle...');
+      const success = await signInWithGoogle();
+      console.log('🔵 signInWithGoogle returned:', success);
+      console.log('🔵 Current error state:', state.error);
+      if (!success) {
+        const errorMessage = state.error || 'Google sign in failed. Please try again.';
+        console.error('❌ Google sign in failed:', errorMessage);
+        Alert.alert('Google Sign In Failed', errorMessage);
+      } else {
+        console.log('✅ Google sign in initiated successfully');
+      }
+    } catch (error) {
+      console.error('❌ Error in handleGoogleLogin:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
   };
 
   const handleAppleLogin = async () => {
-    clearError();
-    const success = await signInWithApple();
-    if (!success && state.error) {
-      Alert.alert('Apple Sign In Failed', state.error);
-    }
+    // Apple login disabled for now
+    // clearError();
+    // const success = await signInWithApple();
+    // if (!success && state.error) {
+    //   Alert.alert('Apple Sign In Failed', state.error);
+    // }
+    console.log('🍎 Apple login clicked - disabled for now');
   };
 
-  const handleFacebookLogin = async () => {
-    clearError();
-    const success = await signInWithFacebook();
-    if (!success && state.error) {
-      Alert.alert('Facebook Sign In Failed', state.error);
-    }
-  };
+  // Facebook login commented out for now
+  // const handleFacebookLogin = async () => {
+  //   console.log('🔵 Facebook login button clicked');
+  //   try {
+  //     clearError();
+  //     console.log('🔵 Calling signInWithFacebook...');
+  //     const success = await signInWithFacebook();
+  //     console.log('🔵 signInWithFacebook returned:', success);
+  //     console.log('🔵 Current error state:', state.error);
+  //     if (!success) {
+  //       const errorMessage = state.error || 'Facebook sign in failed. Please try again.';
+  //       console.error('❌ Facebook sign in failed:', errorMessage);
+  //       Alert.alert('Facebook Sign In Failed', errorMessage);
+  //     } else {
+  //       console.log('✅ Facebook sign in initiated successfully');
+  //     }
+  //   } catch (error) {
+  //     console.error('❌ Error in handleFacebookLogin:', error);
+  //     Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+  //   }
+  // };
 
   return (
     <View style={styles.container}>
       {/* Background Image */}
       <ImageBackground
-        source={{ uri: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80' }}
+        source={require('../../../assets/images/background.png')}
         style={styles.backgroundImage}
         resizeMode="cover">
         
@@ -207,26 +253,29 @@ export const LoginScreen: React.FC = () => {
               <View style={styles.socialSection}>
                 <SocialLoginButton
                   iconName="apple.logo"
-                  text="Sign In with Apple (Coming Soon)"
+                  text="Sign In with Apple"
                   onPress={handleAppleLogin}
-                  disabled={true}
+                  disabled={state.isLoading}
                   isSystemIcon={true}
                   testID="apple-signin-button"
                 />
                 
                 <SocialLoginButton
-                  iconName="globe"
+                  imageSource={require('../../../assets/images/google-logo.webp')}
                   text="Sign In with Google"
                   onPress={handleGoogleLogin}
+                  disabled={state.isLoading}
                   testID="google-signin-button"
                 />
                 
-                <SocialLoginButton
+                {/* Facebook login commented out for now */}
+                {/* <SocialLoginButton
                   iconName="person.2"
                   text="Sign In with Facebook"
                   onPress={handleFacebookLogin}
+                  disabled={state.isLoading}
                   testID="facebook-signin-button"
-                />
+                /> */}
               </View>
               
               {/* Separator */}
@@ -349,9 +398,29 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
+    fontSize: 14,
+    fontWeight: '600',
     textAlign: 'center',
+    letterSpacing: 1.5,
+    marginTop: 4,
+  },
+  subtitleAccent: {
+    color: colors.primary,
+    fontWeight: '700',
+    fontSize: 14,
+    letterSpacing: 1.5,
+    textShadowColor: colors.primary,
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  subtitleRegular: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
+    letterSpacing: 1.5,
+    textShadowColor: 'rgba(147, 35, 34, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   
   // Spacing
@@ -387,6 +456,12 @@ const styles = StyleSheet.create({
   },
   socialButtonTextDisabled: {
     color: 'rgba(255, 255, 255, 0.6)',
+  },
+  socialButtonImage: {
+    width: 17,
+    height: 17,
+    maxWidth: 17,
+    maxHeight: 17,
   },
   
   // Separator

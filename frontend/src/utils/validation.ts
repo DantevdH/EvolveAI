@@ -1,6 +1,127 @@
 /**
- * Validation utilities for onboarding data
+ * Validation utilities for onboarding data and authentication forms
  */
+
+/**
+ * Validation result interface
+ */
+export interface ValidationResult {
+  isValid: boolean;
+  errorMessage?: string;
+}
+
+/**
+ * Validates login form data
+ */
+export const validateLoginForm = (
+  email: string,
+  password: string
+): ValidationResult => {
+  // Email validation
+  if (!email || email.trim() === '') {
+    return {
+      isValid: false,
+      errorMessage: 'Email is required',
+    };
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return {
+      isValid: false,
+      errorMessage: 'Please enter a valid email address',
+    };
+  }
+
+  // Password validation
+  if (!password || password.trim() === '') {
+    return {
+      isValid: false,
+      errorMessage: 'Password is required',
+    };
+  }
+
+  return {
+    isValid: true,
+  };
+};
+
+/**
+ * Validates signup form data
+ */
+export interface SignupValidationResult {
+  isValid: boolean;
+  errorMessage?: string;
+}
+
+export const validateSignupForm = (
+  email: string,
+  password: string,
+  confirmPassword: string
+): SignupValidationResult => {
+  // Email validation
+  if (!email || email.trim() === '') {
+    return {
+      isValid: false,
+      errorMessage: 'Email is required',
+    };
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return {
+      isValid: false,
+      errorMessage: 'Please enter a valid email address',
+    };
+  }
+
+  // Password validation
+  if (!password || password.trim() === '') {
+    return {
+      isValid: false,
+      errorMessage: 'Password is required',
+    };
+  }
+
+  if (password.length < 8) {
+    return {
+      isValid: false,
+      errorMessage: 'Password must be at least 8 characters long',
+    };
+  }
+
+  // Password strength check
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+  if (!hasUpperCase || !hasLowerCase || !hasNumbers) {
+    return {
+      isValid: false,
+      errorMessage: 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
+    };
+  }
+
+  // Confirm password validation
+  if (!confirmPassword || confirmPassword.trim() === '') {
+    return {
+      isValid: false,
+      errorMessage: 'Please confirm your password',
+    };
+  }
+
+  if (password !== confirmPassword) {
+    return {
+      isValid: false,
+      errorMessage: 'Passwords do not match',
+    };
+  }
+
+  return {
+    isValid: true,
+  };
+};
 
 /**
  * Validates if a value is a properly formatted response string

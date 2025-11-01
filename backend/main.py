@@ -43,17 +43,37 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+    from pathlib import Path
+    import sys
 
-    # Restrict reload watching to app source dirs to avoid .venv churn
+    # Get the backend directory (where main.py is located)
+    backend_dir = Path(__file__).parent.absolute()
+
+    # Verify watchfiles is available
+    try:
+        import watchfiles
+        print(f"✓ watchfiles {watchfiles.__version__} detected - using watchfiles for auto-reload")
+    except ImportError:
+        print("⚠ warning: watchfiles not available, falling back to stat-based reload")
+        sys.exit(1)
+
+    # Configure uvicorn with watchfiles to watch all backend files except .venv
     config = uvicorn.Config(
         "main:app",
         host="127.0.0.1",
         port=8000,
         reload=True,
-        reload_dirs=[
-            "core",           # backend/core/**
-            "logging_config.py",
-            "main.py",
+        reload_dirs=[str(backend_dir)],  # Watch the entire backend directory
+        reload_excludes=[
+            "**/.venv/**",  # Exclude .venv directory and all contents
+            "**/__pycache__/**",  # Exclude __pycache__ directories
+            "**/*.pyc",  # Exclude compiled Python files
         ],
     )
+    
+    print(f"✓ Watching directory: {backend_dir}")
+    print("✓ Auto-reload enabled with watchfiles")
+    print("✓ Excluding: .venv, __pycache__, *.pyc")
+    print()
+    
     uvicorn.Server(config).run()

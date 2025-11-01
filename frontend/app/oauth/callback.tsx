@@ -1,88 +1,231 @@
 import React, { useEffect } from 'react';
-import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet, Linking, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/config/supabase';
 import { colors } from '@/src/constants/colors';
+import { useAuth } from '@/src/context/AuthContext';
 
 export default function OAuthCallback() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { dispatch } = useAuth();
 
   useEffect(() => {
     handleOAuthCallback();
   }, []);
 
+  // Extract tokens from URL (handles both web hash and native deep links)
+  const extractTokensFromUrl = async (): Promise<{ accessToken: string | null; refreshToken: string | null }> => {
+    // On web, check window.location.hash
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location.hash) {
+      const hash = window.location.hash.substring(1);
+      const hashParams = new URLSearchParams(hash);
+      return {
+        accessToken: hashParams.get('access_token'),
+        refreshToken: hashParams.get('refresh_token'),
+      };
+    }
+    
+    // On native, check params first (query params from URL)
+    const accessToken = params.access_token as string || null;
+    const refreshToken = params.refresh_token as string || null;
+    
+    if (accessToken && refreshToken) {
+      return { accessToken, refreshToken };
+    }
+    
+    // On native, tokens might be in URL hash fragment (React Native Linking doesn't parse hash)
+    // Try multiple methods to get the deep link URL
+    if (Platform.OS !== 'web') {
+      try {
+        // Method 1: Check if URL is in params (expo-router might pass full URL)
+        const urlInParams = params.url as string || params.redirect_uri as string || params._url as string;
+        if (urlInParams && urlInParams.includes('#')) {
+          console.log('🔑 [OAuth Callback] Found hash in URL params:', urlInParams);
+          const hashPart = urlInParams.split('#')[1];
+          const hashParams = new URLSearchParams(hashPart);
+          const tokenFromHash = {
+            accessToken: hashParams.get('access_token'),
+            refreshToken: hashParams.get('refresh_token'),
+          };
+          if (tokenFromHash.accessToken && tokenFromHash.refreshToken) {
+            return tokenFromHash;
+          }
+        }
+
+        // Method 2: Try getInitialURL (only works on app launch)
+        const initialUrl = await Linking.getInitialURL();
+        if (initialUrl && initialUrl.includes('#') && initialUrl.includes('oauth/callback')) {
+          console.log('🔑 [OAuth Callback] Found hash in initial URL:', initialUrl);
+          const hashPart = initialUrl.split('#')[1];
+          const hashParams = new URLSearchParams(hashPart);
+          const tokenFromHash = {
+            accessToken: hashParams.get('access_token'),
+            refreshToken: hashParams.get('refresh_token'),
+          };
+          if (tokenFromHash.accessToken && tokenFromHash.refreshToken) {
+            return tokenFromHash;
+          }
+        }
+
+        // Method 3: Try to get current URL using Linking.getURL() (if available)
+        // Note: This might not be available in all React Native versions
+        try {
+          // Check if we can access the URL from the navigation state
+          // In expo-router, the URL should be accessible via params
+          if (params && Object.keys(params).length > 0) {
+            // Log all params to help debug
+            console.log('🔑 [OAuth Callback] All params:', JSON.stringify(params));
+          }
+        } catch (e) {
+          console.log('⚠️ [OAuth Callback] Could not get current URL:', e);
+        }
+      } catch (e) {
+        console.log('⚠️ [OAuth Callback] Could not parse URL for tokens:', e);
+      }
+    }
+    
+    return { accessToken: null, refreshToken: null };
+  };
+
   const handleOAuthCallback = async () => {
     try {
-
-      // For OAuth callbacks, tokens are often in URL fragments (after #)
-      // We need to parse them from the current URL
-      let access_token: string | undefined;
-      let refresh_token: string | undefined;
-      let expires_at: string | undefined;
-      let expires_in: string | undefined;
-      let provider_token: string | undefined;
-      let token_type: string | undefined;
+      console.log('🔄 [OAuth Callback] User flow: Processing OAuth callback, checking for tokens');
+      console.log('🔄 [OAuth Callback] Platform:', Platform.OS);
       
-      // If we're on web, we might need to parse the URL fragment
-      if (typeof window !== 'undefined' && window.location.hash) {
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        access_token = hashParams.get('access_token') || undefined;
-        refresh_token = hashParams.get('refresh_token') || undefined;
-        expires_at = hashParams.get('expires_at') || undefined;
-        expires_in = hashParams.get('expires_in') || undefined;
-        provider_token = hashParams.get('provider_token') || undefined;
-        token_type = hashParams.get('token_type') || undefined;
-
-      } else {
-        // Use params from Expo Router
-        access_token = params.access_token as string;
-        refresh_token = params.refresh_token as string;
-        expires_at = params.expires_at as string;
-        expires_in = params.expires_in as string;
-        provider_token = params.provider_token as string;
-        token_type = params.token_type as string;
+      // Log all params for debugging (but limit token values)
+      const paramsForLog = { ...params };
+      if (paramsForLog.access_token) paramsForLog.access_token = '[REDACTED]';
+      if (paramsForLog.refresh_token) paramsForLog.refresh_token = '[REDACTED]';
+      console.log('🔄 [OAuth Callback] URL params:', JSON.stringify(paramsForLog));
+      
+      // Check for error parameters first (OAuth errors)
+      const error = params.error as string;
+      const errorCode = params.error_code as string;
+      const errorDescription = params.error_description as string;
+      
+      if (error) {
+        console.warn('⚠️ [OAuth Callback] OAuth error detected:', { error, errorCode, errorDescription });
+        // Some OAuth errors might still have tokens in hash - continue checking
       }
       
-      if (access_token && refresh_token) {
-
-        // Set the session using the tokens from the OAuth callback
-        const { data, error } = await supabase.auth.setSession({
-          access_token: access_token as string,
-          refresh_token: refresh_token as string,
+      // Priority 1: Extract tokens from URL (handles both web hash and native deep links)
+      console.log('🔑 [OAuth Callback] User flow: Extracting authentication tokens from callback URL');
+      const { accessToken, refreshToken } = await extractTokensFromUrl();
+      
+      if (accessToken && refreshToken) {
+        console.log('🔑 [OAuth Callback] User flow: Tokens found, setting user session');
+        
+        const { data, error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
         });
 
-        if (error) {
-          console.error('Error setting OAuth session:', error);
-          // Redirect to login with error
+        if (sessionError) {
+          console.error('❌ [OAuth Callback] Error setting session:', sessionError);
           router.replace('/login');
           return;
         }
 
-        if (data.session) {
-
-          // Check if user needs email verification
-          if (data.user && !data.user.email_confirmed_at) {
-
+        if (data.session && data.user) {
+          console.log('✅ [OAuth Callback] User flow: Session set successfully, user authenticated');
+          
+          // CRITICAL: Update auth context immediately so routing logic sees the user
+          dispatch({ type: 'SET_USER', payload: data.user });
+          dispatch({ type: 'SET_SESSION', payload: data.session });
+          
+          // Small delay to ensure state propagation before redirect
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          if (!data.user.email_confirmed_at) {
+            console.log('📧 [OAuth Callback] User flow: Email verification required, redirecting to verification screen');
             router.replace({
               pathname: '/email-verification',
-              params: { email: data.user.email }
+              params: { email: data.user.email || '' }
             });
           } else {
-
-            // Redirect to main app - the auth state change will handle the proper routing
+            console.log('✅ [OAuth Callback] User flow: Authentication complete, redirecting to home screen');
             router.replace('/');
           }
+          return;
+        }
+      }
+      
+      // If we got here and there was an error, redirect to login
+      if (error) {
+        console.error('❌ [OAuth Callback] OAuth error without tokens:', { error, errorCode, errorDescription });
+        router.replace('/login');
+        return;
+      }
+      
+      // Fallback: Check if session is already available (for OAuth flows)
+      console.log('🔄 [OAuth Callback] User flow: No tokens found in URL, checking if session already exists');
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error('❌ [OAuth Callback] Error getting session:', sessionError);
+        console.error('❌ [OAuth Callback] Error details:', JSON.stringify(sessionError, null, 2));
+        console.error('❌ [OAuth Callback] Error code:', sessionError.code);
+        console.error('❌ [OAuth Callback] Error message:', sessionError.message);
+        router.replace('/login');
+        return;
+      }
+
+      console.log('🔄 [OAuth Callback] Session check:', { 
+        hasSession: !!session, 
+        hasUser: !!session?.user,
+        userId: session?.user?.id,
+        email: session?.user?.email 
+      });
+
+      if (session && session.user) {
+        console.log('✅ [OAuth Callback] User flow: Session found, user already authenticated');
+        
+        // CRITICAL: Update auth context immediately so routing logic sees the user
+        dispatch({ type: 'SET_USER', payload: session.user });
+        dispatch({ type: 'SET_SESSION', payload: session });
+        
+        // Small delay to ensure state propagation before redirect
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Check if user needs email verification
+        if (!session.user.email_confirmed_at) {
+          console.log('📧 [OAuth Callback] User flow: Email verification required, redirecting to verification screen');
+          router.replace({
+            pathname: '/email-verification',
+            params: { email: session.user.email || '' }
+          });
         } else {
-          console.error('No session data received from OAuth callback');
-          router.replace('/login');
+          console.log('✅ [OAuth Callback] User flow: Authentication complete, redirecting to home screen');
+          router.replace('/');
         }
       } else {
-        console.error('Missing tokens in OAuth callback');
-        router.replace('/login');
+        console.warn('⚠️ [OAuth Callback] No session found - waiting 2 seconds then redirecting to login');
+        // No session found - might need to wait a bit or redirect to login
+        // Wait a moment in case the session is still being established
+        setTimeout(() => {
+          console.log('🔄 [OAuth Callback] Retrying session check after timeout...');
+          supabase.auth.getSession().then(({ data, error: retryError }) => {
+            if (retryError) {
+              console.error('❌ [OAuth Callback] Retry error:', retryError);
+            }
+            if (data?.session) {
+              console.log('✅ [OAuth Callback] Session found on retry - waiting for auth state update');
+              // Wait for auth state to update
+              setTimeout(async () => {
+                console.log('✅ [OAuth Callback] Redirecting to app');
+                router.replace('/');
+              }, 500);
+            } else {
+              console.error('❌ [OAuth Callback] No session after retry - redirecting to login');
+              router.replace('/login');
+            }
+          });
+        }, 2000);
       }
     } catch (error) {
-      console.error('OAuth callback error:', error);
+      console.error('❌ [OAuth Callback] Unexpected error:', error);
+      console.error('❌ [OAuth Callback] Error details:', JSON.stringify(error, null, 2));
       router.replace('/login');
     }
   };
