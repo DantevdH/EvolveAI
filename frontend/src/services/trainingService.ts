@@ -193,9 +193,9 @@ export class TrainingService {
                       force: se.exercises.force,
                       instructions: se.exercises.instructions,
                       equipment: se.exercises.equipment,
-                      target_area: se.exercises.target_area,
+                      targetArea: se.exercises.target_area, // camelCase for consistency
                       secondary_muscles: se.exercises.secondary_muscles,
-                      main_muscles: se.exercises.main_muscles,
+                      mainMuscles: se.exercises.main_muscles, // camelCase for consistency
                       difficulty: se.exercises.difficulty,
                       exercise_tier: se.exercises.exercise_tier,
                       preparation: se.exercises.preparation,
@@ -207,7 +207,11 @@ export class TrainingService {
                     mainMuscle: se.main_muscle || se.exercises?.main_muscles?.[0] || null,
                     exerciseName: se.exercise_name || se.exercises?.name || 'Unknown Exercise',
                     sets: this.parseSets(se.sets, se.reps, se.weight),
-                    weight1RM: se.weight_1rm
+                    weight1RM: se.weight_1rm,
+                    // Enriched fields at top-level (for round-trip preservation) - extract from exercises table
+                    targetArea: se.exercises?.target_area || null,
+                    mainMuscles: se.exercises?.main_muscles || null,
+                    force: se.exercises?.force || null
                   })) || [];
 
                 // Map endurance sessions to proper format

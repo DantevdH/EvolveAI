@@ -224,10 +224,6 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
         planId,
         userMessage.message,
         backendFormatPlan,  // Send training plan in backend format (snake_case)
-        initialQuestions || [],
-        initialResponsesRecord,
-        followUpQuestions || [],
-        followUpResponsesRecord,
         chatMessages.map(msg => ({
           role: msg.isUser ? 'user' : 'assistant',
           content: msg.message,

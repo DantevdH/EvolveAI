@@ -219,17 +219,13 @@ export class trainingService {
   /**
    * Send feedback about the training plan
    * 
-   * Same pattern as generateTrainingPlan - sends initial and follow-up responses/questions in request.
+   * Uses user_playbook instead of initial/follow-up questions/responses.
    */
   static async sendPlanFeedback(
     userProfileId: number,
     planId: number,
     feedbackMessage: string,
     trainingPlan: any,  // Full training plan data from frontend
-    initialQuestions: any[],  // Initial questions from frontend
-    initialResponses: Record<string, any>,  // Raw responses to initial questions
-    followUpQuestions: any[],  // Follow-up questions from frontend
-    followUpResponses: Record<string, any>,  // Raw responses to follow-up questions
     conversationHistory: Array<{ role: string; content: string }> = [],
     jwtToken?: string
   ): Promise<any> {
@@ -241,10 +237,6 @@ export class trainingService {
         plan_id: planId,
         feedback_message: feedbackMessage,
         training_plan: trainingPlan,  // Send training plan to backend
-        initial_responses: initialResponses,  // Send raw responses (same as generate-plan)
-        follow_up_responses: followUpResponses,  // Send raw responses (same as generate-plan)
-        initial_questions: initialQuestions,  // Send initial questions (same as generate-plan)
-        follow_up_questions: followUpQuestions,  // Send follow-up questions (same as generate-plan)
         conversation_history: conversationHistory,
         jwt_token: jwtToken,
       };
