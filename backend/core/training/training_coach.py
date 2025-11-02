@@ -487,16 +487,12 @@ class TrainingCoach(BaseAgent):
                     },
                 }
             
-            # Step 1: Get metadata options from database
-            self.logger.info("Fetching exercise metadata options from database...")
-            metadata_options = self.exercise_selector.get_metadata_options()
-            
             # Step 2: Generate prompt for initial Week 1
+            # Equipment and main_muscle constraints are enforced via Pydantic Enum validation in schema
             prompt = PromptGenerator.generate_initial_training_plan_prompt(
-            personal_info=personal_info,
-            formatted_initial_responses=formatted_initial_responses,
-            formatted_follow_up_responses=formatted_follow_up_responses,
-                metadata_options=metadata_options,
+                personal_info=personal_info,
+                formatted_initial_responses=formatted_initial_responses,
+                formatted_follow_up_responses=formatted_follow_up_responses,
             )
             
             # Step 4: Generate full TrainingPlan with AI (but only Week 1 in weekly_schedules)
@@ -506,14 +502,19 @@ class TrainingCoach(BaseAgent):
             ai_start = time.time()
             
             if self.llm.provider == "gemini":
-                from core.training.schemas.training_schemas import GeminiTrainingPlan
+                from core.training.schemas.training_schemas import GeminiTrainingPlan, GeminiAIStrengthExercise
                 parsed_obj, completion = self.llm.parse_structured(
                     prompt, TrainingPlan, GeminiTrainingPlan
                 )
                 tp_input = parsed_obj.model_dump()
+                
+                # Convert GeminiAIStrengthExercise to AIStrengthExercise (with Enum validation)
+                # This happens in _normalize_gemini_training_plan_input now
+                
                 tp_input["user_profile_id"] = user_profile_id
                 # Skip TrainingPlan.model_validate() - IDs don't exist yet, will be added after database save
                 # GeminiTrainingPlan already validated the structure
+                tp_input = self._normalize_gemini_training_plan_input(tp_input)
                 ai_duration = time.time() - ai_start
                 training_dict = tp_input
             else:
@@ -567,8 +568,7 @@ class TrainingCoach(BaseAgent):
         week_number: int,
         current_week: Dict[str, Any],
         user_profile_id: int,
-        formatted_initial_responses: str,
-        formatted_follow_up_responses: str,
+        user_playbook,
         existing_training_plan: Dict[str, Any],
         jwt_token: str = None,
         conversation_history: Optional[List[Dict[str, Any]]] = None,
@@ -587,8 +587,7 @@ class TrainingCoach(BaseAgent):
             week_number: Week number to update (e.g., 1, 2, 3, etc.)
             current_week: Current week data (WeeklySchedule dict) to update
             user_profile_id: Database ID of the user profile
-            formatted_initial_responses: Formatted responses from initial questions 
-            formatted_follow_up_responses: Formatted responses from follow-up questions 
+            user_playbook: User's playbook with learned lessons (instead of onboarding responses)
             existing_training_plan: Full training plan from request (already fetched)
             jwt_token: JWT token for database authentication
             conversation_history: Optional conversation history for context-aware updates
@@ -596,18 +595,15 @@ class TrainingCoach(BaseAgent):
         """
         try:
             # Use existing training plan from request (no need to fetch from database)
+            # The plan is already enriched from database (when loaded) or frontend (when sent back)
             existing_plan = existing_training_plan
             existing_weekly_schedules = existing_plan.get("weekly_schedules", [])
         
-            # Build week summary
+            # Build week summary - data should already be in backend format with enriched fields
             week_summary = PromptGenerator.format_current_plan_summary(
                 {"weekly_schedules": [current_week]}
             )
             
-            # Step 1: Get metadata options
-            self.logger.info("Fetching exercise metadata options from database...")
-            metadata_options = self.exercise_selector.get_metadata_options()
-        
             # Format conversation history for prompt
             conversation_history_str = None
             if conversation_history and len(conversation_history) > 0:
@@ -620,15 +616,14 @@ class TrainingCoach(BaseAgent):
                 if conversation_lines:
                     conversation_history_str = "\n".join(conversation_lines)
 
-            # Step 2: Generate prompt for updating week (includes onboarding responses like initial generation)
+            # Step 2: Generate prompt for updating week (uses user_playbook instead of onboarding responses)
+            # Equipment and main_muscle constraints are enforced via Pydantic Enum validation in schema
             prompt = PromptGenerator.update_weekly_schedule_prompt(
-            personal_info=personal_info,
-            feedback_message=feedback_message,
+                personal_info=personal_info,
+                feedback_message=feedback_message,
                 week_number=week_number,
                 current_week_summary=week_summary,
-                formatted_initial_responses=formatted_initial_responses,
-                formatted_follow_up_responses=formatted_follow_up_responses,
-                metadata_options=metadata_options,
+                user_playbook=user_playbook,
                 conversation_history=conversation_history_str,
             )
             
@@ -798,10 +793,6 @@ class TrainingCoach(BaseAgent):
                 {"weekly_schedules": completed_weeks}
             )
             
-            # Step 1: Get metadata options
-            self.logger.info("Fetching exercise metadata options from database...")
-            metadata_options = self.exercise_selector.get_metadata_options()
-
             # Step 2: Use playbook for personalized context
             active_lessons = playbook.get_active_lessons(min_confidence=0.3) if playbook else []
             playbook_lessons_dict = (
@@ -821,11 +812,11 @@ class TrainingCoach(BaseAgent):
             )
 
             # Step 3: Generate prompt for creating new week
+            # Equipment and main_muscle constraints are enforced via Pydantic Enum validation in schema
             prompt = PromptGenerator.create_new_weekly_schedule_prompt(
                 personal_info=personal_info,
                 completed_weeks_context=completed_weeks_context,
                 progress_summary="",  # Not needed - context is in completed_weeks
-                metadata_options=metadata_options,
                 playbook_lessons=playbook_lessons_dict,
             )
 
@@ -1197,10 +1188,13 @@ class TrainingCoach(BaseAgent):
     def _normalize_gemini_training_plan_input(tp: Dict[str, Any]) -> Dict[str, Any]:
         """
         Normalize a GeminiTrainingPlan dict to satisfy domain TrainingPlan requirements:
+        - Convert GeminiAIStrengthExercise to AIStrengthExercise (with Enum validation)
         - Inject training_plan_id=0 for each weekly_schedule (placeholder before DB save)
         - Inject weekly_schedule_id=0 for each daily_training
         - Normalize training_type to expected enum lowercase; map synonyms
         """
+        from core.training.schemas.training_schemas import GeminiAIStrengthExercise, AIStrengthExercise, MainMuscleEnum, EquipmentEnum
+        
         schedules = tp.get("weekly_schedules") or []
         weekday_map = {
             "monday": "Monday",
@@ -1228,4 +1222,26 @@ class TrainingCoach(BaseAgent):
                 dow = dt.get("day_of_week")
                 if isinstance(dow, str):
                     dt["day_of_week"] = weekday_map.get(dow.strip().lower(), dow)
+                
+                # Convert GeminiAIStrengthExercise to AIStrengthExercise (with Enum validation)
+                strength_exercises = dt.get("strength_exercises") or []
+                converted_exercises = []
+                for se in strength_exercises:
+                    # se is a dict from GeminiAIStrengthExercise.model_dump()
+                    try:
+                        # Create GeminiAIStrengthExercise from dict
+                        gemini_ex = GeminiAIStrengthExercise(**se)
+                        # Convert to AIStrengthExercise (validates enums)
+                        ai_ex = gemini_ex.to_ai_strength_exercise()
+                        # Convert back to dict for downstream processing
+                        converted_exercises.append(ai_ex.model_dump())
+                    except (ValueError, KeyError) as e:
+                        # Enum validation failed - log and skip
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.error(f"Failed to convert GeminiAIStrengthExercise to AIStrengthExercise: {e}")
+                        logger.error(f"Exercise data: {se}")
+                        # Skip invalid exercise
+                        continue
+                dt["strength_exercises"] = converted_exercises
         return tp

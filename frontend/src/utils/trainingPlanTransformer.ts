@@ -42,6 +42,10 @@ export interface BackendStrengthExercise {
   execution_order: number;  // Order in which to execute this exercise (1-based)
   main_muscle?: string;
   equipment?: string;
+  // Enriched fields from exercises table (populated via JOIN)
+  target_area?: string;
+  main_muscles?: string[];  // List of main muscles (from exercises.primary_muscles)
+  force?: string;  // Type of force (push, pull, static, etc.)
 }
 
 export interface BackendEnduranceSession {
@@ -131,15 +135,23 @@ function transformStrengthExercise(backendExercise: BackendStrengthExercise): an
     })),
     executionOrder: backendExercise.execution_order || 0,
     order: backendExercise.execution_order || 0, // Legacy field for backward compatibility
-    // Add nested exercise object for SimplePlanPreview compatibility
+    // Add nested exercise object for SimplePlanPreview compatibility (includes enriched fields)
     exercise: {
       id: backendExercise.exercise_id?.toString(),
       name: exerciseName,
       mainMuscle: backendExercise.main_muscle,
       equipment: backendExercise.equipment,
+      // Enriched fields from exercises table (populated via JOIN)
+      targetArea: backendExercise.target_area,
+      mainMuscles: backendExercise.main_muscles,
+      force: backendExercise.force,
     },
     mainMuscle: backendExercise.main_muscle,
     equipment: backendExercise.equipment,
+    // Enriched fields (available for round-trip)
+    targetArea: backendExercise.target_area,
+    mainMuscles: backendExercise.main_muscles,
+    force: backendExercise.force,
     completed: false,
   };
 }
@@ -249,19 +261,27 @@ function reverseTransformStrengthExercise(frontendExercise: any): BackendStrengt
   const reps = frontendExercise.sets?.map((set: any) => set.reps) || [];
   const weight = frontendExercise.sets?.map((set: any) => set.weight ?? 0) || [];  // Use 0 for null weights
   
+  // Extract enriched fields from exercise object (critical for round-trip preservation)
+  // These fields come from the exercises table and must be preserved when sending back to backend
+  const exercise = frontendExercise.exercise || {};
+  
   return {
     id: typeof frontendExercise.id === 'string' ? parseInt(frontendExercise.id, 10) : frontendExercise.id,
     daily_training_id: frontendExercise.dailyTrainingId || frontendExercise.daily_training_id || 0,
     exercise_id: typeof frontendExercise.exerciseId === 'string' 
       ? parseInt(frontendExercise.exerciseId, 10) 
       : frontendExercise.exerciseId,
-    exercise_name: frontendExercise.exerciseName || frontendExercise.exercise?.name,
+    exercise_name: frontendExercise.exerciseName || exercise.name,
     sets: frontendExercise.sets?.length || 0,
     reps: reps,
     weight: weight,
     execution_order: frontendExercise.executionOrder || frontendExercise.order || 0,
-    main_muscle: frontendExercise.mainMuscle || frontendExercise.exercise?.mainMuscle,
-    equipment: frontendExercise.equipment || frontendExercise.exercise?.equipment,
+    main_muscle: frontendExercise.mainMuscle || exercise.mainMuscle,
+    equipment: frontendExercise.equipment || exercise.equipment,
+    // Enriched fields from exercise object (preserved in round-trip)
+    target_area: frontendExercise.targetArea || exercise.targetArea || undefined,
+    main_muscles: frontendExercise.mainMuscles || exercise.mainMuscles || undefined,
+    force: frontendExercise.force || exercise.force || undefined,
   };
 }
 

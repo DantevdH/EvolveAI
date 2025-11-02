@@ -754,33 +754,19 @@ async def update_week(
     Updates ONLY the latest week (highest week_number), but returns the full TrainingPlan structure
     with the updated week inserted into the existing plan.
     
-    Request includes (same pattern as /generate-plan):
+    Request includes:
     - feedback_message: User feedback message (required)
     - training_plan: Full training plan data (required)
     - plan_id: Training plan ID (required)
-    - initial_responses: Raw responses to initial questions (required)
-    - follow_up_responses: Raw responses to follow-up questions (required)
-    - initial_questions: Initial questions from frontend (required)
-    - follow_up_questions: Follow-up questions from frontend (required)
     - conversation_history: Previous conversation messages for context (optional, default: [])
     - user_profile_id: User profile ID (optional, can be resolved from JWT)
     - jwt_token: JWT token for authentication (required)
     
+    Uses user_playbook instead of initial/follow-up questions/responses.
     week_number is automatically derived from training_plan (latest week = max week_number).
     """
     try:
-        # Validate input (same as generate-plan)
-        if not request.initial_responses:
-            raise HTTPException(status_code=400, detail="Initial responses cannot be empty")
-        
-        if not request.follow_up_responses:
-            raise HTTPException(status_code=400, detail="Follow-up responses cannot be empty")
-        
-        if not request.initial_questions or not isinstance(request.initial_questions, list):
-            raise HTTPException(status_code=400, detail="Invalid initial questions structure")
-        
-        if not request.follow_up_questions or not isinstance(request.follow_up_questions, list):
-            raise HTTPException(status_code=400, detail="Invalid follow-up questions structure")
+        # Validate input
         
         # Validate JWT token
         if not request.jwt_token:
@@ -1131,15 +1117,10 @@ async def update_week(
             measurement_system=user_profile.get("measurement_system", "metric"),
         )
         
-        # Format responses (same as generate-plan - from request, not database)
-        formatted_initial_responses = ResponseFormatter.format_responses(
-            request.initial_responses, request.initial_questions
-        )
-        formatted_follow_up_responses = ResponseFormatter.format_responses(
-            request.follow_up_responses, request.follow_up_questions
-        )
+        # Load user playbook (instead of initial/follow-up responses)
+        user_playbook = await db_service.load_user_playbook(user_profile_id, request.jwt_token)
 
-        # Update the week using the new method (includes onboarding responses like initial generation)
+        # Update the week using the new method (uses user_playbook instead of onboarding responses)
         # Pass training_plan from request instead of fetching from database
         result = await coach.update_weekly_schedule(
             personal_info=personal_info,
@@ -1147,8 +1128,7 @@ async def update_week(
             week_number=week_number,
             current_week=current_week,
             user_profile_id=user_profile_id,
-            formatted_initial_responses=formatted_initial_responses,
-            formatted_follow_up_responses=formatted_follow_up_responses,
+            user_playbook=user_playbook,
             existing_training_plan=training_plan,  # Use training plan from request
             jwt_token=request.jwt_token,
             conversation_history=conversation_history,

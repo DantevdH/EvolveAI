@@ -278,18 +278,6 @@ class PlanFeedbackRequest(BaseModel):
     plan_id: Union[int, str] = Field(..., description="Training plan ID")
     feedback_message: str = Field(..., description="User feedback message")
     training_plan: Dict[str, Any] = Field(..., description="Full training plan data (sent from frontend)")
-    initial_responses: Dict[str, Any] = Field(
-        ..., description="Raw responses to initial questions"
-    )
-    follow_up_responses: Dict[str, Any] = Field(
-        ..., description="Raw responses to follow-up questions"
-    )
-    initial_questions: List[AIQuestion] = Field(
-        ..., description="Initial questions from frontend"
-    )
-    follow_up_questions: List[AIQuestion] = Field(
-        ..., description="Follow-up questions from frontend"
-    )
     conversation_history: Optional[List[Dict[str, Any]]] = Field(
         default=[], 
         description="Previous conversation messages for context"
