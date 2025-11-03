@@ -19,7 +19,7 @@ import ChatMessage from '../../components/onboarding/ChatMessage';
 import { useAuth } from '@/src/context/AuthContext';
 import { TrainingPlan, DailyTraining } from '../../types/training';
 import { trainingService } from '../../services/onboardingService';
-import { reverseTransformTrainingPlan, transformTrainingPlan } from '../../utils/trainingPlanTransformer';
+import { reverseTransformTrainingPlan, transformTrainingPlan, transformUserProfileToPersonalInfo } from '../../utils/trainingPlanTransformer';
 import { supabase } from '@/src/config/supabase';
 
 interface PlanPreviewStepProps {
@@ -52,7 +52,7 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
   followUpQuestions = [],
   followUpResponses = {},
 }) => {
-  const { state, refreshUserProfile, setTrainingPlan } = useAuth();
+  const { state, dispatch, refreshUserProfile, setTrainingPlan } = useAuth();
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -196,9 +196,30 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
         throw new Error('JWT token not available. Please sign in again.');
       }
       
+      // VALIDATION: Ensure userProfile exists before calling backend
+      if (!state.userProfile || !state.userProfile.id) {
+        Alert.alert(
+          'Error',
+          'User profile not found. Please reload the app.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
+      // VALIDATION: Ensure playbook exists (backend requires it)
+      if (!state.userProfile.playbook) {
+        console.warn('⚠️ Playbook not loaded - backend will return error');
+        // Backend requires playbook, so we can't proceed without it
+        Alert.alert(
+          'Error',
+          'Training profile not fully loaded. Please reload the app.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
       // Convert plan from camelCase (frontend) to snake_case (backend) before sending
       const backendFormatPlan = reverseTransformTrainingPlan(currentPlan);
-      console.log('🔄 PlanPreviewStep: Converted plan to backend format (snake_case)');
       
       // Convert Map to Record for responses (same as generate-plan)
       const initialResponsesRecord: Record<string, any> = {};
@@ -219,11 +240,26 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
         Object.assign(followUpResponsesRecord, followUpResponses);
       }
       
+      // Transform userProfile to PersonalInfo for backend
+      const personalInfo = transformUserProfileToPersonalInfo(state.userProfile);
+      
+      // VALIDATION: Ensure personalInfo transformation succeeded
+      if (!personalInfo) {
+        Alert.alert(
+          'Error',
+          'Failed to prepare user profile data. Please reload the app.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
       const data = await trainingService.sendPlanFeedback(
-        state.userProfile?.id!,
+        state.userProfile.id,
         planId,
         userMessage.message,
         backendFormatPlan,  // Send training plan in backend format (snake_case)
+        state.userProfile.playbook,  // Send playbook from userProfile (validated above)
+        personalInfo,  // Send personal info from userProfile (validated above)
         chatMessages.map(msg => ({
           role: msg.isUser ? 'user' : 'assistant',
           content: msg.message,
@@ -296,6 +332,17 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
           // Backend returns plan in snake_case format - transform to camelCase for frontend
           console.log('🔄 PlanPreviewStep: Transforming plan from backend format (snake_case) to frontend format (camelCase)');
           const updatedPlan = transformTrainingPlan(data.updated_plan);
+          
+          // Update userProfile with updated playbook from backend
+          if (data.updated_playbook && state.userProfile) {
+            dispatch({
+              type: 'SET_USER_PROFILE',
+              payload: {
+                ...state.userProfile,
+                playbook: data.updated_playbook
+              }
+            });
+          }
           
           // Update local plan state with transformed data
           setCurrentPlan(updatedPlan);

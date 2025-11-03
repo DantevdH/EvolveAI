@@ -111,7 +111,7 @@ export class trainingService {
         personal_info: personalInfo,
         initial_responses: initialResponses,  // Send raw responses
         initial_questions: initialQuestions,  // Send initial questions
-        user_profile_id: userProfileId?.toString(),
+        user_profile_id: userProfileId,
         jwt_token: jwtToken,
       };
 
@@ -226,17 +226,19 @@ export class trainingService {
     planId: number,
     feedbackMessage: string,
     trainingPlan: any,  // Full training plan data from frontend
+    playbook: any,  // Playbook from userProfile
+    personalInfo: any,  // Personal info from userProfile
     conversationHistory: Array<{ role: string; content: string }> = [],
     jwtToken?: string
   ): Promise<any> {
     try {
-      console.log('📍 Onboarding Service: Sending plan feedback with training plan data');
-
       const request = {
         user_profile_id: userProfileId,
         plan_id: planId,
         feedback_message: feedbackMessage,
         training_plan: trainingPlan,  // Send training plan to backend
+        playbook: playbook,  // Send playbook from userProfile
+        personal_info: personalInfo,  // Send personal info from userProfile
         conversation_history: conversationHistory,
         jwt_token: jwtToken,
       };
@@ -246,10 +248,9 @@ export class trainingService {
         request
       );
 
-      console.log('📍 Onboarding Service: Plan feedback sent successfully');
       return response;
     } catch (error) {
-      console.error(`❌ Onboarding Service: Plan feedback failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error(`Failed to send plan feedback: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw new Error(error instanceof Error ? error.message : 'Failed to send plan feedback');
     }
   }

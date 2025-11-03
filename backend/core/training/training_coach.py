@@ -446,8 +446,7 @@ class TrainingCoach(BaseAgent):
     async def generate_initial_training_plan(
         self,
         personal_info: PersonalInfo,
-        formatted_initial_responses: str,
-        formatted_follow_up_responses: str,
+        user_playbook,
         user_profile_id: int,
         jwt_token: str = None,
     ) -> Dict[str, Any]:
@@ -458,14 +457,11 @@ class TrainingCoach(BaseAgent):
         The AI generates the plan title, summary, and justification.
         We re-assess by week and adjust.
         
-        NOTE: This function does NOT use playbook lessons in the prompt.
-        The playbook is created during onboarding but used later in create_new_weekly_schedule.
-        This function uses only the onboarding responses (initial + follow-up questions).
+        Uses user_playbook (extracted from onboarding responses) instead of raw assessment responses.
         
         Args:
             personal_info: User's personal information and goals
-            formatted_initial_responses: Formatted responses from initial questions
-            formatted_follow_up_responses: Formatted responses from follow-up questions
+            user_playbook: User's playbook with learned lessons from onboarding
             user_profile_id: Database ID of the user profile (also used for latency tracking)
             jwt_token: JWT token for database authentication
         """
@@ -491,8 +487,7 @@ class TrainingCoach(BaseAgent):
             # Equipment and main_muscle constraints are enforced via Pydantic Enum validation in schema
             prompt = PromptGenerator.generate_initial_training_plan_prompt(
                 personal_info=personal_info,
-                formatted_initial_responses=formatted_initial_responses,
-                formatted_follow_up_responses=formatted_follow_up_responses,
+                user_playbook=user_playbook,
             )
             
             # Step 4: Generate full TrainingPlan with AI (but only Week 1 in weekly_schedules)

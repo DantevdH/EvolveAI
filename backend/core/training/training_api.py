@@ -22,6 +22,7 @@ from core.training.schemas.question_schemas import (
     PlanGenerationResponse,
     PlanFeedbackRequest,
     PlanFeedbackResponse,
+    CreateWeekRequest,
     PersonalInfo,
     AIQuestion,
 )
@@ -30,6 +31,8 @@ from core.training.schemas.training_schemas import TrainingPlan
 from core.training.helpers.database_service import db_service
 # Format responses
 from core.training.helpers.response_formatter import ResponseFormatter
+from core.base.schemas.playbook_schemas import UserPlaybook
+
 logger = logging.getLogger(__name__)
 
 
@@ -283,6 +286,7 @@ async def get_initial_questions(
                 "total_questions": questions_response.total_questions,
                 "estimated_time_minutes": questions_response.estimated_time_minutes,
                 "ai_message": questions_response.ai_message,
+                "user_profile_id": user_profile_id,  # Return profile ID for frontend state management
             },
             "message": "Initial questions generated successfully",
         }
@@ -320,7 +324,18 @@ async def get_follow_up_questions(
             request.initial_questions
         )
         
-        # Store initial responses and get user_profile_id
+        # OPTIMIZATION: user_profile_id should be provided by frontend
+        if not request.user_profile_id:
+            logger.error("❌ Missing user_profile_id in request - this should be provided by frontend")
+            raise HTTPException(
+                status_code=400,
+                detail="Missing user_profile_id in request"
+            )
+        
+        user_profile_id = request.user_profile_id
+        logger.info("✅ Using user_profile_id from request")
+        
+        # Store initial responses
         await safe_db_update(
             "Store initial responses",
             db_service.update_user_profile,
@@ -328,15 +343,6 @@ async def get_follow_up_questions(
             data={"initial_responses": request.initial_responses},
             jwt_token=request.jwt_token
         )
-        
-        # Get user_profile_id for latency tracking
-        user_profile_id = None
-        try:
-            profile_result = await db_service.get_user_profile(user_id, request.jwt_token)
-            if profile_result and profile_result.get("id"):
-                user_profile_id = profile_result["id"]
-        except Exception as e:
-            logger.warning(f"Could not retrieve user_profile_id: {e}")
         
         # Generate follow-up questions (with latency tracking)
         questions_response = await coach.generate_follow_up_questions(
@@ -406,18 +412,16 @@ async def generate_training_plan(
         
         logger.info(f"Generating training plan for: {request.personal_info.goal_description}")
         
-        # Get user profile ID from database
-        user_profile_result = await db_service.get_user_profile_by_user_id(user_id, request.jwt_token)
-        
-        if not user_profile_result.get("success") or not user_profile_result.get("data"):
+        # OPTIMIZATION: user_profile_id should be provided by frontend
+        if not request.user_profile_id:
+            logger.error("❌ Missing user_profile_id in request - this should be provided by frontend")
             raise HTTPException(
-                status_code=404,
-                detail="User profile not found - please complete onboarding first"
+                status_code=400,
+                detail="Missing user_profile_id in request"
             )
         
-        user_profile_id = user_profile_result.get("data", {}).get("id")
-        user_profile = user_profile_result.get("data", {})
-        logger.info(f"✅ Found user profile ID: {user_profile_id}")
+        user_profile_id = request.user_profile_id
+        logger.info(f"✅ Using user_profile_id from request: {user_profile_id}")
         
         # IDEMPOTENCY CHECK: If plan already exists for this user, return existing plan
         existing_plan_result = await db_service.get_training_plan(user_profile_id)
@@ -458,82 +462,68 @@ async def generate_training_plan(
             update={"user_id": user_id}
         )
         
-        # Check if playbook already exists - if so, skip lesson extraction (performance optimization)
-        logger.info("📘 Checking if playbook already exists...")
-        existing_playbook = await db_service.load_user_playbook(user_profile_id, request.jwt_token)
-        
-        # Check if playbook exists in database by comparing user_id
-        # If user_id matches, it means playbook was loaded from DB (exists), not newly created
-        playbook_exists = (
-            existing_playbook 
-            and existing_playbook.user_id 
-            and existing_playbook.user_id == user_id
-        )
-        
-        if playbook_exists:
-            logger.info(f"📘 Playbook already exists (user_id: {existing_playbook.user_id}) with {len(existing_playbook.lessons)} lessons - skipping lesson extraction")
-        else:
-            # Extract initial lessons from onboarding Q&A (ACE pattern seed lessons) - only if playbook doesn't exist
-            logger.info("📘 Extracting initial lessons from onboarding responses...")
-            initial_analyses = coach.extract_initial_lessons_from_onboarding(
-                personal_info=personal_info_with_user_id,
-                formatted_initial_responses=formatted_initial_responses,
-                formatted_follow_up_responses=formatted_follow_up_responses,
-            )
-            
-            if initial_analyses and len(initial_analyses) > 0:
-                logger.info(f"📘 Extracted {len(initial_analyses)} initial lesson analyses from onboarding")
-                
-                # Create empty playbook (will be populated by Curator)
-                from core.base.schemas.playbook_schemas import UserPlaybook
-                empty_playbook = UserPlaybook(
-                    user_id=user_id,
-                    lessons=[],
-                    total_lessons=0,
-                )
-                
-                # Process initial analyses through Curator (deduplication and quality assurance)
-                logger.info("📘 Processing initial lessons through Curator...")
-                curated_playbook = await coach.curator.process_batch_lessons(
-                    analyses=initial_analyses,
-                    existing_playbook=empty_playbook,
-                    source_plan_id="onboarding",
-                )
-                
-                # Convert curated playbook to UserPlaybook format
-                initial_playbook = coach.curator.update_playbook_from_curated(
-                    updated_playbook=curated_playbook,
-                    user_id=user_id,
-                )
-                
-                logger.info(f"📘 Curated initial playbook: {len(empty_playbook.lessons)} → {len(initial_playbook.lessons)} lessons (deduplicated)")
-                
-                # Store initial playbook
-                await safe_db_update(
-                    "Store initial playbook",
-                    db_service.update_user_profile,
-                    user_id=user_id,
-                    data={"user_playbook": initial_playbook.model_dump()},
-                    jwt_token=request.jwt_token
-                )
-                
-                # Use the newly created playbook for plan generation
-                existing_playbook = initial_playbook
-            else:
-                # No lessons extracted - create empty playbook
-                logger.warning("⚠️ No initial lessons extracted - creating empty playbook")
-                from core.base.schemas.playbook_schemas import UserPlaybook
-                existing_playbook = UserPlaybook(
-                    user_id=user_id,
-                    lessons=[],
-                    total_lessons=0,
-                )
-        
-        # Generate initial training plan (onboarding - does NOT use playbook)
-        result = await coach.generate_initial_training_plan(
+        # OPTIMIZATION: On first plan generation, playbook doesn't exist yet
+        # If we hit idempotency check above, we return early, so at this point it's first generation
+        # Skip DB call and extract lessons directly
+        logger.info("📘 Extracting initial lessons from onboarding responses...")
+        initial_analyses = coach.extract_initial_lessons_from_onboarding(
             personal_info=personal_info_with_user_id,
             formatted_initial_responses=formatted_initial_responses,
             formatted_follow_up_responses=formatted_follow_up_responses,
+        )
+        
+        if initial_analyses and len(initial_analyses) > 0:
+            logger.info(f"📘 Extracted {len(initial_analyses)} initial lesson analyses from onboarding")
+            
+            # Create empty playbook (will be populated by Curator)
+            from core.base.schemas.playbook_schemas import UserPlaybook
+            empty_playbook = UserPlaybook(
+                user_id=user_id,
+                lessons=[],
+                total_lessons=0,
+            )
+            
+            # Process initial analyses through Curator (deduplication and quality assurance)
+            logger.info("📘 Processing initial lessons through Curator...")
+            curated_playbook = await coach.curator.process_batch_lessons(
+                analyses=initial_analyses,
+                existing_playbook=empty_playbook,
+                source_plan_id="onboarding",
+            )
+            
+            # Convert curated playbook to UserPlaybook format
+            initial_playbook = coach.curator.update_playbook_from_curated(
+                updated_playbook=curated_playbook,
+                user_id=user_id,
+            )
+            
+            logger.info(f"📘 Curated initial playbook: {len(empty_playbook.lessons)} → {len(initial_playbook.lessons)} lessons (deduplicated)")
+            
+            # Store initial playbook
+            await safe_db_update(
+                "Store initial playbook",
+                db_service.update_user_profile,
+                user_id=user_id,
+                data={"user_playbook": initial_playbook.model_dump()},
+                jwt_token=request.jwt_token
+            )
+            
+            # Use the newly created playbook for plan generation
+            existing_playbook = initial_playbook
+        else:
+            # No lessons extracted - create empty playbook
+            logger.warning("⚠️ No initial lessons extracted - creating empty playbook")
+            from core.base.schemas.playbook_schemas import UserPlaybook
+            existing_playbook = UserPlaybook(
+                user_id=user_id,
+                lessons=[],
+                total_lessons=0,
+            )
+        
+        # Generate initial training plan (onboarding - uses playbook extracted from responses)
+        result = await coach.generate_initial_training_plan(
+            personal_info=personal_info_with_user_id,
+            user_playbook=existing_playbook,
             user_profile_id=user_profile_id,
             jwt_token=request.jwt_token,
         )
@@ -593,6 +583,7 @@ async def generate_training_plan(
             return {
                 "success": True,
                 "data": enriched_plan,
+                "playbook": existing_playbook.model_dump() if existing_playbook else None,
                 "message": "Training plan generated and saved successfully",
                 "completion_message": completion_message,
                 "metadata": result.get("metadata", {}),  # Include metadata for frontend
@@ -606,6 +597,7 @@ async def generate_training_plan(
                 return {
                     "success": True,
                     "data": complete_plan,
+                    "playbook": existing_playbook.model_dump() if existing_playbook else None,
                     "message": "Training plan generated and saved successfully",
                     "completion_message": completion_message,
                         "metadata": result.get("metadata", {}),
@@ -617,6 +609,7 @@ async def generate_training_plan(
             return {
                     "success": True,
                     "data": training_plan_data,
+                    "playbook": existing_playbook.model_dump() if existing_playbook else None,
                     "message": "Training plan generated and saved successfully",
                     "completion_message": completion_message,
                 "metadata": result.get("metadata", {}),
@@ -743,6 +736,107 @@ async def get_playbook_stats(
         }
 
 
+def _create_plan_response(training_plan: Any, ai_message: str, context: str = "") -> Dict[str, Any]:
+    """Helper to create plan_response with ai_message for various intents."""
+    logger.info(f"🔄 [{context}] Creating plan_response from training_plan (type: {type(training_plan)})")
+    plan_response = copy.deepcopy(training_plan) if isinstance(training_plan, dict) else dict(training_plan or {})
+    if isinstance(plan_response, dict) and ai_message:
+        plan_response['ai_message'] = ai_message
+    return plan_response
+
+
+async def _handle_playbook_extraction_for_satisfied(
+    user_id: str,
+    request: PlanFeedbackRequest,
+    training_plan: Dict[str, Any],
+    conversation_history: list,
+    coach: TrainingCoach
+) -> Optional[Dict[str, Any]]:
+    """
+    Extract and update playbook from conversation history when user is satisfied.
+    Returns updated_playbook dict or None.
+    """
+    updated_playbook = None
+    
+    if not conversation_history or len(conversation_history) == 0:
+        logger.info("📘 No conversation history provided - skipping lesson extraction")
+        return updated_playbook
+    
+    try:
+        logger.info(f"📘 Extracting lessons from conversation history ({len(conversation_history)} messages)")
+        
+        # OPTIMIZATION: user_profile_id is already validated in parent /update-week endpoint
+        # No need for fallback DB call
+        try:
+            user_profile_id = int(request.user_profile_id) if request.user_profile_id is not None else None
+        except Exception:
+            user_profile_id = None
+        
+        if not user_profile_id:
+            logger.error("❌ Missing user_profile_id in request - this should be provided by frontend")
+            return updated_playbook
+        
+        # OPTIMIZATION: personal_info should be provided by frontend
+        if not request.personal_info:
+            logger.error("❌ Missing personal_info in request - this should be provided by frontend")
+            return updated_playbook
+        
+        personal_info = request.personal_info
+        logger.info("✅ Using personal_info from request")
+        
+        # OPTIMIZATION: playbook should be provided by frontend
+        if not request.playbook:
+            logger.error("❌ Missing playbook in request - this should be provided by frontend")
+            return updated_playbook
+        
+        existing_playbook = UserPlaybook(**request.playbook)
+        logger.info("✅ Using playbook from request")
+        
+        # Extract lessons from conversation history
+        conversation_analyses = coach.extract_lessons_from_conversation_history(
+            conversation_history=conversation_history,
+            personal_info=personal_info,
+            accepted_training_plan=training_plan,
+            existing_playbook=existing_playbook,
+        )
+        
+        if conversation_analyses and len(conversation_analyses) > 0:
+            logger.info(f"📘 Extracted {len(conversation_analyses)} lesson analyses from conversation history")
+            
+            # Process analyses through Curator
+            updated_playbook_curated = await coach.curator.process_batch_lessons(
+                analyses=conversation_analyses,
+                existing_playbook=existing_playbook,
+                source_plan_id=str(training_plan.get("id", "unknown")),
+            )
+            
+            # Convert curated playbook to UserPlaybook format
+            curated_playbook = coach.curator.update_playbook_from_curated(
+                updated_playbook=updated_playbook_curated,
+                user_id=user_id,
+            )
+            
+            # Save updated playbook
+            await safe_db_update(
+                "Update playbook with conversation lessons",
+                db_service.update_user_profile,
+                user_id=user_id,
+                data={"user_playbook": curated_playbook.model_dump()},
+                jwt_token=request.jwt_token
+            )
+            
+            logger.info(f"✅ Updated playbook with {len(curated_playbook.lessons)} total lessons ({len(existing_playbook.lessons)} → {len(curated_playbook.lessons)})")
+            updated_playbook = curated_playbook.model_dump()
+        else:
+            logger.info("📘 No lessons extracted from conversation history")
+            
+    except Exception as e:
+        logger.error(f"❌ Error extracting lessons from conversation history: {e}", exc_info=True)
+        # Continue - don't block navigation if lesson extraction fails
+    
+    return updated_playbook
+
+
 @router.post("/update-week", response_model=PlanFeedbackResponse)
 async def update_week(
     request: PlanFeedbackRequest,
@@ -766,13 +860,12 @@ async def update_week(
     week_number is automatically derived from training_plan (latest week = max week_number).
     """
     try:
-        # Validate input
+        # Initialize updated_playbook to track playbook updates
+        updated_playbook = None
         
         # Validate JWT token
         if not request.jwt_token:
             raise HTTPException(status_code=401, detail="Missing JWT token")
-
-        logger.info(f"📥 update-week payload keys: {list(request.model_dump().keys())}")
 
         # Get training plan
         training_plan = request.training_plan
@@ -822,11 +915,22 @@ async def update_week(
             training_plan=training_plan  # Include plan for answering questions
         )
         
-        logger.info(f"✅ Stage 1 complete: intent={classification_result.get('intent')}, confidence={classification_result.get('confidence')}, needs_plan_update={classification_result.get('needs_plan_update')}")
+        intent = classification_result.get("intent")
+        action = classification_result.get("action")
+        needs_plan_update = classification_result.get("needs_plan_update")
+        ai_message = classification_result.get("ai_message", "")
         
-        # Handle satisfied or navigate_to_main_app intents (no plan update needed)
-        if classification_result.get("intent") == "satisfied" or classification_result.get("action") == "navigate_to_main_app" or classification_result.get("navigate_to_main_app"):
-            logger.info("✅ User satisfied - setting plan_accepted=True and navigating to main app")
+        logger.info(f"✅ Stage 1 complete: intent={intent}, confidence={classification_result.get('confidence')}, needs_plan_update={needs_plan_update}")
+        
+        # INTENT 1: User is satisfied or wants to navigate to main app
+        is_navigate_intent = (
+            intent == "satisfied" or 
+            action == "navigate_to_main_app" or 
+            classification_result.get("navigate_to_main_app")
+        )
+        
+        if is_navigate_intent:
+            logger.info("✅ INTENT: Navigate to main app (user satisfied)")
             
             # Extract user_id from JWT for database update
             user_id = extract_user_id_from_jwt(request.jwt_token)
@@ -842,283 +946,110 @@ async def update_week(
                 )
                 logger.info("✅ Set plan_accepted=True - user satisfied with plan")
             
-            # Extract lessons from conversation history (if conversation exists)
-            if conversation_history and len(conversation_history) > 0:
-                try:
-                    logger.info(f"📘 Extracting lessons from conversation history ({len(conversation_history)} messages)")
-                    
-                    # Get user_profile_id for playbook operations
-                    try:
-                        user_profile_id = int(request.user_profile_id) if request.user_profile_id is not None else None
-                    except Exception:
-                        user_profile_id = None
-                    
-                    if user_profile_id is None:
-                        try:
-                            profile_res = await db_service.get_user_profile_by_user_id(user_id, request.jwt_token)
-                            if profile_res and profile_res.get("success") and profile_res.get("data"):
-                                user_profile_id = profile_res["data"].get("id")
-                        except Exception as e:
-                            logger.warning(f"Could not resolve user_profile_id from JWT: {e}")
-                    
-                    if user_profile_id:
-                        # Get user profile to extract personal info
-                        profile_response = await db_service.get_user_profile_by_id(user_profile_id)
-                        if profile_response and profile_response.get("success"):
-                            user_profile = profile_response.get("data", {})
-                            
-                            # Create PersonalInfo object
-                            personal_info = PersonalInfo(
-                                user_id=user_profile.get("user_id"),
-                                username=user_profile.get("username", "User"),
-                                age=user_profile.get("age"),
-                                weight=user_profile.get("weight"),
-                                weight_unit=user_profile.get("weight_unit", "kg"),
-                                height=user_profile.get("height"),
-                                height_unit=user_profile.get("height_unit", "cm"),
-                                gender=user_profile.get("gender"),
-                                experience_level=user_profile.get("experience_level", "beginner"),
-                                goal_description=user_profile.get("goal_description", "improve fitness"),
-                                measurement_system=user_profile.get("measurement_system", "metric"),
-                            )
-                            
-                            # Load existing playbook
-                            existing_playbook = await db_service.load_user_playbook(user_profile_id, request.jwt_token)
-                            
-                            # Extract lessons from conversation history (returns ReflectorAnalysis)
-                            conversation_analyses = coach.extract_lessons_from_conversation_history(
-                                conversation_history=conversation_history,
-                                personal_info=personal_info,
-                                accepted_training_plan=training_plan,
-                                existing_playbook=existing_playbook,
-                            )
-                            
-                            if conversation_analyses and len(conversation_analyses) > 0:
-                                logger.info(f"📘 Extracted {len(conversation_analyses)} lesson analyses from conversation history")
-                                
-                                # Process analyses through Curator (single LLM call - returns curated playbook)
-                                updated_playbook_curated = await coach.curator.process_batch_lessons(
-                                    analyses=conversation_analyses,
-                                    existing_playbook=existing_playbook,
-                                    source_plan_id=str(training_plan.get("id", "unknown")),
-                                )
-                                
-                                # Convert curated playbook to UserPlaybook format
-                                from core.base.schemas.playbook_schemas import UserPlaybook
-                                updated_playbook = coach.curator.update_playbook_from_curated(
-                                    updated_playbook=updated_playbook_curated,
-                                    user_id=user_id,
-                                )
-                                
-                                # Save updated playbook
-                                await safe_db_update(
-                                    "Update playbook with conversation lessons",
-                                    db_service.update_user_profile,
-                                    user_id=user_id,
-                                    data={"user_playbook": updated_playbook.model_dump()},
-                                    jwt_token=request.jwt_token
-                                )
-                                
-                                logger.info(f"✅ Updated playbook with {len(updated_playbook.lessons)} total lessons ({len(existing_playbook.lessons)} → {len(updated_playbook.lessons)})")
-                            else:
-                                logger.info("📘 No lessons extracted from conversation history")
-                    else:
-                        logger.warning("⚠️ Could not resolve user_profile_id - skipping conversation lesson extraction")
-                        
-                except Exception as e:
-                    logger.error(f"❌ Error extracting lessons from conversation history: {e}", exc_info=True)
-                    # Continue - don't block navigation if lesson extraction fails
-            else:
-                logger.info("📘 No conversation history provided - skipping lesson extraction")
+            # Extract and update playbook from conversation history
+            updated_playbook = await _handle_playbook_extraction_for_satisfied(
+                user_id, request, training_plan, conversation_history, coach
+            )
             
             # Return response with navigate_to_main_app=True
-            ai_message = classification_result.get("ai_message", "Amazing! You're all set. I'll take you to your main dashboard now. 🚀")
+            ai_message = ai_message or "Amazing! You're all set. I'll take you to your main dashboard now. 🚀"
+            plan_response = _create_plan_response(training_plan, ai_message, "satisfied")
             
-            # Ensure frontend shows the AI answer: mirror ai_response into plan ai_message (response only)
-            logger.info(f"🔄 [satisfied] Creating plan_response from training_plan (type: {type(training_plan)})")
-            plan_response = copy.deepcopy(training_plan) if isinstance(training_plan, dict) else dict(training_plan or {})
-            logger.info(f"🔄 [satisfied] plan_response type: {type(plan_response)}")
-            if isinstance(plan_response, dict):
-                logger.info(f"🔄 [satisfied] plan_response keys: {list(plan_response.keys())}")
-                logger.info(f"🔄 [satisfied] plan_response id: {plan_response.get('id')}")
-                logger.info(f"🔄 [satisfied] plan_response has weekly_schedules: {bool(plan_response.get('weekly_schedules'))}")
-                if plan_response.get('weekly_schedules'):
-                    logger.info(f"🔄 [satisfied] plan_response weekly_schedules count: {len(plan_response.get('weekly_schedules', []))}")
-                else:
-                    logger.error(f"❌ [satisfied] plan_response missing weekly_schedules! Keys: {list(plan_response.keys())}")
-            if ai_message:
-                plan_response['ai_message'] = ai_message
-                logger.info(f"🔄 [satisfied] Added ai_message to plan_response")
-            
-            logger.info(f"📤 [satisfied] Returning plan_response with {len(plan_response.keys()) if isinstance(plan_response, dict) else 'N/A'} keys")
             return PlanFeedbackResponse(
                 success=True,
                 ai_response=ai_message,
                 plan_updated=False,
-                updated_plan=plan_response,  # safe to return; contains ai_message matching ai_response
+                updated_plan=plan_response,
+                updated_playbook=updated_playbook,
                 navigate_to_main_app=True
             )
         
-        # Handle respond_only intent (no plan update, just return AI message)
-        if classification_result.get("action") == "respond_only" and not classification_result.get("needs_plan_update"):
-            ai_message = classification_result.get("ai_message", "Got it! Let me know if you'd like to make any changes. 💪")
-            logger.info(f"💬 Respond-only intent - returning AI message without plan update. ai_message: {ai_message[0:50]}...")
-            
-            # Ensure frontend shows the AI answer: mirror ai_response into plan ai_message (response only)
-            logger.info(f"🔄 [respond_only] Creating plan_response from training_plan (type: {type(training_plan)})")
-            plan_response = copy.deepcopy(training_plan) if isinstance(training_plan, dict) else dict(training_plan or {})
-            logger.info(f"🔄 [respond_only] plan_response type: {type(plan_response)}")
-            if isinstance(plan_response, dict):
-                logger.info(f"🔄 [respond_only] plan_response keys: {list(plan_response.keys())}")
-                logger.info(f"🔄 [respond_only] plan_response id: {plan_response.get('id')}")
-                logger.info(f"🔄 [respond_only] plan_response has weekly_schedules: {bool(plan_response.get('weekly_schedules'))}")
-                if plan_response.get('weekly_schedules'):
-                    logger.info(f"🔄 [respond_only] plan_response weekly_schedules count: {len(plan_response.get('weekly_schedules', []))}")
-                else:
-                    logger.error(f"❌ [respond_only] plan_response missing weekly_schedules! Keys: {list(plan_response.keys())}")
-            if ai_message:
-                plan_response['ai_message'] = ai_message
-                logger.info(f"🔄 [respond_only] Added ai_message to plan_response")
-            
-            logger.info(f"📤 [respond_only] Returning plan_response with {len(plan_response.keys()) if isinstance(plan_response, dict) else 'N/A'} keys")
-            
-            # Deep validation: check if weekly_schedules has complete structure
-            if isinstance(plan_response, dict) and plan_response.get('weekly_schedules'):
-                weekly_schedules = plan_response.get('weekly_schedules', [])
-                logger.info(f"📤 [respond_only] weekly_schedules type: {type(weekly_schedules)}, length: {len(weekly_schedules)}")
-                if weekly_schedules and len(weekly_schedules) > 0:
-                    first_week = weekly_schedules[0]
-                    logger.info(f"📤 [respond_only] First week keys: {list(first_week.keys()) if isinstance(first_week, dict) else 'N/A'}")
-                    logger.info(f"📤 [respond_only] First week has daily_trainings: {bool(first_week.get('daily_trainings') if isinstance(first_week, dict) else False)}")
-                    if isinstance(first_week, dict) and first_week.get('daily_trainings'):
-                        daily_trainings = first_week.get('daily_trainings', [])
-                        logger.info(f"📤 [respond_only] First week daily_trainings count: {len(daily_trainings)}")
-                        if len(daily_trainings) > 0:
-                            first_day = daily_trainings[0]
-                            logger.info(f"📤 [respond_only] First day keys: {list(first_day.keys()) if isinstance(first_day, dict) else 'N/A'}")
-                            if isinstance(first_day, dict):
-                                strength_exercises = first_day.get('strength_exercises')
-                                endurance_sessions = first_day.get('endurance_sessions')
-                                logger.info(f"📤 [respond_only] First day strength_exercises type: {type(strength_exercises)}, length: {len(strength_exercises) if isinstance(strength_exercises, list) else 'N/A'}")
-                                logger.info(f"📤 [respond_only] First day endurance_sessions type: {type(endurance_sessions)}, length: {len(endurance_sessions) if isinstance(endurance_sessions, list) else 'N/A'}")
-                                # Only log error if key is missing (None) - empty lists are valid (rest days or days without endurance)
-                                if strength_exercises is None:
-                                    logger.error(f"❌ [respond_only] First day strength_exercises key is MISSING (None)!")
-                                if endurance_sessions is None:
-                                    logger.error(f"❌ [respond_only] First day endurance_sessions key is MISSING (None)!")
-            
+        # INTENT 2: Respond only (no plan update, just return AI message)
+        is_respond_only = action == "respond_only" and not needs_plan_update
+        if is_respond_only:
+            logger.info(f"💬 INTENT: Respond only (no plan update)")
+            ai_message = ai_message or "Got it! Let me know if you'd like to make any changes. 💪"
+            plan_response = _create_plan_response(training_plan, ai_message, "respond_only")
             return PlanFeedbackResponse(
                 success=True,
                 ai_response=ai_message,
                 plan_updated=False,
-                updated_plan=plan_response,  # safe to return; contains ai_message matching ai_response
+                updated_plan=plan_response,
+                updated_playbook=None,
                 navigate_to_main_app=False
             )
         
-        # Handle unclear intent (ask for clarification)
-        if classification_result.get("intent") == "unclear":
-            ai_message = classification_result.get("ai_message", "I'm having trouble understanding your feedback. Could you please be more specific about what you'd like to change or know? 😊")
-            logger.info(f"❓ Unclear intent - asking for clarification. ai_message: {ai_message[0:50]}...")
-            
-            # Ensure frontend shows the AI answer: mirror ai_response into plan ai_message (response only)
-            logger.info(f"🔄 [unclear] Creating plan_response from training_plan (type: {type(training_plan)})")
-            plan_response = copy.deepcopy(training_plan) if isinstance(training_plan, dict) else dict(training_plan or {})
-            logger.info(f"🔄 [unclear] plan_response type: {type(plan_response)}")
-            if isinstance(plan_response, dict):
-                logger.info(f"🔄 [unclear] plan_response keys: {list(plan_response.keys())}")
-                logger.info(f"🔄 [unclear] plan_response id: {plan_response.get('id')}")
-                logger.info(f"🔄 [unclear] plan_response has weekly_schedules: {bool(plan_response.get('weekly_schedules'))}")
-            if ai_message:
-                plan_response['ai_message'] = ai_message
-                logger.info(f"🔄 [unclear] Added ai_message to plan_response")
-            
+        # INTENT 3: Unclear (ask for clarification)
+        if intent == "unclear":
+            logger.info(f"❓ INTENT: Unclear (asking for clarification)")
+            ai_message = ai_message or "I'm having trouble understanding your feedback. Could you please be more specific about what you'd like to change or know? 😊"
+            plan_response = _create_plan_response(training_plan, ai_message, "unclear")
             return PlanFeedbackResponse(
                 success=True,
                 ai_response=ai_message,
                 plan_updated=False,
-                updated_plan=plan_response,  # safe to return; contains ai_message matching ai_response
+                updated_plan=plan_response,
+                updated_playbook=None,
                 navigate_to_main_app=False
             )
         
-        # STAGE 2: Plan update (only if needs_plan_update=True)
-        if not classification_result.get("needs_plan_update"):
-            # If we reach here and needs_plan_update=False, return AI message without update
-            logger.info("⚠️ Classification says no plan update needed, but reached update logic - returning AI message")
-            ai_message = classification_result.get("ai_message", "Got it! Let me know if you'd like to make any changes. 💪")
-            
-            # Ensure frontend shows the AI answer: mirror ai_response into plan ai_message (response only)
-            logger.info(f"🔄 [fallback] Creating plan_response from training_plan (type: {type(training_plan)})")
-            plan_response = copy.deepcopy(training_plan) if isinstance(training_plan, dict) else dict(training_plan or {})
-            logger.info(f"🔄 [fallback] plan_response type: {type(plan_response)}")
-            if isinstance(plan_response, dict):
-                logger.info(f"🔄 [fallback] plan_response keys: {list(plan_response.keys())}")
-                logger.info(f"🔄 [fallback] plan_response id: {plan_response.get('id')}")
-                logger.info(f"🔄 [fallback] plan_response has weekly_schedules: {bool(plan_response.get('weekly_schedules'))}")
-            if ai_message:
-                plan_response['ai_message'] = ai_message
-                logger.info(f"🔄 [fallback] Added ai_message to plan_response")
-            
+        # INTENT 4: Fallback (no plan update needed but reached here)
+        if not needs_plan_update:
+            logger.info("⚠️ INTENT: Fallback (no plan update needed)")
+            ai_message = ai_message or "Got it! Let me know if you'd like to make any changes. 💪"
+            plan_response = _create_plan_response(training_plan, ai_message, "fallback")
             return PlanFeedbackResponse(
                 success=True,
                 ai_response=ai_message,
                 plan_updated=False,
-                updated_plan=plan_response,  # safe to return; contains ai_message matching ai_response
+                updated_plan=plan_response,
+                updated_playbook=None,
                 navigate_to_main_app=False
             )
         
-        logger.info("🔁 Stage 2: Updating week based on feedback...")
+        # INTENT 5: Update plan (needs_plan_update=True)
+        logger.info("🔁 INTENT: Update plan (Stage 2: Updating week based on feedback)")
         
         # Extract and validate JWT token
         user_id = extract_user_id_from_jwt(request.jwt_token)
         
-        # Coerce user_profile_id with fallbacks
+        # OPTIMIZATION: user_profile_id should be provided by frontend
+        # Remove redundant fallback DB call
         try:
             user_profile_id = int(request.user_profile_id) if request.user_profile_id is not None else None
         except Exception:
             user_profile_id = None
 
-        # If user_profile_id missing, try to resolve from JWT
-        if user_profile_id is None:
-            try:
-                profile_res = await db_service.get_user_profile_by_user_id(user_id, request.jwt_token)
-                if profile_res and profile_res.get("success") and profile_res.get("data"):
-                    user_profile_id = profile_res["data"].get("id")
-            except Exception as e:
-                logger.warning(f"Could not resolve user_profile_id from JWT: {e}")
-
         # Validate required fields
         if user_profile_id is None:
+            logger.error("❌ Missing user_profile_id in request - this should be provided by frontend")
             raise HTTPException(status_code=400, detail="Invalid or missing user_profile_id")
 
         logger.info(f"Updating Week {week_number} (latest) for user {user_profile_id}, plan {plan_id}")
         
-        # Get user profile to extract personal info
-        profile_response = await db_service.get_user_profile_by_id(user_profile_id)
-        if not profile_response or not profile_response.get("success"):
+        # OPTIMIZATION: personal_info should be provided by frontend
+        if not request.personal_info:
+            logger.error("❌ Missing personal_info in request - this should be provided by frontend")
             raise HTTPException(
-                status_code=404,
-                detail="User profile not found"
+                status_code=400,
+                detail="Missing personal_info in request"
             )
         
-        user_profile = profile_response.get("data", {})
+        personal_info = request.personal_info
+        logger.info("✅ Using personal_info from request")
         
-        # Create PersonalInfo object from user profile
-        personal_info = PersonalInfo(
-            user_id=user_profile.get("user_id"),
-            username=user_profile.get("username", "User"),
-            age=user_profile.get("age"),
-            weight=user_profile.get("weight"),
-            weight_unit=user_profile.get("weight_unit", "kg"),
-            height=user_profile.get("height"),
-            height_unit=user_profile.get("height_unit", "cm"),
-            gender=user_profile.get("gender"),
-            experience_level=user_profile.get("experience_level", "beginner"),
-            goal_description=user_profile.get("goal_description", "improve fitness"),
-            measurement_system=user_profile.get("measurement_system", "metric"),
-        )
+        # OPTIMIZATION: playbook should be provided by frontend
+        from core.base.schemas.playbook_schemas import UserPlaybook
+        if not request.playbook:
+            logger.error("❌ Missing playbook in request - this should be provided by frontend")
+            raise HTTPException(
+                status_code=400,
+                detail="Missing playbook in request"
+            )
         
-        # Load user playbook (instead of initial/follow-up responses)
-        user_playbook = await db_service.load_user_playbook(user_profile_id, request.jwt_token)
+        user_playbook = UserPlaybook(**request.playbook)
+        logger.info("✅ Using playbook from request")
+
 
         # Update the week using the new method (uses user_playbook instead of onboarding responses)
         # Pass training_plan from request instead of fetching from database
@@ -1181,6 +1112,7 @@ async def update_week(
                 ai_response=ai_message or "I've updated your week! Take a look and let me know if you'd like any other changes. 💪",
                 plan_updated=True,
                 updated_plan=enriched_plan,
+                updated_playbook=updated_playbook,
                 navigate_to_main_app=False
             )
         else:
@@ -1192,6 +1124,7 @@ async def update_week(
                 ai_response=ai_message,
                 plan_updated=True,
                 updated_plan=updated_plan_data,
+                updated_playbook=updated_playbook,
                 navigate_to_main_app=False
             )
         
@@ -1204,13 +1137,14 @@ async def update_week(
             ai_response="",
             plan_updated=False,
             updated_plan=None,
+            updated_playbook=None,
             error=str(e)
         )
 
 
 @router.post("/create-week")
 async def create_week(
-    request: dict,
+    request: CreateWeekRequest,
     coach: TrainingCoach = Depends(get_training_coach)
 ):
     """
@@ -1221,83 +1155,34 @@ async def create_week(
     
     Request should include:
     - training_plan: Full training plan data (required)
-    - user_profile_id: User profile ID (optional, can be resolved from JWT)
+    - user_profile_id: User profile ID (required, from frontend)
+    - personal_info: User personal information (required, from frontend)
+    - plan_id: Training plan ID (optional, derived from training_plan if not provided)
     - jwt_token: JWT token for authentication (required)
     
-    plan_id and next_week_number are automatically derived from training_plan:
-    - plan_id: from training_plan.id
-    - next_week_number: calculated from existing weeks (max week_number + 1)
+    next_week_number is automatically calculated from existing weeks (max week_number + 1)
     """
     try:
-        # Validate JWT token
-        jwt_token = request.get("jwt_token")
-        if not jwt_token:
-            raise HTTPException(status_code=401, detail="Missing JWT token")
-
-        logger.info(f"📥 create-week payload keys: {list(request.keys())}")
-
-        # Get training plan
-        training_plan = request.get("training_plan")
-        if not training_plan:
-            raise HTTPException(status_code=400, detail="Missing training_plan in request")
+        # OPTIMIZATION: Use data from request (no DB calls)
+        jwt_token = request.jwt_token
+        training_plan = request.training_plan
+        user_profile_id = request.user_profile_id
+        personal_info = request.personal_info
         
-        # Get plan_id from request (required)
-        plan_id = request.get("plan_id")
-        try:
-            if plan_id is not None:
-                plan_id = int(plan_id)
-        except Exception:
-            plan_id = None
+        logger.info(f"📥 Creating new week for user {user_profile_id}, plan {request.plan_id}")
         
+        # Get plan_id from request or derive from training_plan
+        plan_id = request.plan_id
+        if plan_id is None:
+            plan_id = training_plan.get("id")
+            if plan_id:
+                try:
+                    plan_id = int(plan_id)
+                except Exception:
+                    plan_id = None
+
         if plan_id is None:
             raise HTTPException(status_code=400, detail="Missing or invalid plan_id in request")
-
-        # Coerce user_profile_id with fallbacks
-        user_profile_id = request.get("user_profile_id")
-        try:
-            if user_profile_id is not None:
-                user_profile_id = int(user_profile_id)
-        except Exception:
-            user_profile_id = None
-
-        # If user_profile_id missing, try to resolve from JWT
-        if user_profile_id is None:
-            try:
-                token_user_id = extract_user_id_from_jwt(jwt_token)
-                profile_res = await db_service.get_user_profile_by_user_id(token_user_id, jwt_token)
-                if profile_res and profile_res.get("success") and profile_res.get("data"):
-                    user_profile_id = profile_res["data"].get("id")
-            except Exception as e:
-                logger.warning(f"Could not resolve user_profile_id from JWT: {e}")
-
-        # Validate required fields
-        if user_profile_id is None:
-            raise HTTPException(status_code=400, detail="Invalid or missing user_profile_id")
-
-        # Get user profile to extract personal info
-        profile_response = await db_service.get_user_profile_by_id(user_profile_id)
-        if not profile_response or not profile_response.get("success"):
-            raise HTTPException(
-                status_code=404,
-                detail="User profile not found"
-            )
-
-        user_profile = profile_response.get("data", {})
-
-        # Create PersonalInfo object from user profile
-        personal_info = PersonalInfo(
-            user_id=user_profile.get("user_id"),
-            username=user_profile.get("username", "User"),
-            age=user_profile.get("age"),
-            weight=user_profile.get("weight"),
-            weight_unit=user_profile.get("weight_unit", "kg"),
-            height=user_profile.get("height"),
-            height_unit=user_profile.get("height_unit", "cm"),
-            gender=user_profile.get("gender"),
-            experience_level=user_profile.get("experience_level", "beginner"),
-            goal_description=user_profile.get("goal_description", "improve fitness"),
-            measurement_system=user_profile.get("measurement_system", "metric"),
-        )
 
         # Create the new week using the new method
         # next_week_number, completed_weeks are calculated internally from the training plan

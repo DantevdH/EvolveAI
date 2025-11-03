@@ -59,6 +59,7 @@ export interface UserProfile {
   // User input fields (mutable for onboarding)
   username: string;
   experienceLevel: string;
+  goalDescription: string;
   age: number;
   weight: number;
   weightUnit: string;

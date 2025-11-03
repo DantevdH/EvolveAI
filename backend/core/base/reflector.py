@@ -92,8 +92,12 @@ class Reflector:
         try:
             self.logger.info("Extracting initial lessons from onboarding responses...")
 
-            # Build the prompt
-            combined_responses = f"{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
+            goal_experience_question = "Q: What is your ultimate training goals and your accompanying experience level"
+            goal_experience_response = f"A: My goal is; {personal_info.goal_description} and I have experience_level {personal_info.experience_level}"
+            fake_question_response = f"{goal_experience_question}: {goal_experience_response}"
+            
+            # Build the prompt with combined responses including the fake question
+            combined_responses = f"{fake_question_response}\n\n{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
 
             prompt = f"""
                 {self._format_client_information(personal_info)}
@@ -102,12 +106,28 @@ class Reflector:
                 ✅ Initial Questions → ✅ Follow-up Questions → ✅ Responses Collected
                 🎯 **CURRENT STEP:** Extract Seed Lessons from Onboarding
                 
+                **YOUR ROLE IN THE ACE FRAMEWORK:**
+                You are the Reflector - responsible for generating actionable lessons from user interactions. These lessons will be curated by the Curator and stored in the user's playbook, which guides the TrainingCoach to create personalized training plans. Focus on extracting long-term, persistent insights - not temporary states or daily fluctuations.
+                
+                **THE LESSON'S PURPOSE:**
+                - **Institutional Memory:** These lessons become part of the user's playbook that guides ALL future plan generation
+                - **Long-Term Focus:** Extract persistent patterns, constraints, and preferences - not temporary states or daily changes
+                - **Actionable Knowledge:** Each lesson should be specific and actionable for future plan generation
+                - **Quality over Quantity:** Better to extract fewer high-quality, unique lessons than many overlapping ones
+                
                 **COMPLETE ONBOARDING RESPONSES:**
                 {combined_responses}
                 
                 **YOUR TASK:**
-                Extract 3-7 **UNIQUE, ACTIONABLE** lessons from these responses that will guide ALL future training plans.
+                Extract 3-7 **UNIQUE, ACTIONABLE, LONG-TERM** lessons from these responses that will guide ALL future training plans.
                 These are "seed lessons" - fundamental constraints, preferences, and context learned during onboarding.
+                
+                **CRITICAL FILTER: LONG-TERM LESSONS ONLY**
+                - Focus on persistent patterns, not temporary states
+                - Capture long-term constraints (injuries, equipment access, schedule patterns, etc.)
+                - Capture proven preferences that are likely to persist over time
+                - Avoid lessons about daily fluctuations, one-time events, or temporary situations
+                - If a potential lesson seems temporary or situation-specific, it may not belong in the playbook
                 
                 **UNIQUENESS REQUIREMENT:**
                 ✓ Each lesson MUST be DISTINCT and NON-OVERLAPPING with other extracted lessons
@@ -201,6 +221,15 @@ class Reflector:
                 ✅ Initial Questions → ✅ Follow-up Questions → ✅ Plan Generated → ✅ Plan Accepted
                 🎯 **CURRENT STEP:** Extract Lessons from Conversation History
                 
+                **YOUR ROLE IN THE ACE FRAMEWORK:**
+                You are the Reflector - responsible for generating actionable lessons from user interactions. These lessons will be curated by the Curator and stored in the user's playbook, which guides the TrainingCoach to create personalized training plans. Focus on extracting long-term, persistent insights - not temporary states or daily fluctuations.
+                
+                **THE LESSON'S PURPOSE:**
+                - **Institutional Memory:** These lessons become part of the user's playbook that guides ALL future plan generation
+                - **Long-Term Focus:** Extract persistent patterns, constraints, and preferences - not temporary states or daily changes
+                - **Actionable Knowledge:** Each lesson should be specific and actionable for future plan generation
+                - **Quality over Quantity:** Better to extract fewer high-quality, unique lessons than many overlapping ones
+                
                 **ACCEPTED TRAINING PLAN:**
                 {plan_summary}
                 
@@ -211,8 +240,15 @@ class Reflector:
                 {existing_lessons_context}
                 
                 **YOUR TASK:**
-                Extract 1-5 **UNIQUE, ACTIONABLE** lessons from the conversation history that will guide future training plans.
+                Extract 1-5 **UNIQUE, ACTIONABLE, LONG-TERM** lessons from the conversation history that will guide future training plans.
                 **CRITICAL:** Only extract lessons that are TRULY NEW and NOT already covered in the existing playbook.
+                
+                **CRITICAL FILTER: LONG-TERM LESSONS ONLY**
+                - Focus on persistent patterns, not temporary states
+                - Capture long-term constraints (injuries, equipment access, schedule patterns, etc.)
+                - Capture proven preferences that are likely to persist over time
+                - Avoid lessons about daily fluctuations, one-time events, or temporary situations
+                - If a potential lesson seems temporary or situation-specific, it may not belong in the playbook
                 
                 **UNIQUENESS REQUIREMENT:**
                 ✓ Each lesson MUST add NEW value not already present in existing playbook
@@ -228,13 +264,15 @@ class Reflector:
                 • **Additional** training philosophy or approach preferences not yet captured
                 • **New** constraints or limitations mentioned for the first time
                 
-                **WHAT NOT TO EXTRACT (DUPLICATES/IRRELEVANT):**
+                **WHAT NOT TO EXTRACT (DUPLICATES/IRRELEVANT/TEMPORARY):**
                 ✗ Lessons already covered in existing playbook (even if slightly different wording)
                 ✗ Generic compliments ("I like it", "Looks good")
-                ✗ Temporary preferences or mood-based statements
+                ✗ Temporary preferences or mood-based statements (daily fluctuations)
                 ✗ One-off questions without actionable insights
                 ✗ Lessons that are essentially the same as existing lessons (different wording, same meaning)
                 ✗ Lessons that overlap significantly with existing playbook content
+                ✗ Temporary states or situation-specific insights that won't persist
+                ✗ Daily fluctuations, one-time events, or context-dependent preferences
                 
                 **DUPLICATE DETECTION:**
                 Before extracting a lesson, ask yourself:
@@ -406,12 +444,14 @@ class Reflector:
                 ✓ Add **relevant tags**: 2-4 tags per lesson from the categories shown above
                 ✓ Keep lessons **concise**: 1-2 sentences maximum
                 
-                **QUALITY STANDARDS:**
-                ✓ Focus on **unchanging constraints** (injuries, equipment, schedule) - these persist
-                ✓ Extract **strong preferences** only - not weak or uncertain mentions
-                ✓ Lessons should apply to **ALL future plans**, not just the first one
-                ✓ Don't create lessons for temporary/variable factors (current energy, mood, weather)
-                ✓ Extract lessons with focus on quality over quantity
+                **QUALITY STANDARDS (LONG-TERM FOCUS):**
+                ✓ Focus on **unchanging constraints** (injuries, equipment, schedule, etc.) - these persist over time
+                ✓ Extract **strong, persistent preferences** only - not weak, uncertain, or temporary mentions
+                ✓ Lessons should apply to **ALL future plans**, not just the current one
+                ✓ Don't create lessons for temporary/variable factors (current energy, mood, weather, daily fluctuations)
+                ✓ Extract lessons that represent **long-term patterns** - not one-time events or situation-specific insights
+                ✓ Each lesson should be **actionable** and **specific** - something the TrainingCoach can use to guide future plan generation
+                ✓ Extract lessons with focus on quality over quantity - better to extract fewer high-value lessons
                 
                 **CONFIDENCE ASSIGNMENT:**
                 Assign confidence based on how clearly and explicitly the preference/constraint was stated:

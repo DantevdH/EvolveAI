@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 from core.training.schemas.question_schemas import PersonalInfo, AIQuestion
 
-SAVE_PROMPTS = False
+SAVE_PROMPTS = True
 
 def _save_prompt_to_file(prompt_name: str, prompt_content: str):
     """
@@ -489,8 +489,7 @@ class PromptGenerator:
     @staticmethod
     def generate_initial_training_plan_prompt(
         personal_info: PersonalInfo,
-        formatted_initial_responses: str,
-        formatted_follow_up_responses: str,
+        user_playbook,
     ) -> str:
         """
         Generate prompt for creating the FIRST week (Week 1) during onboarding.
@@ -498,8 +497,13 @@ class PromptGenerator:
         This is used only once when the user completes onboarding.
         We re-assess by week and adjust - this creates ONLY Week 1.
         
+        Uses user_playbook (extracted from onboarding responses) instead of raw assessment responses.
         Equipment and main_muscle constraints are enforced via Pydantic Enum validation
         in the schema (MainMuscleEnum and EquipmentEnum), not in the prompt.
+        
+        Args:
+            personal_info: User's personal information and goals
+            user_playbook: User's playbook with learned lessons from onboarding (instead of raw responses)
         """
         
         prompt = f"""
@@ -507,22 +511,6 @@ class PromptGenerator:
             You are an Expert Training Coach who just completed a personalized assessment with {personal_info.username}.
             You gathered information in two phases and now need to create their Week 1 training plan.
             Remember: This is Week 1 only. We re-assess and adjust weekly based on their progress.
-            
-            **CLIENT PROFILE:**
-            {PromptGenerator.format_client_information(personal_info)}
-            
-            **ASSESSMENT PHASE 1 - INITIAL RESPONSES:**
-            {formatted_initial_responses}
-            
-            **ASSESSMENT PHASE 2 - FOLLOW-UP RESPONSES:**
-            {formatted_follow_up_responses}
-            
-            **YOUR TASK:**
-            Design Week 1 training schedule using:
-            • Assessment data above (constraints, preferences, situation)
-            • Goal: "{personal_info.goal_description}"
-            • Experience: {personal_info.experience_level}
-            • Your coaching expertise (structure, volume, intensity, exercise selection)
             
             **RULES & SCOPE:**
             • Respect CONSTRAINTS: equipment access, time availability, injuries, existing commitments
@@ -545,13 +533,31 @@ class PromptGenerator:
 
             {PromptGenerator._get_supplemental_training_scheduling()}
 
-            **OUTPUT:**
-            Schema enforces: title (required), summary (required), justification (required), weekly_schedules (exactly 1 with week_number: 1, exactly 7 daily_trainings), ai_message (optional)
-            All field types, required fields, and enum values are enforced by the schema.
-            
-            **OUTPUT GUIDANCE:**
+            **OUTPUT FORMAT & GUIDANCE:**
+            • Schema enforces: title (required), summary (required), justification (required), weekly_schedules (exactly 1 with week_number: 1, exactly 7 daily_trainings), ai_message (optional)
+            • All field types, required fields, and enum values are enforced by the schema.
             • ai_message: Warm message celebrating plan completion, explaining week-by-week approach (2-3 sentences, 2-3 emojis)
               Example: "🎉 Amazing! I've created your personalized Week 1 plan! We work week-by-week so we can track your progress and adapt as you grow stronger. Take a look — excited to hear your thoughts! 💪✨"
+            
+            ═══════════════════════════════════════════════════════════════════════════════
+            USER-SPECIFIC CONTEXT (CRITICAL - APPLY THESE CONSTRAINTS)
+            ═══════════════════════════════════════════════════════════════════════════════
+            
+            **CLIENT PROFILE:**
+            {PromptGenerator.format_client_information(personal_info)}
+            
+            **USER PLAYBOOK (LEARNED LESSONS - CRITICAL CONSTRAINTS):**
+            {PromptGenerator.format_playbook_lessons(user_playbook, personal_info, context="outline")}
+            
+            ═══════════════════════════════════════════════════════════════════════════════
+            YOUR TASK
+            ═══════════════════════════════════════════════════════════════════════════════
+            
+            Design Week 1 training schedule using the user context above:
+            • Constraints and preferences from the user playbook (equipment, time, injuries, preferences, etc.)
+            • Goal: "{personal_info.goal_description}"
+            • Experience: {personal_info.experience_level}
+            • Your coaching expertise (structure, volume, intensity, exercise selection)
          """
         
         # TODO: REMOVE THIS - Prompt saving for review only
@@ -589,7 +595,7 @@ class PromptGenerator:
         current_week_section = ""
         if current_week_summary:
             current_week_section = f"""
-            **CURRENT WEEK {week_number} STRUCTURE:**
+            **TO BE UP TRAINING WEEK {week_number}:**
             {current_week_summary}
             """
 
@@ -610,26 +616,6 @@ class PromptGenerator:
             1. Learned about the user through onboarding and interactions
             2. Designed Week {week_number} training plan based on user preferences and constraints
             3. Continuously learned from user feedback (stored in user playbook)
-            
-            **CLIENT PROFILE:**
-            {PromptGenerator.format_client_information(personal_info)}
-            
-            **USER PLAYBOOK (LEARNED LESSONS):**
-            {PromptGenerator.format_playbook_lessons(user_playbook, personal_info, context="training")}
-            
-            {current_week_section}
-            {conversation_section}
-            
-            **USER FEEDBACK ON WEEK {week_number}:**
-            {feedback_message}
-            
-            **YOUR TASK:**
-            Adjust Week {week_number} based on the user's feedback while respecting:
-            1. Constraints and preferences learned from the user playbook (equipment, time, injuries, preferences)
-            2. Prior changes documented in conversation history
-            3. Your expertise as a training coach
-            
-            You have autonomy to make adjustments within these constraints - not just apply the exact feedback, but consider what makes sense given the constraints and history.
             
             **CRITICAL UPDATE RULES:**
             • **Structural changes** (e.g., "restructure into PPL", "change to upper/lower split", "Monday ONLY chest", "make it 3 days per week"): 
@@ -662,18 +648,43 @@ class PromptGenerator:
 
             {PromptGenerator._get_supplemental_training_scheduling()}
 
-            **OUTPUT:**
-            Schema enforces: daily_trainings (exactly 7 days with Literal day names), justification (required), ai_message (required)
-            All field types, required fields, and enum values are enforced by the schema.
-            
-            **OUTPUT GUIDANCE:**
+            **OUTPUT FORMAT & GUIDANCE:**
+            • Schema enforces: daily_trainings (exactly 7 days with Literal day names), justification (required), ai_message (required)
+            • All field types, required fields, and enum values are enforced by the schema.
             • execution_order must be sequential across ALL exercises and sessions on a day (e.g., if 2 strength exercises, endurance sessions should start at 3)
             • ai_message: Warm message acknowledging feedback (1-3 short items, 2-3 sentences, 2-3 emojis)
               - If adjustments were made: Explain what changed and why
               - If no adjustments were made: Explain why (e.g., feedback conflicts with constraints, plan already aligns with request, etc.)
+            • Example ai_message (with changes): "🔁 I applied your feedback — swapped Monday's bench for push-ups and lowered Wednesday's volume. We'll run this week and adjust again next week if needed. Take a look and tell me what you think! 💪✨"
+            • Example ai_message (no changes): "Thanks for the feedback! After reviewing your request alongside your constraints and current plan, I kept everything as is because [reason]. If you'd like to explore alternatives, let me know! 💪"
             
-            Example ai_message (with changes): "🔁 I applied your feedback — swapped Monday's bench for push-ups and lowered Wednesday's volume. We'll run this week and adjust again next week if needed. Take a look and tell me what you think! 💪✨"
-            Example ai_message (no changes): "Thanks for the feedback! After reviewing your request alongside your constraints and current plan, I kept everything as is because [reason]. If you'd like to explore alternatives, let me know! 💪"
+            {current_week_section}
+
+            ═══════════════════════════════════════════════════════════════════════════════
+            USER-SPECIFIC CONTEXT (CRITICAL - APPLY THESE CONSTRAINTS)
+            ═══════════════════════════════════════════════════════════════════════════════
+            
+            **CLIENT PROFILE:**
+            {PromptGenerator.format_client_information(personal_info)}
+            
+            **USER PLAYBOOK (LEARNED LESSONS - CRITICAL CONSTRAINTS):**
+            {PromptGenerator.format_playbook_lessons(user_playbook, personal_info, context="training")}
+            
+            {conversation_section}
+            
+            **USER FEEDBACK ON WEEK {week_number}:**
+            {feedback_message}
+            
+            ═══════════════════════════════════════════════════════════════════════════════
+            YOUR TASK
+            ═══════════════════════════════════════════════════════════════════════════════
+            
+            Adjust Week {week_number} based on the user's feedback above while respecting:
+            1. Constraints and preferences from the user playbook (equipment, time, injuries, preferences)
+            2. Prior changes documented in conversation history
+            3. Your expertise as a training coach
+            
+            **IMPORTANT:** The user's feedback takes priority. If their feedback conflicts with constraints from the user playbook, prioritize the user's explicit request and adjust accordingly.
             """
         
         # TODO: REMOVE THIS - Prompt saving for review only
@@ -720,14 +731,12 @@ class PromptGenerator:
         """
         
         ai_message_section = f"""
-        **AI MESSAGE GENERATION (new week):**
-             Generate a warm, encouraging message that:
-        • Celebrates their progress completing the previous week
-        • Explains what's new/different in this week (progression, variation, etc.)
-        • Keeps them motivated and engaged
-             • Stays concise (2–3 sentences) with 2–3 relevant emojis; tone: enthusiastic, supportive, professional
-
-        Example ai_message (new week): "📈 Great work completing Week 1! Here's Week 2 with slightly increased volume and some exercise variations to keep you progressing. Keep up the excellent work! 💪✨"
+            • ai_message: Generate a warm, encouraging message that:
+              - Celebrates their progress completing the previous week
+              - Explains what's new/different in this week (progression, variation, etc.)
+              - Keeps them motivated and engaged
+              - Stays concise (2–3 sentences) with 2–3 relevant emojis; tone: enthusiastic, supportive, professional
+              - Example: "📈 Great work completing Week 1! Here's Week 2 with slightly increased volume and some exercise variations to keep you progressing. Keep up the excellent work! 💪✨"
             """
 
         prompt = f"""
@@ -738,15 +747,6 @@ class PromptGenerator:
             • ✅ We provide: Strength training, running, cycling, swimming, hiking, and general conditioning
             • ❌ We do NOT provide: Sport-specific drills, technical skill training, or team practice schedules
             • 🎯 For athletes: We create supportive strength/conditioning work to complement their existing sport training
-            
-            **GOAL:** {personal_info.goal_description}
-            **LEVEL:** {personal_info.experience_level}
-
-            {playbook_context}
-
-            {PromptGenerator._get_exercise_metadata_requirements()}
-
-            {progress_context_section}
 
             **PROGRESSION RULES:**
             • Progressively increase volume/intensity based on completed weeks
@@ -754,6 +754,8 @@ class PromptGenerator:
             • Maintain consistency with previous weeks while adding progressive challenge
             • Apply ALL playbook lessons learned from training history
             • Respect constraints and preferences established in previous weeks
+
+            {PromptGenerator._get_exercise_metadata_requirements()}
 
             {PromptGenerator._get_one_week_enforcement()}
              
@@ -763,19 +765,40 @@ class PromptGenerator:
 
             {PromptGenerator._get_training_principles()}
 
-             **CRITICAL REQUIREMENTS:**
-             ✓ Match {personal_info.experience_level} complexity
-             ✓ Align with "{personal_info.goal_description}" (primary driver)
-             ✓ Apply goal-appropriate periodization
-             ✓ Apply ALL playbook lessons (if provided - these are proven constraints and preferences from training history)
-             ✓ Stay concise
+            **CRITICAL REQUIREMENTS:**
+            ✓ Match {personal_info.experience_level} complexity
+            ✓ Align with "{personal_info.goal_description}" (primary driver)
+            ✓ Apply goal-appropriate periodization
+            ✓ Apply ALL playbook lessons (if provided - these are proven constraints and preferences from training history)
+            ✓ Stay concise
              
             {PromptGenerator._get_supplemental_training_scheduling()}
              
+            **OUTPUT FORMAT & GUIDANCE:**
+            • Return: WeeklySchedule schema format ONLY (with exactly 7 daily_trainings, progressed from previous week)
+            • Do NOT include TrainingPlan fields (title, summary, justification) - only return the WeeklySchedule
             {ai_message_section}
+            
+            ═══════════════════════════════════════════════════════════════════════════════
+            USER-SPECIFIC CONTEXT (CRITICAL - APPLY THESE CONSTRAINTS)
+            ═══════════════════════════════════════════════════════════════════════════════
+            
+            **GOAL:** {personal_info.goal_description}
+            **LEVEL:** {personal_info.experience_level}
 
-            Return: WeeklySchedule schema format ONLY (with exactly 7 daily_trainings, progressed from previous week).
-            Do NOT include TrainingPlan fields (title, summary, justification) - only return the WeeklySchedule.
+            {playbook_context}
+
+            {progress_context_section}
+            
+            ═══════════════════════════════════════════════════════════════════════════════
+            YOUR TASK
+            ═══════════════════════════════════════════════════════════════════════════════
+            
+            Create the next week training schedule using the user context above:
+            • Apply ALL playbook lessons (proven constraints and preferences from training history)
+            • Progress from previous weeks (adjust volume/intensity based on completed weeks)
+            • Maintain consistency while introducing appropriate variation
+            • Respect all constraints and preferences established in previous weeks
          """
 
         # TODO: REMOVE THIS - Prompt saving for review only
@@ -943,31 +966,38 @@ class PromptGenerator:
     @staticmethod
     def format_current_plan_summary(current_plan: Dict[str, Any]) -> str:
         """
-        Create a nicely formatted summary of the current training plan for context in prompts.
+        Create a token-optimized summary using Matrix Schema pattern for context in prompts.
         
-        Used for regenerations to give AI context about the existing plan structure.
-        Includes exercise details like sets, reps, equipment, and endurance session info.
+        Uses Header-Values JSON format to reduce token usage:
+        - Schema defined once at top
+        - Data stored as arrays matching schema order
+        - Eliminates repeated field names
         
         Args:
             current_plan: Current training plan dictionary
             
         Returns:
-            Formatted plan summary string
+            JSON string with Matrix Schema format
         """
+        import json
         try:
             weekly_schedules = current_plan.get("weekly_schedules", [])
             if not weekly_schedules:
-                return "Empty plan - no weekly schedules found."
+                return json.dumps({"error": "Empty plan - no weekly schedules found."})
             
             week = weekly_schedules[0]
-            # Expect backend format (daily_trainings) - should be enriched before calling this function
             daily_trainings = week.get("daily_trainings", [])
             
             if not daily_trainings:
-                return "Plan structure exists but no daily trainings found."
+                return json.dumps({"error": "Plan structure exists but no daily trainings found."})
             
-            summary_lines = []
-            summary_lines.append("Current Training Plan Structure:\n")
+            # Define schema once (reused for all exercises)
+            exercise_schema = ["order", "id", "name", "equipment", "sets", "weights", "target", "muscles", "movement_pattern"]
+            
+            plan_data = {
+                "schema": exercise_schema,
+                "days": {}
+            }
             
             for day in daily_trainings:
                 day_name = day.get("day_of_week", "Unknown")
@@ -975,27 +1005,25 @@ class PromptGenerator:
                 is_rest = day.get("is_rest_day", False)
                 
                 if is_rest or training_type == "rest":
-                    summary_lines.append(f"📅 {day_name}: REST DAY")
+                    plan_data["days"][day_name] = {"type": "REST", "exercises": []}
                     continue
                 
-                # Build day header
-                day_header = f"📅 {day_name}: {training_type.upper()}"
-                summary_lines.append(day_header)
-                
-                # Strength exercises - expect backend format (strength_exercises, snake_case, enriched fields at top-level)
+                # Strength exercises
                 strength_exercises = day.get("strength_exercises", [])
+                exercises = []
                 
                 if strength_exercises:
                     for ex in strength_exercises:
-                        # Backend format: snake_case with enriched fields at top-level
+                        # Get exercise data
                         ex_name = ex.get("exercise_name", "Unknown Exercise")
                         equipment = ex.get("equipment", "Unknown")
-                        main_muscle = ex.get("main_muscle", "")
-                        
-                        # Enriched fields from exercises table (already flattened to top-level by database service)
                         target_area = ex.get("target_area", "")
                         main_muscles = ex.get("main_muscles", [])
-                        force = ex.get("force", "")
+                        if not main_muscles:
+                            # Fallback to main_muscle if main_muscles not available
+                            main_muscle = ex.get("main_muscle", "")
+                            main_muscles = [main_muscle] if main_muscle else []
+                        pattern = ex.get("force", "")  # "force" field from DB represents movement pattern (Push/Pull/Push & Pull)
                         
                         # Exercise details
                         exercise_id = ex.get("exercise_id")
@@ -1004,6 +1032,8 @@ class PromptGenerator:
                                 exercise_id = int(exercise_id)
                             except (ValueError, TypeError):
                                 exercise_id = None
+                        else:
+                            exercise_id = None
                         
                         execution_order = ex.get("execution_order", 0)
                         try:
@@ -1011,43 +1041,46 @@ class PromptGenerator:
                         except (ValueError, TypeError):
                             execution_order = 0
                         
-                        # Backend format: sets is int, reps/weight are arrays
-                        sets = ex.get("sets", 0)
+                        # Get sets (reps) and weights (backend format: sets is int, reps/weight are arrays)
+                        sets_data = ex.get("sets", 0)
                         reps = ex.get("reps", [])
                         weight = ex.get("weight", [])
                         
-                        # Format reps
+                        # Format sets: reps array (matches user's example where "sets" = reps array)
                         if isinstance(reps, list) and len(reps) > 0:
-                            reps_str = f"{len(reps)} sets: {', '.join(map(str, reps))} reps"
-                        elif sets:
-                            reps_str = f"{sets} set(s)"
+                            sets_array = reps
+                        elif sets_data:
+                            # If sets is an int but no reps, duplicate it to match expected format
+                            sets_array = [sets_data] if isinstance(sets_data, int) else []
                         else:
-                            reps_str = "sets/reps not specified"
+                            sets_array = []
                         
-                        # Format weight
-                        weight_str = ""
+                        # Format weights: weight array (ensure all weights are numbers)
+                        weights_array = []
                         if isinstance(weight, list) and len(weight) > 0:
-                            weight_list = [f"{w:.1f}" for w in weight if w > 0]
-                            if weight_list:
-                                weight_str = f" | Weight: {', '.join(weight_list)}"
+                            weights_array = [float(w) if w and w > 0 else None for w in weight]
+                            weights_array = [w for w in weights_array if w is not None]  # Remove None values
+                        elif weight and weight > 0:
+                            # Single weight value
+                            weights_array = [float(weight)]
                         
-                        # Format enriched fields
-                        enriched_info_parts = []
-                        if target_area:
-                            enriched_info_parts.append(f"Target: {target_area}")
-                        if main_muscles and isinstance(main_muscles, list) and len(main_muscles) > 0:
-                            enriched_info_parts.append(f"Muscles: {', '.join(main_muscles)}")
-                        if force:
-                            enriched_info_parts.append(f"Force: {force}")
-                        enriched_info = f" | {' | '.join(enriched_info_parts)}" if enriched_info_parts else ""
+                        # Build exercise array matching schema order:
+                        # ["order", "id", "name", "equipment", "sets", "weights", "target", "muscles", "pattern"]
+                        # Only include fields that have values (omit None to save tokens)
+                        exercise_row = []
+                        exercise_row.append(execution_order if execution_order > 0 else None)
+                        exercise_row.append(exercise_id)
+                        exercise_row.append(ex_name)
+                        exercise_row.append(equipment)
+                        exercise_row.append(sets_array if sets_array else None)
+                        exercise_row.append(weights_array if weights_array else None)
+                        exercise_row.append(target_area if target_area else None)
+                        exercise_row.append(main_muscles if main_muscles else None)
+                        exercise_row.append(pattern if pattern else None)
                         
-                        # Format exercise line with execution order
-                        muscle_info = f" ({main_muscle})" if main_muscle else ""
-                        execution_info = f"[Order: {execution_order}]" if execution_order > 0 else ""
-                        exercise_id_info = f" (ID: {exercise_id})" if exercise_id else ""
-                        summary_lines.append(f"  💪 {execution_info} {ex_name}{muscle_info}{exercise_id_info} - {equipment} | {reps_str}{weight_str}{enriched_info}")
+                        exercises.append(exercise_row)
                 
-                # Endurance sessions
+                # Endurance sessions (append to exercises array with extended schema if needed)
                 endurance_sessions = day.get("endurance_sessions", [])
                 if endurance_sessions:
                     for session in endurance_sessions:
@@ -1057,26 +1090,59 @@ class PromptGenerator:
                         unit = session.get("unit", "")
                         heart_rate_zone = session.get("heart_rate_zone")
                         execution_order = session.get("execution_order", 0)
+                        try:
+                            execution_order = int(execution_order)
+                        except (ValueError, TypeError):
+                            execution_order = 0
                         
                         # Format volume
-                        if training_volume and unit:
-                            volume_str = f"{training_volume} {unit}"
-                        else:
-                            volume_str = "volume not specified"
+                        volume_str = f"{training_volume}{unit}" if training_volume and unit else None
                         
-                        # Format heart rate zone
-                        hr_zone_str = f" | HR Zone: {heart_rate_zone}" if heart_rate_zone else ""
-                        
-                        # Format execution order
-                        execution_info = f"[Order: {execution_order}]" if execution_order > 0 else ""
-                        
-                        sport_info = f" - {sport_type}" if sport_type else ""
-                        summary_lines.append(f"  🏃 {execution_info} {session_name}{sport_info} | {volume_str}{hr_zone_str}")
+                        # Endurance session as exercise row (using same schema, adapting fields)
+                        # For endurance: sets=volume, weights=HR zone, target=sport_type
+                        endurance_row = [
+                            execution_order if execution_order > 0 else None,
+                            None,  # No exercise ID for endurance
+                            session_name,
+                            sport_type if sport_type else None,
+                            [volume_str] if volume_str else None,  # Volume in sets position
+                            [heart_rate_zone] if heart_rate_zone else None,  # HR zone in weights position
+                            None,
+                            None,
+                            "Endurance"
+                        ]
+                        exercises.append(endurance_row)
+                
+                plan_data["days"][day_name] = {
+                    "type": training_type.upper(),
+                    "exercises": exercises
+                }
             
-            return "\n".join(summary_lines)
+            # Use simple approach: convert to matrix format, then format with JSON
+            # The plan_data already has the correct structure, just need proper formatting
+            json_str = json.dumps(plan_data, indent=2, separators=(',', ':'), ensure_ascii=False)
+            
+            # Post-process to match exact format:
+            # 1. Remove indentation from root-level keys ("schema" and "days")
+            # 2. Keep all other indentation as-is (indent=2 handles it correctly)
+            lines = json_str.split('\n')
+            formatted_lines = []
+            
+            for line in lines:
+                stripped = line.strip()
+                # Remove 2-space indentation from root-level keys
+                if stripped.startswith('"schema"') or stripped.startswith('"days"'):
+                    if line.startswith('  '):
+                        formatted_lines.append(line[2:])
+                    else:
+                        formatted_lines.append(line)
+                else:
+                    formatted_lines.append(line)
+            
+            return '\n'.join(formatted_lines)
             
         except Exception as e:
-            return f"Error summarizing plan: {str(e)}"
+            return json.dumps({"error": f"Error summarizing plan: {str(e)}"})
     
     @staticmethod
     def _format_exercise_info(exercises: List[Dict]) -> str:

@@ -247,6 +247,7 @@ export class UserService {
           username: rawProfile.username || '',
           coachId: rawProfile.coach_id,
           experienceLevel: rawProfile.experience_level || '',
+          goalDescription: rawProfile.goal_description || '',
           age: rawProfile.age || 25,
           weight: rawProfile.weight || 70,
           weightUnit: rawProfile.weight_unit || 'kg',

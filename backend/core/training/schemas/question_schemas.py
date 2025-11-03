@@ -209,7 +209,7 @@ class FollowUpQuestionsRequest(BaseModel):
     initial_questions: List[AIQuestion] = Field(
         ..., description="Initial questions from frontend"
     )
-    user_profile_id: Optional[str] = Field(
+    user_profile_id: Optional[int] = Field(
         default=None, description="User profile ID for database storage"
     )
     jwt_token: Optional[str] = Field(
@@ -278,6 +278,14 @@ class PlanFeedbackRequest(BaseModel):
     plan_id: Union[int, str] = Field(..., description="Training plan ID")
     feedback_message: str = Field(..., description="User feedback message")
     training_plan: Dict[str, Any] = Field(..., description="Full training plan data (sent from frontend)")
+    playbook: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="User playbook from frontend (userProfile.playbook)"
+    )
+    personal_info: Optional[PersonalInfo] = Field(
+        default=None,
+        description="User personal info from frontend (userProfile) - optional, falls back to DB if not provided"
+    )
     conversation_history: Optional[List[Dict[str, Any]]] = Field(
         default=[], 
         description="Previous conversation messages for context"
@@ -294,6 +302,10 @@ class PlanFeedbackResponse(BaseModel):
     updated_plan: Optional[Dict[str, Any]] = Field(
         None, 
         description="Updated plan data if changes were made"
+    )
+    updated_playbook: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Updated playbook after processing feedback"
     )
     navigate_to_main_app: Optional[bool] = Field(
         default=False, 
@@ -526,3 +538,13 @@ class FeedbackClassification(BaseModel):
         default=None,
         description="Friendly AI message confirming changes or responding to feedback"
     )
+
+
+class CreateWeekRequest(BaseModel):
+    """Request for creating a new week in the training plan."""
+    
+    training_plan: Dict[str, Any] = Field(..., description="Full training plan data")
+    user_profile_id: int = Field(..., description="User profile ID")
+    personal_info: PersonalInfo = Field(..., description="User personal information")
+    plan_id: Optional[int] = Field(default=None, description="Training plan ID (optional, derived from training_plan if not provided)")
+    jwt_token: str = Field(..., description="JWT token for authentication")

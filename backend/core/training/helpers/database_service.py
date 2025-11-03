@@ -499,9 +499,15 @@ class DatabaseService:
                                     exercise_metadata = exercise_metadata_result.data
                                     # Store as "exercises" (plural) to match Supabase format (for frontend compatibility)
                                     strength_exercise["exercises"] = exercise_metadata
+                                    # CRITICAL: Add exercise_name, main_muscle, equipment at top-level for Pydantic validation and frontend round-trip
+                                    strength_exercise["exercise_name"] = exercise_metadata.get("name")
+                                    # Extract main_muscle from main_muscles array (first item) - database has main_muscles, not main_muscle
+                                    main_muscles_array = exercise_metadata.get("primary_muscles") or exercise_metadata.get("main_muscles", [])
+                                    strength_exercise["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
+                                    strength_exercise["equipment"] = exercise_metadata.get("equipment")
                                     # Also flatten enriched fields to top-level for schema validation and prompt formatting
                                     strength_exercise["target_area"] = exercise_metadata.get("target_area")
-                                    strength_exercise["main_muscles"] = exercise_metadata.get("primary_muscles") or exercise_metadata.get("main_muscles")
+                                    strength_exercise["main_muscles"] = main_muscles_array
                                     strength_exercise["force"] = exercise_metadata.get("force")
                                 else:
                                     strength_exercise["exercises"] = None
@@ -733,8 +739,11 @@ class DatabaseService:
                                     strength_exercise["exercises"] = exercise_metadata
                                     # Also flatten enriched fields to top-level for schema validation
                                     strength_exercise["target_area"] = exercise_metadata.get("target_area")
-                                    strength_exercise["main_muscles"] = exercise_metadata.get("primary_muscles") or exercise_metadata.get("main_muscles")
+                                    main_muscles_array = exercise_metadata.get("primary_muscles") or exercise_metadata.get("main_muscles", [])
+                                    strength_exercise["main_muscles"] = main_muscles_array
                                     strength_exercise["force"] = exercise_metadata.get("force")
+                                    # Extract main_muscle from main_muscles array for backward compatibility
+                                    strength_exercise["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
                                 else:
                                     strength_exercise["exercises"] = None
                             else:
@@ -1087,6 +1096,33 @@ class DatabaseService:
                                 # Enrich plan dict with generated strength exercise ID and parent linkage
                                 exercise_data["id"] = se_result.data[0]["id"]
                                 exercise_data["daily_training_id"] = daily_training_id
+                                
+                                # CRITICAL: Enrich with exercise metadata from database (same as save_training_plan)
+                                # This ensures exercise_name, main_muscle, equipment are present for frontend round-trip
+                                if exercise_id:
+                                    exercise_metadata_result = (
+                                        supabase_client.table("exercises")
+                                        .select("*")
+                                        .eq("id", exercise_id)
+                                        .single()
+                                        .execute()
+                                    )
+                                    if exercise_metadata_result.data:
+                                        exercise_metadata = exercise_metadata_result.data
+                                        # Store as "exercises" (plural) to match Supabase format (for frontend compatibility)
+                                        exercise_data["exercises"] = exercise_metadata
+                                        # CRITICAL: Add exercise_name, main_muscle, equipment at top-level for Pydantic validation and frontend round-trip
+                                        exercise_data["exercise_name"] = exercise_metadata.get("name")
+                                        # Extract main_muscle from main_muscles array (first item) - database has main_muscles, not main_muscle
+                                        main_muscles_array = exercise_metadata.get("primary_muscles") or exercise_metadata.get("main_muscles", [])
+                                        exercise_data["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
+                                        exercise_data["equipment"] = exercise_metadata.get("equipment")
+                                        # Also flatten enriched fields to top-level for schema validation and prompt formatting
+                                        exercise_data["target_area"] = exercise_metadata.get("target_area")
+                                        exercise_data["main_muscles"] = main_muscles_array
+                                        exercise_data["force"] = exercise_metadata.get("force")
+                                    else:
+                                        exercise_data["exercises"] = None
                         
                         # Save endurance sessions
                         endurance_sessions = daily_data.get("endurance_sessions", [])

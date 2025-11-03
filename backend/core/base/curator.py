@@ -127,9 +127,14 @@ class Curator:
                 ✅ Existing Playbook Loaded ({len(existing_playbook.lessons)} lessons)
                 🎯 **CURRENT STEP:** Curate Playbook (Deduplication & Integration)
 
-                **YOUR ROLE:**
-                You are the Curator - responsible for maintaining a high-quality, deduplicated playbook of user lessons.
-                Analyze all proposed lessons against the existing playbook and return an updated playbook.
+                **YOUR ROLE IN THE ACE FRAMEWORK:**
+                You are the Curator - the guardian of the user's institutional memory. Your playbook is the knowledge base that guides the TrainingCoach to create personalized training plans. These lessons represent long-term, persistent insights about the user's constraints, preferences, and proven patterns - not temporary or daily changes.
+                
+                **THE PLAYBOOK'S PURPOSE:**
+                - **Institutional Memory:** Captures what works and what doesn't for this specific user over time
+                - **Actionable Knowledge:** Each lesson should be specific and actionable for future plan generation
+                - **Long-Term Focus:** We capture persistent patterns, constraints, and preferences, etc. - not temporary states or daily fluctuations
+                - **Quality over Quantity:** The playbook is limited to {self.MAX_PLAYBOOK_SIZE} lessons - prioritize high-value, proven insights
 
                 **EXISTING PLAYBOOK LESSONS ({len(existing_playbook.lessons)}):**
                 {existing_lessons_text}
@@ -137,26 +142,59 @@ class Curator:
                 **PROPOSED NEW LESSONS ({len(proposed_lessons)}):**
                 {proposed_lessons_text}
 
-                **YOUR TASK:**
-                1. Compare each proposed lesson with ALL existing lessons
-                2. Identify duplicates (same/similar content) - merge them into existing lessons
-                3. Identify contradictions (opposite guidance) - keep the new one if it reflects user evolution
-                4. Add truly unique lessons to the playbook
-                5. Preserve existing lesson IDs when merging/updating
-                6. Generate new IDs only for new lessons (format: "lesson_{{random_hex}}")
+                **YOUR PRIMARY TASK:**
+                Analyze each proposed lesson against ALL existing lessons and decide:
+                1. **MERGE** - If it's a duplicate or very similar to an existing lesson
+                2. **REPLACE** - If it contradicts an existing lesson (user evolution/change in long-term circumstances)
+                3. **ADD** - If it's unique and adds new long-term value
+                
+                **CRITICAL FILTER: LONG-TERM LESSONS ONLY**
+                - Focus on persistent patterns, not temporary states
+                - Capture long-term constraints (injuries, equipment access, schedule patterns, etc.)
+                - Capture proven preferences that have been consistent over time
+                - Avoid lessons about daily fluctuations or one-time events
+                - If a proposed lesson seems temporary or situation-specific, it may not belong in the playbook
 
-                **DEDUPLICATION RULES:**
-                - **Exact duplicates:** Merge into existing (update confidence, combine tags, increment counters)
-                - **Similar lessons (>85% overlap):** Merge into existing (keep original text, combine tags)
-                - **Related lessons (50-85% overlap):** Can merge OR keep separate (use judgment)
-                - **Unique lessons (<50% overlap):** Add as new lesson
+                ═══════════════════════════════════════════════════════════════════════════════
+                DECISION FRAMEWORK: MERGE, REPLACE, OR ADD?
+                ═══════════════════════════════════════════════════════════════════════════════
 
-                **CONTRADICTION HANDLING:**
-                - If new lesson contradicts existing (opposite guidance):
-                - Remove the contradicted existing lesson
-                - Add the new lesson (new lesson reflects current reality/user evolution)
-                - Example: Old: "Avoid running due to knee pain" ↔ New: "Knee recovered - can include running"
-                → Remove old, add new
+                **MERGE:**
+                Merge the proposed lesson into an existing lesson if they are exactly the same OR if they are related and should be combined into a single enhanced lesson.
+                
+                **How to Merge:**
+                - **Preserve existing lesson ID** - Keep the existing lesson's ID (NEVER change existing IDs)
+                - **Keep or refine text** - Keep or refine the existing lesson's text to incorporate both perspectives (use existing text OR combine for clarity)
+                - **Combine all tags** - Combine tags from both lessons (merge tags from both lessons, remove duplicates)
+                - **Update confidence** - Use the higher confidence value for exact duplicates, or weighted average (existing * 0.6 + proposed * 0.4) for related lessons (use: max(existing, proposed) OR weighted average)
+                - **Increment counters** - Add proposed lesson's helpful_count or harmful_count to existing lesson's counters (add proposed lesson's helpful_count/harmful_count to existing)
+                - **Update timestamps** - Update last_used_at to current timestamp (set last_used_at to current timestamp)
+
+                **REPLACE:**
+                Replace an existing lesson if the proposed lesson contradicts it (opposite guidance) or if the user's long-term situation has changed (equipment, injuries, preferences, availability) and the new lesson reflects current reality while the old lesson is outdated. Only replace if the change represents a persistent shift, not a temporary variation.
+                
+                **How to Replace:**
+                - REMOVE the contradicted existing lesson entirely (delete it from the playbook)
+                - ADD the new lesson with a new ID (generate new ID for the replacement lesson)
+                - Keep the new lesson's values as-is (use proposed confidence, counters, tags as-is)
+                - Document reasoning (explain why replacement occurred in reasoning field - emphasize it's a long-term change)
+                - This reflects user evolution/change in long-term circumstances
+
+                **ADD:**
+                Add the proposed lesson as a new lesson if it is completely unique, represents a long-term insight, and adds new actionable value not covered by any existing lesson (no overlap or relation to existing lessons).
+                
+                **How to Add:**
+                - **Verify long-term value** - Ensure the lesson represents a persistent pattern or constraint, not a temporary state
+                - **Generate new ID** - Format: "lesson_{{random_hex}}" (8-character hex)
+                - **Keep proposed lesson** - Keep proposed lesson as-is with all original values (use as-is with all original values)
+                - **Preserve all existing lessons** - Preserve all existing lessons unchanged (don't modify existing lessons)
+                
+                **QUALITY CHECK:**
+                Before adding, verify the lesson is:
+                - Actionable (specific enough to guide future plan generation)
+                - Long-term (represents a persistent pattern, not temporary)
+                - Valuable (adds unique insight not already captured)
+                - If the playbook exceeds {self.MAX_PLAYBOOK_SIZE} lessons, prioritize lessons with higher confidence and proven usefulness
 
                 **OUTPUT REQUIREMENTS:**
                 - Return ALL lessons (existing + new, after deduplication)
@@ -169,11 +207,20 @@ class Curator:
                 - Set total_lessons to the count of final lessons
                 - Provide reasoning explaining what was added, merged, removed, and why
 
-                **CRITICAL:**
-                - Preserve existing lesson IDs when merging/updating
-                - Only generate new IDs for truly new lessons
-                - All lesson text must start with "The user..."
-                - Ensure no duplicate lessons in final playbook
+                **CRITICAL RULES:**
+                - **Preserve existing lesson IDs** - NEVER change existing IDs when merging/updating
+                - **Only generate new IDs** - For truly new lessons only
+                - **Lesson text format** - All lesson text must start with "The user..."
+                - **No duplicates** - Ensure no duplicate lessons in final playbook
+                - **Long-term focus** - Prioritize lessons that represent persistent patterns over temporary states
+                - **Confidence matters** - Higher confidence and proven usefulness (helpful_count) indicate more valuable lessons
+                - **Playbook size limit** - If playbook exceeds {self.MAX_PLAYBOOK_SIZE} lessons, prioritize lessons with highest confidence × usage (helpful_count + harmful_count)
+                
+                **WHY CONFIDENCE AND COUNTERS MATTER:**
+                - **Confidence** (0.0-1.0): Higher confidence = more certain/verified insight
+                - **helpful_count**: Number of times this lesson led to positive outcomes - proven usefulness
+                - **harmful_count**: Number of times ignoring this lesson led to negative outcomes - proven importance
+                - Lessons with high confidence and high usage counts are the most valuable institutional memory
             """
 
             # Call LLM with schema (returns validated Pydantic model or dict)

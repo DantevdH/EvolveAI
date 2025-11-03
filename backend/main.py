@@ -1,5 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from logging_config import get_logger
 from core.training.training_api import router as training_router
@@ -15,6 +17,23 @@ app = FastAPI(
     description="FastAPI backend for generating personalized training plans using enhanced AI training Coach",
     version="2.0.0",
 )
+
+# Exception handler for Pydantic validation errors
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Custom handler for Pydantic validation errors to log full details."""
+    logger.error(f"❌ RequestValidationError on {request.method} {request.url}")
+    logger.error(f"    Errors: {exc.errors()}")
+    logger.error(f"    Body: {str(exc.body)[:500]}")
+    
+    # Find the specific field that's missing
+    for error in exc.errors():
+        logger.error(f"    Missing field: {error.get('loc')}, Type: {error.get('type')}, Message: {error.get('msg')}")
+    
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors(), "body": str(exc.body)},
+    )
 
 # CORS middleware
 app.add_middleware(
