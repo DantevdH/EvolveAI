@@ -1,6 +1,7 @@
 // Training Screen - Main training interface
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, SafeAreaView, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTraining } from '../hooks/useTraining';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../constants/colors';
@@ -16,6 +17,7 @@ import { DailyFeedbackModal, DailyFeedbackData } from '../components/training/Da
 import { useDailyFeedback } from '../hooks/useDailyFeedback';
 import AddExerciseModal from '../components/training/AddExerciseModal';
 import AddEnduranceSessionModal from '../components/training/AddEnduranceSessionModal';
+import { FitnessJourneyMap } from '../components/training/journeyMap';
 
 const TrainingScreen: React.FC = () => {
   const { state: authState } = useAuth();
@@ -23,6 +25,7 @@ const TrainingScreen: React.FC = () => {
   const [selectedExerciseForCalculator, setSelectedExerciseForCalculator] = useState<string>('');
   const [addExerciseModalVisible, setAddExerciseModalVisible] = useState(false);
   const [removeExerciseId, setRemoveExerciseId] = useState<{ id: string; isEndurance: boolean; name: string } | null>(null);
+  const [selectedWeekFromMap, setSelectedWeekFromMap] = useState<number | null>(null);
   
   const {
     trainingState,
@@ -215,6 +218,17 @@ const TrainingScreen: React.FC = () => {
     setIsStrengthMode(isStrength);
   };
 
+  // Handle week selection from map
+  const handleWeekSelectFromMap = (weekNumber: number) => {
+    setSelectedWeekFromMap(weekNumber);
+    selectWeek(weekNumber);
+  };
+
+  // Handle back to map
+  const handleBackToMap = () => {
+    setSelectedWeekFromMap(null);
+  };
+
   // Handle loading state
   if (trainingState.isLoading) {
     return (
@@ -282,6 +296,20 @@ const TrainingScreen: React.FC = () => {
 
   const isPastWeek = trainingState.currentWeekSelected < (trainingPlan?.currentWeek || 1);
 
+  // Show map view if no week is selected from map
+  if (selectedWeekFromMap === null) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <FitnessJourneyMap
+          trainingPlan={trainingPlan}
+          currentWeek={trainingPlan.currentWeek}
+          onWeekSelect={handleWeekSelectFromMap}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  // Show detail view if a week is selected
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView 
@@ -289,6 +317,12 @@ const TrainingScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Back to Map Button */}
+        <TouchableOpacity style={styles.backButton} onPress={handleBackToMap}>
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Text style={styles.backButtonText}>Back to Journey Map</Text>
+        </TouchableOpacity>
+
         {/* Training Header */}
         <TrainingHeader
           trainingPlan={trainingPlan}
@@ -490,6 +524,21 @@ const styles = StyleSheet.create({
     color: colors.muted,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.text,
   },
 });
 

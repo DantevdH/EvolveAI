@@ -244,7 +244,7 @@ export interface UseTrainingReturn {
 // Component Props Types
 export interface TrainingHeaderProps {
   trainingPlan: TrainingPlan | null;
-  progressRing: ProgressRingData;
+  progressRing?: ProgressRingData; // Optional - removed from weekly overview, kept in journey map
   currentWeek: number;
   completedTrainingsThisWeek: number;
   totalTrainingsThisWeek: number;
