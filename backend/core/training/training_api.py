@@ -497,6 +497,13 @@ async def generate_training_plan(
                 user_id=user_id,
             )
             
+            # Enrich lessons with context (RAG retrieval and validation)
+            logger.info("📘 Enriching lessons with context from knowledge base...")
+            initial_playbook = await coach.curator.enrich_lessons_with_context(
+                playbook=initial_playbook,
+                rag_tool=coach.rag_tool,
+            )
+            
             logger.info(f"📘 Curated initial playbook: {len(empty_playbook.lessons)} → {len(initial_playbook.lessons)} lessons (deduplicated)")
             
             # Store initial playbook
@@ -814,6 +821,13 @@ async def _handle_playbook_extraction_for_satisfied(
             curated_playbook = coach.curator.update_playbook_from_curated(
                 updated_playbook=updated_playbook_curated,
                 user_id=user_id,
+            )
+            
+            # Enrich lessons with context (RAG retrieval and validation)
+            logger.info("📘 Enriching lessons with context from knowledge base...")
+            curated_playbook = await coach.curator.enrich_lessons_with_context(
+                playbook=curated_playbook,
+                rag_tool=coach.rag_tool,
             )
             
             # Save updated playbook

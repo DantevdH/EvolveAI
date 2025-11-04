@@ -192,10 +192,12 @@ class PromptGenerator:
                     text = lesson.text
                     confidence = lesson.confidence
                     helpful = lesson.helpful_count
+                    lesson_context = getattr(lesson, "context", None)
                 else:
                     text = lesson.get("text", "")
                     confidence = lesson.get("confidence", 0.5)
                     helpful = lesson.get("helpful_count", 0)
+                    lesson_context = lesson.get("context", None)
                 
                 # Escape curly braces in lesson text to prevent format errors
                 safe_text = str(text).replace("{", "{{").replace("}", "}}")
@@ -204,6 +206,12 @@ class PromptGenerator:
                     content += f"        - {safe_text}\n"
                 else:
                     content += f"        - {safe_text} (confidence: {confidence:.0%}, proven {helpful}x)\n"
+                
+                # Include context if available and not "context not found"
+                if lesson_context and lesson_context != "context not found":
+                    # Escape curly braces in context too
+                    safe_context = str(lesson_context).replace("{", "{{").replace("}", "}}")
+                    content += f"\n        📚 **Best Practices Context:**\n        {safe_context}\n"
 
         if warning_lessons:
             if context == "outline":
@@ -216,10 +224,12 @@ class PromptGenerator:
                     text = lesson.text
                     confidence = lesson.confidence
                     harmful = lesson.harmful_count
+                    lesson_context = getattr(lesson, "context", None)
                 else:
                     text = lesson.get("text", "")
                     confidence = lesson.get("confidence", 0.5)
                     harmful = lesson.get("harmful_count", 0)
+                    lesson_context = lesson.get("context", None)
                 
                 # Escape curly braces in lesson text to prevent format errors
                 safe_text = str(text).replace("{", "{{").replace("}", "}}")
@@ -228,6 +238,12 @@ class PromptGenerator:
                     content += f"        - {safe_text}\n"
                 else:
                     content += f"        - {safe_text} (confidence: {confidence:.0%}, learned from {harmful} negative outcome(s))\n"
+                
+                # Include context if available and not "context not found"
+                if lesson_context and lesson_context != "context not found":
+                    # Escape curly braces in context too
+                    safe_context = str(lesson_context).replace("{", "{{").replace("}", "}}")
+                    content += f"\n        📚 **Best Practices Context:**\n        {safe_context}\n"
 
         return header + content + footer
 

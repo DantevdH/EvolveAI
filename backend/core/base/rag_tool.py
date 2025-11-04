@@ -305,3 +305,134 @@ class RAGTool:
                 "hybrid_metadata_vector" if metadata_filters else "vector_only"
             ),
         }
+
+    def validate_and_retrieve_context(
+        self, lesson_text: str, max_sentences: int = 10
+    ) -> str:
+        """
+        Retrieve and validate context for a playbook lesson.
+        
+        This method performs a two-stage process:
+        1. Retrieve context from knowledge base using RAG
+        2. Validate if retrieved context is relevant to the lesson
+        
+        Args:
+            lesson_text: The playbook lesson text
+            max_sentences: Maximum number of sentences to include in context (default: 10)
+            
+        Returns:
+            Validated context text (max 10 sentences) or "context not found" if not relevant
+        """
+        try:
+            # Stage 1: Retrieve context via RAG
+            relevant_docs = self.perform_hybrid_search(
+                user_query=lesson_text, max_results=3
+            )
+            
+            if not relevant_docs:
+                return "context not found"
+            
+            # Check if top result has very high confidence (skip LLM rewriting for high-confidence matches)
+            # Uses final_score (re-ranked score) which combines relevance_score + term matching + metadata
+            top_result = relevant_docs[0]
+            top_score = top_result.get("final_score", top_result.get("relevance_score", 0.0))
+            
+            # High confidence threshold: if match is very strong, skip LLM rewriting
+            HIGH_CONFIDENCE_THRESHOLD = 0.85
+            
+            if top_score >= HIGH_CONFIDENCE_THRESHOLD:
+                # High confidence match - skip LLM rewriting, use top result directly
+                top_chunk = top_result.get("chunk_text", "")
+                if not top_chunk:
+                    return "context not found"
+                
+                # Truncate to max_sentences (simple sentence splitting)
+                sentences = top_chunk.split('. ')
+                if len(sentences) > max_sentences:
+                    top_chunk = '. '.join(sentences[:max_sentences]) + '.'
+                
+                return top_chunk
+            
+            # Lower confidence - proceed with LLM rewriting/refinement
+            # Combine retrieved context chunks
+            context_chunks = []
+            for doc in relevant_docs:
+                chunk_text = doc.get("chunk_text", "")
+                if chunk_text:
+                    context_chunks.append(chunk_text)
+            
+            if not context_chunks:
+                return "context not found"
+            
+            # Combine all chunks into single context string
+            combined_context = "\n\n".join(context_chunks)
+            
+            # Stage 2: Rewrite/refine context and check relevance using LLM
+            # The LLM rewrites/refines the context to be more relevant AND checks if it's relevant at all
+            validation_prompt = f"""
+                You are an expert training coach preparing context from a knowledge base to augment a personalized playbook lesson. This context will be used when generating training plans to help the AI coach create better, evidence-based programs.
+
+                **What We're Doing:**
+                We have a playbook lesson (a personalized insight about a user's training preferences, constraints, or goals). We've retrieved some context from our knowledge base that might contain relevant best practices, training methodologies, or principles. Your job is to:
+                1. Validate if this context is truly relevant to the lesson
+                2. If relevant: Rewrite/refine it to be concise, actionable, and directly applicable to training plan generation
+                3. If not relevant: Return "context not found"
+
+                **How This Will Be Used:**
+                This validated context will be included in prompts when generating training plans. The AI coach will use it alongside the playbook lesson to:
+                - Understand best practices related to the user's goals/preferences
+                - Apply evidence-based training principles
+                - Create more effective and scientifically sound training programs
+                - Avoid common mistakes and follow proven methodologies
+
+                **Playbook Lesson:**
+                {lesson_text}
+
+                **Retrieved Context from Knowledge Base:**
+                {combined_context}
+
+                **Your Task:**
+                1. **Relevance Check**: Is this context relevant to the playbook lesson? Does it provide useful best practices, training principles, or methodologies that would help create a better training plan?
+
+                2. **If Relevant**: Rewrite/refine the context to be:
+                - **Actionable**: Focus on specific, applicable training principles and best practices
+                - **Concise**: Maximum {max_sentences} sentences - be selective and prioritize the most important information
+                - **Directly Applicable**: Focus on information that directly helps with training plan design (volume, intensity, frequency, exercise selection, progression, recovery, etc.)
+                - **Evidence-Based**: Emphasize proven methodologies and principles
+                - **Plan-Focused**: Information should help the AI coach make better decisions when creating training plans
+
+                3. **If NOT Relevant**: If the context doesn't relate to the lesson or won't help with training plan generation, return exactly: "context not found"
+
+                **Example Good Context:**
+                - "Hypertrophy training requires 3-5 sets per exercise, 6-12 reps per set, with 60-90 seconds rest. Progressive overload through volume or intensity increases is essential. Training each muscle group 2-3 times per week maximizes muscle growth."
+
+                **Example Bad Context (too vague/general):**
+                - "Exercise is good for health. People should train regularly."
+
+                **Response:**
+            """
+
+            # Use LLM to validate
+            validated_context = self.base_agent.llm.chat_text([
+                {
+                    "role": "system",
+                    "content": "You are an expert training coach specializing in translating knowledge base content into actionable, evidence-based training principles for training plan generation. You understand how to refine technical information into concise, practical guidance that helps create effective training programs."
+                },
+                {"role": "user", "content": validation_prompt}
+            ]).strip()
+            
+            # Check if validation returned "context not found"
+            if validated_context.lower() == "context not found":
+                return "context not found"
+            
+            # Limit to max_sentences
+            sentences = validated_context.split('. ')
+            if len(sentences) > max_sentences:
+                validated_context = '. '.join(sentences[:max_sentences]) + '.'
+            
+            return validated_context
+            
+        except Exception as e:
+            # Log error but return "context not found" to not break the flow
+            print(f"⚠️  Error validating context for lesson: {e}")
+            return "context not found"

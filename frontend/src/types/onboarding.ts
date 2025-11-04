@@ -170,6 +170,36 @@ export interface OnboardingApiResponse<T> {
   error?: string;
 }
 
+// Plan feedback/update response (update-week endpoint)
+export interface PlanFeedbackResponse {
+  success: boolean;
+  ai_response: string;
+  plan_updated: boolean;
+  updated_plan?: any; // TrainingPlan type
+  updated_playbook?: {
+    user_id: string;
+    lessons: Array<{
+      id: string;
+      text: string;
+      tags: string[];
+      helpful_count: number;
+      harmful_count: number;
+      times_applied: number;
+      confidence: number;
+      positive: boolean;
+      created_at: string;
+      last_used_at?: string | null;
+      source_plan_id?: string | null;
+      requires_context?: string | null; // 'context' or 'not_found'
+      context?: string | null; // Validated context from knowledge base
+    }>;
+    total_lessons: number;
+    last_updated: string;
+  } | null; // Updated playbook with context after processing feedback
+  navigate_to_main_app?: boolean;
+  error?: string;
+}
+
 export interface DailyTraining {
   day: number;
   training_name: string; // Name of the training (e.g., 'Upper Body Strength', 'Easy Cardio')
