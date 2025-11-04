@@ -59,35 +59,11 @@ export const useUser = () => {
   }, [updateUserProfile]);
 
   /**
-   * Update user's goal description
-   */
-  const updateGoalDescription = useCallback(async (description: string): Promise<boolean> => {
-    return await updateUserProfile({
-      goalDescription: description,
-    });
-  }, [updateUserProfile]);
-
-  /**
    * Update user's experience level
    */
   const updateExperienceLevel = useCallback(async (level: string): Promise<boolean> => {
     return await updateUserProfile({
       experienceLevel: level,
-    });
-  }, [updateUserProfile]);
-
-  /**
-   * Update user's training preferences
-   */
-  const updateTrainingPreferences = useCallback(async (
-    daysPerWeek: number,
-    minutesPerSession: number,
-    equipment: string
-  ): Promise<boolean> => {
-    return await updateUserProfile({
-      daysPerWeek,
-      minutesPerSession,
-      equipment,
     });
   }, [updateUserProfile]);
 
@@ -113,19 +89,6 @@ export const useUser = () => {
   }, [updateUserProfile]);
 
   /**
-   * Update user's limitations
-   */
-  const updateLimitations = useCallback(async (
-    hasLimitations: boolean,
-    limitationsDescription: string
-  ): Promise<boolean> => {
-    return await updateUserProfile({
-      hasLimitations,
-      limitationsDescription,
-    });
-  }, [updateUserProfile]);
-
-  /**
    * Update user's final chat notes
    */
   const updateFinalChatNotes = useCallback(async (notes: string): Promise<boolean> => {
@@ -135,34 +98,10 @@ export const useUser = () => {
   }, [updateUserProfile]);
 
   /**
-   * Get user's goal description
-   */
-  const getGoalDescription = useCallback((): string => {
-    return state.userProfile?.goalDescription || '';
-  }, [state.userProfile]);
-
-  /**
    * Get user's experience level
    */
   const getExperienceLevel = useCallback((): string => {
     return state.userProfile?.experienceLevel || '';
-  }, [state.userProfile]);
-
-  /**
-   * Get user's training frequency
-   */
-  const getTrainingFrequency = useCallback((): { daysPerWeek: number; minutesPerSession: number } => {
-    return {
-      daysPerWeek: state.userProfile?.daysPerWeek || 3,
-      minutesPerSession: state.userProfile?.minutesPerSession || 60,
-    };
-  }, [state.userProfile]);
-
-  /**
-   * Get user's equipment
-   */
-  const getEquipment = useCallback((): string => {
-    return state.userProfile?.equipment || '';
   }, [state.userProfile]);
 
   /**
@@ -186,18 +125,6 @@ export const useUser = () => {
     };
   }, [state.userProfile]);
 
-  /**
-   * Get user's limitations
-   */
-  const getLimitations = useCallback((): {
-    hasLimitations: boolean;
-    limitationsDescription: string;
-  } => {
-    return {
-      hasLimitations: state.userProfile?.hasLimitations || false,
-      limitationsDescription: state.userProfile?.limitationsDescription || '',
-    };
-  }, [state.userProfile]);
 
   /**
    * Check if user is ready for plan generation
@@ -229,11 +156,7 @@ export const useUser = () => {
     const profile = state.userProfile;
     const requiredFields = [
       'username',
-      'goalDescription',
       'experienceLevel',
-      'daysPerWeek',
-      'minutesPerSession',
-      'equipment',
       'age',
       'weight',
       'height',
@@ -263,20 +186,13 @@ export const useUser = () => {
     
     // Update methods
     updateProfileField,
-    updateGoalDescription,
     updateExperienceLevel,
-    updateTrainingPreferences,
     updatePhysicalInfo,
-    updateLimitations,
     updateFinalChatNotes,
     
     // Getter methods
-    getGoalDescription,
     getExperienceLevel,
-    getTrainingFrequency,
-    getEquipment,
     getPhysicalInfo,
-    getLimitations,
     
     // Utility methods
     isReadyForPlanGeneration,

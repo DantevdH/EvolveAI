@@ -55,94 +55,6 @@ class Reflector:
         # Unified LLM client (OpenAI or Gemini)
         self.llm = LLMClient()
 
-    def analyze_outcome(
-        self,
-        outcome: TrainingOutcome,
-        personal_info: PersonalInfo,
-        plan_context: str,
-        previous_lessons: List[PlaybookLesson] = None,
-    ) -> List[ReflectorAnalysis]:
-        """
-        Analyze a training outcome and generate lessons (DEPRECATED - use analyze_daily_outcome).
-
-        Args:
-            outcome: The training outcome data to analyze
-            personal_info: User's personal information
-            plan_context: Context about the training plan that was executed
-            previous_lessons: Existing lessons in the playbook for context
-
-        Returns:
-            List of ReflectorAnalysis objects (lessons learned)
-        """
-        try:
-            self.logger.info(
-                f"Analyzing outcome for plan {outcome.plan_id}, week {outcome.week_number}"
-            )
-
-            # Build the analysis prompt
-            prompt = self._build_analysis_prompt(
-                outcome, personal_info, plan_context, previous_lessons
-            )
-
-            # Call LLM to analyze the outcome
-            analysis_list, _ = self.llm.chat_parse(prompt, ReflectorAnalysisList)
-
-            self.logger.info(
-                f"Generated {len(analysis_list.analyses)} lessons from outcome"
-            )
-
-            return analysis_list.analyses
-
-        except Exception as e:
-            self.logger.error(f"Error analyzing outcome: {e}")
-            return []
-
-    def analyze_daily_outcome(
-        self,
-        outcome: "DailyTrainingOutcome",
-        personal_info: PersonalInfo,
-        session_context: str,
-        modifications_summary: str,
-        previous_lessons: List[PlaybookLesson] = None,
-    ) -> List[ReflectorAnalysis]:
-        """
-        Analyze a DAILY training outcome and generate lessons.
-        
-        This provides richer, more immediate learning compared to weekly aggregates.
-        
-        Args:
-            outcome: DailyTrainingOutcome data from completed session
-            personal_info: User's personal information
-            session_context: Context about this specific training session
-            modifications_summary: Formatted summary of user modifications
-            previous_lessons: Existing lessons in the playbook for context
-            
-        Returns:
-            List of ReflectorAnalysis objects (0-3 lessons per session)
-        """
-        try:
-            self.logger.info(
-                f"Analyzing daily outcome: plan {outcome.plan_id}, week {outcome.week_number}, {outcome.day_of_week}"
-            )
-
-            # Build the daily analysis prompt
-            prompt = self._build_daily_analysis_prompt(
-                outcome, personal_info, session_context, modifications_summary, previous_lessons
-            )
-
-            # Call LLM to analyze the daily outcome
-            analysis_list, _ = self.llm.chat_parse(prompt, ReflectorAnalysisList)
-
-            self.logger.info(
-                f"Generated {len(analysis_list.analyses)} lessons from daily session"
-            )
-
-            return analysis_list.analyses
-
-        except Exception as e:
-            self.logger.error(f"Error analyzing daily outcome: {e}")
-            return []
-
     @staticmethod
     def _format_client_information(personal_info: PersonalInfo) -> str:
         """Format client information for prompts (consistent with PromptGenerator)."""
@@ -154,393 +66,20 @@ class Reflector:
         - Experience: {personal_info.experience_level}
         """
 
-    def _build_analysis_prompt(
-        self,
-        outcome: TrainingOutcome,
-        personal_info: PersonalInfo,
-        plan_context: str,
-        previous_lessons: Optional[List[PlaybookLesson]],
-    ) -> str:
-        """Build the prompt for outcome analysis."""
-
-        # Format previous lessons
-        lessons_context = "None yet - this is the first training cycle."
-        if previous_lessons:
-            lessons_context = "\n".join(
-                [
-                    f"        - {lesson.text} (confidence: {lesson.confidence:.0%}, helpful: {lesson.helpful_count}x, harmful: {lesson.harmful_count}x)"
-                    for lesson in previous_lessons
-                ]
-            )
-
-        # Analyze outcome signals
-        completion_status = (
-            "excellent"
-            if outcome.completion_rate >= 0.8
-            else "good" if outcome.completion_rate >= 0.6 else "poor"
-        )
-
-        rating_status = ""
-        if outcome.user_rating:
-            rating_status = (
-                "very satisfied"
-                if outcome.user_rating >= 4
-                else "neutral" if outcome.user_rating == 3 else "dissatisfied"
-            )
-
-        # Heart rate analysis (optional - may not be available)
-        hr_analysis = ""
-        if outcome.avg_heart_rate and outcome.target_heart_rate_zone:
-            hr_analysis = f"\n        - Heart Rate: Avg {outcome.avg_heart_rate} bpm (Target: {outcome.target_heart_rate_zone})"
-        elif outcome.avg_heart_rate:
-            hr_analysis = f"\n        - Heart Rate: Avg {outcome.avg_heart_rate} bpm"
-
-        injury_warning = ""
-        if outcome.injury_reported:
-            injury_warning = f"\n        ⚠️ **INJURY REPORTED:** {outcome.injury_description}"
-
-        prompt = f"""
-            {self._format_client_information(personal_info)}
-            
-            **WORKFLOW STATUS:**
-            ✅ Onboarding → ✅ Plan Generated → ✅ Week {outcome.week_number} Completed
-            🎯 **CURRENT STEP:** Analyze Outcome & Generate Lessons
-            
-            **TRAINING PLAN CONTEXT:**
-            {plan_context}
-            
-            **OUTCOME DATA - Week {outcome.week_number}:**
-            - Completion: {outcome.sessions_completed}/{outcome.sessions_planned} sessions ({outcome.completion_rate*100:.0f}%) - {completion_status}
-            {f"- User Rating: {outcome.user_rating}/5 - {rating_status}" if outcome.user_rating else ""}
-            {f"- User Feedback: {outcome.user_feedback}" if outcome.user_feedback else ""}
-            {hr_analysis}
-            {f"- Energy Level: {outcome.energy_level}/5" if outcome.energy_level else ""}
-            {f"- Soreness: {outcome.soreness_level}/5" if outcome.soreness_level else ""}
-            {injury_warning}
-            {f"- Performance Metrics: {outcome.performance_metrics}" if outcome.performance_metrics else ""}
-            {f"- Additional Notes: {outcome.notes}" if outcome.notes else ""}
-            
-            **EXISTING PLAYBOOK LESSONS:**
-            {lessons_context}
-            
-            **YOUR TASK:**
-            Analyze the outcome data and generate 1-3 specific, actionable lessons that should guide future training plans.
-            
-            **LESSON GENERATION STRATEGY:**
-            
-            **Step 1: Evaluate Outcome Quality**
-            • Completion ≥80% + Rating ≥4 → Generate 1 positive reinforcement lesson
-            • Completion <60% or Rating ≤2 → Generate 1-2 warning lessons
-            • Injury reported → Generate 1 critical warning lesson
-            • Mixed signals → Generate balanced lessons addressing both
-            
-            **Step 2: Identify Patterns**
-            • What worked well? (high completion, positive feedback)
-            • What didn't work? (low completion, negative feedback, injury)
-            • What adaptations are evident? (energy, soreness, performance)
-            
-            **Step 3: Generate Lessons**
-            • Reference specific outcome data
-            • Make actionable for future plans
-            • Avoid repeating existing lessons
-            
-            **LESSON CATEGORIES & EXAMPLES:**
-            
-            **1. Positive Patterns** (positive=true)
-            • Successful strategies to repeat across all training modalities
-            • Strength example: "{personal_info.username} adapts well to progressive overload - increase load 5-10% weekly"
-            • Endurance example: "{personal_info.username} responds well to 3x/week running frequency with steady mileage increases"
-            • Sport example: "{personal_info.username} benefits from sport-specific skill work 2x/week alongside conditioning"
-            • Priority: medium-high
-            
-            **2. Warning Lessons** (positive=false)
-            • Issues to avoid or correct across any training type
-            • Volume example: "Reduce training volume by 20% - user reported high soreness (4/5) and low energy (2/5)"
-            • Intensity example: "Delay high-intensity intervals until week 4+ - premature introduction caused fatigue"
-            • Frequency example: "Limit to 3 training days per week - 4+ days led to poor recovery"
-            • Priority: high-critical (especially for injuries)
-            
-            **3. Adaptation Insights** (positive=true)
-            • How user responds to specific training stimuli
-            • Recovery example: "Recovery adequate with 48-hour rest between high-intensity sessions"
-            • Progression example: "Can handle 10% weekly volume increases without negative symptoms"
-            • Modality example: "Adapts better to mixed training (strength + endurance) than single-modality focus"
-            • Priority: medium
-            
-            **LESSON QUALITY CRITERIA:**
-            ✓ **Specific**: Reference concrete data (completion %, rating, feedback, HR, soreness)
-            ✓ **Actionable**: Provide clear guidance (e.g., "Reduce volume by 20%", "Add rest day mid-week")
-            ✓ **Personalized**: Tailored to {personal_info.username}'s response pattern, not generic
-            ✓ **Evidence-based**: Directly supported by the outcome signals
-            ✓ **Concise**: 1-2 sentences maximum per lesson
-            
-            **PRIORITY ASSIGNMENT GUIDE:**
-            • **critical**: Injury reported, safety concerns requiring immediate action
-            • **high**: Major issues preventing goal achievement (low completion, dissatisfaction)
-            • **medium**: Optimization opportunities (good but could be better)
-            • **low**: Minor tweaks or secondary observations
-            
-        **TAG SELECTION:**
-        Choose 2-4 relevant tags from:
-        • Experience: beginner, intermediate, advanced
-        • Training load: volume, intensity, frequency, progression
-        • Modality: strength, endurance, mixed, sport_specific
-        • Recovery: recovery, adaptation, rest
-        • Resources: equipment, schedule, timing, environment
-        • Safety: injury_prevention, limitations, safety
-        • Other: motivation, preferences, training_style
-        
-        **IMPORTANT RULES:**
-        ✓ Don't repeat existing lessons unless new evidence significantly changes them
-        ✓ Focus on lessons that will actually impact future plan generation
-        ✓ If outcome is excellent (>80% completion, ≥4 rating), generate 1 positive lesson only
-        ✓ If outcome has problems, prioritize 1-2 warning lessons to prevent repetition
-        ✓ Maximum 3 lessons total - quality over quantity
-        
-        **OUTPUT FORMAT:**
-        Return in ReflectorAnalysisList format with 1-3 lessons.
-        Each lesson must include: lesson, tags, confidence, positive, reasoning, priority.
-        """
-
-        return prompt
-
-    def _build_daily_analysis_prompt(
-        self,
-        outcome: "DailyTrainingOutcome",
-        personal_info: PersonalInfo,
-        session_context: str,
-        modifications_summary: str,
-        previous_lessons: Optional[List[PlaybookLesson]],
-    ) -> str:
-        """Build the prompt for daily outcome analysis."""
-        from core.base.schemas.playbook_schemas import DailyTrainingOutcome  # Import here to avoid circular dependency
-
-        # Format previous lessons
-        lessons_context = "None yet - this is early in their training journey."
-        if previous_lessons:
-            lessons_context = "\n".join(
-                [
-                    f"        - {lesson.text} (confidence: {lesson.confidence:.0%}, helpful: {lesson.helpful_count}x, harmful: {lesson.harmful_count}x)"
-                    for lesson in previous_lessons
-                ]
-            )
-
-        # Determine session quality signals
-        completion_status = "completed" if outcome.session_completed else "incomplete"
-        
-        rating_status = ""
-        if outcome.user_rating:
-            rating_status = (
-                "very positive"
-                if outcome.user_rating >= 4
-                else "neutral" if outcome.user_rating == 3 else "negative"
-            )
-
-        # Build feedback section
-        feedback_section = ""
-        if outcome.feedback_provided:
-            feedback_section = f"""
-            **USER FEEDBACK PROVIDED:**
-            • Rating: {outcome.user_rating}/5 - {rating_status}
-            {f"• Comments: {outcome.user_feedback}" if outcome.user_feedback else ""}
-            {f"• Energy after: {outcome.energy_level}/5" if outcome.energy_level else ""}
-            {f"• Difficulty: {outcome.difficulty}/5" if outcome.difficulty else ""}
-            {f"• Enjoyment: {outcome.enjoyment}/5" if outcome.enjoyment else ""}
-            {f"• Soreness: {outcome.soreness_level}/5" if outcome.soreness_level else ""}
-            """
-        else:
-            feedback_section = """
-            **USER SKIPPED FEEDBACK** (still learn from modifications and completion status)
-            """
-
-        # Build modifications section
-        modifications_section = f"""
-        **TRAINING MODIFICATIONS:**
-        {modifications_summary}
-        """
-
-        # Injury warning
-        injury_warning = ""
-        if outcome.injury_reported:
-            injury_warning = f"""
-        ⚠️  **INJURY/PAIN REPORTED:** {outcome.injury_description}
-        Location: {outcome.pain_location}
-        """
-
-        prompt = f"""
-        {self._format_client_information(personal_info)}
-            
-            **WORKFLOW STATUS:**
-            ✅ Onboarding → ✅ Plan Generated → ✅ Session Completed → ✅ Daily Feedback
-            🎯 **CURRENT STEP:** Analyze Daily Session & Generate Immediate Lessons
-            
-            **SESSION CONTEXT:**
-            {session_context}
-            
-            **SESSION OUTCOME - {outcome.day_of_week}, Week {outcome.week_number}:**
-            • Training Type: {outcome.training_type}
-            • Completion: {completion_status} ({outcome.completion_percentage*100:.0f}%)
-            • Date: {outcome.training_date}
-            
-            {modifications_section}
-            {feedback_section}
-            {injury_warning}
-            
-            **EXISTING PLAYBOOK LESSONS:**
-            {lessons_context}
-            
-            **YOUR TASK:**
-            Analyze this SINGLE training session and generate 0-2 specific, actionable lessons.
-            Daily feedback enables immediate learning - focus on signals that indicate needed adjustments.
-            
-            **LESSON GENERATION STRATEGY:**
-            
-            **When to Generate Lessons (Be Selective):**
-            
-            ✅ **Generate 1-2 lessons if:**
-            • User made significant modifications (reduced weight/reps/sets/distance by >15%)
-            • Injury/pain reported (CRITICAL - always generate warning lesson)
-            • Very negative feedback (rating ≤2, difficulty 5/5, very low energy)
-            • Very positive signals with modifications (increased load - user ready for more)
-            • Completion issues (didn't finish planned session)
-            
-            ❌ **Generate 0 lessons if:**
-            • Session went as planned with neutral/positive feedback (no lessons needed)
-            • Feedback skipped AND no modifications (insufficient signal)
-            • Minor modifications (<10% changes)
-            • Everything normal/expected
-            
-            **DAILY LESSON CATEGORIES & EXAMPLES:**
-            
-            **1. Load/Intensity Adjustments** (most common)
-            • Reductions → "Reduce prescribed weight by 10-15% on squat variations - user struggled today"
-            • Increases → "Can increase upper body volume - user added extra sets and reported feeling strong"
-            • Endurance → "Shorten endurance sessions to 20-25min - user consistently reducing planned distance"
-            • Priority: high-medium
-            
-            **2. Immediate Safety Concerns** (always generate if applicable)
-            • Injuries → "Avoid high-impact plyometrics - knee pain reported during box jumps"
-            • Pain patterns → "Reduce overhead pressing volume - shoulder discomfort during workout"
-            • Fatigue → "Add extra rest day after high-intensity sessions - very low energy reported"
-            • Priority: critical
-            
-            **3. Exercise Preferences** (from modifications)
-            • Substitutions → "User prefers dumbbell press over barbell - switched exercises twice this week"
-            • Skipped exercises → "User skips deadlift variations - address technique concerns or substitute"
-            • Added exercises → "User enjoys accessory arm work - consistently adding extra sets"
-            • Priority: medium
-            
-            **4. Progression Insights** (positive signals)
-            • Readiness → "Ready for progression - rated 4/5 and described as 'easy' with high enjoyment"
-            • Adaptations → "Recovering well from high-volume sessions - energy levels good next day"
-            • Capacity → "Can handle 4 training days per week - completing all sessions with positive feedback"
-            • Priority: medium
-            
-            **LESSON QUALITY CRITERIA:**
-            ✓ **Immediate**: Based on THIS session's data (not general observations)
-            ✓ **Specific**: Reference exact exercises, weights, distances, or session details
-            ✓ **Actionable**: Clear guidance for NEXT similar session (e.g., "Reduce weight by 10kg on bench press")
-            ✓ **Evidence-based**: Direct link to modifications, feedback, or completion data
-            ✓ **Concise**: 1 sentence per lesson
-            
-            **PRIORITY ASSIGNMENT:**
-            • **critical**: Injury/pain, safety issues requiring immediate action
-            • **high**: Significant modifications indicating mismatched prescription (>20% changes)
-            • **medium**: Moderate adjustments, preferences, progression opportunities
-            • **low**: Minor optimizations (rare in daily feedback - usually just skip lesson)
-            
-            **TAG SELECTION:**
-            Choose 2-3 relevant tags:
-            • Modality: strength, endurance, mixed, sport_specific
-            • Load: volume, intensity, weight, sets, reps, distance, duration
-            • Response: recovery, fatigue, adaptation, soreness
-            • Safety: injury_prevention, pain, limitations
-            • Behavior: preferences, motivation, adherence, modifications
-            
-            **CRITICAL RULES:**
-            ✓ Be SELECTIVE - Most sessions don't need lessons (0 lessons is valid!)
-            ✓ Only generate lessons when there's a CLEAR SIGNAL requiring action
-            ✓ Don't repeat existing lessons unless new evidence contradicts them
-            ✓ Focus on ACTIONABLE insights for future similar sessions
-            ✓ Maximum 2 lessons per session (usually 0-1)
-            
-            **OUTPUT FORMAT:**
-            Return in ReflectorAnalysisList format with 0-2 lessons.
-            Each lesson must include: lesson, tags, confidence, positive, reasoning, priority.
-            """
-
-        return prompt
-
-    def quick_analyze_signals(self, outcome: TrainingOutcome) -> dict:
-        """
-        Quick analysis of outcome signals without AI (for logging/debugging).
-
-        Returns:
-            Dictionary with simple signal analysis
-        """
-        analysis = {
-            "completion_status": (
-                "good" if outcome.completion_rate >= 0.75 else "needs_improvement"
-            ),
-            "satisfaction": (
-                "high"
-                if outcome.user_rating and outcome.user_rating >= 4
-                else (
-                    "low"
-                    if outcome.user_rating and outcome.user_rating <= 2
-                    else "neutral"
-                )
-            ),
-            "injury_risk": "high" if outcome.injury_reported else "low",
-            "adaptation": (
-                "positive"
-                if outcome.completion_rate >= 0.75
-                and (not outcome.user_rating or outcome.user_rating >= 3)
-                else "negative"
-            ),
-            "flags": [],
-        }
-
-        # Add flags
-        if outcome.completion_rate < 0.5:
-            analysis["flags"].append("Low completion rate")
-
-        if outcome.injury_reported:
-            analysis["flags"].append("Injury reported")
-
-        if outcome.soreness_level and outcome.soreness_level >= 4:
-            analysis["flags"].append("High soreness")
-
-        # Heart rate analysis (optional)
-        if outcome.avg_heart_rate and outcome.target_heart_rate_zone:
-            try:
-                # Simple check if HR seems too high (basic heuristic)
-                target_hr = int(
-                    outcome.target_heart_rate_zone.replace("<", "")
-                    .replace(">", "")
-                    .replace("bpm", "")
-                    .strip()
-                    .split()[0]
-                )
-                if outcome.avg_heart_rate > target_hr + 10:
-                    analysis["flags"].append("Heart rate above target")
-            except (ValueError, AttributeError):
-                # If target HR zone format is unexpected, skip this check
-                pass
-
-        return analysis
-
     def extract_initial_lessons(
         self,
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
         formatted_follow_up_responses: str,
-    ) -> List[PlaybookLesson]:
+    ) -> List[ReflectorAnalysis]:
         """
         Extract initial "seed" lessons from onboarding Q&A responses.
 
         This creates the foundation of the user's playbook based on constraints,
         preferences, and context gathered during the onboarding process.
+
+        Returns ReflectorAnalysis objects that should be passed through Curator
+        for deduplication before being saved to the playbook.
 
         Args:
             personal_info: User's personal information
@@ -548,13 +87,17 @@ class Reflector:
             formatted_follow_up_responses: Formatted responses from follow-up questions
 
         Returns:
-            List of PlaybookLesson objects representing initial constraints/preferences
+            List of ReflectorAnalysis objects (will be processed by Curator)
         """
         try:
             self.logger.info("Extracting initial lessons from onboarding responses...")
 
-            # Build the prompt
-            combined_responses = f"{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
+            goal_experience_question = "Q: What is your ultimate training goals and your accompanying experience level"
+            goal_experience_response = f"A: My goal is; {personal_info.goal_description} and I have experience_level {personal_info.experience_level}"
+            fake_question_response = f"{goal_experience_question}: {goal_experience_response}"
+            
+            # Build the prompt with combined responses including the fake question
+            combined_responses = f"{fake_question_response}\n\n{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
 
             prompt = f"""
                 {self._format_client_information(personal_info)}
@@ -563,401 +106,369 @@ class Reflector:
                 ✅ Initial Questions → ✅ Follow-up Questions → ✅ Responses Collected
                 🎯 **CURRENT STEP:** Extract Seed Lessons from Onboarding
                 
+                **YOUR ROLE IN THE ACE FRAMEWORK:**
+                You are the Reflector - responsible for generating actionable lessons from user interactions. These lessons will be curated by the Curator and stored in the user's playbook, which guides the TrainingCoach to create personalized training plans. Focus on extracting long-term, persistent insights - not temporary states or daily fluctuations.
+                
+                **THE LESSON'S PURPOSE:**
+                - **Institutional Memory:** These lessons become part of the user's playbook that guides ALL future plan generation
+                - **Long-Term Focus:** Extract persistent patterns, constraints, and preferences - not temporary states or daily changes
+                - **Actionable Knowledge:** Each lesson should be specific and actionable for future plan generation
+                - **Quality over Quantity:** Better to extract fewer high-quality, unique lessons than many overlapping ones
+                
                 **COMPLETE ONBOARDING RESPONSES:**
                 {combined_responses}
                 
                 **YOUR TASK:**
-                Extract 3-7 actionable lessons from these responses that will guide ALL future training plans.
+                Extract 3-7 **UNIQUE, ACTIONABLE, LONG-TERM** lessons from these responses that will guide ALL future training plans.
                 These are "seed lessons" - fundamental constraints, preferences, and context learned during onboarding.
                 
+                **CRITICAL FILTER: LONG-TERM LESSONS ONLY**
+                - Focus on persistent patterns, not temporary states
+                - Capture long-term constraints (injuries, equipment access, schedule patterns, etc.)
+                - Capture proven preferences that are likely to persist over time
+                - Avoid lessons about daily fluctuations, one-time events, or temporary situations
+                - If a potential lesson seems temporary or situation-specific, it may not belong in the playbook
+                
+                **UNIQUENESS REQUIREMENT:**
+                ✓ Each lesson MUST be DISTINCT and NON-OVERLAPPING with other extracted lessons
+                ✓ Avoid extracting multiple lessons that convey the same or similar meaning
+                ✓ If two potential lessons overlap significantly → merge them or pick the most comprehensive one
+                ✓ Focus on extracting DIFFERENT aspects of the user (schedule, equipment, constraints, preferences, etc.)
+                ✓ Each lesson should cover a UNIQUE dimension of the user's profile
+                
+                **WHAT TO EXTRACT (DISTINCT LESSONS):**
+                • One lesson about schedule/availability (e.g., "can train Monday/Wednesday/Friday")
+                • One lesson about equipment constraints (e.g., "limited to dumbbells only")
+                • One lesson about physical limitations (e.g., "avoids overhead pressing due to shoulder")
+                • One lesson about preferences (e.g., "prefers strength over endurance")
+                • One lesson about experience level (e.g., "beginner - focus on fundamentals")
+                • Each lesson should cover a DIFFERENT aspect - avoid overlap
+                
+                **WHAT NOT TO EXTRACT (OVERLAPS/DUPLICATES):**
+                ✗ Multiple lessons that say the same thing in different ways
+                ✗ Lessons that significantly overlap in meaning
+                ✗ Redundant lessons about the same constraint/preference
+                ✗ Lessons that could be combined into one comprehensive lesson
+                
+                **DUPLICATE AVOIDANCE:**
+                Before extracting each lesson, ask yourself:
+                1. "Does this lesson overlap with another lesson I'm extracting?"
+                2. "Can I combine this with another lesson instead?"
+                3. "Does this cover the same constraint/preference as an existing lesson?"
+                
+                If YES to any → **MERGE OR SKIP**. Only extract truly distinct, unique lessons.
+                
+                {self._get_shared_lesson_extraction_sections()}
+                
+                Extract 3-7 **UNIQUE, NON-OVERLAPPING** lessons total - **quality and uniqueness over quantity**.
+                Remember: Each lesson should cover a different dimension of the user's profile.
+            """
+
+            analyses_list, _ = self.llm.chat_parse(prompt, ReflectorAnalysisList)
+            analyses = analyses_list.analyses
+
+            self.logger.info(f"Extracted {len(analyses)} initial lesson analyses from onboarding")
+            for analysis in analyses:
+                self.logger.info(f"  - [{('✅' if analysis.positive else '⚠️ ')}] {analysis.lesson} (confidence: {analysis.confidence:.0%})")
+
+            # Return ReflectorAnalysis objects (will be processed by Curator)
+            return analyses
+
+        except Exception as e:
+            self.logger.error(f"Error extracting initial lessons: {e}")
+            return []
+
+    def extract_lessons_from_conversation_history(
+        self,
+        conversation_history: List[Dict[str, str]],
+        personal_info: PersonalInfo,
+        accepted_training_plan: Dict[str, Any],
+        existing_playbook: "UserPlaybook",
+    ) -> List[ReflectorAnalysis]:
+        """
+        Extract lessons from conversation history when user accepts the plan.
+        
+        This extracts additional insights from the conversation that occurred
+        during plan preview/review. The Curator automatically prevents duplicates
+        by comparing against all existing lessons (including onboarding lessons).
+        
+        Args:
+            conversation_history: List of conversation messages [{role, content}, ...]
+            personal_info: User's personal information
+            accepted_training_plan: The training plan that satisfied the user
+            existing_playbook: User's current playbook (for context only)
+            
+        Returns:
+            List of ReflectorAnalysis objects extracted from conversation
+            (Curator will process these and convert to PlaybookLesson)
+        """
+        try:
+            self.logger.info("Extracting lessons from conversation history...")
+            
+            # Format conversation history
+            conversation_text = self._format_conversation_history(conversation_history)
+            
+            # Format accepted training plan summary
+            plan_summary = self._format_training_plan_summary(accepted_training_plan)
+            
+            # Format existing playbook context (what we already know)
+            existing_lessons_context = self._format_existing_lessons_context(existing_playbook)
+            
+            prompt = f"""
+                {self._format_client_information(personal_info)}
+                
+                **WORKFLOW STATUS:**
+                ✅ Initial Questions → ✅ Follow-up Questions → ✅ Plan Generated → ✅ Plan Accepted
+                🎯 **CURRENT STEP:** Extract Lessons from Conversation History
+                
+                **YOUR ROLE IN THE ACE FRAMEWORK:**
+                You are the Reflector - responsible for generating actionable lessons from user interactions. These lessons will be curated by the Curator and stored in the user's playbook, which guides the TrainingCoach to create personalized training plans. Focus on extracting long-term, persistent insights - not temporary states or daily fluctuations.
+                
+                **THE LESSON'S PURPOSE:**
+                - **Institutional Memory:** These lessons become part of the user's playbook that guides ALL future plan generation
+                - **Long-Term Focus:** Extract persistent patterns, constraints, and preferences - not temporary states or daily changes
+                - **Actionable Knowledge:** Each lesson should be specific and actionable for future plan generation
+                - **Quality over Quantity:** Better to extract fewer high-quality, unique lessons than many overlapping ones
+                
+                **ACCEPTED TRAINING PLAN:**
+                {plan_summary}
+                
+                **CONVERSATION HISTORY:**
+                {conversation_text}
+                
+                **EXISTING PLAYBOOK CONTEXT (What We Already Know):**
+                {existing_lessons_context}
+                
+                **YOUR TASK:**
+                Extract 1-5 **UNIQUE, ACTIONABLE, LONG-TERM** lessons from the conversation history that will guide future training plans.
+                **CRITICAL:** Only extract lessons that are TRULY NEW and NOT already covered in the existing playbook.
+                
+                **CRITICAL FILTER: LONG-TERM LESSONS ONLY**
+                - Focus on persistent patterns, not temporary states
+                - Capture long-term constraints (injuries, equipment access, schedule patterns, etc.)
+                - Capture proven preferences that are likely to persist over time
+                - Avoid lessons about daily fluctuations, one-time events, or temporary situations
+                - If a potential lesson seems temporary or situation-specific, it may not belong in the playbook
+                
+                **UNIQUENESS REQUIREMENT:**
+                ✓ Each lesson MUST add NEW value not already present in existing playbook
+                ✓ Compare each potential lesson against ALL existing lessons before extracting
+                ✓ If a lesson is similar/duplicate of existing lesson → DO NOT EXTRACT IT
+                ✓ Focus on insights that COMPLEMENT or EXTEND existing knowledge, not repeat it
+                
+                **WHAT TO EXTRACT (UNIQUE INSIGHTS ONLY):**
+                • **New** preferences mentioned during conversation (not in onboarding or existing playbook)
+                • **Novel** clarifications or elaborations that add new context
+                • **Unique** questions that revealed important new context
+                • **Distinct** feedback patterns or preferences shown through conversation style
+                • **Additional** training philosophy or approach preferences not yet captured
+                • **New** constraints or limitations mentioned for the first time
+                
+                **WHAT NOT TO EXTRACT (DUPLICATES/IRRELEVANT/TEMPORARY):**
+                ✗ Lessons already covered in existing playbook (even if slightly different wording)
+                ✗ Generic compliments ("I like it", "Looks good")
+                ✗ Temporary preferences or mood-based statements (daily fluctuations)
+                ✗ One-off questions without actionable insights
+                ✗ Lessons that are essentially the same as existing lessons (different wording, same meaning)
+                ✗ Lessons that overlap significantly with existing playbook content
+                ✗ Temporary states or situation-specific insights that won't persist
+                ✗ Daily fluctuations, one-time events, or context-dependent preferences
+                
+                **DUPLICATE DETECTION:**
+                Before extracting a lesson, ask yourself:
+                1. "Does this lesson already exist in the playbook (same or similar meaning)?"
+                2. "Does this add truly new information, or is it just restating what we know?"
+                3. "Would this be redundant with existing lessons?"
+                
+                If YES to any → **DO NOT EXTRACT IT**. Only extract if it's genuinely unique.
+                
+                {self._get_shared_lesson_extraction_sections()}
+                
+                Extract 1-5 **UNIQUE** lessons total - **quality and uniqueness over quantity**.
+                Remember: It's better to extract fewer truly unique lessons than many duplicate ones.
+            """
+            
+            analyses_list, _ = self.llm.chat_parse(prompt, ReflectorAnalysisList)
+            analyses = analyses_list.analyses
+            
+            # Store analyses for curator processing (return both for flexibility)
+            # Note: Curator expects ReflectorAnalysis, so we'll process those directly
+            # The caller can convert to PlaybookLesson after curator processing
+            
+            self.logger.info(f"Extracted {len(analyses)} lesson analyses from conversation history")
+            for analysis in analyses:
+                self.logger.info(f"  - [{('✅' if analysis.positive else '⚠️ ')}] {analysis.lesson} (priority: {analysis.priority})")
+            
+            # Return ReflectorAnalysis directly (Curator expects this format)
+            # This preserves priority and all analysis metadata
+            return analyses
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting lessons from conversation history: {e}")
+            return []
+    
+    def _format_conversation_history(self, conversation_history: List[Dict[str, str]]) -> str:
+        """Format conversation history for prompt."""
+        if not conversation_history:
+            return "No conversation history available."
+        
+        formatted = []
+        for i, msg in enumerate(conversation_history, 1):
+            role = msg.get("role", "unknown")
+            content = msg.get("content", "")
+            formatted.append(f"**{role.upper()} {i}:** {content}")
+        
+        return "\n\n".join(formatted)
+    
+    def _format_training_plan_summary(self, training_plan: Dict[str, Any]) -> str:
+        """Format training plan summary for prompt."""
+        if not training_plan:
+            return "Training plan details not available."
+        
+        title = training_plan.get("title", "Unknown")
+        summary = training_plan.get("summary", "No summary available")
+        justification = training_plan.get("justification", "No justification available")
+        
+        return f"""
+                **Title:** {title}
+
+                **Summary:** {summary}
+
+                **Justification:** {justification}
+        """
+    
+    def _format_existing_lessons_context(self, playbook: "UserPlaybook") -> str:
+        """Format existing playbook lessons as context (what we already know)."""
+        if not playbook or not playbook.lessons:
+            return "No existing lessons - this is a new playbook."
+        
+        formatted = []
+        for i, lesson in enumerate(playbook.lessons, 1):
+            formatted.append(
+                f"{i}. [{('✅' if lesson.positive else '⚠️ ')}] {lesson.text} (confidence: {lesson.confidence:.0%})"
+            )
+        
+        return "\n".join(formatted)
+    
+    def _get_shared_lesson_extraction_sections(self) -> str:
+        """
+        Get shared lesson extraction prompt sections (categories, formatting, quality, confidence, output).
+        
+        This is used by both extract_initial_lessons and extract_lessons_from_conversation_history
+        to avoid duplication.
+        
+        Returns:
+            String containing the shared prompt sections
+        """
+        return """
                 **LESSON CATEGORIES & EXAMPLES:**
                 
                 **1. Physical Constraints** (priority: critical | positive: false)
                 • Injuries, pain, medical limitations requiring accommodation across all training types
-                • Strength example: "Avoid overhead pressing movements - shoulder injury recovery ongoing"
-                • Endurance example: "Avoid high-impact activities (running, jumping) due to chronic knee pain"
-                • Sport example: "No contact drills - concussion protocol in effect"
+                • Strength example: "The user avoids overhead pressing movements due to shoulder injury recovery."
+                • Endurance example: "The user avoids high-impact activities (running, jumping) due to chronic knee pain."
+                • Sport example: "The user cannot perform contact drills due to concussion protocol."
                 • Tags: injury_prevention, limitations, safety
                 
                 **2. Equipment & Resources** (priority: high | positive: true/false)
                 • Available/unavailable equipment and training environments
-                • Strength example: "Limited to dumbbells (5-20kg) and bodyweight exercises only"
-                • Endurance example: "No pool access available - use running/cycling for cardio work"
-                • Sport athlete example: "Has existing sport training schedule - provide supplemental strength/conditioning work only"
-                • Mixed example: "Full gym access plus outdoor running routes available"
+                • Strength example: "The user is limited to dumbbells (5-20kg) and bodyweight exercises only."
+                • Endurance example: "The user has no pool access available - use running/cycling for cardio work."
+                • Sport athlete example: "The user has an existing sport training schedule - provide supplemental strength/conditioning work only."
+                • Mixed example: "The user has full gym access plus outdoor running routes available."
                 • Tags: equipment, resources, environment, supplemental_training
                 
-                **3. Schedule Constraints** (priority: high | positive: true)
-                • Training availability, session duration, timing preferences
-                • Time example: "Can train Monday/Wednesday/Friday only, 45 minutes maximum per session"
-                • Timing example: "Prefers early morning sessions (6-7 AM) before work"
-                • Frequency example: "Available 4-5 days per week for training"
-                • Tags: schedule, timing, frequency, availability
+                **3. Schedule & Recovery** (priority: high | positive: true)
+                • Training availability, session duration, timing preferences, and recovery patterns
+                • Schedule example: "The user can train Monday/Wednesday/Friday only, 45 minutes maximum per session."
+                • Timing example: "The user prefers early morning sessions (6-7 AM) before work."
+                • Frequency example: "The user is available 4-5 days per week for training."
+                • Recovery example: "The user needs at least one full rest day per week and prefers Sunday."
+                • Recovery example: "The user enjoys active recovery days with light mobility work or walking."
+                • Recovery example: "The user requires 48 hours between intense strength sessions for optimal recovery."
+                • Tags: schedule, timing, frequency, availability, recovery, rest, active_recovery, rest_days
                 
                 **4. Experience-Based Guidelines** (priority: medium | positive: true)
                 • Skill level, training history, appropriate progressions
-                • Beginner example: "Beginner level - prioritize fundamental movement patterns and technique"
-                • Intermediate example: "Intermediate athlete - ready for structured periodization and moderate volume"
-                • Advanced example: "Advanced competitor - can handle high frequency and complex programming"
+                • Beginner example: "The user is a beginner and should prioritize fundamental movement patterns and technique."
+                • Intermediate example: "The user is an intermediate athlete ready for structured periodization and moderate volume."
+                • Advanced example: "The user is an advanced competitor and can handle high frequency and complex programming."
                 • Tags: experience_level, progression, beginner/intermediate/advanced
                 
-                **5. Preferences & Motivations** (priority: medium | positive: true)
-                • Training style, enjoyment factors, modality preferences
-                • Variety example: "Prefers varied sessions to prevent boredom - rotate activities and formats weekly"
-                • Modality example: "Enjoys strength training more than endurance work - emphasize accordingly"
-                • Format example: "Prefers structured workouts over open-ended training"
-                • Tags: preferences, motivation, variety, training_style
-                
-                **6. Goal-Specific Context** (priority: high | positive: true)
+                **5. Goal-Specific Context** (priority: high | positive: true)
                 • Specific requirements for their athletic goal or sport
-                • Endurance example: "Marathon preparation - prioritize progressive distance with 10% weekly increases"
-                • Strength example: "Powerlifting focus - emphasize main lifts with appropriate accessories"
-                • Sport athlete example: "Football player with Mon/Wed/Fri practice + Saturday games - schedule strength work Tue/Thu/Sun only"
-                • Sport athlete example: "Cyclist with existing training plan - focus on supplemental core/upper body strength 2x/week"
-                • Mixed example: "General fitness - balance strength, endurance, and mobility work"
+                • Endurance example: "The user is preparing for a marathon and needs progressive distance with 10% weekly increases."
+                • Strength example: "The user has a powerlifting focus and needs emphasis on main lifts with appropriate accessories."
+                • Sport athlete example: "The user is a football player with Mon/Wed/Fri practice and Saturday games - schedule strength work Tue/Thu/Sun only."
+                • Sport athlete example: "The user is a cyclist with an existing training plan and needs supplemental core/upper body strength 2x/week."
+                • Mixed example: "The user has a general fitness goal and needs balance between strength, endurance, and mobility work."
                 • Tags: goal_specific, sport_specific, training_focus, supplemental_training
+                
+                **6. Training Load & Progression** (priority: medium | positive: true)
+                • Preferences for intensity, volume, and how training should progress over time
+                • Intensity example: "The user prefers moderate-intensity steady-state cardio over high-intensity intervals."
+                • Intensity example: "The user enjoys high-intensity training sessions (RPE 8-9) 2-3x per week."
+                • Intensity example: "The user prefers conservative intensity (RPE 6-7) with focus on form and consistency."
+                • Volume example: "The user prefers minimal effective dose - quality over quantity approach."
+                • Volume example: "The user thrives on higher training volumes and can handle 5-6 sessions per week."
+                • Volume example: "The user prefers fewer, longer sessions over many short sessions."
+                • Progression example: "The user prefers conservative, gradual progression and avoids aggressive increases."
+                • Progression example: "The user responds well to linear progression with structured overload."
+                • Progression example: "The user enjoys varied progression with periodized intensity and volume changes."
+                • Tags: intensity, volume, progression, rpe, training_intensity, training_volume, periodization, training_load
+                
+                **7. Preferences & Exercise Selection** (priority: medium | positive: true)
+                • Training style preferences, enjoyment factors, and exercise/movement pattern preferences
+                • Style example: "The user prefers varied sessions to prevent boredom - rotate activities and formats weekly."
+                • Modality example: "The user enjoys strength training more than endurance work - emphasize accordingly."
+                • Format example: "The user prefers structured workouts over open-ended training."
+                • Exercise example: "The user prefers free weights over machines for strength training."
+                • Exercise example: "The user avoids specific exercises (e.g., deadlifts) due to form concerns."
+                • Exercise example: "The user enjoys compound movements - prioritize multi-joint exercises."
+                • Exercise example: "The user prefers bodyweight exercises when equipment is unavailable."
+                • Tags: preferences, motivation, variety, training_style, exercise_selection, movement_patterns, compound_isolation
                 
                 **FORMATTING REQUIREMENTS:**
                 ✓ Each lesson must be **specific** and **actionable** (not generic advice like "eat healthy")
-                ✓ Use **imperative language**: "Avoid...", "Focus on...", "Include...", "Limit to...", "Prioritize..."
-                ✓ Reference **specific constraints** mentioned in user responses
+                ✓ **CRITICAL - Lesson Text Format:** Always write lessons in third person starting with "The user...":
+                  • ✅ CORRECT: "The user avoids overhead pressing movements due to shoulder injury recovery."
+                  • ✅ CORRECT: "The user prefers compound movements for upper body strength development."
+                  • ✅ CORRECT: "The user can train Monday/Wednesday/Friday only, 45 minutes maximum per session."
+                  • ❌ WRONG: "Avoid overhead pressing movements..."
+                  • ❌ WRONG: "Focus on compound movements..."
+                  • ❌ WRONG: "Train Monday/Wednesday/Friday only..."
+                ✓ Reference **specific constraints** or insights mentioned
                 ✓ Mark **physical constraints/warnings/limitations** as positive=false
                 ✓ Mark **preferences/capabilities/guidelines/strengths** as positive=true
                 ✓ Assign appropriate **priority levels**: critical, high, medium, low
                 ✓ Add **relevant tags**: 2-4 tags per lesson from the categories shown above
                 ✓ Keep lessons **concise**: 1-2 sentences maximum
                 
-                **QUALITY STANDARDS:**
-                ✓ Focus on **unchanging constraints** (injuries, equipment, schedule) - these persist
-                ✓ Extract **strong preferences** only - not weak or uncertain mentions
-                ✓ Lessons should apply to **ALL future plans**, not just the first one
-                ✓ Don't create lessons for temporary/variable factors (current energy, mood, weather)
-                ✓ Extract 3-7 lessons total - **quality over quantity**
+                **QUALITY STANDARDS (LONG-TERM FOCUS):**
+                ✓ Focus on **unchanging constraints** (injuries, equipment, schedule, etc.) - these persist over time
+                ✓ Extract **strong, persistent preferences** only - not weak, uncertain, or temporary mentions
+                ✓ Lessons should apply to **ALL future plans**, not just the current one
+                ✓ Don't create lessons for temporary/variable factors (current energy, mood, weather, daily fluctuations)
+                ✓ Extract lessons that represent **long-term patterns** - not one-time events or situation-specific insights
+                ✓ Each lesson should be **actionable** and **specific** - something the TrainingCoach can use to guide future plan generation
+                ✓ Extract lessons with focus on quality over quantity - better to extract fewer high-value lessons
                 
                 **CONFIDENCE ASSIGNMENT:**
-                • Critical constraints (injuries, equipment): 0.8-0.9
-                • Explicit strong preferences: 0.7-0.8
-                • Implied preferences or moderate constraints: 0.5-0.7
-                • Weak signals or assumptions: 0.3-0.5
+                Assign confidence based on how clearly and explicitly the preference/constraint was stated:
+                
+                **0.9-1.0 (Highest Confidence - Towards 1):** User made an extremely clear, definitive statement with multiple reinforcements leaving no room for interpretation.
+                
+                **0.8-0.9 (Very High Confidence):** User explicitly stated a critical constraint or limitation with clear, direct language and minimal ambiguity.
+                
+                **0.7-0.8 (High Confidence):** User explicitly stated a strong preference with clear reasoning, though may allow for minor variation.
+                
+                **0.5-0.7 (Medium Confidence):** User mentioned something in passing or implied a preference through context, requiring interpretation to understand.
+                
+                **0.3-0.5 (Low Confidence):** Very vague mentions or assumptions based on limited information, with ambiguous or multiple possible interpretations.
                 
                 **OUTPUT FORMAT:**
-                Return in ReflectorAnalysisList format with 3-7 lessons.
-                Each lesson must include: lesson (text), tags (array), confidence (0.0-1.0), positive (boolean), reasoning (why extracted), priority (string).
-            """
-
-            analyses_list, _ = self.llm.chat_parse(prompt, ReflectorAnalysisList)
-            analyses = analyses_list.analyses
-
-            # Convert analyses to PlaybookLessons
-            lessons = []
-            for analysis in analyses:
-                lesson = PlaybookLesson(
-                    id=f"onboarding_{uuid.uuid4().hex[:8]}",
-                    text=analysis.lesson,
-                    tags=analysis.tags + ["onboarding", "initial_constraint"],
-                    helpful_count=0,
-                    harmful_count=0,
-                    confidence=analysis.confidence,
-                    positive=analysis.positive,
-                    source_plan_id="onboarding",
-                )
-                lessons.append(lesson)
-
-            self.logger.info(f"Extracted {len(lessons)} initial lessons from onboarding")
-            for lesson in lessons:
-                self.logger.info(f"  - [{('✅' if lesson.positive else '⚠️ ')}] {lesson.text}")
-
-            return lessons
-
-        except Exception as e:
-            self.logger.error(f"Error extracting initial lessons: {e}")
-            return []
-
-    def extract_outline_feedback_lesson(
-        self, personal_info: PersonalInfo, outline: dict, feedback: str
-    ) -> Optional[PlaybookLesson]:
-        """
-        Extract a preference lesson from user's outline feedback.
-
-        When users review their training plan outline and provide feedback,
-        this extracts a specific preference lesson to guide the detailed plan.
-
-        Args:
-            personal_info: User's personal information
-            outline: The training plan outline they reviewed
-            feedback: User's feedback on the outline
-
-        Returns:
-            PlaybookLesson or None if feedback is too vague
-        """
-        try:
-            if not feedback or not feedback.strip():
-                return None
-
-            self.logger.info(f"Extracting lesson from outline feedback: {feedback[:50]}...")
-
-            prompt = f"""
-                {self._format_client_information(personal_info)}
-                
-                **WORKFLOW STATUS:**
-                ✅ Onboarding → ✅ Outline Generated → ✅ User Reviewed Outline → ✅ Feedback Received
-                🎯 **CURRENT STEP:** Extract Preference Lesson from Feedback
-                
-                **OUTLINE THEY REVIEWED:**
-                • Title: {outline.get('title', 'N/A')}
-                • Duration: {outline.get('duration_weeks', 'N/A')} weeks
-                • Approach: {outline.get('explanation', 'N/A')}
-                
-                **USER FEEDBACK:**
-                "{feedback}"
-                
-                **YOUR TASK:**
-                Extract ONE actionable preference lesson from this feedback to apply to the detailed training plan.
-                Focus on specific requests, preferences, or concerns that will impact plan design.
-                
-                **EXTRACTION EXAMPLES (Good Cases):**
-                
-                **Example 1: Modality Preference**
-                • Feedback: "I prefer cycling over running"
-                • Lesson: "Prioritize cycling for endurance sessions instead of running"
-                • Tags: ["endurance", "preferences", "cycling", "modality"]
-                • Confidence: 0.7 | Positive: true | Priority: medium
-                
-                **Example 2: Training Volume Adjustment**
-                • Feedback: "Can we do more upper body work?"
-                • Lesson: "Increase upper body training frequency - user wants more upper body emphasis"
-                • Tags: ["upper_body", "frequency", "preferences", "volume"]
-                • Confidence: 0.7 | Positive: true | Priority: medium
-                
-                **Example 3: Intensity Concern**
-                • Feedback: "This looks too intense for me"
-                • Lesson: "Reduce training intensity and volume - user prefers moderate conservative progression"
-                • Tags: ["intensity", "volume", "preferences", "conservative"]
-                • Confidence: 0.7 | Positive: true | Priority: medium
-                
-                **Example 4: Training Focus Shift**
-                • Feedback: "I want to focus more on running and less on strength"
-                • Lesson: "Prioritize endurance volume over strength work - shift emphasis to running development"
-                • Tags: ["running", "endurance", "preferences", "sport_specific"]
-                • Confidence: 0.8 | Positive: true | Priority: high
-                
-                **Example 5: Session Duration**
-                • Feedback: "Sessions seem too long, I can't do more than 30 minutes"
-                • Lesson: "Limit all training sessions to 30 minutes maximum - time constraint from user"
-                • Tags: ["duration", "schedule", "time_constraint"]
-                • Confidence: 0.8 | Positive: true | Priority: high
-                
-                **Example 6: Sport-Specific**
-                • Feedback: "I'd like more technical skill work for basketball"
-                • Lesson: "Include dedicated basketball skill sessions 2x/week alongside conditioning"
-                • Tags: ["sport_specific", "basketball", "skills", "preferences"]
-                • Confidence: 0.7 | Positive: true | Priority: high
-                
-                **NON-EXTRACTION EXAMPLES (Return Empty):**
-                
-                • Feedback: "Looks great!" → No specific change requested
-                • Feedback: "Perfect!" → Just approval, no preference
-                • Feedback: "Good" → Too vague, no actionable insight
-                • Feedback: "When do we start?" → Question, not preference
-                
-                **EXTRACTION RULES:**
-                ✓ **Only extract** if feedback contains a specific preference, concern, or modification request
-                ✓ Make it **actionable and specific** - clear guidance for plan generator
-                ✓ Set **confidence to 0.7-0.8** (medium-high - based on explicit user statement)
-                ✓ Mark as **positive=true** (preferences are guidance, not warnings about safety)
-                ✓ Set **priority** based on impact:
-                • high: Major changes to plan structure (focus shift, time constraints)
-                • medium: Preferences that affect plan details (exercise selection, modality choices)
-                ✓ Add appropriate **tags**: preferences + specific area (cardio, strength, volume, etc.)
-                
-                **WHEN TO RETURN EMPTY (lesson=""):**
-                • Feedback is just approval ("Great!", "Looks good!", "Perfect!", "OK")
-                • Feedback is too vague to extract specific action
-                • Feedback is a question without expressing preference
-                • Feedback is conversational without actionable content
-                
-                **OUTPUT FORMAT:**
-                Return in ReflectorAnalysis format with ONE lesson.
-                If no actionable lesson can be extracted, set lesson to empty string "".
-                Include: lesson, tags, confidence, positive, reasoning, priority.
-            """
-
-            analysis, _ = self.llm.chat_parse(prompt, ReflectorAnalysis)
-
-            # Check if we got a valid lesson
-            if not analysis.lesson or analysis.lesson.strip() == "":
-                self.logger.info("No actionable lesson from outline feedback (too vague or just approval)")
-                return None
-
-            # Convert to PlaybookLesson
-            lesson = PlaybookLesson(
-                id=f"outline_feedback_{uuid.uuid4().hex[:8]}",
-                text=analysis.lesson,
-                tags=analysis.tags + ["outline_feedback", "user_preference"],
-                helpful_count=0,
-                harmful_count=0,
-                confidence=0.7,
-                positive=True,
-                source_plan_id="outline_feedback",
-            )
-
-            self.logger.info(f"Extracted outline feedback lesson: {lesson.text}")
-            return lesson
-
-        except Exception as e:
-            self.logger.error(f"Error extracting outline feedback lesson: {e}")
-            return None
-
-    def extract_lessons_from_outline_feedback(
-        self,
-        personal_info: PersonalInfo,
-        plan_outline: dict,
-        outline_feedback: str,
-    ) -> List[PlaybookLesson]:
-        """
-        Extract multiple actionable lessons from user's outline feedback.
-        
-        When users provide feedback on the training plan outline, this extracts
-        1-3 specific preferences or concerns to incorporate into the detailed plan.
-        
-        Args:
-            personal_info: User's personal information
-            plan_outline: The training plan outline they reviewed
-            outline_feedback: User's feedback on the outline
-            
-        Returns:
-            List of PlaybookLesson objects (0-3 lessons depending on feedback complexity)
-        """
-        try:
-            if not outline_feedback or not outline_feedback.strip():
-                self.logger.info("No outline feedback provided - returning empty lessons list")
-                return []
-            
-            self.logger.info(f"Extracting lessons from outline feedback: {outline_feedback[:80]}...")
-            
-            prompt = f"""
-                {self._format_client_information(personal_info)}
-                
-                **WORKFLOW STATUS:**
-                ✅ Onboarding → ✅ Outline Generated → ✅ User Reviewed Outline → ✅ Feedback Received
-                🎯 **CURRENT STEP:** Extract Preference Lessons from Feedback
-                
-                **OUTLINE THEY REVIEWED:**
-                • Title: {plan_outline.get('title', 'N/A')}
-                • Duration: {plan_outline.get('duration_weeks', 'N/A')} weeks
-                • Approach: {plan_outline.get('explanation', 'N/A')}
-                
-                **USER FEEDBACK:**
-                "{outline_feedback}"
-                
-                **YOUR TASK:**
-                Extract 1-3 actionable preference lessons from this feedback to apply to the detailed training plan.
-                Focus on specific requests, preferences, or concerns that will impact plan design.
-                
-                **EXTRACTION GUIDELINES:**
-                
-                ✅ **Extract If Feedback Contains:**
-                • Specific training preferences (modality, volume, intensity, duration)
-                • Concerns about the proposed approach
-                • Requests for modifications or emphasis shifts
-                • Time/schedule constraints not captured in Q&A
-                • Focus area preferences (more upper body, less cardio, etc.)
-                
-                ❌ **Do NOT Extract If Feedback Is:**
-                • Simple approval ("Looks great!", "Perfect!", "Good!")
-                • General excitement ("Can't wait to start!")
-                • Questions only ("When do we start?")
-                • Too vague to be actionable
-                
-                **LESSON FORMATTING:**
-                • Make lessons **specific and actionable** - clear guidance for plan generator
-                • Use **imperative language**: "Prioritize...", "Limit to...", "Include...", "Reduce..."
-                • Set **confidence to 0.7-0.8** (user explicitly stated preference)
-                • Mark as **positive=true** (preferences are guidance, not safety warnings)
-                • Set **priority** based on impact:
-                  - high: Major structure changes (focus shift, time constraints, frequency changes)
-                  - medium: Modality preferences, exercise selection, volume adjustments
-                  - low: Minor style preferences
-                • Add relevant **tags**: preferences + specific area (endurance, strength, volume, modality, etc.)
-                
-                **EXAMPLES:**
-                
-                **Example 1: Simple modality preference**
-                Feedback: "I prefer cycling over running"
-                → Lesson: "Prioritize cycling for endurance sessions instead of running"
-                   Tags: ["preferences", "endurance", "cycling", "modality"]
-                   Priority: medium | Confidence: 0.7 | Positive: true
-                
-                **Example 2: Multiple concerns**
-                Feedback: "This looks too intense and the sessions seem long. Can we do more upper body work?"
-                → Lesson 1: "Reduce training intensity and volume - user prefers conservative progression"
-                   Tags: ["preferences", "intensity", "volume", "conservative"]
-                → Lesson 2: "Limit session duration to 45 minutes or less"
-                   Tags: ["duration", "schedule", "time_constraint"]
-                → Lesson 3: "Increase upper body training frequency and volume"
-                   Tags: ["preferences", "upper_body", "frequency", "volume"]
-                
-                **Example 3: Training focus shift**
-                Feedback: "I want to focus more on running and less on strength"
-                → Lesson: "Prioritize endurance volume over strength work - shift emphasis to running development"
-                   Tags: ["preferences", "running", "endurance", "focus_shift"]
-                   Priority: high | Confidence: 0.8 | Positive: true
-                
-                **Example 4: Just approval (return empty)**
-                Feedback: "Looks perfect! Let's do this!"
-                → No lessons (just approval, no modifications needed)
-                
-                **OUTPUT FORMAT:**
-                Return in ReflectorAnalysisList format with 0-3 lessons.
-                Each lesson must include: lesson (text), tags (array), confidence (0.7-0.8), positive (true), reasoning (why extracted), priority (string).
-                Return empty analyses array if feedback is just approval or too vague.
-            """
-            
-            completion = self.openai_client.chat.completions.parse(
-                model=os.getenv("OPENAI_MODEL", "gpt-4"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert at extracting actionable training preferences from user feedback.",
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                response_format=ReflectorAnalysisList,
-                temperature=0.3,
-            )
-            
-            analyses = completion.choices[0].message.parsed.analyses
-            
-            # Convert analyses to PlaybookLessons
-            lessons = []
-            for analysis in analyses:
-                if not analysis.lesson or not analysis.lesson.strip():
-                    continue  # Skip empty lessons
-                    
-                lesson = PlaybookLesson(
-                    id=f"outline_feedback_{uuid.uuid4().hex[:8]}",
-                    text=analysis.lesson,
-                    tags=analysis.tags + ["outline_feedback", "user_preference"],
-                    helpful_count=0,
-                    harmful_count=0,
-                    confidence=analysis.confidence,
-                    positive=analysis.positive,
-                    source_plan_id="outline_feedback",
-                )
-                lessons.append(lesson)
-            
-            if lessons:
-                self.logger.info(f"Extracted {len(lessons)} lessons from outline feedback")
-                for lesson in lessons:
-                    self.logger.info(f"  - [{('✅' if lesson.positive else '⚠️ ')}] {lesson.text}")
-            else:
-                self.logger.info("No actionable lessons extracted from feedback (likely just approval)")
-            
-            return lessons
-            
-        except Exception as e:
-            self.logger.error(f"Error extracting lessons from outline feedback: {e}")
-            return []
+                Return in ReflectorAnalysisList format.
+                Each lesson must include: lesson (text), tags (array), confidence (0.0-1.0), positive (boolean), reasoning (why extracted), priority (string)."""
 
     def identify_applied_lessons(
         self, training_plan: dict, playbook_lessons: List[dict], personal_info: PersonalInfo

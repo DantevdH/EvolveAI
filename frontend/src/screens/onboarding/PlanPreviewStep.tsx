@@ -19,7 +19,8 @@ import ChatMessage from '../../components/onboarding/ChatMessage';
 import { useAuth } from '@/src/context/AuthContext';
 import { TrainingPlan, DailyTraining } from '../../types/training';
 import { trainingService } from '../../services/onboardingService';
-import { reverseTransformTrainingPlan, transformTrainingPlan } from '../../utils/trainingPlanTransformer';
+import { reverseTransformTrainingPlan, transformTrainingPlan, transformUserProfileToPersonalInfo } from '../../utils/trainingPlanTransformer';
+import { supabase } from '@/src/config/supabase';
 
 interface PlanPreviewStepProps {
   onContinue: () => void;
@@ -28,6 +29,10 @@ interface PlanPreviewStepProps {
     formattedInitialResponses?: string;
     formattedFollowUpResponses?: string;
   };
+  initialQuestions?: any[];
+  initialResponses?: Record<string, any>;
+  followUpQuestions?: any[];
+  followUpResponses?: Record<string, any>;
 }
 
 interface ChatMessage {
@@ -41,9 +46,13 @@ interface ChatMessage {
 const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
   onContinue,
   onBack,
-  planMetadata
+  planMetadata,
+  initialQuestions = [],
+  initialResponses = {},
+  followUpQuestions = [],
+  followUpResponses = {},
 }) => {
-  const { state, refreshUserProfile, setTrainingPlan } = useAuth();
+  const { state, dispatch, refreshUserProfile, setTrainingPlan } = useAuth();
   const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -174,24 +183,87 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
     try {
       const planId = typeof currentPlan?.id === 'string' ? parseInt(currentPlan.id, 10) : currentPlan?.id!;
       
-      // Get JWT token from session in AuthContext state
-      const jwtToken = state.session?.access_token;
+      // Get JWT token from session in AuthContext state (ensure available in both scenarios)
+      let jwtToken = state.session?.access_token;
+      
+      // Fallback: Get session directly from Supabase if not in state (for resume scenario)
+      if (!jwtToken) {
+        const { data: { session } } = await supabase.auth.getSession();
+        jwtToken = session?.access_token;
+      }
+      
+      if (!jwtToken) {
+        throw new Error('JWT token not available. Please sign in again.');
+      }
+      
+      // VALIDATION: Ensure userProfile exists before calling backend
+      if (!state.userProfile || !state.userProfile.id) {
+        Alert.alert(
+          'Error',
+          'User profile not found. Please reload the app.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+      
+      // VALIDATION: Ensure playbook exists (backend requires it)
+      if (!state.userProfile.playbook) {
+        console.warn('⚠️ Playbook not loaded - backend will return error');
+        // Backend requires playbook, so we can't proceed without it
+        Alert.alert(
+          'Error',
+          'Training profile not fully loaded. Please reload the app.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
       
       // Convert plan from camelCase (frontend) to snake_case (backend) before sending
       const backendFormatPlan = reverseTransformTrainingPlan(currentPlan);
-      console.log('🔄 PlanPreviewStep: Converted plan to backend format (snake_case)');
+      
+      // Convert Map to Record for responses (same as generate-plan)
+      const initialResponsesRecord: Record<string, any> = {};
+      if (initialResponses instanceof Map) {
+        initialResponses.forEach((value, key) => {
+          initialResponsesRecord[key] = value;
+        });
+      } else {
+        Object.assign(initialResponsesRecord, initialResponses);
+      }
+
+      const followUpResponsesRecord: Record<string, any> = {};
+      if (followUpResponses instanceof Map) {
+        followUpResponses.forEach((value, key) => {
+          followUpResponsesRecord[key] = value;
+        });
+      } else {
+        Object.assign(followUpResponsesRecord, followUpResponses);
+      }
+      
+      // Transform userProfile to PersonalInfo for backend
+      const personalInfo = transformUserProfileToPersonalInfo(state.userProfile);
+      
+      // VALIDATION: Ensure personalInfo transformation succeeded
+      if (!personalInfo) {
+        Alert.alert(
+          'Error',
+          'Failed to prepare user profile data. Please reload the app.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
       
       const data = await trainingService.sendPlanFeedback(
-        state.userProfile?.id!,
+        state.userProfile.id,
         planId,
         userMessage.message,
-        backendFormatPlan,  // Send plan in backend format (snake_case)
+        backendFormatPlan,  // Send training plan in backend format (snake_case)
+        state.userProfile.playbook,  // Send playbook from userProfile (validated above)
+        personalInfo,  // Send personal info from userProfile (validated above)
         chatMessages.map(msg => ({
           role: msg.isUser ? 'user' : 'assistant',
           content: msg.message,
         })),
-        planMetadata?.formattedInitialResponses,
-        planMetadata?.formattedFollowUpResponses,
         jwtToken
       );
 
@@ -260,6 +332,17 @@ const PlanPreviewStep: React.FC<PlanPreviewStepProps> = ({
           // Backend returns plan in snake_case format - transform to camelCase for frontend
           console.log('🔄 PlanPreviewStep: Transforming plan from backend format (snake_case) to frontend format (camelCase)');
           const updatedPlan = transformTrainingPlan(data.updated_plan);
+          
+          // Update userProfile with updated playbook from backend
+          if (data.updated_playbook && state.userProfile) {
+            dispatch({
+              type: 'SET_USER_PROFILE',
+              payload: {
+                ...state.userProfile,
+                playbook: data.updated_playbook
+              }
+            });
+          }
           
           // Update local plan state with transformed data
           setCurrentPlan(updatedPlan);

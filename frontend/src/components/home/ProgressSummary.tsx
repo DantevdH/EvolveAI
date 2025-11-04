@@ -42,7 +42,7 @@ export const ProgressSummary: React.FC<ProgressSummaryProps> = ({
       icon: 'calendar',
     },
     {
-      title: 'Goal',
+      title: 'Progress',
       value: `${goalProgress}%`,
       subtitle: 'complete',
       color: colors.secondary,

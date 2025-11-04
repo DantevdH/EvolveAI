@@ -34,19 +34,38 @@ export interface PlanOutline {
   [key: string]: any; // Allow additional properties
 }
 
+export interface PlaybookLesson {
+  id: string;
+  text: string;
+  tags: string[];
+  helpful_count: number;
+  harmful_count: number;
+  times_applied: number;
+  confidence: number;
+  positive: boolean;
+  created_at: string;
+  last_used_at?: string | null;
+  source_plan_id?: string | null;
+}
+
+export interface UserPlaybook {
+  user_id: string;
+  lessons: PlaybookLesson[];
+  total_lessons: number;
+  last_updated: string;
+}
+
 export interface UserProfile {
   // User input fields (mutable for onboarding)
   username: string;
-  goalDescription: string;
   experienceLevel: string;
+  goalDescription: string;
   age: number;
   weight: number;
   weightUnit: string;
   height: number;
   heightUnit: string;
   gender: string;
-  hasLimitations: boolean;
-  limitationsDescription: string;
   finalChatNotes: string;
   
   // Raw questions and responses (for consistency)
@@ -58,6 +77,9 @@ export interface UserProfile {
   // AI messages from database
   initial_ai_message?: string | null;
   follow_up_ai_message?: string | null;
+  
+  // User playbook
+  playbook?: UserPlaybook | null;
   
   // Database fields (read-only)
   id?: number;
@@ -124,8 +146,7 @@ export interface TrainingExercise {
   exerciseId: number;
   sets: number;
   reps: number[];
-  weight: (number | null)[];  // Array of optional numbers (each weight can be null)
-  weight1rm: number[];        // Weight as percentage of 1RM (e.g., [80, 75, 70])
+  weight: number[];  // Array of actual weight values (in kg or lbs)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -161,7 +182,7 @@ export interface GeneratedTrainingExercise {
   name: string;
   sets: number;
   reps: number[];
-  weight1rm: number[];  // Weight as percentage of 1RM for each set (e.g., [80, 75, 70])
+  weight: number[];  // Actual weight values (in kg or lbs) for each set
 }
 
 // MARK: - Progress Tracking Models
@@ -203,8 +224,7 @@ export interface TrainingExerciseInsert {
   exercise_id: number;
   sets: number;
   reps: number[];
-  weight: (number | null)[];  // Array of optional numbers (each weight can be null)
-  weight_1rm: number[];       // Weight as percentage of 1RM for each set (e.g., [80, 75, 70])
+  weight: number[];  // Array of actual weight values (in kg or lbs)
 }
 
 // MARK: - API Response Models

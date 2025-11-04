@@ -13,7 +13,6 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
   onShowDetail,
   onOneRMCalculator,
   onSwapExercise,
-  onIntensityUpdate,
   isLocked = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -90,7 +89,9 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
           
           <View style={styles.exerciseDetails}>
             {exercise.exerciseId?.startsWith('endurance_') ? (
-              <Text style={styles.setsText}>Endurance</Text>
+              <Text style={styles.setsText}>
+                {exercise.enduranceSession?.trainingVolume || 'N/A'} {exercise.enduranceSession?.unit || ''} • zone {exercise.enduranceSession?.heartRateZone || 'N/A'}
+              </Text>
             ) : (
               <Text style={styles.setsText}>
                 {equipmentLabel} • {numSets} {numSets === 1 ? 'set' : 'sets'}
@@ -148,7 +149,7 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
         </View>
       </View>
 
-      {/* Expanded detail - strength exercises show sets, endurance shows intensity slider */}
+      {/* Expanded detail - strength exercises show sets, endurance shows details */}
       {isExpanded && (
         <View style={styles.setsContainer}>
           {exercise.exerciseId?.startsWith('endurance_') ? (
@@ -172,14 +173,12 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
                 </View>
                 
                 {/* Heart Zone */}
-                {exercise.enduranceSession?.heartRateZone && (
-                  <View style={styles.enduranceDetailItemVertical}>
-                    <Text style={styles.enduranceDetailLabelSmall}>HEART ZONE</Text>
-                    <Text style={styles.enduranceDetailValueSmall}>
-                      Zone {exercise.enduranceSession.heartRateZone}
-                    </Text>
-                  </View>
-                )}
+                <View style={styles.enduranceDetailItemVertical}>
+                  <Text style={styles.enduranceDetailLabelSmall}>HEART ZONE</Text>
+                  <Text style={styles.enduranceDetailValueSmall}>
+                    Zone {exercise.enduranceSession?.heartRateZone || 'N/A'}
+                  </Text>
+                </View>
               </View>
               
               {/* Intensity UI removed per request */}
@@ -219,7 +218,7 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
                   set={set}
                   setIndex={index}
                   onUpdate={(reps, weight) => handleSetUpdate(index, reps, weight)}
-                  weight1RMPercentages={exercise.weight1RM}
+                  weight1RMPercentages={undefined}
                   // allSets={exercise.sets || []} // COMMENTED OUT - 1RM calculator
                 />
               ))}
@@ -227,57 +226,6 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
           )}
         </View>
       )}
-    </View>
-  );
-};
-
-// Intensity Slider Component for Endurance Sessions
-interface IntensitySliderProps {
-  exerciseId: string;
-  currentIntensity: number;
-  onIntensityChange: (intensity: number) => void;
-  disabled?: boolean;
-}
-
-const IntensitySlider: React.FC<IntensitySliderProps> = ({
-  exerciseId,
-  currentIntensity,
-  onIntensityChange,
-  disabled = false
-}) => {
-  const intensityLabels = ['Very Easy', 'Easy', 'Moderate', 'Hard', 'Very Hard'];
-  
-  return (
-    <View style={styles.intensityContainer}>
-      <View style={styles.intensitySlider}>
-        {[1, 2, 3, 4, 5].map((intensity) => (
-          <TouchableOpacity
-            key={intensity}
-            style={[
-              styles.intensityButton,
-              currentIntensity === intensity && styles.intensityButtonActive,
-              disabled && styles.intensityButtonDisabled
-            ]}
-            onPress={() => {
-              if (!disabled) {
-                onIntensityChange(intensity);
-              }
-            }}
-            disabled={disabled}
-          >
-            <Text style={[
-              styles.intensityNumber,
-              currentIntensity === intensity && styles.intensityNumberActive,
-              disabled && styles.intensityNumberDisabled
-            ]}>
-              {intensity}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <Text style={[styles.intensityLabel, disabled && styles.intensityLabelDisabled]}>
-        {intensityLabels[currentIntensity - 1]}
-      </Text>
     </View>
   );
 };
@@ -631,53 +579,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: colors.text
-  },
-  intensityContainer: {
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    gap: 6
-  },
-  intensitySlider: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  intensityButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.inputBackground,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  intensityButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary
-  },
-  intensityButtonDisabled: {
-    opacity: 0.5
-  },
-  intensityNumber: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text
-  },
-  intensityNumberActive: {
-    color: colors.text
-  },
-  intensityNumberDisabled: {
-    color: colors.muted
-  },
-  intensityLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.text,
-    textAlign: 'center'
-  },
-  intensityLabelDisabled: {
-    color: colors.muted
   }
 });
 

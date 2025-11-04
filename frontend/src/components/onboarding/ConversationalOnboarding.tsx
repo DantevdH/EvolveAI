@@ -32,7 +32,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   onError,
   startFromStep = 'welcome',
 }) => {
-  const { state: authState, refreshUserProfile, setTrainingPlan, setExercises } = useAuth();
+  const { state: authState, dispatch, refreshUserProfile, setTrainingPlan, setExercises } = useAuth();
   const [state, setState] = useState<OnboardingState>({
     username: '',
     usernameValid: false,
@@ -158,10 +158,17 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       
       setCurrentStep('preview');
       
-      // Load the training plan into state
+      // Load the training plan AND questions/responses from profile into state
       setState(prev => ({
         ...prev,
         trainingPlan: authState.trainingPlan,
+        // Load questions and responses from user profile (Option 2: user resumes later)
+        initialQuestions: authState.userProfile?.initial_questions || prev.initialQuestions,
+        followUpQuestions: authState.userProfile?.follow_up_questions || prev.followUpQuestions,
+        initialResponses: authState.userProfile?.initial_responses ? 
+          new Map(Object.entries(authState.userProfile.initial_responses)) : prev.initialResponses,
+        followUpResponses: authState.userProfile?.follow_up_responses ? 
+          new Map(Object.entries(authState.userProfile.follow_up_responses)) : prev.followUpResponses,
         planMetadata: {
           formattedInitialResponses: authState.userProfile?.initial_responses ? 
             Object.entries(authState.userProfile.initial_responses)
@@ -291,6 +298,17 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         const initialResponses = Object.fromEntries(state.initialResponses);
         const followUpResponses = Object.fromEntries(state.followUpResponses);
         
+        // VALIDATION: Ensure userProfile exists (backend requires user_profile_id)
+        if (!authState.userProfile?.id) {
+          console.error('❌ User profile not found - cannot generate training plan');
+          setState(prev => ({
+            ...prev,
+            planGenerationLoading: false,
+            error: 'User profile not found. Please complete initial questions first.',
+          }));
+          return;
+        }
+        
         const fullPersonalInfo = {
           ...state.personalInfo!,
           username: state.username,
@@ -304,7 +322,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           followUpResponses,
           state.initialQuestions,
           state.followUpQuestions,
-          authState.userProfile?.id,
+          authState.userProfile.id, // Now guaranteed to exist
           jwtToken
         );
         
@@ -325,6 +343,17 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           const { transformTrainingPlan } = await import('../../utils/trainingPlanTransformer');
           const transformedPlan = transformTrainingPlan(response.data);
           console.log('✅ ConversationalOnboarding: Transformed plan to frontend format');
+          
+          // Update userProfile with playbook from response
+          if (response.playbook && authState.userProfile) {
+            dispatch({
+              type: 'SET_USER_PROFILE',
+              payload: {
+                ...authState.userProfile,
+                playbook: response.playbook
+              }
+            });
+          }
               
           // Set plan in AuthContext - already has all database IDs
           setTrainingPlan(transformedPlan);
@@ -487,6 +516,10 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         jwtToken
       );
       
+      // Refresh user profile if backend just created it
+      if (response.user_profile_id && !authState.userProfile?.id) {
+        await refreshUserProfile();
+      }
       
       setState(prev => ({
         ...prev,
@@ -505,7 +538,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }));
       onError(errorMessage);
     }
-  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, authState.userProfile?.id, onError]);
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, authState.userProfile, authState.session?.access_token, refreshUserProfile, onError]);
 
   // Simple function to load follow-up questions
   const loadFollowUpQuestions = useCallback(async () => {
@@ -636,6 +669,17 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         // Get JWT token from AuthContext state
         const jwtToken = authState.session?.access_token;
         
+        // VALIDATION: Ensure userProfile exists (backend requires user_profile_id)
+        if (!authState.userProfile?.id) {
+          console.error('❌ User profile not found - cannot generate follow-up questions');
+          setState(prev => ({
+            ...prev,
+            planGenerationLoading: false,
+            error: 'User profile not found. Please complete initial questions first.',
+          }));
+          return;
+        }
+        
         const fullPersonalInfo = {
           ...state.personalInfo!,
           username: state.username,
@@ -647,7 +691,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           fullPersonalInfo, 
           responsesObject, // Send raw responses - backend will format them
           state.initialQuestions, // Send initial questions
-          authState.userProfile?.id,
+          authState.userProfile.id, // Now guaranteed to exist
           jwtToken
         );
         
@@ -946,6 +990,10 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             onContinue={handleComplete}
             onBack={() => setCurrentStep('generation')}
             planMetadata={state.planMetadata}
+            initialQuestions={state.initialQuestions}
+            initialResponses={state.initialResponses}
+            followUpQuestions={state.followUpQuestions}
+            followUpResponses={state.followUpResponses}
           />
         );
       

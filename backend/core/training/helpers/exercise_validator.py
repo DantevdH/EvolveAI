@@ -508,6 +508,42 @@ class ExerciseValidator:
 
         return None
 
+    def post_process_rest_days(self, daily_trainings: List[Dict[str, Any]]) -> None:
+        """
+        Post-process daily trainings to auto-set is_rest_day = true when there are no 
+        strength_exercises AND no endurance_sessions.
+        
+        This ensures data consistency even if the AI doesn't explicitly set is_rest_day.
+        Can be used in generate, update, and create flows.
+        
+        Args:
+            daily_trainings: List of daily training dictionaries to process
+        """
+        for daily_training in daily_trainings:
+            strength_exercises_final = daily_training.get("strength_exercises", [])
+            endurance_sessions_final = daily_training.get("endurance_sessions", [])
+            
+            # Filter out None or empty exercises/sessions
+            has_strength = bool([ex for ex in strength_exercises_final if ex and ex.get("exercise_id")])
+            has_endurance = bool([sess for sess in endurance_sessions_final if sess])
+            
+            if not has_strength and not has_endurance:
+                # No exercises and no sessions - this is a rest day
+                if not daily_training.get("is_rest_day", False):
+                    logger.info(
+                        f"🔄 Auto-setting is_rest_day=true for {daily_training.get('day_of_week', 'Unknown')} "
+                        f"(no strength exercises and no endurance sessions)"
+                    )
+                daily_training["is_rest_day"] = True
+                daily_training["training_type"] = "rest"
+            elif daily_training.get("is_rest_day", False) and (has_strength or has_endurance):
+                # Rest day flag was set but there are exercises/sessions - clear the flag
+                logger.warning(
+                    f"⚠️ Clearing is_rest_day flag for {daily_training.get('day_of_week', 'Unknown')} "
+                    f"(has exercises or sessions)"
+                )
+                daily_training["is_rest_day"] = False
+
     def _validate_training_structure(self, training_plan: Dict[str, Any]) -> List[str]:
         """Validate the overall structure of the training plan with optimized checks."""
         messages = []
@@ -650,6 +686,8 @@ class ExerciseValidator:
                         except Exception as e:
                             logger.warning(f"Could not fetch existing exercise names: {e}")
                     
+                    # CRITICAL: Process ALL exercises regardless of whether existing IDs exist
+                    # This loop must always run to match exercises and set exercise_id
                     for exercise in strength_exercises:
                         exercise_name = exercise.get("exercise_name", "Unknown")
                         exercise_id = exercise.get("exercise_id")
@@ -660,14 +698,9 @@ class ExerciseValidator:
                             try:
                                 valid_ids, invalid_ids = self.exercise_selector.validate_exercise_ids([str(exercise_id)])
                                 if str(exercise_id) in valid_ids:
-                                    logger.debug(f"✅ Exercise '{exercise_name}' has valid exercise_id={exercise_id}, keeping it")
                                     exercises_to_keep.append(exercise)
                                     continue
                                 else:
-                                    logger.warning(
-                                        f"⚠️ Exercise '{exercise_name}' has invalid exercise_id={exercise_id} (not in database). "
-                                        f"Will attempt to rematch or remove."
-                                    )
                                     # Don't continue - fall through to rematch logic
                                     # Clear the invalid exercise_id so it can be rematched
                                     exercise.pop("exercise_id", None)
@@ -682,9 +715,8 @@ class ExerciseValidator:
                         
                         if not all([exercise_name, main_muscle, equipment]):
                             logger.warning(
-                                f"⚠️ Skipping exercise with incomplete metadata: "
-                                f"name={exercise_name}, main_muscle={main_muscle}, equipment={equipment}. "
-                                f"Exercise will be removed from plan."
+                                f"Skipping exercise with incomplete metadata: "
+                                f"name={exercise_name}, main_muscle={main_muscle}, equipment={equipment}"
                             )
                             # Mark for removal instead of silently skipping
                             exercise["_remove_from_plan"] = True
@@ -717,7 +749,9 @@ class ExerciseValidator:
                                     # Keep exercise_name for frontend display, update with matched name
                                     exercise["exercise_name"] = matched_exercise_name
                                     # Update other metadata with matched values
-                                    exercise["main_muscle"] = matched_exercise.get("main_muscle")
+                                    # Extract main_muscle from main_muscles array (first item) - database has main_muscles, not main_muscle
+                                    main_muscles_array = matched_exercise.get("primary_muscles") or matched_exercise.get("main_muscles", [])
+                                    exercise["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
                                     exercise["equipment"] = matched_exercise.get("equipment")
                                     stats["exercises_matched"] += 1
                                     
@@ -772,7 +806,9 @@ class ExerciseValidator:
                                         # Keep exercise_name for frontend display, update with fallback name
                                         exercise["exercise_name"] = fallback_exercise_name
                                         # Update other metadata with fallback values
-                                        exercise["main_muscle"] = fallback_exercise.get("main_muscle")
+                                        # Extract main_muscle from main_muscles array (first item) - database has main_muscles, not main_muscle
+                                        main_muscles_array = fallback_exercise.get("primary_muscles") or fallback_exercise.get("main_muscles", [])
+                                        exercise["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
                                         exercise["equipment"] = fallback_exercise.get("equipment")
                                         stats["exercises_matched"] += 1
                                         
@@ -873,6 +909,9 @@ class ExerciseValidator:
                         # This can happen if all exercises already had valid exercise_id
                         logger.debug(f"No filtering needed for {daily_training.get('day_of_week', 'Unknown')} - all exercises valid")
                         daily_training["strength_exercises"] = strength_exercises
+                    
+                    # Post-process rest days (set is_rest_day based on exercises/sessions)
+                    self.post_process_rest_days([daily_training])
             
             # Bulk log all exercises at once (non-critical monitoring operation)
             if exercises_to_log:

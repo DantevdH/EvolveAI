@@ -1,0 +1,25 @@
+name: Enforce Branch Naming Convention
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - develop
+  pull_request:
+
+jobs:
+  enforce-branch-name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate branch name
+        run: |
+          BRANCH_NAME="${GITHUB_HEAD_REF:-${GITHUB_REF#refs/heads/}}"
+          echo "Branch name: $BRANCH_NAME"
+
+          # Allowed branch name patterns
+          if [[ ! "$BRANCH_NAME" =~ ^(main|develop|feature\/[a-z0-9._-]+|hotfix\/[a-z0-9._-]+)$ ]]; then
+            echo "❌ Invalid branch name: $BRANCH_NAME"
+            echo "Allowed: main, develop, feature/*, hotfix/*"
+            exit 1
+          fi
+          echo "✅ Valid branch name"

@@ -18,6 +18,7 @@ from core.base.ace_telemetry import ACETelemetry
 # Import schemas and services
 from core.training.schemas.training_schemas import (
     TrainingPlan,
+    WeeklySchedule,
     DailyTraining,
     StrengthExercise,
     EnduranceSession,
@@ -445,174 +446,350 @@ class TrainingCoach(BaseAgent):
     async def generate_initial_training_plan(
         self,
         personal_info: PersonalInfo,
-        formatted_initial_responses: str,
-        formatted_follow_up_responses: str,
+        user_playbook,
         user_profile_id: int,
         jwt_token: str = None,
-        playbook: Optional[UserPlaybook] = None,
     ) -> Dict[str, Any]:
         """
-        Generate the initial training plan during onboarding.
+        Generate the initial training plan (Week 1) during onboarding.
         
-        1. Loads playbook with Q&A lessons (created during plan generation)
-        2. Generates plan using lessons (does NOT mark as "applied" - no history yet)
-        3. AI generates exercises with metadata which are then matched to database
+        Creates full TrainingPlan structure (title, summary, justification) with ONLY Week 1.
+        The AI generates the plan title, summary, and justification.
+        We re-assess by week and adjust.
+        
+        Uses user_playbook (extracted from onboarding responses) instead of raw assessment responses.
         
         Args:
             personal_info: User's personal information and goals
-            formatted_initial_responses: Formatted responses from initial questions
-            formatted_follow_up_responses: Formatted responses from follow-up questions
+            user_playbook: User's playbook with learned lessons from onboarding
             user_profile_id: Database ID of the user profile (also used for latency tracking)
             jwt_token: JWT token for database authentication
-            playbook: Optional pre-loaded playbook (avoids duplicate DB call if already loaded)
-        """
-        # Load current playbook from database only if not provided
-        if not playbook:
-            playbook = await db_service.load_user_playbook(user_profile_id, jwt_token)
-        
-        if not playbook:
-            self.logger.warning("No playbook found - creating empty playbook")
-            playbook = UserPlaybook(
-                user_id=personal_info.user_id,
-                lessons=[],
-                total_lessons=0,
-            )
-        
-        # Pass the playbook to internal method (AI will generate exercises with metadata for matching)
-        return await self._generate_training_plan_internal(
-            personal_info=personal_info,
-            formatted_initial_responses=formatted_initial_responses,
-            formatted_follow_up_responses=formatted_follow_up_responses,
-            playbook=playbook,
-            jwt_token=jwt_token,
-            is_regeneration=False,
-            user_profile_id=user_profile_id,
-        )
-    
-    async def regenerate_training_plan(
-        self,
-        personal_info: PersonalInfo,
-        feedback_message: str,
-        user_profile_id: int,
-        jwt_token: str = None,
-        current_plan: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        """
-        Regenerate training plan after user has trained and provided feedback.
-        
-        Uses playbook lessons from training history AND marks which lessons
-        were applied in the new plan. Playbook already contains onboarding preferences
-        extracted from initial/follow-up responses, so those are not needed here.
-        
-        Args:
-            personal_info: User's personal information and goals
-            feedback_message: User's feedback message requesting plan changes
-            user_profile_id: Database ID of the user profile (also used for latency tracking)
-            jwt_token: JWT token for database authentication
-            current_plan: Current plan dict to summarize for regeneration context
-        """
-        # Load current playbook from database
-        playbook = await db_service.load_user_playbook(user_profile_id, jwt_token)
-        
-        if not playbook:
-            self.logger.warning("No playbook found - creating empty playbook")
-            playbook = UserPlaybook(
-                user_id=personal_info.user_id,
-                lessons=[],
-                total_lessons=0,
-            )
-        
-        # Build plan summary if available using prompt generator
-        plan_summary = None
-        try:
-            if current_plan:
-                plan_summary = PromptGenerator.format_current_plan_summary(current_plan)
-        except Exception as e:
-            self.logger.warning(f"Could not summarize current plan for regeneration: {e}")
-
-        # Pass the playbook to internal method with feedback
-        return await self._generate_training_plan_internal(
-            personal_info=personal_info,
-            formatted_initial_responses="",  # Not needed - playbook has onboarding lessons
-            formatted_follow_up_responses="",  # Not needed - playbook has onboarding lessons
-            playbook=playbook,
-            jwt_token=jwt_token,
-            is_regeneration=True,
-            user_profile_id=user_profile_id,
-            feedback_message=feedback_message,
-            plan_summary=plan_summary,
-        )
-    
-    async def _generate_training_plan_internal(
-        self,
-        personal_info: PersonalInfo,
-        formatted_initial_responses: str,
-        formatted_follow_up_responses: str,
-        playbook: UserPlaybook,
-        jwt_token: str = None,
-        is_regeneration: bool = False,
-        user_profile_id: Optional[int] = None,
-        feedback_message: Optional[str] = None,
-        plan_summary: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """
-        Internal method to generate training plans.
-        
-        Args:
-            personal_info: User's personal information and goals
-            formatted_initial_responses: Formatted responses from initial questions (only for initial generation)
-            formatted_follow_up_responses: Formatted responses from follow-up questions (only for initial generation)
-            playbook: UserPlaybook with lessons to use in plan generation
-            jwt_token: JWT token for database authentication
-            is_regeneration: If True, marks playbook lessons as applied and updates playbook.
-                           If False (onboarding), uses playbook but doesn't update it.
-            user_profile_id: User profile ID for latency tracking (optional)
-            feedback_message: User's feedback message for regeneration (only for regenerations)
         """
         try:
-            # Check if debug mode is enabled - skip validation for mock data
+            # Check if debug mode is enabled
             if os.getenv("DEBUG", "false").lower() == "true":
                 self.logger.debug("DEBUG MODE: Using mock training plan")
                 from core.training.helpers.mock_data import create_mock_training_plan
-
+                
                 training_plan = create_mock_training_plan()
                 training_dict = training_plan.model_dump()
-                self.logger.debug(
-                    f"DEBUG MODE: Generated mock training plan with {len(training_dict.get('weekly_schedules', []))} weeks"
-                )
+                
                 return {
                     "success": True,
                     "training_plan": training_dict,
                     "metadata": {
-                        "exercises_candidates": 0,
                         "validation_messages": ["Debug mode: Using mock data"],
                         "generation_method": "Mock Data (Debug Mode)",
                     },
                 }
-
-            # Step 1: Get metadata options from database (equipment, main_muscles)
-            self.logger.info("Fetching exercise metadata options from database...")
-            metadata_options = self.exercise_selector.get_metadata_options()
-            self.logger.info(
-                f"Metadata options: {len(metadata_options.get('equipment', []))} equipment types, "
-                f"{len(metadata_options.get('main_muscles', []))} muscle groups"
-            )
-
-            # Step 2: Use playbook for personalized context (passed as parameter)
-            self.logger.info(f"Using playbook with {len(playbook.lessons)} lessons for plan generation")
             
-            active_lessons = (
-                playbook.get_active_lessons(min_confidence=0.3) if playbook else []
+            # Step 2: Generate prompt for initial Week 1
+            # Equipment and main_muscle constraints are enforced via Pydantic Enum validation in schema
+            prompt = PromptGenerator.generate_initial_training_plan_prompt(
+                personal_info=personal_info,
+                user_playbook=user_playbook,
             )
-
-            if active_lessons:
-                self.logger.info(
-                    f"Using {len(active_lessons)} active lessons in plan generation"
+            
+            # Step 4: Generate full TrainingPlan with AI (but only Week 1 in weekly_schedules)
+            model_name = os.getenv("LLM_MODEL_CHAT", os.getenv("LLM_MODEL", "gpt-4o"))
+            self.logger.info(f"🤖 Generating full training plan (Week 1 only) with AI model: {model_name}...")
+            
+            ai_start = time.time()
+            
+            if self.llm.provider == "gemini":
+                from core.training.schemas.training_schemas import GeminiTrainingPlan, GeminiAIStrengthExercise
+                parsed_obj, completion = self.llm.parse_structured(
+                    prompt, TrainingPlan, GeminiTrainingPlan
                 )
+                tp_input = parsed_obj.model_dump()
+                
+                # Convert GeminiAIStrengthExercise to AIStrengthExercise (with Enum validation)
+                # This happens in _normalize_gemini_training_plan_input now
+                
+                tp_input["user_profile_id"] = user_profile_id
+                # Skip TrainingPlan.model_validate() - IDs don't exist yet, will be added after database save
+                # GeminiTrainingPlan already validated the structure
+                tp_input = self._normalize_gemini_training_plan_input(tp_input)
+                ai_duration = time.time() - ai_start
+                training_dict = tp_input
             else:
-                self.logger.info("No active lessons found")
+                # OpenAI path: validate with TrainingPlan (will fail if IDs missing, but OpenAI may include them differently)
+                training_plan, completion = self.llm.chat_parse(prompt, TrainingPlan)
+                ai_duration = time.time() - ai_start
+                training_dict = training_plan.model_dump()
+                training_dict["user_profile_id"] = user_profile_id
+            
+            # Verify only Week 1 is generated
+            num_weeks = len(training_dict.get("weekly_schedules", []))
+            if num_weeks != 1:
+                self.logger.warning(f"⚠️ AI generated {num_weeks} weeks instead of 1! Using only first week.")
+                training_dict["weekly_schedules"] = training_dict.get("weekly_schedules", [])[:1]
+            
+            # Ensure Week 1 has week_number = 1
+            if training_dict.get("weekly_schedules"):
+                training_dict["weekly_schedules"][0]["week_number"] = 1
+            
+            # Step 5: Post-process and validate exercises
+            validated_plan = self.exercise_validator.post_process_strength_exercises(training_dict)
+            
+            validated_plan, validation_messages = self.exercise_validator.validate_training_plan(
+                validated_plan
+            )
+            
+            # Ensure user_profile_id is set
+            validated_plan["user_profile_id"] = user_profile_id
+            
+            # Step 6: Track latency
+            await db_service.log_latency_event("initial_week", ai_duration, completion)
+            
+            return {
+                "success": True,
+                "training_plan": validated_plan,  # Full plan structure with title, summary, justification (only Week 1)
+                "completion_message": validated_plan.get("ai_message"),  # Extract from plan if available
+                "metadata": {
+                    "validation_messages": validation_messages,
+                    "generation_method": "AI + Metadata-Based Exercise Matching",
+                },
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error generating initial weekly schedule: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def update_weekly_schedule(
+        self,
+        personal_info: PersonalInfo,
+        feedback_message: str,
+        week_number: int,
+        current_week: Dict[str, Any],
+        user_profile_id: int,
+        user_playbook,
+        existing_training_plan: Dict[str, Any],
+        jwt_token: str = None,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+        
+    ) -> Dict[str, Any]:
+        """
+        Update an existing week based on user feedback.
+        
+        Updates ONLY the specified week, but returns the full TrainingPlan structure
+        with the updated week inserted into the existing plan.
+        We re-assess by week and adjust.
+        
+        Args:
+            personal_info: User's personal information and goals
+            feedback_message: User's feedback message requesting week changes
+            week_number: Week number to update (e.g., 1, 2, 3, etc.)
+            current_week: Current week data (WeeklySchedule dict) to update
+            user_profile_id: Database ID of the user profile
+            user_playbook: User's playbook with learned lessons (instead of onboarding responses)
+            existing_training_plan: Full training plan from request (already fetched)
+            jwt_token: JWT token for database authentication
+            conversation_history: Optional conversation history for context-aware updates
+            
+        """
+        try:
+            # Use existing training plan from request (no need to fetch from database)
+            # The plan is already enriched from database (when loaded) or frontend (when sent back)
+            existing_plan = existing_training_plan
+            existing_weekly_schedules = existing_plan.get("weekly_schedules", [])
+        
+            # Build week summary - data should already be in backend format with enriched fields
+            week_summary = PromptGenerator.format_current_plan_summary(
+                {"weekly_schedules": [current_week]}
+            )
+            
+            # Format conversation history for prompt
+            conversation_history_str = None
+            if conversation_history and len(conversation_history) > 0:
+                conversation_lines = []
+                for msg in conversation_history[-10:]:  # Last 10 messages for context
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    if content:
+                        conversation_lines.append(f"{role.capitalize()}: {content}")
+                if conversation_lines:
+                    conversation_history_str = "\n".join(conversation_lines)
 
-            # Convert lessons to dict format for prompt
+            # Step 2: Generate prompt for updating week (uses user_playbook instead of onboarding responses)
+            # Equipment and main_muscle constraints are enforced via Pydantic Enum validation in schema
+            prompt = PromptGenerator.update_weekly_schedule_prompt(
+                personal_info=personal_info,
+                feedback_message=feedback_message,
+                week_number=week_number,
+                current_week_summary=week_summary,
+                user_playbook=user_playbook,
+                conversation_history=conversation_history_str,
+            )
+            
+            # Step 4: Generate updated WeeklySchedule with AI (using response schema that includes ai_message)
+            model_name = os.getenv("LLM_MODEL_CHAT", os.getenv("LLM_MODEL", "gpt-4o"))
+            self.logger.info(f"🤖 Updating Week {week_number} schedule with AI model: {model_name}...")
+            
+            ai_start = time.time()
+            
+            # Extract ai_message from response, then convert to WeeklySchedule (without ai_message)
+            ai_message = None
+            if self.llm.provider == "gemini":
+                from core.training.schemas.training_schemas import WeeklyScheduleResponse, GeminiWeeklyScheduleResponse
+                parsed_obj, completion = self.llm.parse_structured(
+                    prompt, WeeklyScheduleResponse, GeminiWeeklyScheduleResponse
+                )
+                ws_dict = parsed_obj.model_dump()
+                
+                # Validate that required fields are present
+                if not ws_dict or ws_dict == {}:
+                    self.logger.error("❌ Gemini returned empty response for WeeklyScheduleResponse")
+                    raise ValueError("AI returned empty response - missing required fields (daily_trainings, justification, ai_message)")
+                
+                # Check for missing required fields
+                missing_fields = []
+                if not ws_dict.get("daily_trainings"):
+                    missing_fields.append("daily_trainings")
+                if not ws_dict.get("justification"):
+                    missing_fields.append("justification")
+                if not ws_dict.get("ai_message"):
+                    missing_fields.append("ai_message")
+                
+                if missing_fields:
+                    self.logger.error(f"❌ Gemini response missing required fields: {missing_fields}")
+                    self.logger.error(f"Received keys: {list(ws_dict.keys())}")
+                    raise ValueError(f"AI response missing required fields: {missing_fields}")
+                
+                # Extract ai_message (GeminiWeeklyScheduleResponse already validated structure)
+                ai_message = ws_dict.get("ai_message")
+                # Skip WeeklyScheduleResponse.model_validate() - IDs don't exist yet, will be added after database save
+                # Skip WeeklySchedule.model_validate() - IDs don't exist yet
+                # Convert to WeeklySchedule dict (without ai_message)
+                week_dict = {k: v for k, v in ws_dict.items() if k != "ai_message"}
+                week_dict["week_number"] = week_number
+                ai_duration = time.time() - ai_start
+            else:
+                from core.training.schemas.training_schemas import WeeklyScheduleResponse
+                ws_response, completion = self.llm.chat_parse(prompt, WeeklyScheduleResponse)
+                ai_duration = time.time() - ai_start
+                # Extract ai_message before converting to WeeklySchedule
+                ai_message = ws_response.ai_message
+                # Convert to WeeklySchedule (without ai_message)
+                week_dict = ws_response.model_dump(exclude={'ai_message'})
+                week_dict["week_number"] = week_number
+            
+            # Step 5: Post-process and validate exercises
+            temp_plan_dict = {"weekly_schedules": [week_dict]}
+            validated_plan = self.exercise_validator.post_process_strength_exercises(temp_plan_dict)
+            validated_week = validated_plan.get("weekly_schedules", [week_dict])[0]
+            
+            validated_plan, validation_messages = self.exercise_validator.validate_training_plan(
+                {"weekly_schedules": [validated_week]}
+            )
+            updated_week = validated_plan.get("weekly_schedules", [validated_week])[0]
+            
+            # Step 6: Insert updated week into existing plan
+            updated_weekly_schedules = []
+            week_updated = False
+            for week in existing_weekly_schedules:
+                if week.get("week_number") == week_number:
+                    updated_weekly_schedules.append(updated_week)
+                    week_updated = True
+                else:
+                    updated_weekly_schedules.append(week)
+            
+            if not week_updated:
+                self.logger.warning(f"Week {week_number} not found in existing plan, appending updated week")
+                updated_weekly_schedules.append(updated_week)
+            
+            # Sort by week_number
+            updated_weekly_schedules.sort(key=lambda x: x.get("week_number", 0))
+            
+            # Build full TrainingPlan structure with updated week
+            full_training_plan = {
+                **existing_plan,  # Keep all existing plan fields (id, title, summary, etc.)
+                "weekly_schedules": updated_weekly_schedules,
+            }
+            
+            # Step 7: Track latency
+            await db_service.log_latency_event("update_week", ai_duration, completion)
+            
+            return {
+                "success": True,
+                "training_plan": full_training_plan,  # Return full plan with updated week
+                "ai_message": ai_message,  # Return AI message explaining the changes
+                "metadata": {
+                    "validation_messages": validation_messages,
+                    "generation_method": "AI + Metadata-Based Exercise Matching",
+                },
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error updating weekly schedule: {e}")
+            return {"success": False, "error": str(e)}
+    
+    async def create_new_weekly_schedule(
+        self,
+        personal_info: PersonalInfo,
+        user_profile_id: int,
+        jwt_token: str = None,
+    ) -> Dict[str, Any]:
+        """
+        Create a new week when previous week is completed.
+        
+        Creates ONLY the next week (Week 2, 3, 4, etc.), but returns the full TrainingPlan structure
+        with the new week added to the existing plan.
+        
+        Automatically calculates next_week_number from existing plan (max week number + 1).
+        Uses all existing weeks as completed weeks (everything is already completed).
+        
+        Based on:
+        - Previous weeks' training history (all existing weeks)
+        - Playbook lessons learned from training
+        
+        Args:
+            personal_info: User's personal information and goals
+            user_profile_id: Database ID of the user profile
+            jwt_token: JWT token for database authentication
+        """
+        try:
+            # Load current playbook from database
+            playbook = await db_service.load_user_playbook(user_profile_id, jwt_token)
+            
+            if not playbook:
+                self.logger.warning("No playbook found - creating empty playbook")
+                playbook = UserPlaybook(
+                    user_id=personal_info.user_id,
+                    lessons=[],
+                    total_lessons=0,
+                )
+            
+            # Fetch existing full training plan
+            existing_plan_result = await db_service.get_training_plan(user_profile_id)
+            if not existing_plan_result.get("success"):
+                return {
+                    "success": False,
+                    "error": "No existing training plan found. Create Week 1 first.",
+                }
+            
+            existing_plan = existing_plan_result.get("data", {})
+            existing_weekly_schedules = existing_plan.get("weekly_schedules", [])
+            
+            # Calculate next_week_number from existing weeks (max week number + 1)
+            if existing_weekly_schedules:
+                week_numbers = [w.get("week_number", 0) for w in existing_weekly_schedules if w.get("week_number")]
+                next_week_number = max(week_numbers) + 1 if week_numbers else 1
+            else:
+                next_week_number = 1
+            
+            self.logger.info(f"Calculated next_week_number: {next_week_number} from {len(existing_weekly_schedules)} existing weeks")
+            
+            # Use all existing weeks as completed weeks (everything is already completed)
+            completed_weeks = existing_weekly_schedules
+            
+            # Build completed weeks context
+            completed_weeks_context = PromptGenerator.format_current_plan_summary(
+                {"weekly_schedules": completed_weeks}
+            )
+            
+            # Step 2: Use playbook for personalized context
+            active_lessons = playbook.get_active_lessons(min_confidence=0.3) if playbook else []
             playbook_lessons_dict = (
                 [
                     {
@@ -629,155 +806,76 @@ class TrainingCoach(BaseAgent):
                 else None
             )
 
-            # Step 3: Generate plan with metadata options (AI will generate name + metadata)
-            # For regenerations, include feedback message; for initial generation, use formatted responses
-            prompt = PromptGenerator.generate_training_plan_prompt(
-                personal_info,
-                formatted_initial_responses if not is_regeneration else "",
-                formatted_follow_up_responses if not is_regeneration else "",
-                metadata_options=metadata_options,
+            # Step 3: Generate prompt for creating new week
+            # Equipment and main_muscle constraints are enforced via Pydantic Enum validation in schema
+            prompt = PromptGenerator.create_new_weekly_schedule_prompt(
+                personal_info=personal_info,
+                completed_weeks_context=completed_weeks_context,
+                progress_summary="",  # Not needed - context is in completed_weeks
                 playbook_lessons=playbook_lessons_dict,
-                feedback_message=feedback_message if is_regeneration else None,
-                current_plan_summary=plan_summary if is_regeneration else None,
             )
 
-            # Step 4: Get the training plan - TRACK AI LATENCY
+            # Step 4: Generate new WeeklySchedule with AI
             model_name = os.getenv("LLM_MODEL_CHAT", os.getenv("LLM_MODEL", "gpt-4o"))
-            self.logger.info(f"🤖 Generating training plan with AI model: {model_name} (AI will generate exercise name + metadata)...")
+            self.logger.info(f"🤖 Creating Week {next_week_number} schedule with AI model: {model_name}...")
             
-            ai_start_plan = time.time()
-            # Note: No max_completion_tokens - structured output requires complete JSON.
-            # Use DTO for Gemini to avoid enum refs; coerce to domain model afterward
+            ai_start = time.time()
+            
             if self.llm.provider == "gemini":
-                from core.training.schemas.training_schemas import GeminiTrainingPlan
+                from core.training.schemas.training_schemas import GeminiWeeklySchedule
                 parsed_obj, completion = self.llm.parse_structured(
-                    prompt, TrainingPlan, GeminiTrainingPlan
+                    prompt, WeeklySchedule, GeminiWeeklySchedule
                 )
-                tp_input = parsed_obj.model_dump()
-                tp_input["user_profile_id"] = user_profile_id
-                tp_input = self._normalize_gemini_training_plan_input(tp_input)
-                training_plan = TrainingPlan.model_validate(tp_input)
-                plan_gen_duration = time.time() - ai_start_plan
-                training_dict = training_plan.model_dump()
+                ws_input = parsed_obj.model_dump()
+                ws_input["week_number"] = next_week_number
+                # Skip WeeklySchedule.model_validate() - IDs don't exist yet, will be added after database save
+                # GeminiWeeklySchedule already validated the structure
+                ai_duration = time.time() - ai_start
+                week_dict = ws_input
             else:
-                training_plan, completion = self.llm.chat_parse(prompt, TrainingPlan)
-                plan_gen_duration = time.time() - ai_start_plan
-                training_dict = training_plan.model_dump()
-            
-            # Verify plan structure (should be exactly 1 week)
-            num_weeks = len(training_dict.get("weekly_schedules", []))
-            num_days_per_week = [len(week.get("daily_trainings", [])) for week in training_dict.get("weekly_schedules", [])]
-            self.logger.info(f"📊 Generated plan structure: {num_weeks} weekly_schedule(s), days per week: {num_days_per_week}")
-            if num_weeks != 1:
-                self.logger.warning(f"⚠️ AI generated {num_weeks} weeks instead of 1! Prompt enforcement may need adjustment.")
+                weekly_schedule, completion = self.llm.chat_parse(prompt, WeeklySchedule)
+                ai_duration = time.time() - ai_start
+                week_dict = weekly_schedule.model_dump()
+                week_dict["week_number"] = next_week_number
 
-            # Step 5: Post-process strength exercises (match AI-generated metadata to database)
-            self.logger.info("Post-processing strength exercises (matching to database)...")
-            validated_training = self.exercise_validator.post_process_strength_exercises(training_dict)
+            # Step 5: Post-process and validate exercises
+            temp_plan_dict = {"weekly_schedules": [week_dict]}
+            validated_plan = self.exercise_validator.post_process_strength_exercises(temp_plan_dict)
+            validated_week = validated_plan.get("weekly_schedules", [week_dict])[0]
             
-            # Step 6: Validate the training plan with exercise_validator (checks exercise_id existence)
-            validation_messages = []
-            self.logger.info("Validating training plan...")
-            validated_training, validation_messages = (
-                self.exercise_validator.validate_training_plan(validated_training)
+            validated_plan, validation_messages = self.exercise_validator.validate_training_plan(
+                {"weekly_schedules": [validated_week]}
             )
-
-            self.logger.info(
-                f"Validation complete: {len(validation_messages)} messages"
-            )
-            for message in validation_messages:
-                self.logger.debug(f"   {message}")
-
-            # Step 7: Identify which lessons were applied & update playbook (only for regeneration)
-            applied_lesson_ids = []
-            identify_duration = 0.0
+            new_week = validated_plan.get("weekly_schedules", [validated_week])[0]
             
-            if is_regeneration and playbook_lessons_dict and len(playbook_lessons_dict) > 0:
-                self.logger.info(
-                    "Identifying which lessons were applied in the plan (regeneration mode)..."
-                )
-                # Track AI call for identify_applied_lessons
-                ai_start_identify = time.time()
-                applied_lesson_ids = self.reflector.identify_applied_lessons(
-                    training_plan=validated_training,
-                    playbook_lessons=playbook_lessons_dict,
-                    personal_info=personal_info,
-                )
-                identify_duration = time.time() - ai_start_identify
-                self.logger.info(f"Identify applied lessons AI call took {identify_duration:.2f}s")
-
-                # Update playbook with application counts
-                if applied_lesson_ids and playbook:
-                    playbook = self.curator.mark_lessons_as_applied(
-                        playbook, applied_lesson_ids
-                    )
-                    self.logger.info(
-                        f"Updated playbook: {len(applied_lesson_ids)} lessons marked as applied [[memory:8636680]]"
-                    )
-            elif not is_regeneration and playbook_lessons_dict:
-                self.logger.info(
-                    f"Skipping playbook update (initial plan): {len(playbook_lessons_dict)} lessons used as constraints"
-                )
+            # Step 6: Add new week to existing plan
+            updated_weekly_schedules = existing_weekly_schedules.copy()
+            updated_weekly_schedules.append(new_week)
             
-            # Track latency for initial_plan or regenerate_plan
-            if is_regeneration:
-                # regenerate_plan: track both AI calls (plan generation + identify)
-                # Note: identify_lessons doesn't return token usage, so we only log plan generation tokens
-                total_ai_duration = plan_gen_duration + identify_duration
-                await db_service.log_latency_event("regenerate_plan", total_ai_duration, completion)
-                self.logger.info(f"Regenerate plan total AI calls: {total_ai_duration:.2f}s (plan: {plan_gen_duration:.2f}s, identify: {identify_duration:.2f}s)")
-            else:
-                # initial_plan: track only plan generation AI call
-                await db_service.log_latency_event("initial_plan", plan_gen_duration, completion)
-                self.logger.info(f"Initial plan AI call: {plan_gen_duration:.2f}s")
-
-            # The AI message is now generated within the TrainingPlan by the LLM
-            # Extract it from the training plan for the API response
-            ai_message = validated_training.get("ai_message") if isinstance(validated_training, dict) else getattr(validated_training, "ai_message", None)
+            # Sort by week_number
+            updated_weekly_schedules.sort(key=lambda x: x.get("week_number", 0))
             
-            # Ensure non-null string; fallback if missing/invalid
-            if ai_message is None or (isinstance(ai_message, str) and ai_message.strip() == ""):
-                ai_message = "🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨"
-            else:
-                try:
-                    ai_message = str(ai_message)
-                except Exception:
-                    ai_message = "🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨"
+            # Build full TrainingPlan structure with new week added
+            full_training_plan = {
+                **existing_plan,  # Keep all existing plan fields (id, title, summary, etc.)
+                "weekly_schedules": updated_weekly_schedules,
+            }
             
-            # Mirror into training plan dict for response consumers
-            if isinstance(validated_training, dict):
-                validated_training["ai_message"] = ai_message
-
-            # Save playbook to the training plan (will be saved when plan is saved to DB)
-            result_dict = {
+            # Step 7: Track latency
+            await db_service.log_latency_event("create_week", ai_duration, completion)
+            
+            return {
                 "success": True,
-                "training_plan": validated_training,
-                "user_playbook": (
-                    playbook.model_dump() if playbook else None
-                ),  # Include playbook for saving
-                "completion_message": ai_message,  # Keep for backward compatibility with API
+                "training_plan": full_training_plan,  # Return full plan with new week added
                 "metadata": {
                     "validation_messages": validation_messages,
                     "generation_method": "AI + Metadata-Based Exercise Matching",
-                    "metadata_options_count": {
-                        "equipment": len(metadata_options.get("equipment", [])),
-                        "main_muscles": len(metadata_options.get("main_muscles", []))
-                    },
-                    "playbook_lessons_count": len(playbook.lessons) if playbook else 0,
-                    "playbook_initialized": (
-                        len(playbook.lessons) > 0 if playbook else False
-                    ),
-                    "lessons_applied_count": len(applied_lesson_ids),
-                    "lessons_applied_ids": applied_lesson_ids,
-                    "formatted_initial_responses": formatted_initial_responses,  # Store for feedback updates
-                    "formatted_follow_up_responses": formatted_follow_up_responses,  # Store for feedback updates
+                    "next_week_number": next_week_number,  # Include for API response
                 },
             }
 
-            return result_dict
-
         except Exception as e:
-            self.logger.error(f"Error generating training plan: {e}")
+            self.logger.error(f"Error creating new weekly schedule: {e}")
             return {"success": False, "error": str(e)}
 
     def _format_training_response(
@@ -832,12 +930,15 @@ class TrainingCoach(BaseAgent):
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
         formatted_follow_up_responses: str,
-    ) -> List[PlaybookLesson]:
+    ) -> List[ReflectorAnalysis]:
         """
         Extract initial "seed" lessons from onboarding Q&A responses.
         
         This is a wrapper around reflector.extract_initial_lessons that maintains
         a clean API for the TrainingCoach.
+        
+        Returns ReflectorAnalysis objects that should be passed through Curator
+        for deduplication before being saved to the playbook.
         
         Args:
             personal_info: User's personal information
@@ -845,325 +946,43 @@ class TrainingCoach(BaseAgent):
             formatted_follow_up_responses: Formatted responses from follow-up questions
             
         Returns:
-            List of PlaybookLesson objects representing initial constraints/preferences
+            List of ReflectorAnalysis objects (will be processed by Curator)
         """
         return self.reflector.extract_initial_lessons(
             personal_info=personal_info,
             formatted_initial_responses=formatted_initial_responses,
             formatted_follow_up_responses=formatted_follow_up_responses,
         )
-        
-    async def process_training_feedback(
-        self, outcome: TrainingOutcome, personal_info: PersonalInfo, plan_context: str
-    ) -> Dict[str, Any]:
-        """
-        Process training feedback using the ACE pattern: Reflector → Curator → Update Playbook.
-        
-        DEPRECATED: Use process_daily_training_feedback for daily feedback loop.
-
-        Args:
-            outcome: TrainingOutcome with completion data, feedback, HR, etc.
-            personal_info: User's personal information
-            plan_context: Context about the training plan (description, structure, etc.)
-
-        Returns:
-            Dictionary with results of the feedback processing
-        """
-        try:
-            self.logger.info(
-                f"Processing feedback for plan {outcome.plan_id}, week {outcome.week_number} [[memory:8636680]]"
-            )
-
-            # Step 0: Get user_profile_id from user_id
-            user_profile = await db_service.get_user_profile_by_user_id(outcome.user_id)
-            if not user_profile.get("success") or not user_profile.get("data"):
-                self.logger.error(
-                    f"Failed to get user profile for user_id {outcome.user_id}"
-                )
-                return {"success": False, "message": "User profile not found"}
-
-            user_profile_id = user_profile["data"].get("id")
-
-            # Step 1: Load current playbook from user_profiles
-            playbook = await db_service.load_user_playbook(user_profile_id)
-
-            # Step 2: Reflector - analyze outcome and generate lessons
-            self.logger.info("Reflector analyzing outcome...")
-            analyses = self.reflector.analyze_outcome(
-                outcome=outcome,
-                personal_info=personal_info,
-                plan_context=plan_context,
-                previous_lessons=playbook.lessons if playbook else [],
-            )
-
-            if not analyses:
-                self.logger.info("No lessons generated from this outcome")
-                return {
-                    "success": True,
-                    "lessons_generated": 0,
-                    "playbook_updated": False,
-                    "message": "No actionable lessons from this feedback cycle",
-                }
-
-            self.logger.info(f"Reflector generated {len(analyses)} lessons")
-
-            # Step 3: Curator - process each lesson and decide what to do
-            self.logger.info("Curator processing lessons...")
-            decisions = []
-            for analysis in analyses:
-                decision, lesson = self.curator.process_new_lesson(
-                    analysis=analysis,
-                    existing_playbook=playbook,
-                    source_plan_id=outcome.plan_id,
-                )
-                decisions.append((decision, lesson))
-                self.logger.info(
-                    f"Curator decision: {decision.action} - {decision.reasoning}"
-                )
-
-            # Step 4: Update playbook with curator decisions
-            updated_playbook = self.curator.update_playbook(playbook, decisions)
-
-            # Step 5: Save updated playbook to user_profiles
-            saved = await db_service.save_user_playbook(
-                user_profile_id, updated_playbook.model_dump()
-            )
-
-            return {
-                "success": True,
-                "lessons_generated": len(analyses),
-                "lessons_added": sum(1 for d, _ in decisions if d.action == "add_new"),
-                "lessons_updated": sum(
-                    1
-                    for d, _ in decisions
-                    if d.action in ["merge_with_existing", "update_existing"]
-                ),
-                "lessons_rejected": sum(
-                    1 for d, _ in decisions if d.action == "reject"
-                ),
-                "total_lessons_in_playbook": len(updated_playbook.lessons),
-                "playbook_updated": saved,
-                "decisions": [
-                    {
-                        "action": d.action,
-                        "reasoning": d.reasoning,
-                        "similarity": d.similarity_score,
-                    }
-                    for d, _ in decisions
-                ],
-                "message": f"Processed {len(analyses)} lessons, playbook now has {len(updated_playbook.lessons)} total lessons",
-            }
-
-        except Exception as e:
-            self.logger.error(f"Error processing training feedback: {e}")
-            return {"success": False, "error": str(e)}
-
-    async def process_daily_training_feedback(
+    
+    def extract_lessons_from_conversation_history(
         self,
-        outcome: "DailyTrainingOutcome",
-        original_training: Dict[str, Any],
-        actual_training: Dict[str, Any],
+        conversation_history: List[Dict[str, str]],
         personal_info: PersonalInfo,
-        session_context: str,
-        user_profile_id: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        accepted_training_plan: Dict[str, Any],
+        existing_playbook: UserPlaybook,
+    ) -> List["ReflectorAnalysis"]:
         """
-        Process DAILY training feedback using the ACE pattern with modification tracking.
-
-        This is the main feedback loop for the new daily feedback system. It:
-        1. Compares original vs actual training to detect modifications (no LLM needed)
-        2. Uses Reflector to analyze the session outcome and modifications
-        3. Uses Curator to integrate lessons into the playbook
-        4. Updates the training status in database ONLY after feedback is processed
-
+        Extract lessons from conversation history when user accepts the plan.
+        
+        This is a wrapper around reflector.extract_lessons_from_conversation_history
+        that maintains a clean API for the TrainingCoach.
+        
         Args:
-            outcome: DailyTrainingOutcome with session data and feedback
-            original_training: Original planned training from database
-            actual_training: What user actually did from frontend
+            conversation_history: List of conversation messages [{role, content}, ...]
             personal_info: User's personal information
-            session_context: Brief description of the session
-
+            accepted_training_plan: The training plan that satisfied the user
+            existing_playbook: User's current playbook (for context only)
+            
         Returns:
-            Dictionary with results of the feedback processing
+            List of ReflectorAnalysis objects extracted from conversation
+            (Curator will process these and convert to PlaybookLesson)
         """
-        try:
-            from core.base.schemas.playbook_schemas import DailyTrainingOutcome
-            from core.training.helpers.training_comparison import TrainingComparison
-
-            self.logger.info(
-                f"Processing daily feedback: plan {outcome.plan_id}, week {outcome.week_number}, {outcome.day_of_week} [[memory:8636680]]"
-            )
-
-            # Step 0: Get user_profile_id from user_id
-            user_profile = await db_service.get_user_profile_by_user_id(outcome.user_id)
-            if not user_profile.get("success") or not user_profile.get("data"):
-                self.logger.error(
-                    f"Failed to get user profile for user_id {outcome.user_id}"
-                )
-                return {"success": False, "message": "User profile not found"}
-
-            user_profile_id = user_profile["data"].get("id")
-
-            # Step 1: Compare original vs actual training (detect modifications)
-            self.logger.info("Comparing original vs actual training for modifications...")
-            modifications = TrainingComparison.compare_daily_training(
-                original_training, actual_training
-            )
-            modifications_summary = TrainingComparison.format_modifications_for_analysis(
-                modifications
-            )
-
-            self.logger.info(f"Detected {len(modifications)} modification(s)")
-
-            # Step 2: Load current playbook
-            playbook = await db_service.load_user_playbook(user_profile_id)
-
-            # Step 3: Decide if we should analyze (skip if feedback skipped AND no modifications)
-            should_analyze = (
-                outcome.feedback_provided
-                or len(modifications) > 0
-                or outcome.injury_reported
-                or not outcome.session_completed
-            )
-
-            analyses = []
-            reflector_duration = 0.0
-            
-            if should_analyze:
-                # Step 4: Reflector - analyze daily outcome - TRACK AI CALL
-                self.logger.info("Reflector analyzing daily session...")
-                ai_start_reflector = time.time()
-                analyses = self.reflector.analyze_daily_outcome(
-                    outcome=outcome,
-                    personal_info=personal_info,
-                    session_context=session_context,
-                    modifications_summary=modifications_summary,
-                    previous_lessons=playbook.lessons if playbook else [],
-                )
-                reflector_duration = time.time() - ai_start_reflector
-                self.logger.info(f"Reflector AI call took {reflector_duration:.2f}s, generated {len(analyses)} lessons")
-            else:
-                self.logger.info(
-                    "No analysis needed - feedback skipped and no significant signals"
-                )
-
-            # Step 5: Curator - process lessons (if any) - TRACK AI CALLS
-            decisions = []
-            curator_ai_duration = 0.0
-            
-            if analyses:
-                self.logger.info("Curator processing lessons...")
-                for analysis in analyses:
-                    # Curator may make AI calls for similarity checking
-                    ai_start_curator = time.time()
-                    decision, lesson = self.curator.process_new_lesson(
-                        analysis=analysis,
-                        existing_playbook=playbook,
-                        source_plan_id=outcome.plan_id,
-                    )
-                    curator_ai_duration += (time.time() - ai_start_curator)
-                    decisions.append((decision, lesson))
-                    self.logger.info(
-                        f"Curator decision: {decision.action} - {decision.reasoning}"
-                    )
-                
-                if curator_ai_duration > 0:
-                    self.logger.info(f"Curator AI calls took {curator_ai_duration:.2f}s total")
-
-                # Step 6: Update playbook with curator decisions
-                updated_playbook = self.curator.update_playbook(playbook, decisions)
-
-                # Step 7: Save updated playbook
-                saved = await db_service.save_user_playbook(
-                    user_profile_id, updated_playbook.model_dump()
-                )
-            else:
-                saved = False
-
-            # Step 8: Update training status in database (NOW after feedback)
-            # Mark the daily training as completed in Supabase
-            await db_service.update_daily_training_status(
-                daily_training_id=outcome.daily_training_id,
-                completed=outcome.session_completed,
-                completion_percentage=outcome.completion_percentage,
-                modifications=modifications,
-                feedback_provided=outcome.feedback_provided,
-            )
-
-            self.logger.info(
-                f"✅ Daily training {outcome.daily_training_id} status updated in database"
-            )
-
-            # Calculate metrics for return and telemetry
-            lessons_added_count = sum(1 for d, _ in decisions if d.action == "add_new")
-            lessons_updated_count = sum(
-                1 for d, _ in decisions if d.action in ["merge_with_existing", "update_existing"]
-            )
-            
-            # Track playbook AI latency (Reflector + Curator)
-            # TODO: Add token tracking - requires refactoring Reflector/Curator to return usage
-            total_playbook_ai = reflector_duration + curator_ai_duration
-            await db_service.log_latency_event("playbook", total_playbook_ai)
-            self.logger.info(f"Playbook total AI calls: {total_playbook_ai:.2f}s (reflector: {reflector_duration:.2f}s, curator: {curator_ai_duration:.2f}s)")
-            
-            # For telemetry, calculate total duration including all processing
-            duration_ms = int(total_playbook_ai * 1000)  # Use AI duration for consistency
-
-            # Track telemetry - feedback session
-            ACETelemetry.track_feedback_session(
-                user_id=outcome.user_id,
-                feedback_provided=outcome.feedback_provided,
-                lessons_generated=len(analyses),
-                lessons_added=lessons_added_count,
-                lessons_updated=lessons_updated_count,
-                modifications_detected=len(modifications),
-                session_duration_ms=duration_ms
-            )
-
-            # Track telemetry - playbook state (if updated)
-            if analyses and decisions:
-                updated_playbook = locals().get('updated_playbook')
-                if updated_playbook and hasattr(updated_playbook, 'lessons'):
-                    positive_count = sum(1 for l in updated_playbook.lessons if l.positive)
-                    warning_count = len(updated_playbook.lessons) - positive_count
-                    avg_conf = sum(l.confidence for l in updated_playbook.lessons) / len(updated_playbook.lessons) if updated_playbook.lessons else 0
-                    max_applied = max((l.times_applied for l in updated_playbook.lessons), default=0)
-                    
-                    ACETelemetry.track_playbook_state(
-                        user_id=outcome.user_id,
-                        total_lessons=len(updated_playbook.lessons),
-                        positive_lessons=positive_count,
-                        warning_lessons=warning_count,
-                        avg_confidence=avg_conf,
-                        most_applied_lesson_times=max_applied
-                    )
-
-            return {
-                "success": True,
-                "lessons_generated": len(analyses),
-                "lessons_added": lessons_added_count,
-                "lessons_updated": lessons_updated_count,
-                "lessons_rejected": sum(
-                    1 for d, _ in decisions if d.action == "reject"
-                ),
-                "modifications_detected": len(modifications),
-                "total_lessons_in_playbook": len(playbook.lessons),
-                "playbook_updated": saved,
-                "training_status_updated": True,
-                "decisions": [
-                    {
-                        "action": d.action,
-                        "reasoning": d.reasoning,
-                        "similarity": d.similarity_score,
-                    }
-                    for d, _ in decisions
-                ],
-                "message": f"Processed daily session: {len(analyses)} lessons generated, {len(modifications)} modifications detected",
-            }
-
-        except Exception as e:
-            self.logger.error(f"Error processing daily training feedback: {e}")
-            return {"success": False, "error": str(e)}
+        return self.reflector.extract_lessons_from_conversation_history(
+            conversation_history=conversation_history,
+            personal_info=personal_info,
+            accepted_training_plan=accepted_training_plan,
+            existing_playbook=existing_playbook,
+        )
 
     async def get_playbook_stats(self, user_id: str) -> Optional[PlaybookStats]:
         """
@@ -1237,17 +1056,19 @@ class TrainingCoach(BaseAgent):
     async def classify_feedback_intent_lightweight(
         self,
         feedback_message: str,
-        conversation_history: List[Dict[str, str]]
+        conversation_history: List[Dict[str, str]],
+        training_plan: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         """
         STAGE 1: Lightweight intent classification (no operations parsing).
         
-        Fast and efficient - only uses feedback and conversation history.
-        No plan details, assessment data, or metadata needed.
+        Fast and efficient - uses feedback, conversation history, and training plan.
+        Includes plan details so AI can answer questions about the plan.
         
         Args:
             feedback_message: User's feedback message
             conversation_history: Conversation context
+            training_plan: Current training plan (optional, for answering questions)
         
         Returns:
             Classification result with intent, action, ai_message (no operations)
@@ -1256,10 +1077,11 @@ class TrainingCoach(BaseAgent):
             # Build conversation context
             context = self._build_conversation_context(conversation_history)
             
-            # Get lightweight prompt
+            # Get lightweight prompt (includes plan for answering questions)
             prompt = PromptGenerator.generate_lightweight_intent_classification_prompt(
                 feedback_message=feedback_message,
-                conversation_context=context
+                conversation_context=context,
+                training_plan=training_plan
             )
             
             # Use structured parsing with Pydantic model - TRACK AI CALL
@@ -1361,10 +1183,13 @@ class TrainingCoach(BaseAgent):
     def _normalize_gemini_training_plan_input(tp: Dict[str, Any]) -> Dict[str, Any]:
         """
         Normalize a GeminiTrainingPlan dict to satisfy domain TrainingPlan requirements:
+        - Convert GeminiAIStrengthExercise to AIStrengthExercise (with Enum validation)
         - Inject training_plan_id=0 for each weekly_schedule (placeholder before DB save)
         - Inject weekly_schedule_id=0 for each daily_training
         - Normalize training_type to expected enum lowercase; map synonyms
         """
+        from core.training.schemas.training_schemas import GeminiAIStrengthExercise, AIStrengthExercise, MainMuscleEnum, EquipmentEnum
+        
         schedules = tp.get("weekly_schedules") or []
         weekday_map = {
             "monday": "Monday",
@@ -1392,4 +1217,26 @@ class TrainingCoach(BaseAgent):
                 dow = dt.get("day_of_week")
                 if isinstance(dow, str):
                     dt["day_of_week"] = weekday_map.get(dow.strip().lower(), dow)
+                
+                # Convert GeminiAIStrengthExercise to AIStrengthExercise (with Enum validation)
+                strength_exercises = dt.get("strength_exercises") or []
+                converted_exercises = []
+                for se in strength_exercises:
+                    # se is a dict from GeminiAIStrengthExercise.model_dump()
+                    try:
+                        # Create GeminiAIStrengthExercise from dict
+                        gemini_ex = GeminiAIStrengthExercise(**se)
+                        # Convert to AIStrengthExercise (validates enums)
+                        ai_ex = gemini_ex.to_ai_strength_exercise()
+                        # Convert back to dict for downstream processing
+                        converted_exercises.append(ai_ex.model_dump())
+                    except (ValueError, KeyError) as e:
+                        # Enum validation failed - log and skip
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.error(f"Failed to convert GeminiAIStrengthExercise to AIStrengthExercise: {e}")
+                        logger.error(f"Exercise data: {se}")
+                        # Skip invalid exercise
+                        continue
+                dt["strength_exercises"] = converted_exercises
         return tp

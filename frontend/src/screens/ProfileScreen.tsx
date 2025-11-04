@@ -40,12 +40,6 @@ export const ProfileScreen: React.FC = () => {
             <Text style={styles.trainingLevel}>
               Experience Level: {authState.userProfile.experienceLevel}
             </Text>
-            <Text style={styles.trainingLevel}>
-              Goal: {authState.userProfile.goalDescription}
-            </Text>
-            <Text style={styles.trainingLevel}>
-              Trainings per week: {authState.userProfile.daysPerWeek}
-            </Text>
           </View>
         )}
 

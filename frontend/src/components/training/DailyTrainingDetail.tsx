@@ -15,8 +15,7 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
   onExerciseDetail,
   onOneRMCalculator,
   onSwapExercise,
-  onReopenTraining,
-  onIntensityUpdate
+  onReopenTraining
 }) => {
   if (!dailyTraining) {
     return (
@@ -78,7 +77,9 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
 
         {/* Content */}
         <View style={styles.exercisesContainer}>
-            {dailyTraining.exercises.map((exercise) => (
+            {dailyTraining.exercises
+              .sort((a, b) => (a.executionOrder || a.order || 0) - (b.executionOrder || b.order || 0))
+              .map((exercise) => (
               <ExerciseRow
                 key={exercise.id}
                 exercise={exercise}
@@ -92,10 +93,6 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
                 }}
                 onOneRMCalculator={onOneRMCalculator}
                 onSwapExercise={onSwapExercise ? () => onSwapExercise(exercise.exercise) : undefined}
-                onIntensityUpdate={(exerciseId, intensity) => {
-                  console.log('🎯 DailyTrainingDetail: onIntensityUpdate called with exerciseId:', exerciseId, 'intensity:', intensity);
-                  onIntensityUpdate?.(exerciseId, intensity);
-                }}
                 isLocked={dailyTraining.completed}
               />
             ))}

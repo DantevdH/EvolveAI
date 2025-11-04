@@ -41,6 +41,7 @@ DerivedData/
 *.xcarchive
 *.xcresult
 *.xctestrun
+*.plist
 
 # Swift Package Manager
 #
