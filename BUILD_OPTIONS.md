@@ -2,6 +2,8 @@
 
 ## Three Ways to Run Your Expo App
 
+**BACKEND**: uvicorn main:app --reload --host 127.0.0.1 --port 8000
+
 ### 1. Expo Go (Development - Current)
 **What it is:** Sandboxed development app from App Store  
 **Setup:** `npx expo start` → Scan QR code (instant)

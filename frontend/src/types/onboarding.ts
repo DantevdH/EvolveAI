@@ -37,9 +37,11 @@ export interface AIQuestionResponse {
   estimated_time_minutes: number;
   initial_questions?: AIQuestion[]; // For follow-up questions response
   ai_message?: string; // Personalized AI coach message for this phase
+  user_profile_id?: number; // User profile ID (returned from backend after profile creation)
 }
 
 export interface PersonalInfo {
+  user_id?: string;
   username: string;
   age: number;
   weight: number;
@@ -49,6 +51,7 @@ export interface PersonalInfo {
   measurement_system: 'metric' | 'imperial';
   gender: string;
   goal_description: string;
+  experience_level?: string;
 }
 
 export interface ExperienceLevel {
@@ -146,7 +149,7 @@ export interface FollowUpQuestionsRequest {
   personal_info: PersonalInfo;
   initial_responses: Record<string, any>;  // Raw responses from frontend
   initial_questions?: AIQuestion[];
-  user_profile_id?: string;
+  user_profile_id?: number;
   jwt_token?: string;
 }
 

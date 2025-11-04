@@ -52,7 +52,7 @@ export default function OAuthCallback() {
             return tokenFromHash;
           }
         }
-
+        
         // Method 2: Try getInitialURL (only works on app launch)
         const initialUrl = await Linking.getInitialURL();
         if (initialUrl && initialUrl.includes('#') && initialUrl.includes('oauth/callback')) {

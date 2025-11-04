@@ -168,10 +168,8 @@ class TrainingDatabaseService:
                 "exercise_id": exercise_data.get("exercise_id"),
                 "sets": exercise_data.get("sets", 1),
                 "reps": exercise_data.get("reps", [1]),
-                "weight": exercise_data.get(
-                    "weight_1rm", [0.0]
-                ),  # Using weight_1rm as weight
-                "weight_1rm": exercise_data.get("weight_1rm", [0.0]),
+                "weight": exercise_data.get("weight", [0.0]),
+                "execution_order": exercise_data.get("execution_order", 0),
                 "completed": False,
             }
 
@@ -199,7 +197,8 @@ class TrainingDatabaseService:
                 "sport_type": session_data.get("sport_type", "running"),
                 "training_volume": session_data.get("training_volume", 0),
                 "unit": session_data.get("unit", "minutes"),
-                "heart_rate_zone": session_data.get("heart_rate_zone"),
+                "heart_rate_zone": session_data.get("heart_rate_zone", 3),  # Default to Zone 3 if not provided
+                "execution_order": session_data.get("execution_order", 0),
                 "completed": False,
             }
 
@@ -286,6 +285,37 @@ class TrainingDatabaseService:
                         .eq("daily_training_id", daily["id"])
                         .execute()
                     )
+                    strength_exercises = exercises_result.data or []
+
+                    # Enrich each strength exercise with exercise metadata (JOIN with exercises table)
+                    # Store as "exercises" (plural) to match Supabase relational query format
+                    # Frontend TrainingService expects se.exercises from Supabase queries
+                    for strength_exercise in strength_exercises:
+                        exercise_id = strength_exercise.get("exercise_id")
+                        if exercise_id:
+                            # Fetch exercise metadata from exercises table
+                            exercise_metadata_result = (
+                                self.supabase.table("exercises")
+                                .select("*")
+                                .eq("id", exercise_id)
+                                .single()
+                                .execute()
+                            )
+                            if exercise_metadata_result.data:
+                                exercise_metadata = exercise_metadata_result.data
+                                # Store as "exercises" (plural) to match Supabase format (for frontend compatibility)
+                                strength_exercise["exercises"] = exercise_metadata
+                                # Also flatten enriched fields to top-level for schema validation
+                                strength_exercise["target_area"] = exercise_metadata.get("target_area")
+                                strength_exercise["main_muscles"] = exercise_metadata.get("primary_muscles") or exercise_metadata.get("main_muscles")
+                                strength_exercise["force"] = exercise_metadata.get("force")
+                            else:
+                                strength_exercise["exercises"] = None
+                        else:
+                            strength_exercise["exercises"] = None
+
+                    # Store as strength_exercise (singular) to match Supabase relational query format
+                    daily["strength_exercise"] = strength_exercises
 
                     # Get endurance sessions
                     endurance_result = (
@@ -294,9 +324,8 @@ class TrainingDatabaseService:
                         .eq("daily_training_id", daily["id"])
                         .execute()
                     )
-
-                    daily["strength_exercises"] = exercises_result.data or []
-                    daily["endurance_sessions"] = endurance_result.data or []
+                    # Store as endurance_session (singular) to match Supabase relational query format
+                    daily["endurance_session"] = endurance_result.data or []
                     daily_trainings.append(daily)
 
                 schedule["daily_trainings"] = daily_trainings

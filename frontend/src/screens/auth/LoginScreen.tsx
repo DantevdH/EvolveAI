@@ -76,11 +76,11 @@ const SocialLoginButton: React.FC<{
             resizeMode="cover"
           />
         ) : (
-          <IconSymbol
-            name={iconName as any}
-            size={20}
-            color="#FFFFFF"
-          />
+        <IconSymbol
+          name={iconName as any}
+          size={20}
+          color="#FFFFFF"
+        />
         )}
         <Text style={[styles.socialButtonText, disabled && styles.socialButtonTextDisabled]}>
           {text}

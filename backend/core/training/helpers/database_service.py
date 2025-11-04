@@ -406,7 +406,7 @@ class DatabaseService:
                             
                             sets = exercise_data.get("sets", 3)
                             reps = exercise_data.get("reps", [10, 10, 10])
-                            weight_1rm = exercise_data.get("weight_1rm", [80, 80, 80])
+                            weight = exercise_data.get("weight", [0.0] * sets)
 
                             # Create strength exercise record
                             strength_exercise_record = {
@@ -414,8 +414,8 @@ class DatabaseService:
                                 "exercise_id": exercise_id,
                                 "sets": sets,
                                 "reps": reps,
-                                "weight": [None] * sets,
-                                "weight_1rm": weight_1rm,
+                                "weight": weight,
+                                "execution_order": exercise_data.get("execution_order", 0),
                                 "completed": False,
                                 "created_at": datetime.utcnow().isoformat(),
                                 "updated_at": datetime.utcnow().isoformat(),
@@ -443,7 +443,7 @@ class DatabaseService:
                             sport_type = session_data.get("sport_type", "running")
                             training_volume = session_data.get("training_volume", 30.0)
                             unit = session_data.get("unit", "minutes")
-                            heart_rate_zone = session_data.get("heart_rate_zone")
+                            heart_rate_zone = session_data.get("heart_rate_zone", 3)  # Default to Zone 3 if not provided
 
                             # Create endurance session record
                             endurance_session_record = {
@@ -454,6 +454,7 @@ class DatabaseService:
                                 "training_volume": training_volume,
                                 "unit": unit,
                                 "heart_rate_zone": heart_rate_zone,
+                                "execution_order": session_data.get("execution_order", 0),
                                 "completed": False,
                                 "created_at": datetime.utcnow().isoformat(),
                                 "updated_at": datetime.utcnow().isoformat(),
@@ -474,13 +475,50 @@ class DatabaseService:
                 f"Training plan saved successfully (ID: {training_plan_id})"
             )
 
-            # Return complete plan structure with all database IDs
+            # Enrich plan_dict with exercise metadata (same as get_training_plan does)
+            # This ensures enriched fields (target_area, main_muscles, force) are available
+            # No additional database call needed - we enrich during the save process
+            weekly_schedules = plan_dict.get("weekly_schedules", [])
+            for weekly_schedule in weekly_schedules:
+                daily_trainings = weekly_schedule.get("daily_trainings", [])
+                for daily_training in daily_trainings:
+                    if not daily_training.get("is_rest_day", False):
+                        strength_exercises = daily_training.get("strength_exercises", [])
+                        for strength_exercise in strength_exercises:
+                            exercise_id = strength_exercise.get("exercise_id")
+                            if exercise_id:
+                                # Fetch exercise metadata from exercises table
+                                exercise_metadata_result = (
+                                    supabase_client.table("exercises")
+                                    .select("*")
+                                    .eq("id", exercise_id)
+                                    .single()
+                                    .execute()
+                                )
+                                if exercise_metadata_result.data:
+                                    exercise_metadata = exercise_metadata_result.data
+                                    # Store as "exercises" (plural) to match Supabase format (for frontend compatibility)
+                                    strength_exercise["exercises"] = exercise_metadata
+                                    # CRITICAL: Add exercise_name, main_muscle, equipment at top-level for Pydantic validation and frontend round-trip
+                                    strength_exercise["exercise_name"] = exercise_metadata.get("name")
+                                    # Extract main_muscle from main_muscles array (first item) - database has main_muscles, not main_muscle
+                                    main_muscles_array = exercise_metadata.get("primary_muscles") or exercise_metadata.get("main_muscles", [])
+                                    strength_exercise["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
+                                    strength_exercise["equipment"] = exercise_metadata.get("equipment")
+                                    # Also flatten enriched fields to top-level for schema validation and prompt formatting
+                                    strength_exercise["target_area"] = exercise_metadata.get("target_area")
+                                    strength_exercise["main_muscles"] = main_muscles_array
+                                    strength_exercise["force"] = exercise_metadata.get("force")
+                                else:
+                                    strength_exercise["exercises"] = None
+
+            # Return complete plan structure with all database IDs and enriched fields
             # This allows caller to use the plan without refetching from DB
             return {
                 "success": True,
                 "data": {
                     "training_plan_id": training_plan_id,
-                    "training_plan": plan_dict,  # Include full nested structure
+                    "training_plan": plan_dict,  # Include full nested structure with enriched fields
                 },
                 "message": "Training plan saved successfully",
             }
@@ -679,9 +717,40 @@ class DatabaseService:
                             .eq("daily_training_id", daily_training_id)
                             .execute()
                         )
-                        daily_training["strength_exercises"] = (
-                            exercise_result.data or []
-                        )
+                        strength_exercises = exercise_result.data or []
+
+                        # Enrich each strength exercise with exercise metadata (JOIN with exercises table)
+                        # Store as "exercises" (plural) to match Supabase relational query format
+                        # Frontend TrainingService expects se.exercises from Supabase queries
+                        for strength_exercise in strength_exercises:
+                            exercise_id = strength_exercise.get("exercise_id")
+                            if exercise_id:
+                                # Fetch exercise metadata from exercises table
+                                exercise_metadata_result = (
+                                    self.supabase.table("exercises")
+                                    .select("*")
+                                    .eq("id", exercise_id)
+                                    .single()
+                                    .execute()
+                                )
+                                if exercise_metadata_result.data:
+                                    exercise_metadata = exercise_metadata_result.data
+                                    # Store as "exercises" (plural) to match Supabase format (for frontend compatibility)
+                                    strength_exercise["exercises"] = exercise_metadata
+                                    # Also flatten enriched fields to top-level for schema validation
+                                    strength_exercise["target_area"] = exercise_metadata.get("target_area")
+                                    main_muscles_array = exercise_metadata.get("primary_muscles") or exercise_metadata.get("main_muscles", [])
+                                    strength_exercise["main_muscles"] = main_muscles_array
+                                    strength_exercise["force"] = exercise_metadata.get("force")
+                                    # Extract main_muscle from main_muscles array for backward compatibility
+                                    strength_exercise["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
+                                else:
+                                    strength_exercise["exercises"] = None
+                            else:
+                                strength_exercise["exercises"] = None
+
+                        # Store as strength_exercise (singular) to match Supabase relational query format
+                        daily_training["strength_exercise"] = strength_exercises
 
                         # Get endurance sessions
                         session_result = (
@@ -690,10 +759,11 @@ class DatabaseService:
                             .eq("daily_training_id", daily_training_id)
                             .execute()
                         )
-                        daily_training["endurance_sessions"] = session_result.data or []
+                        # Store as endurance_session (singular) to match Supabase relational query format
+                        daily_training["endurance_session"] = session_result.data or []
                     else:
-                        daily_training["strength_exercises"] = []
-                        daily_training["endurance_sessions"] = []
+                        daily_training["strength_exercise"] = []
+                        daily_training["endurance_session"] = []
 
                 weekly_schedule["daily_trainings"] = daily_trainings
 
@@ -1002,7 +1072,7 @@ class DatabaseService:
                             
                             sets = exercise_data.get("sets", 3)
                             reps = exercise_data.get("reps", [10, 10, 10])
-                            weight_1rm = exercise_data.get("weight_1rm", [80, 80, 80])
+                            weight = exercise_data.get("weight", [0.0] * sets)
                             
                             # Create strength exercise record
                             strength_exercise_record = {
@@ -1010,8 +1080,8 @@ class DatabaseService:
                                 "exercise_id": exercise_id,
                                 "sets": sets,
                                 "reps": reps,
-                                "weight": [None] * sets,
-                                "weight_1rm": weight_1rm,
+                                "weight": weight,
+                                "execution_order": exercise_data.get("execution_order", 0),
                                 "completed": False,
                                 "created_at": datetime.utcnow().isoformat(),
                                 "updated_at": datetime.utcnow().isoformat(),
@@ -1026,6 +1096,33 @@ class DatabaseService:
                                 # Enrich plan dict with generated strength exercise ID and parent linkage
                                 exercise_data["id"] = se_result.data[0]["id"]
                                 exercise_data["daily_training_id"] = daily_training_id
+                                
+                                # CRITICAL: Enrich with exercise metadata from database (same as save_training_plan)
+                                # This ensures exercise_name, main_muscle, equipment are present for frontend round-trip
+                                if exercise_id:
+                                    exercise_metadata_result = (
+                                        supabase_client.table("exercises")
+                                        .select("*")
+                                        .eq("id", exercise_id)
+                                        .single()
+                                        .execute()
+                                    )
+                                    if exercise_metadata_result.data:
+                                        exercise_metadata = exercise_metadata_result.data
+                                        # Store as "exercises" (plural) to match Supabase format (for frontend compatibility)
+                                        exercise_data["exercises"] = exercise_metadata
+                                        # CRITICAL: Add exercise_name, main_muscle, equipment at top-level for Pydantic validation and frontend round-trip
+                                        exercise_data["exercise_name"] = exercise_metadata.get("name")
+                                        # Extract main_muscle from main_muscles array (first item) - database has main_muscles, not main_muscle
+                                        main_muscles_array = exercise_metadata.get("primary_muscles") or exercise_metadata.get("main_muscles", [])
+                                        exercise_data["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
+                                        exercise_data["equipment"] = exercise_metadata.get("equipment")
+                                        # Also flatten enriched fields to top-level for schema validation and prompt formatting
+                                        exercise_data["target_area"] = exercise_metadata.get("target_area")
+                                        exercise_data["main_muscles"] = main_muscles_array
+                                        exercise_data["force"] = exercise_metadata.get("force")
+                                    else:
+                                        exercise_data["exercises"] = None
                         
                         # Save endurance sessions
                         endurance_sessions = daily_data.get("endurance_sessions", [])
@@ -1039,7 +1136,7 @@ class DatabaseService:
                             sport_type = session_data.get("sport_type", "running")
                             training_volume = session_data.get("training_volume", 30.0)
                             unit = session_data.get("unit", "minutes")
-                            heart_rate_zone = session_data.get("heart_rate_zone")
+                            heart_rate_zone = session_data.get("heart_rate_zone", 3)  # Default to Zone 3 if not provided
                             
                             # Create endurance session record
                             endurance_session_record = {
@@ -1050,6 +1147,7 @@ class DatabaseService:
                                 "training_volume": training_volume,
                                 "unit": unit,
                                 "heart_rate_zone": heart_rate_zone,
+                                "execution_order": session_data.get("execution_order", 0),
                                 "completed": False,
                                 "created_at": datetime.utcnow().isoformat(),
                                 "updated_at": datetime.utcnow().isoformat(),

@@ -77,6 +77,9 @@ class AIQuestion(BaseModel):
         default=None, description="Unit of measurement - REQUIRED for slider ONLY (must be a single string, not array)"
     )
     min_description: Optional[str] = Field(
+        default=None, description="Minimum value label - REQUIRED for rating ONLY"
+    )
+    max_description: Optional[str] = Field(
         default=None, description="Maximum value label - REQUIRED for rating ONLY"
     )
     max_length: Optional[int] = Field(
@@ -128,6 +131,7 @@ class GeminiAIQuestion(BaseModel):
     step: Optional[float] = None
     unit: Optional[str] = None
     min_description: Optional[str] = None
+    max_description: Optional[str] = None
     max_length: Optional[int] = Field(default=None, ge=1, le=5000)
     placeholder: Optional[str] = None
 
@@ -205,7 +209,7 @@ class FollowUpQuestionsRequest(BaseModel):
     initial_questions: List[AIQuestion] = Field(
         ..., description="Initial questions from frontend"
     )
-    user_profile_id: Optional[str] = Field(
+    user_profile_id: Optional[int] = Field(
         default=None, description="User profile ID for database storage"
     )
     jwt_token: Optional[str] = Field(
@@ -273,18 +277,18 @@ class PlanFeedbackRequest(BaseModel):
     user_profile_id: Union[int, str] = Field(..., description="User profile ID")
     plan_id: Union[int, str] = Field(..., description="Training plan ID")
     feedback_message: str = Field(..., description="User feedback message")
-    current_plan: Dict[str, Any] = Field(..., description="Current training plan data (sent from frontend)")
+    training_plan: Dict[str, Any] = Field(..., description="Full training plan data (sent from frontend)")
+    playbook: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="User playbook from frontend (userProfile.playbook)"
+    )
+    personal_info: Optional[PersonalInfo] = Field(
+        default=None,
+        description="User personal info from frontend (userProfile) - optional, falls back to DB if not provided"
+    )
     conversation_history: Optional[List[Dict[str, Any]]] = Field(
         default=[], 
         description="Previous conversation messages for context"
-    )
-    formatted_initial_responses: Optional[str] = Field(
-        None, 
-        description="Formatted initial question responses for context"
-    )
-    formatted_follow_up_responses: Optional[str] = Field(
-        None, 
-        description="Formatted follow-up question responses for context"
     )
     jwt_token: Optional[str] = Field(default=None, description="JWT token for authentication")
 
@@ -298,6 +302,10 @@ class PlanFeedbackResponse(BaseModel):
     updated_plan: Optional[Dict[str, Any]] = Field(
         None, 
         description="Updated plan data if changes were made"
+    )
+    updated_playbook: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Updated playbook after processing feedback"
     )
     navigate_to_main_app: Optional[bool] = Field(
         default=False, 
@@ -530,3 +538,13 @@ class FeedbackClassification(BaseModel):
         default=None,
         description="Friendly AI message confirming changes or responding to feedback"
     )
+
+
+class CreateWeekRequest(BaseModel):
+    """Request for creating a new week in the training plan."""
+    
+    training_plan: Dict[str, Any] = Field(..., description="Full training plan data")
+    user_profile_id: int = Field(..., description="User profile ID")
+    personal_info: PersonalInfo = Field(..., description="User personal information")
+    plan_id: Optional[int] = Field(default=None, description="Training plan ID (optional, derived from training_plan if not provided)")
+    jwt_token: str = Field(..., description="JWT token for authentication")

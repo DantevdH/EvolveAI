@@ -187,11 +187,10 @@ export interface Database {
           exercise_id: number;
           sets: number;
           reps: number[];
-          weight: (number | null)[];
+          weight: number[];
           completed: boolean;
           created_at: string;
           updated_at: string;
-          weight_1rm: number[];
         };
         Insert: {
           id?: number;
@@ -199,11 +198,10 @@ export interface Database {
           exercise_id: number;
           sets: number;
           reps: number[];
-          weight?: (number | null)[];
+          weight?: number[];
           completed?: boolean;
           created_at?: string;
           updated_at?: string;
-          weight_1rm?: number[];
         };
         Update: {
           id?: number;
@@ -211,11 +209,10 @@ export interface Database {
           exercise_id?: number;
           sets?: number;
           reps?: number[];
-          weight?: (number | null)[];
+          weight?: number[];
           completed?: boolean;
           created_at?: string;
           updated_at?: string;
-          weight_1rm?: number[];
         };
       };
       exercises: {

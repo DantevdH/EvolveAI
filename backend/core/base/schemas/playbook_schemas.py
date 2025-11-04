@@ -278,3 +278,25 @@ class PlaybookStats(BaseModel):
     most_common_tags: List[str]
     lessons_by_priority: Dict[str, int]
     last_updated: str
+
+
+# ===== Batch Playbook Curation Schema =====
+
+class UpdatedUserPlaybook(BaseModel):
+    """
+    Updated playbook after analyzing new lessons against existing playbook.
+    
+    The LLM analyzes all new lessons, compares them with existing lessons,
+    performs deduplication (merging duplicates), handles contradictions,
+    and returns the final curated playbook.
+    """
+    
+    lessons: List[PlaybookLesson] = Field(
+        ...,
+        description="Complete list of lessons in the updated playbook (existing + new, after deduplication/merging)"
+    )
+    total_lessons: int = Field(..., description="Total number of lessons in the updated playbook")
+    reasoning: str = Field(
+        ...,
+        description="Brief explanation of what changes were made (what was added, merged, removed, and why)"
+    )

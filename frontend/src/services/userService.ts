@@ -222,22 +222,38 @@ export class UserService {
         console.log('✅ userService: Found profile, ID:', user_profiles[0].id);
         const rawProfile = user_profiles[0];
         
+        // Parse playbook if it exists
+        let playbook = null;
+        if (rawProfile.user_playbook) {
+          try {
+            const playbookData = typeof rawProfile.user_playbook === 'string' 
+              ? JSON.parse(rawProfile.user_playbook) 
+              : rawProfile.user_playbook;
+            playbook = {
+              user_id: playbookData.user_id || String(rawProfile.id),
+              lessons: playbookData.lessons || [],
+              total_lessons: playbookData.total_lessons || (playbookData.lessons?.length || 0),
+              last_updated: playbookData.last_updated || playbookData.lastUpdated || new Date().toISOString(),
+            };
+          } catch (error) {
+            console.warn('⚠️ userService: Failed to parse playbook:', error);
+          }
+        }
+        
         // Map database fields (snake_case) to frontend interface (camelCase)
         const mappedProfile: UserProfile = {
           id: rawProfile.id,
           userId: rawProfile.user_id,
           username: rawProfile.username || '',
-          goalDescription: rawProfile.goal_description || '',
           coachId: rawProfile.coach_id,
           experienceLevel: rawProfile.experience_level || '',
+          goalDescription: rawProfile.goal_description || '',
           age: rawProfile.age || 25,
           weight: rawProfile.weight || 70,
           weightUnit: rawProfile.weight_unit || 'kg',
           height: rawProfile.height || 170,
           heightUnit: rawProfile.height_unit || 'cm',
           gender: rawProfile.gender || '',
-          hasLimitations: rawProfile.has_limitations || false,
-          limitationsDescription: rawProfile.limitations_description || '',
           finalChatNotes: rawProfile.final_chat_notes || '',
           // Raw questions and responses (for consistency)
           initial_questions: convertToAIQuestions(rawProfile.initial_questions),
@@ -255,6 +271,8 @@ export class UserService {
           // Plan outline and feedback (separated)
           plan_outline: rawProfile.plan_outline || null,
           plan_outline_feedback: rawProfile.plan_outline_feedback || null,
+          // User playbook
+          playbook: playbook,
           planAccepted: rawProfile.plan_accepted || false,
           createdAt: rawProfile.created_at ? new Date(rawProfile.created_at) : undefined,
           updatedAt: rawProfile.updated_at ? new Date(rawProfile.updated_at) : undefined,

@@ -4,7 +4,7 @@ This replaces the old training-focused schemas with sports-agnostic training sch
 """
 
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import List, Optional, Union, Literal
+from typing import List, Optional, Union, Literal, get_args, get_origin
 from datetime import datetime
 from enum import Enum
 
@@ -14,10 +14,10 @@ from enum import Enum
 
 def _create_exercise_metadata_enums():
     """
-    Create Enum classes for exercise metadata from Supabase.
+    Create Enum classes and extract values for Literal types from Supabase.
     
     Returns:
-        Tuple of (EquipmentEnum, MainMuscleEnum)
+        Tuple of (EquipmentEnum, MainMuscleEnum, equipment_values_tuple, main_muscle_values_tuple)
     """
     import logging
     logger = logging.getLogger(__name__)
@@ -119,7 +119,11 @@ def _create_exercise_metadata_enums():
         
         MainMuscleEnum = Enum("MainMuscleEnum", main_muscle_dict, type=str)
         
-        return EquipmentEnum, MainMuscleEnum
+        # Extract sorted unique string values for Literal types
+        equipment_values = tuple(sorted(set(str(eq).strip() for eq in equipment_list if eq)))
+        main_muscle_values = tuple(sorted(set(str(mm).strip() for mm in main_muscles_list if mm)))
+        
+        return EquipmentEnum, MainMuscleEnum, equipment_values, main_muscle_values
         
     except Exception as e:
         # Fallback to comprehensive default lists if database access fails
@@ -149,11 +153,51 @@ def _create_exercise_metadata_enums():
         EquipmentEnum = Enum("EquipmentEnum", equipment_dict, type=str)
         MainMuscleEnum = Enum("MainMuscleEnum", main_muscle_dict, type=str)
         
-        return EquipmentEnum, MainMuscleEnum
+        # Extract sorted unique string values for Literal types
+        equipment_values = tuple(sorted(set(str(eq).strip() for eq in fallback_equipment if eq)))
+        main_muscle_values = tuple(sorted(set(str(mm).strip() for mm in fallback_main_muscles if mm)))
+        
+        return EquipmentEnum, MainMuscleEnum, equipment_values, main_muscle_values
 
 
-# Create the Enums at module load
-EquipmentEnum, MainMuscleEnum = _create_exercise_metadata_enums()
+# Create the Enums and values at module load
+EquipmentEnum, MainMuscleEnum, equipment_values, main_muscle_values = _create_exercise_metadata_enums()
+
+
+def _create_literal_from_values(values: tuple) -> type:
+    """
+    Create a Literal type from tuple of string values.
+    
+    Constructs Literal[v1, v2, ...] dynamically so Pydantic generates
+    JSON Schema with enum constraints, forcing Gemini to only use valid values.
+    """
+    if not values:
+        return str
+    
+    # Filter and convert to strings
+    str_values = tuple(str(v).strip() for v in values if v and str(v).strip())
+    if not str_values:
+        return str
+    
+    if len(str_values) == 1:
+        return Literal[str_values[0]]
+    
+    # Construct Literal[v1, v2, ...] dynamically
+    literal_args = ', '.join(repr(v) for v in str_values)
+    literal_type = eval(f"Literal[{literal_args}]", {"Literal": Literal, "__builtins__": {}})
+    
+    # Verify all args are strings (required for Literal types)
+    args = get_args(literal_type)
+    if not args or not all(isinstance(arg, str) for arg in args):
+        raise ValueError(f"Literal requires all string values, got: {args}")
+    
+    return literal_type
+
+
+# Create Literal types from Enum values for Gemini schemas
+# These generate JSON Schema with enum constraints, forcing Gemini to use only valid values
+EquipmentLiteral = _create_literal_from_values(equipment_values)
+MainMuscleLiteral = _create_literal_from_values(main_muscle_values)
 
 
 class DayOfWeek(str, Enum):
@@ -216,11 +260,14 @@ class EnduranceSession(BaseModel):
     unit: Union[VolumeUnit, str] = Field(
         ..., description="Unit for training_volume (use VolumeUnit enum: minutes, km, miles, meters)"
     )
-    heart_rate_zone: Optional[int] = Field(
-        default=None, description="Target heart rate zone (1-5)"
+    heart_rate_zone: int = Field(
+        ..., description="Target heart rate zone (1-5)"
     )
     description: Optional[str] = Field(
         default=None, description="Description of the context of the endurance session"
+    )
+    execution_order: int = Field(
+        ..., description="Order in which to execute this session within the day's training (1-based: 1, 2, 3, etc.)"
     )
     completed: bool = Field(
         default=False, description="Whether the session was completed"
@@ -288,8 +335,10 @@ class AIStrengthExercise(BaseModel):
     
     sets: int = Field(..., description="Number of sets")
     reps: List[int] = Field(..., description="Reps for each set")
-    weight: List[float] = Field(..., description="Weight for each set")
-    weight_1rm: List[float] = Field(..., description="1-rep max estimates for each set")
+    weight: List[float] = Field(..., description="Actual weight (in kg or lbs) for each set")
+    execution_order: int = Field(
+        ..., description="Order in which to execute this exercise within the day's training (1-based: 1, 2, 3, etc.)"
+    )
     
     # AI-generated metadata (required, validated against database via Enum)
     exercise_name: str = Field(
@@ -336,7 +385,7 @@ class AIStrengthExercise(BaseModel):
             sets=self.sets,
             reps=self.reps,
             weight=self.weight,
-            weight_1rm=self.weight_1rm,
+            execution_order=self.execution_order,
             completed=self.completed
         )
 
@@ -376,11 +425,29 @@ class StrengthExercise(BaseModel):
     
     sets: int = Field(..., description="Number of sets")
     reps: List[int] = Field(..., description="Reps for each set")
-    weight: List[float] = Field(..., description="Weight for each set")
-    weight_1rm: List[float] = Field(..., description="1-rep max estimates for each set")
+    weight: List[float] = Field(..., description="Actual weight (in kg or lbs) for each set")
+    execution_order: int = Field(
+        ..., description="Order in which to execute this exercise within the day's training (1-based: 1, 2, 3, etc.)"
+    )
     completed: bool = Field(
         default=False, description="Whether the exercise was completed"
     )
+    
+    # Enriched fields from exercises table (populated when exercise_id is set)
+    # These fields come from the exercises table JOIN and provide additional exercise metadata
+    target_area: Optional[str] = Field(
+        default=None,
+        description="Target area of the exercise (from exercises table, populated via JOIN)"
+    )
+    main_muscles: Optional[List[str]] = Field(
+        default=None,
+        description="Main muscles targeted by this exercise (from exercises.primary_muscles, populated via JOIN)"
+    )
+    force: Optional[str] = Field(
+        default=None,
+        description="Type of force applied (push, pull, static, etc.) - from exercises table (populated via JOIN)"
+    )
+    
     created_at: Optional[datetime] = Field(
         default=None, description="Creation timestamp"
     )
@@ -497,13 +564,67 @@ class TrainingPlanResponse(BaseModel):
 
 
 # ===== Gemini-friendly DTOs (Enums flattened to str, omit server fields) =====
+class GeminiAIStrengthExercise(BaseModel):
+    """
+    Gemini-friendly schema for AI-generated strength exercises.
+    
+    Uses Literal types instead of Enum to avoid JSON Schema $ref/allOf issues
+    with Gemini's structured output, while still providing enum constraints.
+    
+    Literal types are created dynamically from Enum values at module load time,
+    ensuring Gemini can only use valid Enum values.
+    """
+    
+    sets: int = Field(..., description="Number of sets")
+    reps: List[int] = Field(..., description="Reps for each set")
+    weight: List[float] = Field(..., description="Actual weight (in kg or lbs) for each set")
+    execution_order: int = Field(
+        ..., description="Order in which to execute this exercise within the day's training (1-based: 1, 2, 3, etc.)"
+    )
+    
+    # AI-generated metadata (validated via Literal types - forces Gemini to use valid Enum values)
+    exercise_name: str = Field(
+        ...,
+        description="Exercise name WITHOUT equipment type (e.g., 'Bench Press', 'Shoulder Press')"
+    )
+    main_muscle: MainMuscleLiteral = Field(
+        ...,
+        description="Main muscle group. MUST be a valid MainMuscleEnum value."
+    )
+    equipment: EquipmentLiteral = Field(
+        ...,
+        description="Equipment type. MUST be a valid EquipmentEnum value."
+    )
+    
+    completed: bool = Field(
+        default=False, description="Whether the exercise was completed"
+    )
+    
+    def to_ai_strength_exercise(self) -> AIStrengthExercise:
+        """
+        Convert to AIStrengthExercise with Enum validation.
+        
+        Validates main_muscle and equipment against MainMuscleEnum and EquipmentEnum.
+        """
+        return AIStrengthExercise(
+            sets=self.sets,
+            reps=self.reps,
+            weight=self.weight,
+            execution_order=self.execution_order,
+            exercise_name=self.exercise_name,
+            main_muscle=MainMuscleEnum(self.main_muscle.strip()),  # Will raise ValueError if invalid
+            equipment=EquipmentEnum(self.equipment.strip()),  # Will raise ValueError if invalid
+            completed=self.completed,
+        )
+
+
 class GeminiDailyTraining(BaseModel):
     day_of_week: Literal[
         "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
     ]
     is_rest_day: bool = False
     training_type: Literal["strength", "endurance", "mixed", "rest"]
-    strength_exercises: List[StrengthExercise] = []
+    strength_exercises: List[GeminiAIStrengthExercise] = []
     endurance_sessions: List[EnduranceSession] = []
     justification: str
 
@@ -512,6 +633,42 @@ class GeminiWeeklySchedule(BaseModel):
     week_number: int
     daily_trainings: List[GeminiDailyTraining]
     justification: str
+
+
+class WeeklyScheduleResponse(BaseModel):
+    """
+    Response schema for WeeklySchedule generation with AI message.
+    
+    Used when AI generates a WeeklySchedule and includes an ai_message.
+    The ai_message is extracted and handled separately - it's never persisted to the database.
+    """
+    id: Optional[int] = Field(default=None, description="Database ID")
+    training_plan_id: int = Field(..., description="ID of the training plan")
+    week_number: int = Field(..., description="Week number in the plan")
+    daily_trainings: List[DailyTraining] = Field(
+        default=[], description="Daily training sessions"
+    )
+    justification: str = Field(
+        ...,
+        description="AI justification: this week's purpose and how it progresses toward the goal",
+    )
+    ai_message: str = Field(
+        ..., 
+        description="AI message explaining the changes made to the week (required, but never persisted)"
+    )
+    created_at: Optional[datetime] = Field(
+        default=None, description="Creation timestamp"
+    )
+    updated_at: Optional[datetime] = Field(
+        default=None, description="Last update timestamp"
+    )
+
+
+class GeminiWeeklyScheduleResponse(BaseModel):
+    """Gemini-compatible version of WeeklyScheduleResponse."""
+    daily_trainings: List[GeminiDailyTraining]
+    justification: str
+    ai_message: str
 
 
 class GeminiTrainingPlan(BaseModel):
