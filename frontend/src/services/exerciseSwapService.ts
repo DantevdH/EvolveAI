@@ -153,10 +153,11 @@ export class ExerciseSwapService {
   static async searchExercises(
     query: string,
     filters: ExerciseSearchFilters = {},
-    limit: number = 20
+    limit: number = 20,
+    offset: number = 0
   ): Promise<{ success: boolean; data?: ExerciseSearchResult[]; error?: string }> {
     try {
-      console.log('🔍 Searching exercises with query:', query, 'filters:', filters);
+      console.log('🔍 Searching exercises with query:', query, 'filters:', filters, 'limit:', limit, 'offset:', offset);
 
       let supabaseQuery = supabase
         .from('exercises')
@@ -180,10 +181,10 @@ export class ExerciseSwapService {
         supabaseQuery = supabaseQuery.eq('difficulty', filters.difficulty);
       }
 
-      // Order by popularity and limit results
+      // Order alphabetically by name, apply pagination
       supabaseQuery = supabaseQuery
-        .order('popularity_score', { ascending: false })
-        .limit(limit);
+        .order('name', { ascending: true })
+        .range(offset, offset + limit - 1);
 
       const { data, error } = await supabaseQuery;
 

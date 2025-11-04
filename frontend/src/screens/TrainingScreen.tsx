@@ -14,11 +14,15 @@ import ExerciseSwapModal from '../components/training/ExerciseSwapModal';
 import SessionRPEModal from '../components/training/SessionRPEModal';
 import { DailyFeedbackModal, DailyFeedbackData } from '../components/training/DailyFeedbackModal';
 import { useDailyFeedback } from '../hooks/useDailyFeedback';
+import AddExerciseModal from '../components/training/AddExerciseModal';
+import AddEnduranceSessionModal from '../components/training/AddEnduranceSessionModal';
 
 const TrainingScreen: React.FC = () => {
   const { state: authState } = useAuth();
   const [oneRMCalculatorVisible, setOneRMCalculatorVisible] = useState(false);
   const [selectedExerciseForCalculator, setSelectedExerciseForCalculator] = useState<string>('');
+  const [addExerciseModalVisible, setAddExerciseModalVisible] = useState(false);
+  const [removeExerciseId, setRemoveExerciseId] = useState<{ id: string; isEndurance: boolean; name: string } | null>(null);
   
   const {
     trainingState,
@@ -46,7 +50,10 @@ const TrainingScreen: React.FC = () => {
     isExerciseSwapModalVisible,
     exerciseToSwap,
     isPlanComplete,
-    currentWeekProgress
+    currentWeekProgress,
+    addExercise: addExerciseHook,
+    addEnduranceSession: addEnduranceSessionHook,
+    removeExercise: removeExerciseHook
   } = useTraining();
 
   // Daily Feedback Hook for ACE Pattern
@@ -157,6 +164,57 @@ const TrainingScreen: React.FC = () => {
     setShowFeedbackModal(false);
   };
 
+  // Add Exercise Handlers
+  const handleAddExercise = () => {
+    setAddExerciseModalVisible(true);
+  };
+
+  const handleAddEnduranceSession = (sessionData: {
+    sportType: string;
+    trainingVolume: number;
+    unit: string;
+    heartRateZone: number;
+    name?: string;
+    description?: string;
+  }) => {
+    if (selectedDayTraining) {
+      addEnduranceSessionHook(sessionData, selectedDayTraining.id);
+    }
+  };
+
+  const handleConfirmAddExercise = (exercise: any) => {
+    if (selectedDayTraining) {
+      addExerciseHook(exercise, selectedDayTraining.id);
+    }
+    setAddExerciseModalVisible(false);
+  };
+
+
+  // Remove Exercise Handlers
+  const handleRemoveExercise = (exerciseId: string, isEndurance: boolean) => {
+    if (!selectedDayTraining) return;
+
+    const exercise = selectedDayTraining.exercises.find(ex => ex.id === exerciseId);
+    const exerciseName = exercise?.exercise?.name || exercise?.enduranceSession?.name || 'Exercise';
+    
+    setRemoveExerciseId({ id: exerciseId, isEndurance, name: exerciseName });
+  };
+
+  const handleConfirmRemoveExercise = () => {
+    if (removeExerciseId && selectedDayTraining) {
+      removeExerciseHook(removeExerciseId.id, removeExerciseId.isEndurance, selectedDayTraining.id);
+    }
+    setRemoveExerciseId(null);
+  };
+
+  const handleCancelRemoveExercise = () => {
+    setRemoveExerciseId(null);
+  };
+
+  const handleToggleChange = (isStrength: boolean) => {
+    setIsStrengthMode(isStrength);
+  };
+
   // Handle loading state
   if (trainingState.isLoading) {
     return (
@@ -258,6 +316,8 @@ const TrainingScreen: React.FC = () => {
           onOneRMCalculator={handleOneRMCalculator}
           onSwapExercise={handleExerciseSwap}
           onReopenTraining={reopenTraining}
+          onAddExercise={handleAddExercise}
+          onRemoveExercise={handleRemoveExercise}
         />
 
         {/* Bottom spacing for scroll comfort */}
@@ -321,6 +381,29 @@ const TrainingScreen: React.FC = () => {
         dayOfWeek={selectedDayTraining?.dayOfWeek || ''}
         trainingType={selectedDayTraining?.isRestDay ? 'Rest Day' : 'Training'}
         modificationsDetected={modificationsDetected}
+      />
+
+      {/* Add Exercise Modal (with toggle inside) */}
+      <AddExerciseModal
+        visible={addExerciseModalVisible}
+        onClose={() => setAddExerciseModalVisible(false)}
+        onAddExercise={handleConfirmAddExercise}
+        onAddEnduranceSession={handleAddEnduranceSession}
+        scheduledExerciseIds={selectedDayTraining?.exercises.map(ex => ex.exercise?.id).filter(Boolean) || []}
+        scheduledExerciseNames={selectedDayTraining?.exercises.map(ex => ex.exercise?.name).filter(Boolean) || []}
+      />
+
+      {/* Remove Exercise Confirmation Dialog */}
+      <ConfirmationDialog
+        visible={!!removeExerciseId}
+        title="Remove Exercise"
+        message={`Remove ${removeExerciseId?.name}? This cannot be undone.`}
+        confirmText="Remove"
+        cancelText="Cancel"
+        onConfirm={handleConfirmRemoveExercise}
+        onCancel={handleCancelRemoveExercise}
+        confirmButtonColor={colors.primary}
+        icon="trash"
       />
     </SafeAreaView>
   );

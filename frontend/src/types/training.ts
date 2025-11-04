@@ -174,6 +174,7 @@ export interface CompleteTrainingResponse {
   success: boolean;
   data?: {
     trainingId: string;
+    exerciseIdMap?: Map<string, string>; // Maps old exercise IDs to new IDs after saveDailyTrainingExercises
   };
   error?: string;
 }
@@ -216,6 +217,18 @@ export interface UseTrainingReturn {
   showExerciseSwapModal: (exercise: Exercise) => void;
   hideExerciseSwapModal: () => void;
   swapExercise: (exerciseId: string, newExercise: Exercise) => Promise<void>;
+  
+  // Exercise add/remove actions
+  addExercise: (exercise: Exercise, dailyTrainingId: string) => Promise<void>;
+  addEnduranceSession: (sessionData: {
+    sportType: string;
+    trainingVolume: number;
+    unit: string;
+    heartRateZone: number;
+    name?: string;
+    description?: string;
+  }, dailyTrainingId: string) => Promise<void>;
+  removeExercise: (exerciseId: string, isEndurance: boolean, dailyTrainingId: string) => Promise<void>;
   
   // Exercise swap state
   isExerciseSwapModalVisible: boolean;
@@ -264,6 +277,11 @@ export interface DailyTrainingDetailProps {
   onOneRMCalculator: (exerciseName: string) => void;
   onSwapExercise?: (exercise: Exercise) => void;
   onReopenTraining?: () => void;
+  onAddExercise?: () => void;
+  onAddEnduranceSession?: () => void;
+  onRemoveExercise?: (exerciseId: string, isEndurance: boolean) => void;
+  onToggleChange?: (isStrength: boolean) => void;
+  isStrengthMode?: boolean;
 }
 
 export interface ExerciseRowProps {
@@ -273,6 +291,7 @@ export interface ExerciseRowProps {
   onShowDetail: () => void;
   onOneRMCalculator: (exerciseName: string) => void;
   onSwapExercise?: () => void;
+  onRemoveExercise?: () => void;
   isLocked?: boolean;
 }
 
