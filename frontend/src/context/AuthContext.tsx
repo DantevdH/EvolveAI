@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { AuthService, AuthState } from '@/src/services/authService';
 import { UserService } from '@/src/services/userService';
 import { UserProfile } from '@/src/types';
@@ -130,6 +130,7 @@ interface AuthContextType {
   setTrainingPlan: (trainingPlan: TrainingPlan) => void;
   
   // Exercise methods
+  loadAllExercises: () => Promise<void>;
   setExercises: (exercises: any[]) => void;
   clearExercises: () => void;
   
@@ -150,14 +151,17 @@ interface AuthProviderProps {
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
+  const isLoadingProfileRef = useRef(false);
 
   // Simplified user profile loading with debouncing
   const loadUserProfile = useCallback(async (userId: string) => {
     // Prevent multiple simultaneous calls
-    if (state.isLoading) {
+    if (isLoadingProfileRef.current) {
       console.log('🚫 Profile loading already in progress, skipping...');
       return;
     }
+
+    isLoadingProfileRef.current = true;
 
     try {
       console.log('👤 Loading user profile...');
@@ -216,8 +220,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Failed to load user profile' });
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
+      isLoadingProfileRef.current = false;
     }
-  }, [state.isLoading]);
+  }, []); // No dependencies - stable function
+
+  // Load all exercises at startup (non-blocking, runs in background)
+  useEffect(() => {
+    // Only load if exercises haven't been loaded yet
+    if (state.exercises === null) {
+      loadAllExercises();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run once on mount
 
   // Initialize auth state
   useEffect(() => {
@@ -264,7 +278,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     initializeAuth();
-  }, []);
+  }, [loadUserProfile]);
 
   // Single auth state listener - handles all auth changes
   useEffect(() => {
@@ -281,7 +295,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
         
         // Only load profile if we don't already have one for this user and not currently loading
-        if ((!state.userProfile || state.userProfile.userId !== session.user.id) && !state.isLoading) {
+        if ((!state.userProfile || state.userProfile.userId !== session.user.id) && !isLoadingProfileRef.current) {
           console.log('🔄 Loading profile for signed in user...');
           await loadUserProfile(session.user.id);
         } else {
@@ -290,13 +304,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } else if (event === 'SIGNED_OUT') {
         console.log('👋 User signed out');
         dispatch({ type: 'CLEAR_AUTH' });
+        isLoadingProfileRef.current = false;
       }
     });
 
     return () => {
       subscription.unsubscribe();
     };
-  }, [loadUserProfile, state.userProfile, state.isLoading]);
+  }, [loadUserProfile, state.userProfile]);
 
   // Force clear all authentication data
   const forceSignOut = async () => {
@@ -650,6 +665,35 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     dispatch({ type: 'SET_WORKOUT_PLAN', payload: trainingPlan });
   };
 
+  // Load all exercises at startup (one-time DB call)
+  const loadAllExercises = useCallback(async (): Promise<void> => {
+    // Only load if not already loaded
+    if (state.exercises !== null) {
+      console.log('🏋️ Exercises already loaded, skipping...');
+      return;
+    }
+
+    try {
+      console.log('🏋️ Loading all exercises...');
+      const { ExerciseSwapService } = await import('../services/exerciseSwapService');
+      
+      // Load all exercises (no limit, no offset)
+      const result = await ExerciseSwapService.searchExercises('', {}, 10000, 0);
+      
+      if (result.success && result.data) {
+        console.log(`✅ Loaded ${result.data.length} exercises into context`);
+        dispatch({ type: 'SET_EXERCISES', payload: result.data.map(r => r.exercise) });
+      } else {
+        console.error('❌ Failed to load exercises:', result.error);
+        dispatch({ type: 'SET_EXERCISES', payload: [] });
+      }
+    } catch (error) {
+      console.error('❌ Error loading exercises:', error);
+      dispatch({ type: 'SET_EXERCISES', payload: [] });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Don't depend on state.exercises to avoid infinite loops
+
   // Set exercises directly (for use after plan generation)
   const setExercises = (exercises: any[]): void => {
     console.log('🏋️ Exercises set');
@@ -680,6 +724,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // generateTrainingPlan, // REMOVED: Use GeneratePlanScreen instead
     refreshTrainingPlan,
     setTrainingPlan,
+    loadAllExercises,
     setExercises,
     clearExercises,
     clearError,

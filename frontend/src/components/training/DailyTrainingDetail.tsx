@@ -15,8 +15,24 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
   onExerciseDetail,
   onOneRMCalculator,
   onSwapExercise,
-  onReopenTraining
+  onReopenTraining,
+  onAddExercise,
+  onAddEnduranceSession,
+  onRemoveExercise,
+  onToggleChange,
+  isStrengthMode,
 }) => {
+  const isLocked = dailyTraining?.completed || false;
+  
+  // Check if this is today's workout
+  // MOCK: For testing only - today is Wednesday
+  const today = new Date();
+  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  // const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, etc.
+  // const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
+  // const todayName = dayNames[mondayFirstIndex];
+  const todayName = 'Wednesday'; // MOCK: Remove this later
+  const isTodaysWorkout = dailyTraining?.dayOfWeek === todayName;
   if (!dailyTraining) {
     return (
       <View style={styles.container}>
@@ -79,23 +95,45 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
         <View style={styles.exercisesContainer}>
             {dailyTraining.exercises
               .sort((a, b) => (a.executionOrder || a.order || 0) - (b.executionOrder || b.order || 0))
-              .map((exercise) => (
-              <ExerciseRow
-                key={exercise.id}
-                exercise={exercise}
-                onToggle={() => onExerciseToggle(exercise.id)}
-                onSetUpdate={(setIndex, reps, weight) => 
-                  onSetUpdate(exercise.id, setIndex, reps, weight)
-                }
-                onShowDetail={() => {
-                  console.log('🔍 DailyTrainingDetail: Calling onExerciseDetail with exercise:', exercise.exercise);
-                  onExerciseDetail(exercise.exercise);
-                }}
-                onOneRMCalculator={onOneRMCalculator}
-                onSwapExercise={onSwapExercise ? () => onSwapExercise(exercise.exercise) : undefined}
-                isLocked={dailyTraining.completed}
-              />
-            ))}
+              .map((exercise) => {
+                const isEndurance = !!exercise.enduranceSession;
+                return (
+                  <ExerciseRow
+                    key={exercise.id}
+                    exercise={exercise}
+                    onToggle={() => onExerciseToggle(exercise.id)}
+                    onSetUpdate={(setIndex, reps, weight) => 
+                      onSetUpdate(exercise.id, setIndex, reps, weight)
+                    }
+                    onShowDetail={() => {
+                      console.log('🔍 DailyTrainingDetail: Calling onExerciseDetail with exercise:', exercise.exercise);
+                      onExerciseDetail(exercise.exercise);
+                    }}
+                    onOneRMCalculator={onOneRMCalculator}
+                    onSwapExercise={onSwapExercise ? () => onSwapExercise(exercise.exercise) : undefined}
+                    onRemoveExercise={!isLocked && isTodaysWorkout && onRemoveExercise ? () => {
+                      const exerciseName = exercise.exercise?.name || exercise.enduranceSession?.name || 'Exercise';
+                      onRemoveExercise(exercise.id, isEndurance);
+                    } : undefined}
+                    isLocked={isLocked}
+                  />
+                );
+              })}
+            
+            {/* Add Exercise Button - Only show for today's workout */}
+            {!isLocked && isTodaysWorkout && (
+              <View style={styles.addControls}>
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={() => {
+                    // Open combined modal (will show toggle inside)
+                    onAddExercise?.();
+                  }}
+                >
+                  <Ionicons name="add" size={12} color="white" />
+                </TouchableOpacity>
+              </View>
+            )}
             
             {/* Training completion status */}
             <View style={styles.trainingStatus}>
@@ -236,7 +274,28 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
     marginBottom: 8,
-  }
+  },
+  addControls: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  addButton: {
+    alignSelf: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.overlay,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
 });
 
 export default DailyTrainingDetail;

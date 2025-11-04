@@ -342,28 +342,85 @@ export const useTraining = (): UseTrainingReturn => {
             // All exercises completed - show RPE modal first
             console.log('🎉 All exercises completed! Showing RPE modal...');
             
-            // Update database: Mark all exercises as completed first
-            const exerciseUpdatePromises = updatedCurrentDailyTraining.exercises.map(exercise => 
-              TrainingService.updateExerciseCompletion(exercise.id, true)
+            // Only save temporary exercises to DB (existing exercises will be handled by saveDailyTrainingExercises)
+            // This ensures temporary exercises have real IDs before the final save
+            const temporaryExercises = updatedCurrentDailyTraining.exercises.filter(exercise => 
+              exercise.id.startsWith('temp_') || exercise.id.startsWith('endurance_temp_')
             );
             
-            Promise.all(exerciseUpdatePromises).then(() => {
-              // Show RPE modal to collect session rating
+            if (temporaryExercises.length > 0) {
+              // Save temporary exercises and update local state with new IDs
+              const savePromises = temporaryExercises.map(exercise => 
+                TrainingService.updateExerciseCompletion(
+                  exercise.id, 
+                  true,
+                  exercise,
+                  updatedCurrentDailyTraining.id
+                )
+              );
+              
+              Promise.all(savePromises).then((results) => {
+                // Update local plan with new database IDs for temporary exercises
+                let finalPlan = updatedPlan;
+                results.forEach((result, index) => {
+                  if (result.newId) {
+                    const exerciseToUpdate = temporaryExercises[index];
+                    
+                    // Preserve the endurance_ prefix for endurance sessions
+                    const wasEnduranceSession = exerciseToUpdate.id.startsWith('endurance_temp_') || exerciseToUpdate.isEndurance;
+                    const newIdString = wasEnduranceSession 
+                      ? `endurance_${result.newId}` 
+                      : result.newId.toString();
+                    
+                    console.log(`✅ Temporary exercise ${exerciseToUpdate.id} saved with new DB ID: ${newIdString}`);
+                    
+                    // Update the plan with the new ID
+                    finalPlan = {
+                      ...finalPlan,
+                      weeklySchedules: finalPlan.weeklySchedules.map(week => ({
+                        ...week,
+                        dailyTrainings: week.dailyTrainings.map(daily =>
+                          daily.id === updatedCurrentDailyTraining.id
+                            ? {
+                                ...daily,
+                                exercises: daily.exercises.map(ex =>
+                                  ex.id === exerciseToUpdate.id
+                                    ? { ...ex, id: newIdString }
+                                    : ex
+                                )
+                              }
+                            : daily
+                        )
+                      }))
+                    };
+                  }
+                });
+                
+                // Update local plan with new IDs for temporary exercises
+                updateTrainingPlan(finalPlan);
+                
+                // Show RPE modal to collect session rating
+                setTrainingState(prev => ({
+                  ...prev,
+                  showRPEModal: true,
+                  pendingCompletionDailyTrainingId: updatedCurrentDailyTraining.id
+                }));
+              }).catch(error => {
+                console.error('❌ Error saving temporary exercises:', error);
+                setTrainingState(prev => ({
+                  ...prev,
+                  error: 'Failed to save temporary exercises'
+                }));
+              });
+            } else {
+              // No temporary exercises - just show RPE modal
+              // All exercises will be saved with correct completion status by saveDailyTrainingExercises
               setTrainingState(prev => ({
                 ...prev,
                 showRPEModal: true,
                 pendingCompletionDailyTrainingId: updatedCurrentDailyTraining.id
               }));
-              
-              // Update local plan to show exercises as completed (but not the daily training yet)
-              updateTrainingPlan(updatedPlan);
-            }).catch(error => {
-              console.error('❌ Error updating exercise completion:', error);
-              setTrainingState(prev => ({
-                ...prev,
-                error: 'Failed to complete training'
-              }));
-            });
+            }
           } else if (!allExercisesCompleted && updatedCurrentDailyTraining.completed) {
             // Some exercises were unchecked - mark training as incomplete
             
@@ -644,11 +701,42 @@ export const useTraining = (): UseTrainingReturn => {
 
       // Update database if exercises were reset to incomplete
       if (resetExercises && selectedDayTraining) {
-        const exerciseUpdatePromises = selectedDayTraining.exercises.map(exercise => 
-          TrainingService.updateExerciseCompletion(exercise.id, false)
+        // Remove temporary exercises from the plan (they were never saved)
+        const exercisesToUpdate = selectedDayTraining.exercises.filter(exercise => 
+          !exercise.id.startsWith('temp_') && !exercise.id.startsWith('endurance_temp_')
         );
         
-        await Promise.all(exerciseUpdatePromises);
+        const tempExercisesCount = selectedDayTraining.exercises.length - exercisesToUpdate.length;
+        
+        if (tempExercisesCount > 0) {
+          console.log(`🗑️ Removing ${tempExercisesCount} temporary exercises that were never saved`);
+          const planWithoutTempExercises = {
+            ...updatedPlan,
+            weeklySchedules: updatedPlan.weeklySchedules.map(week => ({
+              ...week,
+              dailyTrainings: week.dailyTrainings.map(daily =>
+                daily.id === selectedDayTraining.id
+                  ? {
+                      ...daily,
+                      exercises: daily.exercises.filter(ex => 
+                        !ex.id.startsWith('temp_') && !ex.id.startsWith('endurance_temp_')
+                      )
+                    }
+                  : daily
+              )
+            }))
+          };
+          updateTrainingPlan(planWithoutTempExercises);
+        }
+        
+        // Bulk reset exercise completion status (much more efficient than individual calls)
+        if (exercisesToUpdate.length > 0) {
+          const result = await TrainingService.bulkResetExerciseCompletion(exercisesToUpdate);
+          if (!result.success) {
+            console.warn(`⚠️ Failed to bulk reset exercises: ${result.error}`);
+            // Don't throw - reopening should still succeed even if DB update fails
+          }
+        }
       }
 
       // Hide dialog
@@ -767,16 +855,24 @@ export const useTraining = (): UseTrainingReturn => {
 
       const dailyTrainingId = trainingState.pendingCompletionDailyTrainingId;
       
-      // Complete the daily training with session RPE
+      // Get current exercises from selectedDayTraining (includes all added/removed exercises)
+      const currentDailyTraining = trainingPlan?.weeklySchedules
+        .find(week => week.weekNumber === trainingState.currentWeekSelected)
+        ?.dailyTrainings.find(daily => daily.id === dailyTrainingId);
+      
+      const exercises = currentDailyTraining?.exercises || [];
+      
+      // Complete the daily training with session RPE and exercises
       const result = await TrainingService.completeDailyTraining(
         dailyTrainingId,
-        rpe
+        rpe,
+        exercises // Pass exercises array to save all changes
       );
 
       if (result.success) {
         // Update local state with completedAt timestamp and sessionRPE
         const now = new Date();
-        const updatedPlan = {
+        let updatedPlan = {
           ...trainingPlan!,
           weeklySchedules: trainingPlan!.weeklySchedules.map(week => ({
             ...week,
@@ -787,6 +883,30 @@ export const useTraining = (): UseTrainingReturn => {
             )
           }))
         };
+
+        // Update exercise IDs if they were recreated (saveDailyTrainingExercises deletes and recreates)
+        const exerciseIdMap = result.data?.exerciseIdMap;
+        if (exerciseIdMap && exerciseIdMap.size > 0) {
+          // Update exercises with new IDs from the database
+          updatedPlan = {
+            ...updatedPlan,
+            weeklySchedules: updatedPlan.weeklySchedules.map(week => ({
+              ...week,
+              dailyTrainings: week.dailyTrainings.map(daily =>
+                daily.id === dailyTrainingId
+                  ? {
+                      ...daily,
+                      exercises: daily.exercises.map(exercise => {
+                        const newId = exerciseIdMap.get(exercise.id);
+                        return newId ? { ...exercise, id: newId } : exercise;
+                      })
+                    }
+                  : daily
+              )
+            }))
+          };
+          console.log(`✅ Updated ${exerciseIdMap.size} exercise IDs after completion`);
+        }
         
         // Update both local and auth context training plans
         updateTrainingPlan(updatedPlan);
@@ -825,6 +945,273 @@ export const useTraining = (): UseTrainingReturn => {
       pendingCompletionDailyTrainingId: null
     }));
   }, []);
+
+  const addExercise = useCallback(async (
+    exercise: Exercise,
+    dailyTrainingId: string
+  ) => {
+    try {
+      // Check if training is completed/locked - if so, don't allow add
+      const currentWeek = trainingPlan?.weeklySchedules.find(
+        week => week.weekNumber === trainingState.currentWeekSelected
+      );
+      const currentDailyTraining = currentWeek?.dailyTrainings.find(
+        daily => daily.id === dailyTrainingId
+      );
+      
+      if (!currentDailyTraining) {
+        console.error('Daily training not found');
+        return;
+      }
+
+      // Check if this is today's workout
+      // MOCK: For testing only - today is Wednesday
+      const today = new Date();
+      const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      // const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, etc.
+      // const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
+      // const todayName = dayNames[mondayFirstIndex];
+      const todayName = 'Wednesday'; // MOCK: Remove this later
+      
+      if (currentDailyTraining.dayOfWeek !== todayName) {
+        console.log('❌ Can only add exercises to today\'s workout');
+        return;
+      }
+
+      if (currentDailyTraining.completed) {
+        console.log('🔒 Training is completed and locked. Cannot add exercises.');
+        return;
+      }
+
+      // Calculate next execution_order (max + 1 from existing exercises)
+      const existingExercises = currentDailyTraining.exercises || [];
+      const maxExecutionOrder = existingExercises.length > 0
+        ? Math.max(...existingExercises.map(ex => ex.executionOrder || 0))
+        : 0;
+      const nextExecutionOrder = maxExecutionOrder + 1;
+
+      // Generate temporary ID
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Create new TrainingExercise object with defaults
+      const newExercise: TrainingExercise = {
+        id: tempId,
+        exerciseId: exercise.id.toString(),
+        exercise: exercise,
+        sets: [
+          { id: `${tempId}-0`, reps: 12, weight: 0, completed: false, restTime: 60 },
+          { id: `${tempId}-1`, reps: 12, weight: 0, completed: false, restTime: 60 },
+          { id: `${tempId}-2`, reps: 12, weight: 0, completed: false, restTime: 60 },
+        ],
+        weight: [0, 0, 0], // For backward compatibility
+        executionOrder: nextExecutionOrder,
+        completed: false,
+        order: nextExecutionOrder, // Legacy field
+      };
+
+      // Update local state immediately (optimistic update)
+      const updatedPlan = {
+        ...trainingPlan!,
+        weeklySchedules: trainingPlan!.weeklySchedules.map(week => ({
+          ...week,
+          dailyTrainings: week.dailyTrainings.map(daily =>
+            daily.id === dailyTrainingId
+              ? { ...daily, exercises: [...daily.exercises, newExercise] }
+              : daily
+          )
+        }))
+      };
+
+      // Update auth context training plan
+      updateTrainingPlan(updatedPlan);
+    } catch (error) {
+      console.error('Error adding exercise:', error);
+      setTrainingState(prev => ({
+        ...prev,
+        error: 'Failed to add exercise'
+      }));
+    }
+  }, [trainingPlan, trainingState.currentWeekSelected, updateTrainingPlan]);
+
+  const addEnduranceSession = useCallback(async (
+    sessionData: {
+      sportType: string;
+      trainingVolume: number;
+      unit: string;
+      heartRateZone: number;
+      name?: string;
+      description?: string;
+    },
+    dailyTrainingId: string
+  ) => {
+    try {
+      // Check if training is completed/locked - if so, don't allow add
+      const currentWeek = trainingPlan?.weeklySchedules.find(
+        week => week.weekNumber === trainingState.currentWeekSelected
+      );
+      const currentDailyTraining = currentWeek?.dailyTrainings.find(
+        daily => daily.id === dailyTrainingId
+      );
+      
+      if (!currentDailyTraining) {
+        console.error('Daily training not found');
+        return;
+      }
+
+      // Check if this is today's workout
+      // MOCK: For testing only - today is Wednesday
+      const today = new Date();
+      const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      // const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, etc.
+      // const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
+      // const todayName = dayNames[mondayFirstIndex];
+      const todayName = 'Wednesday'; // MOCK: Remove this later
+      
+      if (currentDailyTraining.dayOfWeek !== todayName) {
+        console.log('❌ Can only add sessions to today\'s workout');
+        return;
+      }
+
+      if (currentDailyTraining.completed) {
+        console.log('🔒 Training is completed and locked. Cannot add sessions.');
+        return;
+      }
+
+      // Calculate next execution_order (max + 1 from existing exercises)
+      const existingExercises = currentDailyTraining.exercises || [];
+      const maxExecutionOrder = existingExercises.length > 0
+        ? Math.max(...existingExercises.map(ex => ex.executionOrder || 0))
+        : 0;
+      const nextExecutionOrder = maxExecutionOrder + 1;
+
+      // Generate temporary ID
+      const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // Create new TrainingExercise object with endurance session
+      const newExercise: TrainingExercise = {
+        id: tempId,
+        exerciseId: `endurance_${tempId}`,
+        executionOrder: nextExecutionOrder,
+        completed: false,
+        order: nextExecutionOrder, // Legacy field
+        enduranceSession: {
+          id: tempId,
+          name: sessionData.name || `${sessionData.sportType} - ${sessionData.trainingVolume} ${sessionData.unit}`,
+          sportType: sessionData.sportType,
+          trainingVolume: sessionData.trainingVolume || 30,
+          unit: sessionData.unit || 'minutes',
+          heartRateZone: sessionData.heartRateZone || 3,
+          executionOrder: nextExecutionOrder,
+          completed: false,
+          description: sessionData.description,
+        },
+      };
+
+      // Update local state immediately (optimistic update)
+      const updatedPlan = {
+        ...trainingPlan!,
+        weeklySchedules: trainingPlan!.weeklySchedules.map(week => ({
+          ...week,
+          dailyTrainings: week.dailyTrainings.map(daily =>
+            daily.id === dailyTrainingId
+              ? { ...daily, exercises: [...daily.exercises, newExercise], isRestDay: false }
+              : daily
+          )
+        }))
+      };
+
+      // Update auth context training plan
+      updateTrainingPlan(updatedPlan);
+    } catch (error) {
+      console.error('Error adding endurance session:', error);
+      setTrainingState(prev => ({
+        ...prev,
+        error: 'Failed to add endurance session'
+      }));
+    }
+  }, [trainingPlan, trainingState.currentWeekSelected, updateTrainingPlan]);
+
+  const removeExercise = useCallback(async (
+    exerciseId: string,
+    isEndurance: boolean,
+    dailyTrainingId: string
+  ) => {
+    try {
+      // Check if training is completed/locked - if so, don't allow remove
+      const currentWeek = trainingPlan?.weeklySchedules.find(
+        week => week.weekNumber === trainingState.currentWeekSelected
+      );
+      const currentDailyTraining = currentWeek?.dailyTrainings.find(
+        daily => daily.id === dailyTrainingId
+      );
+      
+      if (!currentDailyTraining) {
+        console.error('Daily training not found');
+        return;
+      }
+
+      // Check if this is today's workout
+      // MOCK: For testing only - today is Wednesday
+      const today = new Date();
+      const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      // const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, etc.
+      // const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
+      // const todayName = dayNames[mondayFirstIndex];
+      const todayName = 'Wednesday'; // MOCK: Remove this later
+      
+      if (currentDailyTraining.dayOfWeek !== todayName) {
+        console.log('❌ Can only remove exercises from today\'s workout');
+        return;
+      }
+
+      if (currentDailyTraining.completed) {
+        console.log('🔒 Training is completed and locked. Cannot remove exercises.');
+        return;
+      }
+
+      // Remove exercise from exercises array
+      const updatedExercises = currentDailyTraining.exercises.filter(
+        ex => ex.id !== exerciseId
+      );
+
+      // Check if exercises array is now empty
+      const isEmpty = updatedExercises.length === 0;
+
+      // If not empty, reorder execution_order for remaining items (1, 2, 3, ...)
+      if (!isEmpty) {
+        updatedExercises.forEach((ex, index) => {
+          ex.executionOrder = index + 1;
+          ex.order = index + 1; // Legacy field
+        });
+      }
+
+      // Update local state
+      const updatedPlan = {
+        ...trainingPlan!,
+        weeklySchedules: trainingPlan!.weeklySchedules.map(week => ({
+          ...week,
+          dailyTrainings: week.dailyTrainings.map(daily =>
+            daily.id === dailyTrainingId
+              ? { 
+                  ...daily, 
+                  exercises: updatedExercises,
+                  isRestDay: isEmpty // Convert to rest day if empty
+                }
+              : daily
+          )
+        }))
+      };
+
+      // Update auth context training plan
+      updateTrainingPlan(updatedPlan);
+    } catch (error) {
+      console.error('Error removing exercise:', error);
+      setTrainingState(prev => ({
+        ...prev,
+        error: 'Failed to remove exercise'
+      }));
+    }
+  }, [trainingPlan, trainingState.currentWeekSelected, updateTrainingPlan]);
 
   const refreshTrainingPlan = useCallback(async () => {
     if (!authState.userProfile) return;
@@ -926,6 +1313,9 @@ export const useTraining = (): UseTrainingReturn => {
     showExerciseSwapModal,
     hideExerciseSwapModal,
     swapExercise,
+    addExercise,
+    addEnduranceSession,
+    removeExercise,
     
     // Exercise swap state
     isExerciseSwapModalVisible: showExerciseSwapModalState,

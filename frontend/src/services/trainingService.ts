@@ -64,6 +64,7 @@ export class TrainingService {
 
     try {
       // Use relational query to get training plan with all exercise details
+      // Explicitly include main_muscles (jsonb) field to ensure it's loaded
       console.log('📊 TrainingService: Fetching training plan with relational query...');
       const { data, error } = await supabase
         .from('training_plans')
@@ -75,7 +76,10 @@ export class TrainingService {
               *,
               strength_exercise (
                 *,
-                exercises (*)
+                exercises (
+                  *,
+                  main_muscles
+                )
               ),
               endurance_session (*)
             )
@@ -193,9 +197,9 @@ export class TrainingService {
                       force: se.exercises.force,
                       instructions: se.exercises.instructions,
                       equipment: se.exercises.equipment,
-                      targetArea: se.exercises.target_area, // camelCase for consistency
+                      target_area: se.exercises.target_area,
                       secondary_muscles: se.exercises.secondary_muscles,
-                      mainMuscles: se.exercises.main_muscles, // camelCase for consistency
+                      main_muscles: se.exercises.main_muscles || [], // Ensure it's an array, not undefined
                       difficulty: se.exercises.difficulty,
                       exercise_tier: se.exercises.exercise_tier,
                       preparation: se.exercises.preparation,
@@ -417,9 +421,168 @@ export class TrainingService {
   /**
    * Update exercise completion status in database
    */
-  static async updateExerciseCompletion(exerciseId: string, completed: boolean): Promise<{ success: boolean; error?: string }> {
+  /**
+   * Save a temporary exercise to the database
+   * This is called when a newly added exercise is marked as complete
+   */
+  static async saveTemporaryExercise(
+    exercise: TrainingExercise,
+    dailyTrainingId: string
+  ): Promise<{ success: boolean; newId?: number; error?: string }> {
     try {
-      // Try strength_exercise first
+      if (exercise.enduranceSession) {
+        // Endurance session
+        const { data, error } = await supabase
+          .from('endurance_session')
+          .insert({
+            daily_training_id: dailyTrainingId,
+            sport_type: exercise.enduranceSession.sportType,
+            training_volume: exercise.enduranceSession.trainingVolume,
+            unit: exercise.enduranceSession.unit,
+            heart_rate_zone: exercise.enduranceSession.heartRateZone,
+            execution_order: exercise.executionOrder,
+            completed: exercise.completed || false,
+            name: exercise.enduranceSession.name || null,
+            description: exercise.enduranceSession.description || null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error saving temporary endurance session:', error);
+          return { success: false, error: error.message };
+        }
+
+        return { success: true, newId: data.id };
+      } else if (exercise.exercise) {
+        // Strength exercise
+        const sets = exercise.sets || [];
+        const reps = sets.length > 0 
+          ? sets.map(s => s.reps) 
+          : (exercise.weight?.length ? exercise.weight.map(() => 12) : [12, 12, 12]);
+        const weight = sets.length > 0
+          ? sets.map(s => s.weight)
+          : (exercise.weight || [0, 0, 0]);
+        const setsCount = sets.length || reps.length || 3;
+
+        const { data, error } = await supabase
+          .from('strength_exercise')
+          .insert({
+            daily_training_id: dailyTrainingId,
+            exercise_id: parseInt(exercise.exerciseId),
+            sets: setsCount,
+            reps: reps,
+            weight: weight,
+            execution_order: exercise.executionOrder,
+            completed: exercise.completed || false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Error saving temporary strength exercise:', error);
+          return { success: false, error: error.message };
+        }
+
+        return { success: true, newId: data.id };
+      }
+
+      return { success: false, error: 'Invalid exercise type' };
+    } catch (error) {
+      console.error('Error in saveTemporaryExercise:', error);
+      return { success: false, error: 'Failed to save temporary exercise' };
+    }
+  }
+
+  static async updateExerciseCompletion(
+    exerciseId: string, 
+    completed: boolean,
+    exercise?: TrainingExercise,
+    dailyTrainingId?: string
+  ): Promise<{ success: boolean; newId?: number; error?: string }> {
+    try {
+      // Check if this is a temporary ID (newly added exercise that hasn't been saved to DB yet)
+      // Temporary IDs:
+      // - Strength exercises: start with "temp_" (e.g., "temp_1234567890_abc123")
+      // - Endurance sessions: start with "endurance_temp_" (e.g., "endurance_temp_1234567890_abc123")
+      // Note: Real endurance session IDs from DB are just numbers, but exerciseId stores them as "endurance_{id}"
+      const isTempStrength = exerciseId.startsWith('temp_');
+      const isTempEndurance = exerciseId.startsWith('endurance_temp_');
+      
+      if (isTempStrength || isTempEndurance) {
+        // This is a temporary ID - we need to save it to DB first
+        if (!exercise || !dailyTrainingId) {
+          console.log(`ℹ️ Temporary exercise ID ${exerciseId} - will be saved when full workout is completed`);
+          return { success: true };
+        }
+
+        // Save the temporary exercise to database
+        const saveResult = await this.saveTemporaryExercise(exercise, dailyTrainingId);
+        if (!saveResult.success) {
+          return { success: false, error: saveResult.error };
+        }
+
+        // Return the new database ID so the frontend can update the local state
+        console.log(`✅ Saved temporary exercise to DB with new ID: ${saveResult.newId}`);
+        return { success: true, newId: saveResult.newId };
+      }
+
+      // Determine exercise type from the exercise object (most reliable)
+      // Endurance sessions have enduranceSession property, strength exercises have exercise property
+      const isEnduranceSession = exercise?.enduranceSession !== undefined;
+      
+      if (isEnduranceSession) {
+        // This is an endurance session - extract numeric ID
+        // exercise.id can be "123" (from DB) or "endurance_123" (after saving temporary)
+        let numericId = exerciseId;
+        if (exerciseId.startsWith('endurance_')) {
+          numericId = exerciseId.replace('endurance_', '');
+        }
+        
+        const { data: enduranceData, error: enduranceError } = await supabase
+          .from('endurance_session')
+          .update({
+            completed: completed,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', numericId)
+          .select()
+          .single();
+
+        if (enduranceError) {
+          console.error('Error updating endurance session completion:', enduranceError);
+          return { success: false, error: enduranceError.message };
+        }
+
+        console.log(`✅ Endurance session ${numericId} completion updated to: ${completed}`);
+        return { success: true };
+      }
+
+      // Also check if exerciseId has endurance_ prefix (fallback for edge cases)
+      if (exerciseId.startsWith('endurance_') && !exerciseId.startsWith('endurance_temp_')) {
+        const numericId = exerciseId.replace('endurance_', '');
+        const { data: enduranceData, error: enduranceError } = await supabase
+          .from('endurance_session')
+          .update({
+            completed: completed,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', numericId)
+          .select()
+          .single();
+
+        if (!enduranceError && enduranceData) {
+          console.log(`✅ Endurance session ${numericId} completion updated to: ${completed}`);
+          return { success: true };
+        }
+      }
+
+      // This is a strength exercise - use the numeric ID directly
+      // exercise.id is the strength_exercise table ID
       const { data: strengthData, error: strengthError } = await supabase
         .from('strength_exercise')
         .update({
@@ -430,32 +593,95 @@ export class TrainingService {
         .select()
         .single();
 
-      if (!strengthError && strengthData) {
-        console.log(`✅ Strength exercise ${exerciseId} completion updated to: ${completed}`);
-        return { success: true };
+      if (strengthError) {
+        console.error('Error updating strength exercise completion:', strengthError);
+        return { success: false, error: strengthError.message };
       }
 
-      // If not found in strength_exercise, try endurance_session
-      const { data: enduranceData, error: enduranceError } = await supabase
-        .from('endurance_session')
-        .update({
-          completed: completed,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', exerciseId)
-        .select()
-        .single();
-
-      if (enduranceError) {
-        console.error('Error updating exercise completion:', enduranceError);
-        return { success: false, error: enduranceError.message };
-      }
-
-      console.log(`✅ Endurance session ${exerciseId} completion updated to: ${completed}`);
+      console.log(`✅ Strength exercise ${exerciseId} completion updated to: ${completed}`);
       return { success: true };
     } catch (error) {
       console.error('Error in updateExerciseCompletion:', error);
       return { success: false, error: 'Failed to update exercise completion' };
+    }
+  }
+
+  /**
+   * Bulk reset exercise completion status for reopening training
+   * Updates all exercises for a daily training to incomplete in a single call
+   */
+  static async bulkResetExerciseCompletion(
+    exercises: TrainingExercise[]
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Separate strength exercises and endurance sessions
+      const strengthExerciseIds: number[] = [];
+      const enduranceSessionIds: number[] = [];
+
+      exercises.forEach(exercise => {
+        // Skip temporary exercises that haven't been saved to DB
+        if (exercise.id.startsWith('temp_') || exercise.id.startsWith('endurance_temp_')) {
+          return;
+        }
+
+        if (exercise.enduranceSession !== undefined) {
+          // Endurance session - extract numeric ID
+          // exercise.id can be "123" (from DB) or "endurance_123" (after saving temporary)
+          let idString = exercise.id;
+          if (exercise.id.startsWith('endurance_')) {
+            idString = exercise.id.replace('endurance_', '');
+          }
+          const id = parseInt(idString, 10);
+          if (!isNaN(id)) {
+            enduranceSessionIds.push(id);
+          }
+        } else {
+          // Strength exercise - use numeric ID directly
+          const id = parseInt(exercise.id, 10);
+          if (!isNaN(id)) {
+            strengthExerciseIds.push(id);
+          }
+        }
+      });
+
+      // Bulk update strength exercises
+      if (strengthExerciseIds.length > 0) {
+        const { error: strengthError } = await supabase
+          .from('strength_exercise')
+          .update({
+            completed: false,
+            updated_at: new Date().toISOString()
+          })
+          .in('id', strengthExerciseIds);
+
+        if (strengthError) {
+          console.error('Error bulk updating strength exercises:', strengthError);
+          return { success: false, error: strengthError.message };
+        }
+      }
+
+      // Bulk update endurance sessions
+      if (enduranceSessionIds.length > 0) {
+        const { error: enduranceError } = await supabase
+          .from('endurance_session')
+          .update({
+            completed: false,
+            updated_at: new Date().toISOString()
+          })
+          .in('id', enduranceSessionIds);
+
+        if (enduranceError) {
+          console.error('Error bulk updating endurance sessions:', enduranceError);
+          return { success: false, error: enduranceError.message };
+        }
+      }
+
+      const totalUpdated = strengthExerciseIds.length + enduranceSessionIds.length;
+      console.log(`✅ Bulk reset ${totalUpdated} exercises to incomplete (${strengthExerciseIds.length} strength, ${enduranceSessionIds.length} endurance)`);
+      return { success: true };
+    } catch (error) {
+      console.error('Error in bulkResetExerciseCompletion:', error);
+      return { success: false, error: 'Failed to bulk reset exercise completion' };
     }
   }
 
@@ -474,7 +700,8 @@ export class TrainingService {
    */
   static async completeDailyTraining(
     dailyTrainingId: string,
-    sessionRPE?: number
+    sessionRPE?: number,
+    exercises?: TrainingExercise[] // New parameter for exercises/sessions
   ): Promise<CompleteTrainingResponse> {
     try {
       const updateData: any = {
@@ -486,6 +713,7 @@ export class TrainingService {
         updateData.session_rpe = sessionRPE;
       }
 
+      // Update daily_training record with session_rpe
       const { data, error } = await supabase
         .from('daily_training')
         .update(updateData)
@@ -498,15 +726,172 @@ export class TrainingService {
         return { success: false, error: error.message };
       }
 
+      // If exercises provided, save them (this persists all added/removed exercises)
+      let exerciseIdMap: Map<string, string> | undefined;
+      if (exercises && exercises.length > 0) {
+        const saveResult = await this.saveDailyTrainingExercises(dailyTrainingId, exercises);
+        if (!saveResult.success) {
+          console.error('Error saving exercises:', saveResult.error);
+          return { success: false, error: saveResult.error || 'Failed to save exercises' };
+        }
+        exerciseIdMap = saveResult.exerciseIdMap;
+      }
+
       return { 
         success: true, 
         data: {
-          trainingId: dailyTrainingId
+          trainingId: dailyTrainingId,
+          exerciseIdMap
         }
       };
     } catch (error) {
       console.error('Error in completeDailyTraining:', error);
       return { success: false, error: 'Failed to complete daily training' };
+    }
+  }
+
+  /**
+   * Save exercises and endurance sessions for a specific daily training
+   * Called when training is completed to persist all changes (added/removed exercises)
+   * NOTE: This method is ONLY called when ALL exercises in the day are completed
+   * Therefore, all exercises/sessions are saved with completed: true
+   * 
+   * @param dailyTrainingId - The daily training ID
+   * @param exercises - Array of TrainingExercise objects (including added/removed)
+   * @returns Success status
+   */
+  static async saveDailyTrainingExercises(
+    dailyTrainingId: string,
+    exercises: TrainingExercise[]
+  ): Promise<{ success: boolean; error?: string; exerciseIdMap?: Map<string, string> }> {
+    try {
+      // 1. Delete all existing exercises/sessions for this daily training
+      // Delete strength exercises
+      const { error: strengthError } = await supabase
+        .from('strength_exercise')
+        .delete()
+        .eq('daily_training_id', dailyTrainingId);
+
+      if (strengthError) {
+        console.error('Error deleting strength exercises:', strengthError);
+        return { success: false, error: strengthError.message };
+      }
+
+      // Delete endurance sessions
+      const { error: enduranceError } = await supabase
+        .from('endurance_session')
+        .delete()
+        .eq('daily_training_id', dailyTrainingId);
+
+      if (enduranceError) {
+        console.error('Error deleting endurance sessions:', enduranceError);
+        return { success: false, error: enduranceError.message };
+      }
+
+      // 2. Separate exercises into strength exercises and endurance sessions
+      const strengthExercises: any[] = [];
+      const enduranceSessions: any[] = [];
+
+      for (const exercise of exercises) {
+        if (exercise.enduranceSession) {
+          // Endurance session
+          enduranceSessions.push({
+            daily_training_id: dailyTrainingId,
+            sport_type: exercise.enduranceSession.sportType,
+            training_volume: exercise.enduranceSession.trainingVolume,
+            unit: exercise.enduranceSession.unit,
+            heart_rate_zone: exercise.enduranceSession.heartRateZone,
+            execution_order: exercise.executionOrder,
+            completed: true, // ALL exercises are completed when this method is called
+            name: exercise.enduranceSession.name || null,
+            description: exercise.enduranceSession.description || null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+        } else if (exercise.exercise) {
+          // Strength exercise
+          // Extract reps and weight from TrainingSet[] or use weight array
+          const sets = exercise.sets || [];
+          const reps = sets.length > 0 
+            ? sets.map(s => s.reps) 
+            : (exercise.weight?.length ? exercise.weight.map(() => 12) : [12, 12, 12]);
+          const weight = sets.length > 0
+            ? sets.map(s => s.weight)
+            : (exercise.weight || [0, 0, 0]);
+          const setsCount = sets.length || reps.length || 3;
+
+          strengthExercises.push({
+            daily_training_id: dailyTrainingId,
+            exercise_id: parseInt(exercise.exerciseId),
+            sets: setsCount,
+            reps: reps,
+            weight: weight,
+            execution_order: exercise.executionOrder,
+            completed: true, // ALL exercises are completed when this method is called
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+        }
+      }
+
+      // 3. Insert new strength exercises and get back their IDs
+      let insertedStrengthExercises: any[] = [];
+      if (strengthExercises.length > 0) {
+        const { data: strengthData, error: insertStrengthError } = await supabase
+          .from('strength_exercise')
+          .insert(strengthExercises)
+          .select();
+
+        if (insertStrengthError) {
+          console.error('Error inserting strength exercises:', insertStrengthError);
+          return { success: false, error: insertStrengthError.message };
+        }
+
+        insertedStrengthExercises = strengthData || [];
+      }
+
+      // 4. Insert new endurance sessions and get back their IDs
+      let insertedEnduranceSessions: any[] = [];
+      if (enduranceSessions.length > 0) {
+        const { data: enduranceData, error: insertEnduranceError } = await supabase
+          .from('endurance_session')
+          .insert(enduranceSessions)
+          .select();
+
+        if (insertEnduranceError) {
+          console.error('Error inserting endurance sessions:', insertEnduranceError);
+          return { success: false, error: insertEnduranceError.message };
+        }
+
+        insertedEnduranceSessions = enduranceData || [];
+      }
+
+      // 5. Map new IDs back to exercises (preserve order)
+      const exerciseIdMap = new Map<string, string>();
+      let strengthIndex = 0;
+      let enduranceIndex = 0;
+
+      exercises.forEach(exercise => {
+        if (exercise.enduranceSession) {
+          if (enduranceIndex < insertedEnduranceSessions.length) {
+            const newId = insertedEnduranceSessions[enduranceIndex].id;
+            exerciseIdMap.set(exercise.id, `endurance_${newId}`);
+            enduranceIndex++;
+          }
+        } else if (exercise.exercise) {
+          if (strengthIndex < insertedStrengthExercises.length) {
+            const newId = insertedStrengthExercises[strengthIndex].id;
+            exerciseIdMap.set(exercise.id, newId.toString());
+            strengthIndex++;
+          }
+        }
+      });
+
+      console.log(`✅ Saved ${strengthExercises.length} strength exercises and ${enduranceSessions.length} endurance sessions for daily training ${dailyTrainingId}`);
+      return { success: true, exerciseIdMap };
+    } catch (error) {
+      console.error('Error in saveDailyTrainingExercises:', error);
+      return { success: false, error: 'Failed to save exercises and sessions' };
     }
   }
 

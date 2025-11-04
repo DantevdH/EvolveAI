@@ -13,6 +13,7 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
   onShowDetail,
   onOneRMCalculator,
   onSwapExercise,
+  onRemoveExercise,
   isLocked = false
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -57,6 +58,16 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
 
   return (
     <View style={styles.container}>
+      {/* Remove Button - Top Right */}
+      {onRemoveExercise && !isLocked && (
+        <TouchableOpacity
+          style={styles.removeButtonTopRight}
+          onPress={onRemoveExercise}
+        >
+          <Ionicons name="close" size={16} color={colors.primary} />
+        </TouchableOpacity>
+      )}
+      
       {/* Main exercise row */}
       <View style={styles.exerciseRow}>
         {/* Completion status indicator (tappable or locked) */}
@@ -376,6 +387,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 2,
     elevation: 2,
+    position: 'relative',
+  },
+  removeButtonTopRight: {
+    position: 'absolute',
+    top: -12, // Half outside to sit on border
+    right: -12, // Half outside to sit on border
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   exerciseRow: {
     flexDirection: 'row',
