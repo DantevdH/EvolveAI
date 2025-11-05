@@ -12,7 +12,7 @@ import { useState, useCallback, useRef } from 'react';
 import { Alert } from 'react-native';
 import { TrainingService } from '../services/trainingService';
 import { DailyTraining } from '../types/training';
-import { DailyFeedbackData } from '../components/training/DailyFeedbackModal';
+import { DailyFeedbackData } from '../components/training/dailyFeedback';
 
 export interface UseDailyFeedbackReturn {
   showFeedbackModal: boolean;

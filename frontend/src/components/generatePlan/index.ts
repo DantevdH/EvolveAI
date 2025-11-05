@@ -1,3 +1,4 @@
 export { AnimatedSpinner } from './AnimatedSpinner';
 export { LoadingIndicator } from './LoadingIndicator';
-export { AIChatMessage } from './AIChatMessage';
+// AIChatMessage moved to shared/chat
+export { AIChatMessage } from '../shared/chat';

@@ -7,7 +7,7 @@ import { ProgressIndicator } from '../../components/onboarding/ProgressIndicator
 import { IconSymbol } from '../../../components/ui/IconSymbol';
 import { QuestionsStepProps, QuestionType } from '../../types/onboarding';
 import { colors } from '../../constants/designSystem';
-import { AIChatMessage } from '../../components/generatePlan/AIChatMessage';
+import { AIChatMessage } from '../../components/shared/chat';
 import { AILoadingScreen } from '../../components/shared/AILoadingScreen';
 
 export const QuestionsStep: React.FC<QuestionsStepProps> = ({

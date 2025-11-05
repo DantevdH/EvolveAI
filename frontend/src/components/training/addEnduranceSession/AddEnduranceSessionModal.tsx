@@ -13,53 +13,32 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
-
-// Sport types
-const SPORT_TYPES = [
-  'running',
-  'cycling',
-  'swimming',
-  'rowing',
-  'hiking',
-  'walking',
-  'elliptical',
-  'stair_climbing',
-  'jump_rope',
-  'other',
-];
-
-// Units
-const UNITS = ['minutes', 'km', 'miles', 'meters'];
-
-interface AddEnduranceSessionModalProps {
-  visible: boolean;
-  onClose: () => void;
-  onAddSession: (sessionData: {
-    sportType: string;
-    trainingVolume: number;
-    unit: string;
-    heartRateZone: number;
-    name?: string;
-    description?: string;
-  }) => void;
-}
+import { useAuth } from '../../context/AuthContext';
+import { SportTypePicker } from '../addExerciseModal/SportTypePicker';
+import { HeartRateZoneSelector } from '../addExerciseModal/HeartRateZoneSelector';
+import { DurationInput } from './DurationInput';
+import { getAvailableUnits } from '../addExerciseModal/constants';
+import { AddEnduranceSessionModalProps } from './types';
 
 const AddEnduranceSessionModal: React.FC<AddEnduranceSessionModalProps> = ({
   visible,
   onClose,
   onAddSession,
 }) => {
-  const [sportType, setSportType] = useState<string>('');
+  const { state: authState } = useAuth();
+  const isMetric = authState.userProfile?.weightUnit !== 'lbs';
+  const availableUnits = getAvailableUnits(isMetric);
+
+  const [sportType, setSportType] = useState<string>('running');
   const [duration, setDuration] = useState<string>('30');
-  const [unit, setUnit] = useState<string>('minutes');
-  const [heartRateZone, setHeartRateZone] = useState<string>('3');
+  const [unit, setUnit] = useState<string>(availableUnits[0]);
+  const [heartRateZone, setHeartRateZone] = useState<number>(3);
   const [name, setName] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [showSportTypePicker, setShowSportTypePicker] = useState(false);
   const [showUnitPicker, setShowUnitPicker] = useState(false);
 
   const handleAdd = () => {
-    // Validate required fields
     if (!sportType) {
       Alert.alert('Validation Error', 'Please select a sport type');
       return;
@@ -71,8 +50,7 @@ const AddEnduranceSessionModal: React.FC<AddEnduranceSessionModalProps> = ({
       return;
     }
 
-    const zone = parseInt(heartRateZone);
-    if (isNaN(zone) || zone < 1 || zone > 5) {
+    if (heartRateZone < 1 || heartRateZone > 5) {
       Alert.alert('Validation Error', 'Heart rate zone must be between 1 and 5');
       return;
     }
@@ -81,31 +59,38 @@ const AddEnduranceSessionModal: React.FC<AddEnduranceSessionModalProps> = ({
       sportType,
       trainingVolume: volume,
       unit,
-      heartRateZone: zone,
+      heartRateZone,
       name: name.trim() || undefined,
       description: description.trim() || undefined,
     });
 
     // Reset form
-    setSportType('');
-    setDuration('30');
-    setUnit('minutes');
-    setHeartRateZone('3');
-    setName('');
-    setDescription('');
+    resetForm();
     onClose();
   };
 
   const handleCancel = () => {
-    // Reset form
-    setSportType('');
-    setDuration('30');
-    setUnit('minutes');
-    setHeartRateZone('3');
-    setName('');
-    setDescription('');
+    resetForm();
     onClose();
   };
+
+  const resetForm = () => {
+    setSportType('running');
+    setDuration('30');
+    setUnit(availableUnits[0]);
+    setHeartRateZone(3);
+    setName('');
+    setDescription('');
+    setShowSportTypePicker(false);
+    setShowUnitPicker(false);
+  };
+
+  // Reset form when modal closes
+  React.useEffect(() => {
+    if (!visible) {
+      resetForm();
+    }
+  }, [visible]);
 
   return (
     <Modal
@@ -127,107 +112,34 @@ const AddEnduranceSessionModal: React.FC<AddEnduranceSessionModalProps> = ({
           {/* Sport Type */}
           <View style={styles.field}>
             <Text style={styles.label}>Sport Type *</Text>
-            <TouchableOpacity
-              style={styles.picker}
-              onPress={() => setShowSportTypePicker(!showSportTypePicker)}
-            >
-              <Text style={[styles.pickerText, !sportType && styles.placeholder]}>
-                {sportType || 'Select sport type'}
-              </Text>
-              <Ionicons name="chevron-down" size={20} color={colors.muted} />
-            </TouchableOpacity>
-            {showSportTypePicker && (
-              <View style={styles.pickerOptions}>
-                {SPORT_TYPES.map((type) => (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.pickerOption,
-                      sportType === type && styles.pickerOptionActive,
-                    ]}
-                    onPress={() => {
-                      setSportType(type);
-                      setShowSportTypePicker(false);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.pickerOptionText,
-                        sportType === type && styles.pickerOptionTextActive,
-                      ]}
-                    >
-                      {type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ')}
-                    </Text>
-                    {sportType === type && (
-                      <Ionicons name="checkmark" size={20} color={colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+            <SportTypePicker
+              sportType={sportType || 'running'}
+              onSelect={(type) => {
+                setSportType(type);
+                setShowSportTypePicker(false);
+              }}
+              showPicker={showSportTypePicker}
+              onTogglePicker={() => setShowSportTypePicker(!showSportTypePicker)}
+            />
           </View>
 
           {/* Duration */}
-          <View style={styles.field}>
-            <Text style={styles.label}>Duration</Text>
-            <View style={styles.durationRow}>
-              <TextInput
-                style={styles.numberInput}
-                value={duration}
-                onChangeText={setDuration}
-                placeholder="30"
-                keyboardType="numeric"
-                placeholderTextColor={colors.muted}
-              />
-              <TouchableOpacity
-                style={styles.picker}
-                onPress={() => setShowUnitPicker(!showUnitPicker)}
-              >
-                <Text style={styles.pickerText}>{unit}</Text>
-                <Ionicons name="chevron-down" size={20} color={colors.muted} />
-              </TouchableOpacity>
-              {showUnitPicker && (
-                <View style={styles.pickerOptions}>
-                  {UNITS.map((u) => (
-                    <TouchableOpacity
-                      key={u}
-                      style={[
-                        styles.pickerOption,
-                        unit === u && styles.pickerOptionActive,
-                      ]}
-                      onPress={() => {
-                        setUnit(u);
-                        setShowUnitPicker(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.pickerOptionText,
-                          unit === u && styles.pickerOptionTextActive,
-                        ]}
-                      >
-                        {u}
-                      </Text>
-                      {unit === u && (
-                        <Ionicons name="checkmark" size={20} color={colors.primary} />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-          </View>
+          <DurationInput
+            duration={duration}
+            unit={unit}
+            availableUnits={availableUnits}
+            showUnitPicker={showUnitPicker}
+            onDurationChange={setDuration}
+            onUnitChange={setUnit}
+            onToggleUnitPicker={() => setShowUnitPicker(!showUnitPicker)}
+          />
 
           {/* Heart Rate Zone */}
           <View style={styles.field}>
             <Text style={styles.label}>Heart Rate Zone (1-5)</Text>
-            <TextInput
-              style={styles.numberInput}
-              value={heartRateZone}
-              onChangeText={setHeartRateZone}
-              placeholder="3"
-              keyboardType="numeric"
-              placeholderTextColor={colors.muted}
+            <HeartRateZoneSelector
+              heartRateZone={heartRateZone}
+              onSelect={setHeartRateZone}
             />
           </View>
 
@@ -356,21 +268,6 @@ const styles = StyleSheet.create({
   pickerOptionTextActive: {
     color: colors.primary,
     fontWeight: '600',
-  },
-  durationRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  numberInput: {
-    flex: 1,
-    backgroundColor: colors.card,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    fontSize: 16,
-    color: colors.text,
   },
   textInput: {
     backgroundColor: colors.card,

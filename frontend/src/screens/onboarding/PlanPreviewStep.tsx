@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import WeekNavigationAndOverview from '../../components/training/WeekNavigationAndOverview';
 import { SimplePlanPreview } from '../../components/onboarding/SimplePlanPreview';
-import ChatMessage from '../../components/onboarding/ChatMessage';
+import { ChatMessage } from '../../components/shared/chat';
 import { useAuth } from '@/src/context/AuthContext';
 import { TrainingPlan, DailyTraining } from '../../types/training';
 import { trainingService } from '../../services/onboardingService';

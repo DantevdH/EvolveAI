@@ -16,7 +16,7 @@ import { VolumeTrendChart } from '@/src/components/insights/VolumeTrendChart';
 import { PerformanceScoreChart } from '@/src/components/insights/PerformanceScoreChart';
 import { TopPerformingExercises } from '@/src/components/insights/TopPerformingExercises';
 import { WeakPointsAnalysis } from '@/src/components/insights/WeakPointsAnalysis';
-import { ForecastAndMilestones } from '@/src/components/insights/ForecastAndMilestones';
+import { ForecastAndMilestones } from '@/src/components/insights/forecastAndMilestones';
 import { colors } from '@/src/constants/colors';
 
 type TimePeriod = '1M' | '3M' | '6M' | '1Y' | 'ALL';

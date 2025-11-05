@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { AnimatedSpinner } from '../generatePlan/AnimatedSpinner';
-import { AIChatMessage } from '../generatePlan/AIChatMessage';
+import { AIChatMessage } from './chat';
 import { LoadingIndicator } from '../generatePlan/LoadingIndicator';
 import { OnboardingCard } from '../onboarding/OnboardingCard';
 import { OnboardingNavigation } from '../onboarding/OnboardingNavigation';
