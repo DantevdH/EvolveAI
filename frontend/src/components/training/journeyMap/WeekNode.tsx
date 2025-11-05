@@ -25,12 +25,7 @@ const WeekNode: React.FC<WeekNodeProps> = ({ node, onPress, animations }) => {
     node.status === 'current' ? colors.primary :
     colors.muted;
   
-  const nodeSize = isCurrentWeek ? 70 : 60;
-  
-  // Animated styles for current week
-  const animatedStyle = isCurrentWeek && animations ? {
-    transform: [{ translateY: animations.bounceAnim }],
-  } : {};
+  const nodeSize = isCurrentWeek ? 65 : 60;
 
   return (
     <TouchableOpacity
@@ -47,8 +42,8 @@ const WeekNode: React.FC<WeekNodeProps> = ({ node, onPress, animations }) => {
       onPress={() => onPress(node)}
       activeOpacity={0.7}
     >
-      <Animated.View style={[styles.inner, animatedStyle]}>
-        {/* Glow effect for current week */}
+      <View style={styles.inner}>
+        {/* Subtle glow effect for current week */}
         {isCurrentWeek && animations && (
           <Animated.View
             style={[
@@ -56,48 +51,11 @@ const WeekNode: React.FC<WeekNodeProps> = ({ node, onPress, animations }) => {
               {
                 opacity: animations.glowAnim.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [0.3, 0.8],
+                  outputRange: [0.2, 0.5],
                 }),
               },
             ]}
           />
-        )}
-        
-        {/* Rotating rings for current week */}
-        {isCurrentWeek && animations && (
-          <>
-            <Animated.View
-              style={[
-                styles.ring,
-                {
-                  transform: [
-                    {
-                      rotate: animations.ring1Rotation.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: ['0deg', '360deg'],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            />
-            <Animated.View
-              style={[
-                styles.ring,
-                styles.ring2,
-                {
-                  transform: [
-                    {
-                      rotate: animations.ring2Rotation.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: ['360deg', '0deg'],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            />
-          </>
         )}
         
         <Text style={styles.weekNumber}>{node.weekNumber}</Text>
@@ -124,7 +82,7 @@ const WeekNode: React.FC<WeekNodeProps> = ({ node, onPress, animations }) => {
             <Ionicons name="lock-closed" size={20} color={colors.text} />
           </View>
         )}
-      </Animated.View>
+      </View>
     </TouchableOpacity>
   );
 };
@@ -150,24 +108,10 @@ const styles = StyleSheet.create({
   },
   glow: {
     position: 'absolute',
-    width: '140%',
-    height: '140%',
+    width: '130%',
+    height: '130%',
     borderRadius: 50,
     backgroundColor: colors.primary,
-  },
-  ring: {
-    position: 'absolute',
-    width: '120%',
-    height: '120%',
-    borderRadius: 50,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderStyle: 'dashed',
-  },
-  ring2: {
-    width: '140%',
-    height: '140%',
-    borderColor: colors.secondary,
   },
   weekNumber: {
     fontSize: 20,

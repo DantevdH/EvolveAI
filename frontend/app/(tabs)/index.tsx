@@ -1,7 +1,7 @@
-import { HomeScreen } from '@/src/screens/HomeScreen';
+import TrainingScreen from '@/src/screens/TrainingScreen';
 
 export default function Home() {
-  return <HomeScreen />;
+  return <TrainingScreen />;
 }
 
 

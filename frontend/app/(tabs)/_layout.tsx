@@ -1,92 +1,47 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
-import { Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-
-import { HapticTab } from '@/components/HapticTab';
+import CustomTabBar from '@/components/CustomTabBar';
 import { colors } from '@/src/constants/colors';
 
 export default function TabLayout() {
   return (
     <Tabs
+      tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.muted,
         headerShown: false,
-        tabBarButton: HapticTab,
         tabBarStyle: {
-          backgroundColor: colors.card,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
-          paddingBottom: Platform.OS === 'ios' ? 20 : 5,
-          paddingTop: 5,
-          height: Platform.OS === 'ios' ? 85 : 60,
-          shadowColor: colors.primary,
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.08,
-          shadowRadius: 8,
-          elevation: 8,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '600',
-        },
-        tabBarIconStyle: {
-          marginTop: 2,
+          backgroundColor: 'transparent',
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
         },
       }}>
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? 'home' : 'home-outline'} 
-              size={24} 
-              color={color} 
-            />
-          ),
+          title: 'Journey',
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="chat"
         options={{
-          title: 'Training',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? 'fitness' : 'fitness-outline'} 
-              size={24} 
-              color={color} 
-            />
-          ),
+          title: 'Chat',
         }}
       />
-      {/* Nutrition tab commented out
-      <Tabs.Screen
-        name="nutrition"
-        options={{
-          title: 'Nutrition',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? 'nutrition' : 'nutrition-outline'} 
-              size={24} 
-              color={color} 
-            />
-          ),
-        }}
-      />
-      */}
       <Tabs.Screen
         name="insights"
         options={{
           title: 'Insights',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons 
-              name={focused ? 'bulb' : 'bulb-outline'} 
-              size={24} 
-              color={color} 
-            />
-          ),
+        }}
+      />
+      <Tabs.Screen
+        name="community"
+        options={{
+          title: 'Community',
         }}
       />
     </Tabs>

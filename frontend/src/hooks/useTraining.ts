@@ -965,13 +965,11 @@ export const useTraining = (): UseTrainingReturn => {
       }
 
       // Check if this is today's workout
-      // MOCK: For testing only - today is Wednesday
       const today = new Date();
       const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-      // const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, etc.
-      // const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
-      // const todayName = dayNames[mondayFirstIndex];
-      const todayName = 'Wednesday'; // MOCK: Remove this later
+      const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, etc.
+      const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
+      const todayName = dayNames[mondayFirstIndex];
       
       if (currentDailyTraining.dayOfWeek !== todayName) {
         console.log('❌ Can only add exercises to today\'s workout');
@@ -1059,13 +1057,11 @@ export const useTraining = (): UseTrainingReturn => {
       }
 
       // Check if this is today's workout
-      // MOCK: For testing only - today is Wednesday
       const today = new Date();
       const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-      // const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, etc.
-      // const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
-      // const todayName = dayNames[mondayFirstIndex];
-      const todayName = 'Wednesday'; // MOCK: Remove this later
+      const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, etc.
+      const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
+      const todayName = dayNames[mondayFirstIndex];
       
       if (currentDailyTraining.dayOfWeek !== todayName) {
         console.log('❌ Can only add sessions to today\'s workout');
@@ -1151,13 +1147,11 @@ export const useTraining = (): UseTrainingReturn => {
       }
 
       // Check if this is today's workout
-      // MOCK: For testing only - today is Wednesday
       const today = new Date();
       const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-      // const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, etc.
-      // const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
-      // const todayName = dayNames[mondayFirstIndex];
-      const todayName = 'Wednesday'; // MOCK: Remove this later
+      const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, etc.
+      const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
+      const todayName = dayNames[mondayFirstIndex];
       
       if (currentDailyTraining.dayOfWeek !== todayName) {
         console.log('❌ Can only remove exercises from today\'s workout');

@@ -243,11 +243,12 @@ export interface UseTrainingReturn {
 
 // Component Props Types
 export interface TrainingHeaderProps {
-  trainingPlan: TrainingPlan | null;
+  trainingPlan?: TrainingPlan | null;
   progressRing?: ProgressRingData; // Optional - removed from weekly overview, kept in journey map
-  currentWeek: number;
-  completedTrainingsThisWeek: number;
-  totalTrainingsThisWeek: number;
+  currentWeek?: number;
+  completedTrainingsThisWeek?: number;
+  totalTrainingsThisWeek?: number;
+  onBackToMap?: () => void;
 }
 
 export interface WeekNavigationProps {
@@ -261,11 +262,9 @@ export interface WeeklyOverviewProps {
 }
 
 export interface WeekNavigationAndOverviewProps {
-  weekNavigation: WeekNavigationData;
   dayIndicators: DayIndicator[];
-  onWeekChange: (week: number) => void;
   onDaySelect: (dayIndex: number) => void;
-  hideNavigation?: boolean;
+  currentWeek: number;
 }
 
 export interface DailyTrainingDetailProps {
@@ -286,6 +285,7 @@ export interface DailyTrainingDetailProps {
 
 export interface ExerciseRowProps {
   exercise: TrainingExercise;
+  exerciseNumber?: number; // Exercise number in the sequence (1, 2, 3, etc.)
   onToggle: () => void;
   onSetUpdate: (setIndex: number, reps: number, weight: number) => Promise<void>;
   onShowDetail: () => void;

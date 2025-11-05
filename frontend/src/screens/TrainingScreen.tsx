@@ -5,9 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTraining } from '../hooks/useTraining';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../constants/colors';
-import TrainingHeader from '../components/training/TrainingHeader';
-import WeekNavigationAndOverview from '../components/training/WeekNavigationAndOverview';
-import DailyTrainingDetail from '../components/training/DailyTrainingDetail';
+import { TrainingHeader } from '../components/training/header';
+import { DailyTrainingDetail } from '../components/training/dailyDetail';
 import ConfirmationDialog from '../components/shared/ConfirmationDialog';
 import ExerciseDetailView from '../components/training/ExerciseDetailView';
 import OneRMCalculatorView from '../components/training/OneRMCalculatorView';
@@ -18,6 +17,8 @@ import { useDailyFeedback } from '../hooks/useDailyFeedback';
 import AddExerciseModal from '../components/training/AddExerciseModal';
 import AddEnduranceSessionModal from '../components/training/AddEnduranceSessionModal';
 import { FitnessJourneyMap } from '../components/training/journeyMap';
+import { WelcomeHeader } from '../components/home/WelcomeHeader';
+import { ProgressSummary } from '../components/home/ProgressSummary';
 
 const TrainingScreen: React.FC = () => {
   const { state: authState } = useAuth();
@@ -296,15 +297,108 @@ const TrainingScreen: React.FC = () => {
 
   const isPastWeek = trainingState.currentWeekSelected < (trainingPlan?.currentWeek || 1);
 
+  // Calculate KPIs for ProgressSummary
+  const completedWeeks = trainingPlan?.weeklySchedules?.filter(
+    week => week.weekNumber < trainingPlan.currentWeek
+  ).length || 0;
+
+  // Calculate streak (consecutive completed days)
+  const calculateStreak = () => {
+    if (!trainingPlan?.weeklySchedules) return 0;
+    
+    const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const today = new Date();
+    const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, etc.
+    const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0
+    const todayName = dayOrder[mondayFirstIndex];
+    const todayIndex = dayOrder.indexOf(todayName);
+    
+    const allDailyTrainings: Array<{ weekNumber: number; dayOfWeek: string; completed: boolean }> = [];
+    
+    trainingPlan.weeklySchedules.forEach(week => {
+      week.dailyTrainings.forEach(daily => {
+        if (!daily.isRestDay) {
+          const dayIndex = dayOrder.indexOf(daily.dayOfWeek);
+          const isPastOrToday = dayIndex <= todayIndex;
+          
+          if (isPastOrToday) {
+            const isCompleted = daily.exercises.length > 0 && daily.exercises.every(ex => ex.completed);
+            allDailyTrainings.push({
+              weekNumber: week.weekNumber,
+              dayOfWeek: daily.dayOfWeek,
+              completed: isCompleted
+            });
+          }
+        }
+      });
+    });
+    
+    // Sort by week number (descending) and day order (descending) - most recent first
+    allDailyTrainings.sort((a, b) => {
+      if (a.weekNumber !== b.weekNumber) {
+        return b.weekNumber - a.weekNumber;
+      }
+      return dayOrder.indexOf(b.dayOfWeek) - dayOrder.indexOf(a.dayOfWeek);
+    });
+    
+    let streak = 0;
+    for (const training of allDailyTrainings) {
+      if (training.completed) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
+  };
+
+  // Calculate weekly trainings (completed trainings in current week)
+  const calculateWeeklyTrainings = () => {
+    if (!trainingPlan?.weeklySchedules) return 0;
+    
+    const currentWeek = trainingPlan.weeklySchedules.find(
+      week => week.weekNumber === trainingPlan.currentWeek
+    );
+    
+    if (!currentWeek) return 0;
+    
+    return currentWeek.dailyTrainings.filter(
+      training => !training.isRestDay && 
+                  training.exercises.length > 0 && 
+                  training.exercises.every(ex => ex.completed)
+    ).length;
+  };
+
+  const streak = calculateStreak();
+  const weeklyTrainings = calculateWeeklyTrainings();
+
   // Show map view if no week is selected from map
   if (selectedWeekFromMap === null) {
     return (
       <SafeAreaView style={styles.container}>
-        <FitnessJourneyMap
-          trainingPlan={trainingPlan}
-          currentWeek={trainingPlan.currentWeek}
-          onWeekSelect={handleWeekSelectFromMap}
-        />
+        <ScrollView 
+          style={styles.scrollView}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Welcome Header */}
+          <WelcomeHeader username={authState.userProfile?.username} />
+          
+          {/* Progress Summary - KPIs */}
+          <ProgressSummary 
+            streak={streak}
+            weeklyTrainings={weeklyTrainings}
+            weeksCompleted={completedWeeks}
+          />
+          
+          {/* Journey Map */}
+          <FitnessJourneyMap
+            trainingPlan={trainingPlan}
+            currentWeek={trainingPlan.currentWeek}
+            onWeekSelect={handleWeekSelectFromMap}
+          />
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -317,27 +411,13 @@ const TrainingScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Back to Map Button */}
-        <TouchableOpacity style={styles.backButton} onPress={handleBackToMap}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-          <Text style={styles.backButtonText}>Back to Journey Map</Text>
-        </TouchableOpacity>
-
-        {/* Training Header */}
+        {/* Training Header (Unified: Back + Progress + Weekdays) */}
         <TrainingHeader
-          trainingPlan={trainingPlan}
           progressRing={progressRing}
-          currentWeek={trainingState.currentWeekSelected}
-          completedTrainingsThisWeek={completedTrainingsThisWeek}
-          totalTrainingsThisWeek={totalTrainingsThisWeek}
-        />
-
-        {/* Week Navigation and Overview */}
-        <WeekNavigationAndOverview
-          weekNavigation={weekNavigation}
+          onBackToMap={handleBackToMap}
           dayIndicators={dayIndicators}
-          onWeekChange={selectWeek}
           onDaySelect={selectDay}
+          currentWeek={trainingState.currentWeekSelected}
         />
 
         {/* Daily Training Detail */}
@@ -524,21 +604,6 @@ const styles = StyleSheet.create({
     color: colors.muted,
     textAlign: 'center',
     lineHeight: 22,
-  },
-  backButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: colors.card,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  backButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.text,
   },
 });
 

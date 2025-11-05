@@ -3,7 +3,7 @@
  * Main orchestrator component for the journey map view
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { colors } from '../../../constants/colors';
 import { TrainingPlan } from '../../../types/training';
@@ -11,9 +11,10 @@ import JourneyMapHeader from './JourneyMapHeader';
 import CurvedRoadPath from './CurvedRoadPath';
 import WeekNode from './WeekNode';
 import WeekDetailModal from './WeekDetailModal';
+import LightningExplosion from './LightningExplosion';
 import { WeekNodeData, WeekModalData } from './types';
 import { calculateWeekStats } from './utils';
-import { generateCurvedPath } from './pathGenerator';
+import { generateCurvedPath, PathSegment } from './pathGenerator';
 import { useWeekNodeAnimations } from './WeekNodeAnimations';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -32,7 +33,8 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
 }) => {
   const [weekNodes, setWeekNodes] = useState<WeekNodeData[]>([]);
   const [selectedWeekModal, setSelectedWeekModal] = useState<WeekModalData | null>(null);
-  const [curvedPath, setCurvedPath] = useState<string>('');
+  const [roadSegments, setRoadSegments] = useState<Array<{ segment: PathSegment; status: 'completed' | 'current' | 'locked' }>>([]);
+  const [lightningExplosion, setLightningExplosion] = useState<boolean>(false);
   
   // Animations for current week node
   const animations = useWeekNodeAnimations();
@@ -42,25 +44,15 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
     if (!trainingPlan || !trainingPlan.weeklySchedules) return;
 
     const numWeeks = trainingPlan.totalWeeks;
-    const { pathData, nodePositions } = generateCurvedPath(numWeeks);
+    const { segments, nodePositions } = generateCurvedPath(numWeeks);
     
-    // Build week nodes with statistics
-    const nodes: WeekNodeData[] = nodePositions.map((position, index) => {
+    // Build week nodes with statistics and road segments
+    const nodes: WeekNodeData[] = [];
+    const segmentsWithStatus: Array<{ segment: PathSegment; status: 'completed' | 'current' | 'locked' }> = [];
+    
+    nodePositions.forEach((position, index) => {
       const weekNumber = index + 1;
       const weekSchedule = trainingPlan.weeklySchedules.find(w => w.weekNumber === weekNumber);
-      
-      if (!weekSchedule) {
-        return {
-          weekNumber,
-          x: position.x,
-          y: position.y,
-          status: 'locked' as const,
-          stars: 0,
-          completionPercentage: 0,
-        };
-      }
-
-      const stats = calculateWeekStats(weekSchedule);
       
       // Determine week status
       let status: 'completed' | 'current' | 'locked';
@@ -71,23 +63,57 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
       } else {
         status = 'locked';
       }
+
+      if (!weekSchedule) {
+        nodes.push({
+          weekNumber,
+          x: position.x,
+          y: position.y,
+          status: 'locked' as const,
+          stars: 0,
+          completionPercentage: 0,
+        });
+        segmentsWithStatus.push({
+          segment: segments[index],
+          status: 'locked',
+        });
+        return;
+      }
+
+      const stats = calculateWeekStats(weekSchedule);
       
-      return {
+      nodes.push({
         weekNumber,
         x: position.x,
         y: position.y,
         status,
         stars: status === 'completed' ? stats.stars : 0,
         completionPercentage: stats.completionPercentage,
-      };
+      });
+
+      segmentsWithStatus.push({
+        segment: segments[index],
+        status,
+      });
     });
     
-    setCurvedPath(pathData);
     setWeekNodes(nodes);
+    setRoadSegments(segmentsWithStatus);
   }, [trainingPlan, currentWeek]);
 
   // Handle week node press
   const handleWeekPress = (node: WeekNodeData) => {
+    // If it's the current week, show lightning explosion and navigate directly
+    if (node.status === 'current') {
+      setLightningExplosion(true);
+      // Navigate after a short delay to show animation
+      setTimeout(() => {
+        onWeekSelect(node.weekNumber);
+      }, 500);
+      return;
+    }
+
+    // For other weeks, show the modal as before
     const weekSchedule = trainingPlan.weeklySchedules.find(w => w.weekNumber === node.weekNumber);
     if (!weekSchedule) return;
     
@@ -111,20 +137,19 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
     }
   };
 
-  // Calculate header stats
-  const totalStars = weekNodes
-    .filter(node => node.status === 'completed')
-    .reduce((sum, node) => sum + node.stars, 0);
-  const completedWeeks = weekNodes.filter(node => node.status === 'completed').length;
+  // Stable callback for animation complete
+  const handleAnimationComplete = useCallback(() => {
+    setLightningExplosion(false);
+  }, []);
+
+  // Note: completedWeeks and totalStars are calculated but no longer used in header
+  // Keeping for potential future use
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header - Plan Title */}
       <JourneyMapHeader
         trainingPlan={trainingPlan}
-        currentWeek={currentWeek}
-        completedWeeks={completedWeeks}
-        totalStars={totalStars}
       />
 
       {/* Scrollable Map */}
@@ -134,9 +159,9 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.mapContainer}>
-          {/* Curved Road Path */}
+          {/* Curved Road Path - Segmented with colors */}
           <CurvedRoadPath
-            pathData={curvedPath}
+            segments={roadSegments}
             height={weekNodes.length * 160 + 200}
             width={SCREEN_WIDTH}
           />
@@ -152,6 +177,12 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
           ))}
         </View>
       </ScrollView>
+
+      {/* Lightning Explosion Animation */}
+      <LightningExplosion
+        visible={lightningExplosion}
+        onAnimationComplete={handleAnimationComplete}
+      />
 
       {/* Week Detail Modal */}
       <WeekDetailModal

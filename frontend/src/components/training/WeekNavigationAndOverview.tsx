@@ -6,55 +6,18 @@ import { colors } from '../../constants/colors';
 import { WeekNavigationAndOverviewProps } from '../../types/training';
 
 const WeekNavigationAndOverview: React.FC<WeekNavigationAndOverviewProps> = ({
-  weekNavigation,
   dayIndicators,
-  onWeekChange,
   onDaySelect,
-  hideNavigation = false
+  currentWeek,
 }) => {
-  const { currentWeek, totalWeeks, canGoBack, canGoForward } = weekNavigation;
-
   return (
     <View style={styles.container}>
-      {/* Week Navigation Section - Hidden if hideNavigation is true */}
-      {!hideNavigation && (
-        <>
-          <View style={styles.weekNavigation}>
-            <TouchableOpacity
-              style={[styles.navButton, !canGoBack && styles.navButtonDisabled]}
-              onPress={() => canGoBack && onWeekChange(currentWeek - 1)}
-              disabled={!canGoBack}
-            >
-              <Ionicons 
-                name="chevron-back" 
-                size={20} 
-                color={canGoBack ? colors.primary : colors.muted} 
-              />
-            </TouchableOpacity>
-
-            <Text style={styles.weekText}>Week {currentWeek}</Text>
-
-            <TouchableOpacity
-              style={[styles.navButton, !canGoForward && styles.navButtonDisabled]}
-              onPress={() => canGoForward && onWeekChange(currentWeek + 1)}
-              disabled={!canGoForward}
-            >
-              <Ionicons 
-                name="chevron-forward" 
-                size={20} 
-                color={canGoForward ? colors.primary : colors.muted} 
-              />
-            </TouchableOpacity>
-          </View>
-
-          {/* Weekly Overview Section */}
-          <View style={styles.weeklyOverview}>
-            <View style={styles.overviewHeader}>
-              <Text style={styles.overviewTitle}>This Week</Text>
-            </View>
-          </View>
-        </>
-      )}
+      {/* Weekly Overview Section */}
+      <View style={styles.weeklyOverview}>
+        <View style={styles.overviewHeader}>
+          <Text style={styles.overviewTitle}>Week {currentWeek}</Text>
+        </View>
+      </View>
         
       <View style={styles.daysContainer}>
           {dayIndicators.map((day, index) => {
@@ -121,27 +84,6 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
     gap: 16
-  },
-  weekNavigation: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between'
-  },
-  navButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.buttonSecondary,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  navButtonDisabled: {
-    backgroundColor: colors.buttonDisabled
-  },
-  weekText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text
   },
   weeklyOverview: {
     gap: 12

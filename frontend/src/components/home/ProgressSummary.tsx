@@ -1,11 +1,13 @@
 /**
  * Progress Summary Component - Quick stats overview
+ * Responsive design that adapts to all screen sizes
  */
 
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants/colors';
+import { colors, createColorWithOpacity } from '../../constants/colors';
 
 interface StatData {
   title: string;
@@ -18,14 +20,31 @@ interface StatData {
 interface ProgressSummaryProps {
   streak?: number;
   weeklyTrainings?: number;
-  goalProgress?: number;
+  weeksCompleted?: number;
 }
 
 export const ProgressSummary: React.FC<ProgressSummaryProps> = ({
   streak = 0,
   weeklyTrainings = 0,
-  goalProgress = 0,
+  weeksCompleted = 0,
 }) => {
+  const { width: screenWidth } = useWindowDimensions();
+  
+  // Calculate responsive dimensions
+  const cardDimensions = useMemo(() => {
+    const HORIZONTAL_PADDING = 16;
+    const CARD_GAP = 8;
+    const TOTAL_GAPS = CARD_GAP * 2; // 2 gaps between 3 cards
+    const AVAILABLE_WIDTH = screenWidth - (HORIZONTAL_PADDING * 2);
+    const CARD_WIDTH = Math.floor((AVAILABLE_WIDTH - TOTAL_GAPS) / 3);
+    
+    return {
+      cardWidth: CARD_WIDTH,
+      gap: CARD_GAP,
+      padding: HORIZONTAL_PADDING,
+    };
+  }, [screenWidth]);
+
   const stats: StatData[] = [
     {
       title: 'Streak',
@@ -42,24 +61,30 @@ export const ProgressSummary: React.FC<ProgressSummaryProps> = ({
       icon: 'calendar',
     },
     {
-      title: 'Progress',
-      value: `${goalProgress}%`,
-      subtitle: 'complete',
+      title: 'Weeks',
+      value: weeksCompleted.toString(),
+      subtitle: 'completed',
       color: colors.secondary,
-      icon: 'flag',
+      icon: 'checkmark-circle',
     },
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingHorizontal: cardDimensions.padding, gap: cardDimensions.gap }]}>
       {stats.map((stat, index) => (
-        <StatCard key={index} {...stat} />
+        <StatCard 
+          key={index} 
+          {...stat} 
+          cardWidth={cardDimensions.cardWidth}
+        />
       ))}
     </View>
   );
 };
 
-interface StatCardProps extends StatData {}
+interface StatCardProps extends StatData {
+  cardWidth: number;
+}
 
 const StatCard: React.FC<StatCardProps> = ({
   title,
@@ -67,15 +92,71 @@ const StatCard: React.FC<StatCardProps> = ({
   subtitle,
   color,
   icon,
+  cardWidth,
 }) => {
+  // Calculate responsive font sizes based on card width
+  const fontSize = useMemo(() => {
+    if (cardWidth < 100) {
+      return { title: 9, value: 14, subtitle: 8, icon: 10 };
+    } else if (cardWidth < 120) {
+      return { title: 10, value: 16, subtitle: 8, icon: 11 };
+    } else {
+      return { title: 11, value: 18, subtitle: 9, icon: 12 };
+    }
+  }, [cardWidth]);
+
+  // Get gradient colors based on card type - using only color template
+  const getGradientColors = () => {
+    if (title === 'Streak') {
+      return [createColorWithOpacity(colors.primary, 0.4), createColorWithOpacity(colors.primary, 0.35)]; // Primary red
+    } else if (title === 'This Week') {
+      return [createColorWithOpacity(colors.tertiary, 0.4), createColorWithOpacity(colors.tertiary, 0.35)]; // Tertiary teal
+    } else {
+      return [createColorWithOpacity(colors.secondary, 0.4), createColorWithOpacity(colors.secondary, 0.35)]; // Secondary blue
+    }
+  };
+
   return (
-    <View style={styles.statCard}>
-      <View style={styles.statHeader}>
-        <Ionicons name={icon} size={14} color={color} />
-        <Text style={styles.statTitle}>{title}</Text>
-      </View>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={styles.statSubtitle}>{subtitle}</Text>
+    <View style={[styles.statCard, { width: cardWidth }]}>
+      <LinearGradient
+        colors={getGradientColors()}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientBackground}
+      >
+        {/* Icon Badge */}
+        <View style={styles.iconBadge}>
+          <Ionicons name={icon} size={fontSize.icon + 4} color={colors.text} />
+        </View>
+        
+        {/* Value - Large and prominent */}
+        <Text 
+          style={[styles.statValue, { fontSize: fontSize.value + 4 }]} 
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          minimumFontScale={0.6}
+        >
+          {value}
+        </Text>
+        
+        {/* Title and Subtitle */}
+        <View style={styles.statTextContainer}>
+          <Text 
+            style={[styles.statTitle, { fontSize: fontSize.title }]} 
+            numberOfLines={1} 
+            ellipsizeMode="tail"
+          >
+            {title}
+          </Text>
+          <Text 
+            style={[styles.statSubtitle, { fontSize: fontSize.subtitle }]} 
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            {subtitle}
+          </Text>
+        </View>
+      </LinearGradient>
     </View>
   );
 };
@@ -83,41 +164,68 @@ const StatCard: React.FC<StatCardProps> = ({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    gap: 16,
-    paddingHorizontal: 16,
-    marginVertical: 8,
+    marginVertical: 12,
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    gap: 8,
   },
   statCard: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: colors.card, // Base background for gradient overlay
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+    minWidth: 80, // Absolute minimum for very small screens
   },
-  statHeader: {
-    flexDirection: 'row',
+  gradientBackground: {
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    minHeight: 80,
+  },
+  iconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: createColorWithOpacity(colors.text, 0.15),
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 4,
+    borderWidth: 1.5,
+    borderColor: createColorWithOpacity(colors.text, 0.2),
+  },
+  statTextContainer: {
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 2,
   },
   statTitle: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '700',
     color: colors.text,
+    textAlign: 'center',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    letterSpacing: 0.5,
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 2,
+    fontWeight: '800',
+    color: colors.text,
+    textAlign: 'center',
+    width: '100%',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   statSubtitle: {
-    fontSize: 10,
     color: colors.text,
-    opacity: 0.8,
+    opacity: 0.9,
+    textAlign: 'center',
+    width: '100%',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    fontWeight: '600',
   },
 });
