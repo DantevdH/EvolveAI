@@ -51,7 +51,8 @@ const convertToAIQuestions = (questionsData: any): AIQuestion[] | null => {
     return null;
   }
   
-  return questions.map(question => ({
+  // Map questions and include order field
+  const mappedQuestions = questions.map(question => ({
     id: question.id || '',
     text: question.text || '',
     response_type: question.response_type || 'free_text',
@@ -66,7 +67,18 @@ const convertToAIQuestions = (questionsData: any): AIQuestion[] | null => {
     max_length: question.max_length || null,
     step: question.step || 1,
     unit: question.unit || null,
+    min_description: question.min_description || null,
+    max_description: question.max_description || null,
+    order: question.order || null, // Include order field for sorting
   }));
+  
+  // Sort questions by order field (1-based, lower numbers appear first)
+  // Questions without order field will be placed at the end
+  return mappedQuestions.sort((a, b) => {
+    const orderA = a.order ?? 999;
+    const orderB = b.order ?? 999;
+    return orderA - orderB;
+  });
 };
 
 

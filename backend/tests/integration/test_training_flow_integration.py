@@ -22,10 +22,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", ".."))
 from core.training.training_api import router
 from core.training.training_coach import TrainingCoach
 from core.training.helpers.database_service import DatabaseService
-from core.training.helpers.ai_question_schemas import (
+from core.training.schemas.question_schemas import (
     InitialQuestionsRequest,
     FollowUpQuestionsRequest,
-    TrainingPlanOutlineRequest,
     PlanGenerationRequest,
     PersonalInfo,
     AIQuestion,
@@ -201,18 +200,17 @@ class TestTrainingFlowIntegration:
             ai_message="Great responses! Let's dive deeper. 💪",
         )
 
-        # Mock training plan outline response
-        from core.training.helpers.ai_question_schemas import TrainingPlanOutline
-
+        # Mock training plan outline response (removed - TrainingPlanOutline doesn't exist)
+        # Note: This test may need to be updated based on actual API structure
         coach.generate_training_plan_outline.return_value = {
             "success": True,
-            "outline": TrainingPlanOutline(
-                title="Strength Builder",
-                duration_weeks=12,
-                explanation="A comprehensive strength building program",
-                training_periods=[],
-                ai_message="Your personalized plan outline is ready! 🎯",
-            ),
+            "outline": {
+                "title": "Strength Builder",
+                "duration_weeks": 12,
+                "explanation": "A comprehensive strength building program",
+                "training_periods": [],
+                "ai_message": "Your personalized plan outline is ready! 🎯",
+            },
         }
 
         # Mock training plan generation response
@@ -312,8 +310,9 @@ class TestTrainingFlowIntegration:
                     assert "questions" in follow_up_response["data"]
                     # Note: follow-up questions API doesn't return ai_message in response
 
-                    # Test 3: Training Plan Outline
-                    outline_request = TrainingPlanOutlineRequest(
+                    # Test 3: Training Plan Generation (TrainingPlanOutlineRequest removed)
+                    # Note: This test may need to be updated based on actual API structure
+                    plan_request = PlanGenerationRequest(
                         personal_info=sample_personal_info,
                         initial_responses={"q1": "muscle_building"},
                         follow_up_responses={"fq1": "full_gym"},

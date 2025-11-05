@@ -48,15 +48,15 @@ class TestBaseAgent:
 class TestRAGTool:
     """Test RAGTool functionality."""
 
-    def test_rag_tool_import(self):
+    def test_rag_service_import(self):
         """Test that RAGTool can be imported."""
-        from core.base.rag_tool import RAGTool
+        from core.base.rag_service import RAGTool
 
         assert RAGTool is not None, "RAGTool should be importable"
 
-    def test_rag_tool_structure(self):
+    def test_rag_service_structure(self):
         """Test that RAGTool has required methods."""
-        from core.base.rag_tool import RAGTool
+        from core.base.rag_service import RAGTool
 
         # Check that required methods exist
         assert hasattr(
@@ -72,18 +72,18 @@ class TestRAGTool:
             RAGTool, "get_search_insights"
         ), "RAGTool should have get_search_insights method"
 
-    def test_rag_tool_instantiation(self):
+    def test_rag_service_instantiation(self):
         """Test that RAGTool can be instantiated with a mock agent."""
-        from core.base.rag_tool import RAGTool
+        from core.base.rag_service import RAGTool
 
         # Create a mock agent
         mock_agent = MagicMock()
         mock_agent.topic = "training"
 
         # This should not raise an exception
-        rag_tool = RAGTool(mock_agent)
-        assert rag_tool.base_agent == mock_agent
-        assert rag_tool.base_agent.topic == "training"
+        rag_service = RAGTool(mock_agent)
+        assert rag_service.base_agent == mock_agent
+        assert rag_service.base_agent.topic == "training"
 
 
 class TestConcreteImplementations:

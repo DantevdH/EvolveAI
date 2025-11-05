@@ -326,7 +326,7 @@ class Curator:
     async def enrich_lessons_with_context(
         self,
         playbook: UserPlaybook,
-        rag_tool: Optional[Any] = None,
+        rag_service: Optional[Any] = None,
     ) -> UserPlaybook:
         """
         Enrich playbook lessons with validated context from knowledge base.
@@ -336,12 +336,12 @@ class Curator:
         
         Args:
             playbook: UserPlaybook with curated lessons (requires_context field already set)
-            rag_tool: RAGTool instance for context retrieval (optional, will use TrainingCoach if None)
+            rag_service: RAGTool instance for context retrieval (optional, will use TrainingCoach if None)
             
         Returns:
             UserPlaybook with context field populated for lessons that require it
         """
-        if not rag_tool:
+        if not rag_service:
             self.logger.warning("No RAGTool provided - cannot enrich lessons with context")
             return playbook
         
@@ -371,7 +371,7 @@ class Curator:
                     try:
                         # Run sync operation in thread pool (non-blocking)
                         validated_context = await asyncio.to_thread(
-                            rag_tool.validate_and_retrieve_context,
+                            rag_service.validate_and_retrieve_context,
                             lesson_text=lesson.text,
                             max_sentences=10
                         )

@@ -12,7 +12,7 @@ from datetime import datetime
 
 from core.base.base_agent import BaseAgent
 from logging_config import get_logger
-from core.base.rag_tool import RAGTool
+from core.base.rag_service import RAGTool
 from core.base.ace_telemetry import ACETelemetry
 
 # Import schemas and services
@@ -22,6 +22,14 @@ from core.training.schemas.training_schemas import (
     DailyTraining,
     StrengthExercise,
     EnduranceSession,
+    GeminiTrainingPlan,
+    GeminiAIStrengthExercise,
+    WeeklyScheduleResponse,
+    GeminiWeeklyScheduleResponse,
+    GeminiWeeklySchedule,
+    AIStrengthExercise,
+    MainMuscleEnum,
+    EquipmentEnum,
 )
 from core.training.helpers.exercise_selector import ExerciseSelector
 from core.training.helpers.exercise_validator import ExerciseValidator
@@ -37,9 +45,23 @@ from core.training.schemas.question_schemas import (
     QuestionType,
     AIQuestion,
     QuestionOption,
+    AthleteTypeClassification,
+    GeminiAthleteTypeClassification,
+    QuestionContent,
+    GeminiQuestionContent,
+    GeminiAIQuestionResponse,
+    FeedbackIntentClassification,
+    GeminiFeedbackIntentClassification,
 )
 from core.training.helpers.response_formatter import ResponseFormatter
 from core.training.helpers.prompt_generator import PromptGenerator
+from core.training.helpers.question_checklist_loader import merge_question_checklists
+from core.training.helpers.mock_data import (
+    create_mock_initial_questions,
+    create_mock_follow_up_questions,
+    create_mock_training_plan,
+)
+import logging
 
 # Import ACE pattern components
 from core.base.schemas.playbook_schemas import (
@@ -72,15 +94,16 @@ class TrainingCoach(BaseAgent):
         )
 
         # Initialize RAG tool for training-specific knowledge retrieval
-        self.rag_tool = RAGTool(self)
+        self.rag_service = RAGTool(self)
 
         # Initialize exercise services
         self.exercise_selector = ExerciseSelector()
         self.exercise_validator = ExerciseValidator()
 
         # Initialize ACE pattern components
-        self.reflector = Reflector(self.openai_client)
-        self.curator = Curator(self.openai_client)
+        # Reflector and Curator create their own LLMClient instances internally
+        self.reflector = Reflector(None)
+        self.curator = Curator(None)
         # Unified LLM client (OpenAI or Gemini based on env)
         self.llm = LLMClient()
 
@@ -207,13 +230,13 @@ class TrainingCoach(BaseAgent):
         """
         try:
             # Search for relevant training documents
-            relevant_docs = self.search_knowledge_base(
+            relevant_docs = self.rag_service.search_knowledge_base(
                 query=user_request, max_results=5, metadata_filters=None
             )
 
             if relevant_docs:
                 # Use RAG tool to generate response with context
-                response = self.rag_tool.generate_response(
+                response = self.rag_service.generate_response(
                     user_request, relevant_docs, context=context
                 )
                 return self._format_training_response(response, relevant_docs)
@@ -228,75 +251,134 @@ class TrainingCoach(BaseAgent):
     async def generate_initial_questions(
         self, personal_info: PersonalInfo, user_profile_id: Optional[int] = None
     ) -> AIQuestionResponse:
-        """Generate initial questions for onboarding based on personal information."""
+        """
+        Generate initial questions using the new 4-step flow:
+        Step 1: Athlete Type Classification
+        Step 2: Load & Merge Question Checklists
+        Step 3: Generate Question Content
+        Step 4: Format Questions
+        """
         try:
             # Check if debug mode is enabled
             if os.getenv("DEBUG", "false").lower() == "true":
-                from core.training.helpers.mock_data import (
-                    create_mock_initial_questions,
-                )
-
                 initial_questions = create_mock_initial_questions()
                 return initial_questions
 
-            # Create a comprehensive prompt for initial questions
-            prompt = PromptGenerator.generate_initial_questions_prompt(personal_info)
+            # ===== STEP 1: Athlete Type Classification =====
+            self.logger.info("Step 1: Classifying athlete type...")
+            classification_prompt = PromptGenerator.generate_athlete_type_classification_prompt(
+                personal_info.goal_description
+            )
+            
+            ai_start = time.time()
+            parsed_obj, completion = self.llm.parse_structured(
+                classification_prompt,
+                AthleteTypeClassification,
+                GeminiAthleteTypeClassification,
+            )
+            classification = AthleteTypeClassification.model_validate(parsed_obj.model_dump())
+            classification_duration = time.time() - ai_start
+            
+            await db_service.log_latency_event(
+                "athlete_type_classification", classification_duration, completion
+            )
+            
+            athlete_type_dict = {
+                "primary_type": classification.primary_type.value,
+                "secondary_types": [st.value for st in classification.secondary_types],
+                "confidence": classification.confidence,
+            }
+            
+            self.logger.info(
+                f"Classified as: {athlete_type_dict['primary_type']} "
+                f"(confidence: {classification.confidence:.2f})"
+            )
 
-            # Retry logic for validation errors
-            max_retries = 2
-            last_error = None
+            # ===== STEP 2: Load & Merge Question Themes =====
+            self.logger.info("Step 2: Loading and merging question themes...")
+            unified_checklist = merge_question_checklists(
+                primary_type=athlete_type_dict["primary_type"],
+                secondary_types=athlete_type_dict["secondary_types"],
+                confidence=classification.confidence,
+                personal_info=personal_info,
+            )
+            self.logger.info(f"Merged themes have {len(unified_checklist)} items")
 
-            for attempt in range(max_retries):
-                try:
-                    # Generate questions via unified LLM - TRACK AI LATENCY
-                    ai_start = time.time()
-                    from core.training.schemas.question_schemas import GeminiAIQuestionResponse
-                    parsed_obj, completion = self.llm.parse_structured(
-                        prompt, AIQuestionResponse, GeminiAIQuestionResponse
-                    )
-                    # Coerce to domain model (works for both providers)
-                    questions_response = AIQuestionResponse.model_validate(parsed_obj.model_dump())
-                    ai_duration = time.time() - ai_start
-                    
-                    # Track AI latency
-                    await db_service.log_latency_event("initial_questions", ai_duration, completion)
-                    
-                    # Filter out invalid questions instead of failing
-                    valid_questions = self._filter_valid_questions(questions_response.questions)
-                    
-                    if len(valid_questions) < len(questions_response.questions):
-                        self.logger.warning(
-                            f"Filtered out {len(questions_response.questions) - len(valid_questions)} invalid questions"
-                        )
-                    
-                    # Update response with valid questions only
-                    questions_response.questions = valid_questions
-                    questions_response.total_questions = len(valid_questions)
+            # ===== STEP 3: Generate Question Content =====
+            self.logger.info("Step 3: Generating question content...")
+            content_prompt = PromptGenerator.generate_question_content_prompt_initial(
+                personal_info=personal_info,
+                unified_checklist=unified_checklist,
+                athlete_type=athlete_type_dict,
+            )
+            
+            ai_start = time.time()
+            parsed_obj, completion = self.llm.parse_structured(
+                content_prompt, QuestionContent, GeminiQuestionContent
+            )
+            question_content = QuestionContent.model_validate(parsed_obj.model_dump())
+            content_duration = time.time() - ai_start
+            
+            await db_service.log_latency_event(
+                "question_generation", content_duration, completion
+            )
+            
+            self.logger.info(f"Generated {len(question_content.questions_content)} question content items")
 
-                    # If we get here, validation passed
-                    if attempt > 0:
-                        self.logger.info(
-                            f"Successfully generated questions after {attempt + 1} attempts"
-                        )
+            # ===== STEP 4: Format Questions =====
+            self.logger.info("Step 4: Formatting questions into schema...")
+            # Sort questions by order field, then convert to dict for prompt
+            sorted_questions = sorted(question_content.questions_content, key=lambda x: x.order)
+            content_dicts = [
+                {
+                    "question_text": item.question_text,
+                    "order": item.order,
+                }
+                for item in sorted_questions
+            ]
+            
+            formatting_prompt = PromptGenerator.generate_question_formatting_prompt(
+                question_content=content_dicts,
+                personal_info=personal_info,
+                is_initial=True,
+            )
+            
+            ai_start = time.time()
+            parsed_obj, completion = self.llm.parse_structured(
+                formatting_prompt, AIQuestionResponse, GeminiAIQuestionResponse
+            )
+            questions_response = AIQuestionResponse.model_validate(parsed_obj.model_dump())
+            formatting_duration = time.time() - ai_start
+            
+            await db_service.log_latency_event(
+                "question_formatting", formatting_duration, completion
+            )
+            
+            # Filter out invalid questions
+            valid_questions = self._filter_valid_questions(questions_response.questions)
+            
+            if len(valid_questions) < len(questions_response.questions):
+                self.logger.warning(
+                    f"Filtered out {len(questions_response.questions) - len(valid_questions)} invalid questions"
+                )
+            
+            # Sort by order field to maintain logical ordering (frontend can use this)
+            valid_questions_sorted = sorted(
+                valid_questions, 
+                key=lambda q: q.order if q.order is not None else 999
+            )
+            
+            # Update response with valid questions only
+            questions_response.questions = valid_questions_sorted
+            questions_response.total_questions = len(valid_questions_sorted)
+            
+            total_duration = classification_duration + content_duration + formatting_duration
+            self.logger.info(
+                f"Successfully generated {len(valid_questions_sorted)} questions "
+                f"(total: {total_duration:.2f}s)"
+            )
 
-                    return questions_response
-
-                except ValueError as ve:
-                    # Validation error from our custom validator
-                    last_error = ve
-                    self.logger.warning(
-                        f"Validation error on attempt {attempt + 1}/{max_retries}: {ve}"
-                    )
-
-                    if attempt < max_retries - 1:
-                        # Add error feedback to prompt for retry
-                        prompt += f"\n\n⚠️ PREVIOUS ATTEMPT FAILED: {str(ve)}\nPlease fix this error and try again."
-                    else:
-                        # Last attempt failed, will fall through to fallback
-                        self.logger.error(
-                            f"All {max_retries} attempts failed validation: {ve}"
-                        )
-                        raise
+            return questions_response
 
         except Exception as e:
             self.logger.error(f"Error generating initial questions: {e}")
@@ -339,14 +421,13 @@ class TrainingCoach(BaseAgent):
         initial_questions: List[AIQuestion] = None,
         user_profile_id: Optional[int] = None,
     ) -> AIQuestionResponseWithFormatted:
-        """Generate follow-up questions based on initial responses."""
+        """
+        Generate follow-up questions using Steps 3-4.
+        Steps 1-2 are only for initial questions.
+        """
         try:
             # Check if debug mode is enabled
             if os.getenv("DEBUG", "false").lower() == "true":
-                from core.training.helpers.mock_data import (
-                    create_mock_follow_up_questions,
-                )
-
                 follow_up_questions = create_mock_follow_up_questions()
                 self.logger.debug(
                     f"DEBUG MODE: User responses for follow-up questions: {formatted_responses}"
@@ -359,68 +440,83 @@ class TrainingCoach(BaseAgent):
                     ai_message=follow_up_questions.ai_message,
                 )
 
-            # Create a comprehensive prompt for follow-up questions
-            prompt = PromptGenerator.generate_followup_questions_prompt(
-                personal_info, formatted_responses
+            # ===== STEP 3: Generate Question Content (Follow-Up) =====
+            self.logger.info("Step 3: Generating follow-up question content...")
+            content_prompt = PromptGenerator.generate_question_content_prompt_followup(
+                personal_info=personal_info,
+                formatted_responses=formatted_responses,
+            )
+            
+            ai_start = time.time()
+            parsed_obj, completion = self.llm.parse_structured(
+                content_prompt, QuestionContent, GeminiQuestionContent
+            )
+            question_content = QuestionContent.model_validate(parsed_obj.model_dump())
+            content_duration = time.time() - ai_start
+            
+            await db_service.log_latency_event(
+                "question_generation", content_duration, completion
+            )
+            
+            self.logger.info(f"Generated {len(question_content.questions_content)} follow-up question content items")
+
+            # ===== STEP 4: Format Questions =====
+            self.logger.info("Step 4: Formatting follow-up questions into schema...")
+            # Sort questions by order field, then convert to dict for prompt
+            sorted_questions = sorted(question_content.questions_content, key=lambda x: x.order)
+            content_dicts = [
+                {
+                    "question_text": item.question_text,
+                    "order": item.order,
+                }
+                for item in sorted_questions
+            ]
+            
+            formatting_prompt = PromptGenerator.generate_question_formatting_prompt(
+                question_content=content_dicts,
+                personal_info=personal_info,
+                is_initial=False,
+            )
+            
+            ai_start = time.time()
+            parsed_obj, completion = self.llm.parse_structured(
+                formatting_prompt, AIQuestionResponse, GeminiAIQuestionResponse
+            )
+            question_response = AIQuestionResponse.model_validate(parsed_obj.model_dump())
+            formatting_duration = time.time() - ai_start
+            
+            await db_service.log_latency_event(
+                "question_formatting", formatting_duration, completion
+            )
+            
+            # Filter out invalid questions
+            valid_questions = self._filter_valid_questions(question_response.questions)
+            
+            if len(valid_questions) < len(question_response.questions):
+                self.logger.warning(
+                    f"Filtered out {len(question_response.questions) - len(valid_questions)} invalid follow-up questions"
+                )
+            
+            # Sort by order field to maintain logical ordering (frontend can use this)
+            valid_questions_sorted = sorted(
+                valid_questions, 
+                key=lambda q: q.order if q.order is not None else 999
+            )
+            
+            total_duration = content_duration + formatting_duration
+            self.logger.info(
+                f"Successfully generated {len(valid_questions_sorted)} follow-up questions "
+                f"(total: {total_duration:.2f}s)"
             )
 
-            # Retry logic for validation errors
-            max_retries = 2
-            last_error = None
-
-            for attempt in range(max_retries):
-                try:
-                    # Generate questions via unified LLM - TRACK AI LATENCY
-                    ai_start = time.time()
-                    from core.training.schemas.question_schemas import GeminiAIQuestionResponse
-                    parsed_obj, completion = self.llm.parse_structured(
-                        prompt, AIQuestionResponse, GeminiAIQuestionResponse
-                    )
-                    question_response = AIQuestionResponse.model_validate(parsed_obj.model_dump())
-                    ai_duration = time.time() - ai_start
-                    
-                    # Track AI latency
-                    await db_service.log_latency_event("followup_questions", ai_duration, completion)
-                    
-                    # Filter out invalid questions instead of failing
-                    valid_questions = self._filter_valid_questions(question_response.questions)
-                    
-                    if len(valid_questions) < len(question_response.questions):
-                        self.logger.warning(
-                            f"Filtered out {len(question_response.questions) - len(valid_questions)} invalid follow-up questions"
-                        )
-
-                    # If we get here, validation passed
-                    if attempt > 0:
-                        self.logger.info(
-                            f"Successfully generated follow-up questions after {attempt + 1} attempts"
-                        )
-
-                    # Return with formatted responses and AI message
-                    return AIQuestionResponseWithFormatted(
-                        questions=valid_questions,
-                        total_questions=len(valid_questions),
-                        estimated_time_minutes=question_response.estimated_time_minutes,
-                        formatted_responses=formatted_responses,
-                        ai_message=question_response.ai_message,
-                    )
-
-                except ValueError as ve:
-                    # Validation error from our custom validator
-                    last_error = ve
-                    self.logger.warning(
-                        f"Validation error on attempt {attempt + 1}/{max_retries}: {ve}"
-                    )
-
-                    if attempt < max_retries - 1:
-                        # Add error feedback to prompt for retry
-                        prompt += f"\n\n⚠️ PREVIOUS ATTEMPT FAILED: {str(ve)}\nPlease fix this error and try again."
-                    else:
-                        # Last attempt failed, will fall through to fallback
-                        self.logger.error(
-                            f"All {max_retries} attempts failed validation: {ve}"
-                        )
-                        raise
+            # Return with formatted responses and AI message
+            return AIQuestionResponseWithFormatted(
+                questions=valid_questions_sorted,
+                total_questions=len(valid_questions_sorted),
+                estimated_time_minutes=question_response.estimated_time_minutes,
+                formatted_responses=formatted_responses,
+                ai_message=question_response.ai_message,
+            )
 
         except Exception as e:
             self.logger.error(f"Error generating follow-up questions: {e}")
@@ -469,8 +565,6 @@ class TrainingCoach(BaseAgent):
             # Check if debug mode is enabled
             if os.getenv("DEBUG", "false").lower() == "true":
                 self.logger.debug("DEBUG MODE: Using mock training plan")
-                from core.training.helpers.mock_data import create_mock_training_plan
-                
                 training_plan = create_mock_training_plan()
                 training_dict = training_plan.model_dump()
                 
@@ -497,7 +591,6 @@ class TrainingCoach(BaseAgent):
             ai_start = time.time()
             
             if self.llm.provider == "gemini":
-                from core.training.schemas.training_schemas import GeminiTrainingPlan, GeminiAIStrengthExercise
                 parsed_obj, completion = self.llm.parse_structured(
                     prompt, TrainingPlan, GeminiTrainingPlan
                 )
@@ -631,7 +724,6 @@ class TrainingCoach(BaseAgent):
             # Extract ai_message from response, then convert to WeeklySchedule (without ai_message)
             ai_message = None
             if self.llm.provider == "gemini":
-                from core.training.schemas.training_schemas import WeeklyScheduleResponse, GeminiWeeklyScheduleResponse
                 parsed_obj, completion = self.llm.parse_structured(
                     prompt, WeeklyScheduleResponse, GeminiWeeklyScheduleResponse
                 )
@@ -665,7 +757,6 @@ class TrainingCoach(BaseAgent):
                 week_dict["week_number"] = week_number
                 ai_duration = time.time() - ai_start
             else:
-                from core.training.schemas.training_schemas import WeeklyScheduleResponse
                 ws_response, completion = self.llm.chat_parse(prompt, WeeklyScheduleResponse)
                 ai_duration = time.time() - ai_start
                 # Extract ai_message before converting to WeeklySchedule
@@ -822,7 +913,6 @@ class TrainingCoach(BaseAgent):
             ai_start = time.time()
             
             if self.llm.provider == "gemini":
-                from core.training.schemas.training_schemas import GeminiWeeklySchedule
                 parsed_obj, completion = self.llm.parse_structured(
                     prompt, WeeklySchedule, GeminiWeeklySchedule
                 )
@@ -1085,7 +1175,6 @@ class TrainingCoach(BaseAgent):
             )
             
             # Use structured parsing with Pydantic model - TRACK AI CALL
-            from core.training.schemas.question_schemas import FeedbackIntentClassification, GeminiFeedbackIntentClassification
             ai_start = time.time()
             parsed_any, completion = self.llm.parse_structured(
                 prompt, FeedbackIntentClassification, GeminiFeedbackIntentClassification
@@ -1188,8 +1277,6 @@ class TrainingCoach(BaseAgent):
         - Inject weekly_schedule_id=0 for each daily_training
         - Normalize training_type to expected enum lowercase; map synonyms
         """
-        from core.training.schemas.training_schemas import GeminiAIStrengthExercise, AIStrengthExercise, MainMuscleEnum, EquipmentEnum
-        
         schedules = tp.get("weekly_schedules") or []
         weekday_map = {
             "monday": "Monday",
@@ -1232,7 +1319,6 @@ class TrainingCoach(BaseAgent):
                         converted_exercises.append(ai_ex.model_dump())
                     except (ValueError, KeyError) as e:
                         # Enum validation failed - log and skip
-                        import logging
                         logger = logging.getLogger(__name__)
                         logger.error(f"Failed to convert GeminiAIStrengthExercise to AIStrengthExercise: {e}")
                         logger.error(f"Exercise data: {se}")

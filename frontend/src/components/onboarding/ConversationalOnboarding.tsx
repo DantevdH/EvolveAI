@@ -521,9 +521,16 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         await refreshUserProfile();
       }
       
+      // Sort questions by order field (backend should already sort, but ensure it here too)
+      const sortedQuestions = [...(response.questions || [])].sort((a, b) => {
+        const orderA = a.order ?? 999;
+        const orderB = b.order ?? 999;
+        return orderA - orderB;
+      });
+      
       setState(prev => ({
         ...prev,
-        initialQuestions: response.questions,
+        initialQuestions: sortedQuestions,
         initialQuestionsLoading: false,
         currentInitialQuestionIndex: 0,
         aiHasQuestions: true,
@@ -569,9 +576,16 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         jwtToken
       );
 
+      // Sort questions by order field (backend should already sort, but ensure it here too)
+      const sortedFollowUpQuestions = [...(response.questions || [])].sort((a, b) => {
+        const orderA = a.order ?? 999;
+        const orderB = b.order ?? 999;
+        return orderA - orderB;
+      });
+      
       setState(prev => ({
         ...prev,
-        followUpQuestions: response.questions || [],
+        followUpQuestions: sortedFollowUpQuestions,
         followUpQuestionsLoading: false,
         currentFollowUpQuestionIndex: 0,
         aiHasQuestions: true,

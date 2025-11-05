@@ -1219,6 +1219,9 @@ class DatabaseService:
             valid_events = [
                 "initial_questions",
                 "followup_questions",
+                "athlete_type_classification",  # Step 1: Athlete type classification
+                "question_generation",  # Step 3: Question content generation
+                "question_formatting",  # Step 4: Question formatting
                 "playbook",
                 "initial_plan",
                 "feedback_classify",  # Stage 1: Lightweight intent classification

@@ -29,6 +29,7 @@ export interface AIQuestion {
   help_text?: string;
   min_description?: string;
   max_description?: string;
+  order?: number; // Display order for this question (1-based, lower numbers appear first)
 }
 
 export interface AIQuestionResponse {

@@ -501,7 +501,7 @@ async def generate_training_plan(
             logger.info("📘 Enriching lessons with context from knowledge base...")
             initial_playbook = await coach.curator.enrich_lessons_with_context(
                 playbook=initial_playbook,
-                rag_tool=coach.rag_tool,
+                rag_service=coach.rag_service,
             )
             
             logger.info(f"📘 Curated initial playbook: {len(empty_playbook.lessons)} → {len(initial_playbook.lessons)} lessons (deduplicated)")
@@ -827,7 +827,7 @@ async def _handle_playbook_extraction_for_satisfied(
             logger.info("📘 Enriching lessons with context from knowledge base...")
             curated_playbook = await coach.curator.enrich_lessons_with_context(
                 playbook=curated_playbook,
-                rag_tool=coach.rag_tool,
+                rag_service=coach.rag_service,
             )
             
             # Save updated playbook

@@ -33,7 +33,7 @@ class TestTrainingCoach:
         return mock_agent
 
     @pytest.fixture
-    def mock_rag_tool(self):
+    def mock_rag_service(self):
         """Create a mocked RAGTool."""
         mock_rag = Mock()
         mock_rag.extract_metadata_filters.return_value = {"topic": "training"}
@@ -70,7 +70,7 @@ class TestTrainingCoach:
     def mock_training_coach(
         self,
         mock_base_agent,
-        mock_rag_tool,
+        mock_rag_service,
         mock_prompt_generator,
         mock_exercise_selector,
         mock_exercise_validator,
@@ -80,7 +80,7 @@ class TestTrainingCoach:
             "core.training.training_coach.BaseAgent.__init__",
             return_value=None,
         ) as mock_base_init, patch(
-            "core.training.training_coach.RAGTool", return_value=mock_rag_tool
+            "core.training.training_coach.RAGTool", return_value=mock_rag_service
         ) as mock_rag_class, patch(
             "core.training.training_coach.ExerciseSelector",
             return_value=mock_exercise_selector,
@@ -94,7 +94,7 @@ class TestTrainingCoach:
             coach.topic = "training"
             coach.agent_name = "training Coach"
             coach.agent_description = "Expert in strength training, muscle building, weight loss routines, and training planning"
-            coach.rag_tool = mock_rag_tool
+            coach.rag_service = mock_rag_service
             coach.exercise_selector = mock_exercise_selector
             coach.exercise_validator = mock_exercise_validator
 
@@ -160,7 +160,7 @@ class TestTrainingCoach:
     def test_training_coach_initialization(
         self,
         mock_base_agent,
-        mock_rag_tool,
+        mock_rag_service,
         mock_prompt_generator,
         mock_exercise_selector,
         mock_exercise_validator,
@@ -170,7 +170,7 @@ class TestTrainingCoach:
             "core.training.training_coach.BaseAgent.__init__",
             return_value=None,
         ) as mock_base_init, patch(
-            "core.training.training_coach.RAGTool", return_value=mock_rag_tool
+            "core.training.training_coach.RAGTool", return_value=mock_rag_service
         ) as mock_rag_class, patch(
             "core.training.training_coach.ExerciseSelector",
             return_value=mock_exercise_selector,
@@ -225,7 +225,7 @@ class TestTrainingCoach:
         ]
 
         # Mock RAG tool response generation
-        mock_training_coach.rag_tool.generate_response.return_value = (
+        mock_training_coach.rag_service.generate_response.return_value = (
             "Here's your training plan..."
         )
 
@@ -235,7 +235,7 @@ class TestTrainingCoach:
         mock_training_coach.search_knowledge_base.assert_called_once()
 
         # Should generate response via RAG tool
-        mock_training_coach.rag_tool.generate_response.assert_called_once()
+        mock_training_coach.rag_service.generate_response.assert_called_once()
 
         # Should return formatted response
         assert len(response) > 0
@@ -483,7 +483,7 @@ class TestTrainingCoachEdgeCases:
 
             coach = TrainingCoach()
             coach.topic = "training"
-            coach.rag_tool = Mock()
+            coach.rag_service = Mock()
             coach.exercise_selector = Mock()
             coach.exercise_validator = Mock()
             coach.search_knowledge_base = Mock()
@@ -512,7 +512,7 @@ class TestTrainingCoachEdgeCases:
         mock_training_coach_edge_cases.search_knowledge_base.return_value = [
             {"chunk_text": "Content"}
         ]
-        mock_training_coach_edge_cases.rag_tool.generate_response.return_value = (
+        mock_training_coach_edge_cases.rag_service.generate_response.return_value = (
             "Response"
         )
 
@@ -535,7 +535,7 @@ class TestTrainingCoachEdgeCases:
         mock_training_coach_edge_cases.search_knowledge_base.return_value = [
             {"chunk_text": "Content"}
         ]
-        mock_training_coach_edge_cases.rag_tool.generate_response.return_value = (
+        mock_training_coach_edge_cases.rag_service.generate_response.return_value = (
             "Response"
         )
 

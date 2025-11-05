@@ -243,7 +243,7 @@ Automatically retrieves and validates best practices context from the knowledge 
 
 ### Step 4: RAG Retrieval & Validation
 **Function**: `RAGTool.validate_and_retrieve_context()`
-**Location**: `backend/core/base/rag_tool.py:309-439`
+**Location**: `backend/core/base/rag_service.py:309-439`
 
 **Two-Stage Process**:
 
@@ -409,8 +409,8 @@ export interface PlanFeedbackResponse {
 | `playbook_schemas.py` | `PlaybookLesson` | Added `requires_context`, `context` fields |
 | `curator.py` | `process_batch_lessons()` | Updated prompt to set `requires_context` |
 | `curator.py` | `enrich_lessons_with_context()` | **NEW** - Parallel context enrichment |
-| `rag_tool.py` | `validate_and_retrieve_context()` | **NEW** - Two-stage RAG + validation |
-| `rag_tool.py` | `validate_and_retrieve_context()` | **OPTIMIZATION** - High-confidence skip |
+| `rag_service.py` | `validate_and_retrieve_context()` | **NEW** - Two-stage RAG + validation |
+| `rag_service.py` | `validate_and_retrieve_context()` | **OPTIMIZATION** - High-confidence skip |
 | `training_api.py` | `generate_training_plan()` | Integrated context enrichment step |
 | `training_api.py` | `_handle_playbook_extraction_for_satisfied()` | Integrated context enrichment step |
 | `prompt_generator.py` | `format_playbook_lessons()` | Updated to include context in prompts |
@@ -434,12 +434,12 @@ export interface PlanFeedbackResponse {
 ### 2. High-Confidence Skip
 - **Implementation**: Skip LLM validation if relevance score ≥ 0.85
 - **Impact**: ~50% latency reduction for high-confidence matches
-- **Location**: `rag_tool.py:validate_and_retrieve_context()`
+- **Location**: `rag_service.py:validate_and_retrieve_context()`
 
 ### 3. Token Management
 - **Limit**: Max 10 sentences per lesson context
 - **Impact**: Reduces token usage and cost
-- **Location**: `rag_tool.py:validate_and_retrieve_context()`
+- **Location**: `rag_service.py:validate_and_retrieve_context()`
 
 ---
 
