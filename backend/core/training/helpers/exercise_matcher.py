@@ -20,8 +20,8 @@ except ImportError:
     HAS_RAPIDFUZZ = False
 
 logger = get_logger(__name__)
-# Reduce log verbosity - only show warnings and errors
-logger.setLevel(logging.WARNING)
+# Keep INFO for step transitions, but reduce detailed logs
+# Individual exercise matching details will be DEBUG
 
 
 class ExerciseMatcher:
@@ -73,7 +73,7 @@ class ExerciseMatcher:
                     f"No candidates found for: {main_muscle}, {equipment}"
                 )
                 # FALLBACK 1: Try matching only on main_muscle + fuzzy name with high threshold
-                logger.info(f"Attempting fallback match on main_muscle + name only...")
+                logger.debug(f"Attempting fallback match on main_muscle + name only...")
                 fallback_match, fallback_score, fallback_status = self._fallback_match_main_muscle_only(
                     ai_exercise_name=ai_exercise_name,
                     main_muscle=main_muscle,
@@ -81,21 +81,21 @@ class ExerciseMatcher:
                     min_similarity=0.85  # High threshold for fallback
                 )
                 if fallback_match:
-                    logger.info(
+                    logger.debug(
                         f"Fallback match found: {ai_exercise_name} -> {fallback_match.get('name')} "
                         f"(score: {fallback_score:.3f}, status: {fallback_status})"
                     )
                     return fallback_match, fallback_score, fallback_status
                 
                 # FALLBACK 2: Try matching on name ONLY with high accuracy threshold
-                logger.info(f"Attempting final fallback match on name only (no metadata)...")
+                logger.debug(f"Attempting final fallback match on name only (no metadata)...")
                 name_only_match, name_only_score, name_only_status = self._fallback_match_name_only(
                     ai_exercise_name=ai_exercise_name,
                     max_popularity=max_popularity,
                     min_similarity=0.80  # High accuracy threshold for name-only matching
                 )
                 if name_only_match:
-                    logger.info(
+                    logger.debug(
                         f"Name-only fallback match found: {ai_exercise_name} -> {name_only_match.get('name')} "
                         f"(score: {name_only_score:.3f}, status: {name_only_status})"
                     )
@@ -121,7 +121,7 @@ class ExerciseMatcher:
             
             # Always return the match if we found one (metadata filtering ensures it's relevant)
             if best_match:
-                logger.info(
+                logger.debug(
                     f"Match result: {ai_exercise_name} -> {best_match.get('name')} "
                     f"(score: {score:.3f}, status: {status})"
                 )
@@ -173,7 +173,7 @@ class ExerciseMatcher:
             equipment_response = query.execute()
             equipment_candidates = equipment_response.data if equipment_response.data else []
             
-            logger.info(f"Found {len(equipment_candidates)} candidates after equipment filter")
+            logger.debug(f"Found {len(equipment_candidates)} candidates after equipment filter")
             
             # Step 2: Filter by main_muscle (which is an array, check if main_muscle is IN the array)
             main_muscle_candidates = []
@@ -190,7 +190,7 @@ class ExerciseMatcher:
             else:
                 main_muscle_candidates = equipment_candidates
             
-            logger.info(
+            logger.debug(
                 f"Found {len(main_muscle_candidates)} candidates after metadata filtering "
                 f"(equipment: {equipment}, main_muscle: {main_muscle})"
             )
@@ -198,7 +198,16 @@ class ExerciseMatcher:
             return main_muscle_candidates
             
         except Exception as e:
-            logger.error(f"Error getting candidates by metadata: {e}")
+            error_msg = str(e)
+            if "timed out" in error_msg.lower():
+                logger.error(
+                    f"Database query timed out while fetching exercise candidates "
+                    f"(main_muscle: {main_muscle}, equipment: {equipment}). "
+                    f"Possible causes: slow database, missing indexes, or network issues. "
+                    f"Error: {error_msg}"
+                )
+            else:
+                logger.error(f"Error getting candidates by metadata: {error_msg}")
             return []
     
     def _fallback_match_main_muscle_only(
@@ -241,7 +250,7 @@ class ExerciseMatcher:
                 logger.warning(f"Fallback: No candidates found for main_muscle: {main_muscle}")
                 return None, 0.0, "no_match"
             
-            logger.info(f"Fallback: Found {len(candidates)} candidates by main_muscle only")
+            logger.debug(f"Fallback: Found {len(candidates)} candidates by main_muscle only")
             
             # Find best match using fuzzy matching
             best_match, score = self._find_best_match(
@@ -258,7 +267,7 @@ class ExerciseMatcher:
                     status = "low_confidence"
                 else:
                     status = "pending_review"
-                logger.info(
+                logger.debug(
                     f"Fallback match accepted: {ai_exercise_name} -> {best_match.get('name')} "
                     f"(score: {score:.3f}, min_required: {min_similarity})"
                 )
@@ -272,7 +281,16 @@ class ExerciseMatcher:
                 return None, 0.0, "no_match"
             
         except Exception as e:
-            logger.error(f"Error in fallback matching: {e}")
+            error_msg = str(e)
+            if "timed out" in error_msg.lower():
+                logger.error(
+                    f"Database query timed out during fallback exercise matching "
+                    f"(main_muscle: {main_muscle}). "
+                    f"Possible causes: slow database, missing indexes, or network issues. "
+                    f"Error: {error_msg}"
+                )
+            else:
+                logger.error(f"Error in fallback matching: {error_msg}")
             return None, 0.0, "no_match"
 
     def _fallback_match_name_only(
@@ -310,7 +328,7 @@ class ExerciseMatcher:
                 logger.warning(f"Name-only fallback: No candidates found (popularity <= {max_popularity})")
                 return None, 0.0, "no_match"
             
-            logger.info(f"Name-only fallback: Found {len(candidates)} candidates (popularity filtered only)")
+            logger.debug(f"Name-only fallback: Found {len(candidates)} candidates (popularity filtered only)")
             
             # Find best match using fuzzy matching
             best_match, score = self._find_best_match(
@@ -328,7 +346,7 @@ class ExerciseMatcher:
                 else:
                     status = "pending_review"
                 
-                logger.info(
+                logger.debug(
                     f"Name-only fallback match accepted: {ai_exercise_name} -> {best_match.get('name')} "
                     f"(score: {score:.3f}, min_required: {min_similarity}, status: {status})"
                 )
@@ -535,7 +553,7 @@ class ExerciseMatcher:
                     best_replacement = candidate
             
             if best_replacement:
-                logger.info(
+                logger.debug(
                     f"Found fallback replacement: '{best_replacement.get('name')}' "
                     f"(diversity score: {best_diversity_score:.3f}, equipment: {equipment}, main_muscle: {main_muscle})"
                 )

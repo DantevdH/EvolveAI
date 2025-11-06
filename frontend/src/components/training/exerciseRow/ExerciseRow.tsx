@@ -25,7 +25,11 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
   onOneRMCalculator,
   onSwapExercise,
   onRemoveExercise,
-  isLocked = false
+  isLocked = false,
+  hideCompletionButton = false,
+  hideExpandButton = false,
+  hideInfoButton = false,
+  compactMode = false,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -66,21 +70,23 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
   const numSets = (exercise.sets || []).length;
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, compactMode && styles.wrapperCompact]}>
       <View style={[
         styles.container,
         exercise.completed && styles.containerCompleted,
         isExpanded && styles.containerExpanded
       ]}>
         {/* Main exercise row */}
-        <View style={styles.exerciseRow}>
+        <View style={[styles.exerciseRow, compactMode && styles.exerciseRowCompact]}>
           <ExerciseNumberBadge exerciseNumber={exerciseNumber} />
 
-          <ExerciseCompletionStar
-            completed={exercise.completed}
-            isLocked={isLocked}
-            onToggle={onToggle}
-          />
+          {!hideCompletionButton && (
+            <ExerciseCompletionStar
+              completed={exercise.completed}
+              isLocked={isLocked}
+              onToggle={onToggle}
+            />
+          )}
 
           <ExerciseInfo
             displayName={displayName}
@@ -91,14 +97,18 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
             isExpanded={isExpanded}
             isLocked={isLocked}
             onToggleExpand={toggleExpanded}
+            hideExpandButton={hideExpandButton}
+            compactMode={compactMode}
           />
 
-          <ExerciseActions
-            onSwapExercise={onSwapExercise}
-            onShowDetail={onShowDetail}
-            isEndurance={isEndurance}
-            isLocked={isLocked}
-          />
+          {!hideInfoButton && (
+            <ExerciseActions
+              onSwapExercise={onSwapExercise}
+              onShowDetail={onShowDetail}
+              isEndurance={isEndurance}
+              isLocked={isLocked}
+            />
+          )}
         </View>
 
         {/* Expanded detail - strength exercises show sets, endurance shows details */}
@@ -142,6 +152,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginVertical: 6,
   },
+  wrapperCompact: {
+    marginVertical: 2,
+  },
   container: {
     backgroundColor: colors.card,
     borderRadius: 14,
@@ -175,6 +188,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     gap: 12
+  },
+  exerciseRowCompact: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    gap: 6
   },
   setsContainer: {
     paddingHorizontal: 16,

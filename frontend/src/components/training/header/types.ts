@@ -8,6 +8,7 @@ export interface TrainingHeaderComponentProps extends TrainingHeaderProps {
   dayIndicators: DayIndicator[];
   onDaySelect: (dayIndex: number) => void;
   currentWeek: number;
+  hideWeekTitle?: boolean;
 }
 
 export interface ProgressSectionProps {
@@ -18,6 +19,7 @@ export interface ProgressSectionProps {
     color: string;
   };
   currentWeek: number;
+  hideWeekTitle?: boolean;
 }
 
 export interface WeekdayPathProps {

@@ -40,7 +40,8 @@ export const TextInput: React.FC<TextInputProps> = ({
     onChangeText(text);
   };
 
-  const isMinLengthValid = !minLength || (value || '').trim().length >= minLength;
+  const stringValue = typeof value === 'string' ? value : (value ? String(value) : '');
+  const isMinLengthValid = !minLength || stringValue.trim().length >= minLength;
   const hasError = !!error; // Only show error border for actual errors, not min length warnings
 
   return (
@@ -53,7 +54,7 @@ export const TextInput: React.FC<TextInputProps> = ({
           disabled && styles.textInputDisabled,
           noBackground && styles.textInputNoBackground,
         ]}
-        value={value || ''}
+        value={stringValue}
         onChangeText={handleTextChange}
         placeholder={placeholder}
         placeholderTextColor={colors.muted}
@@ -74,7 +75,7 @@ export const TextInput: React.FC<TextInputProps> = ({
         )}
         {showCharacterCount && maxLength && (
           <Text style={styles.characterCount}>
-            {(value || '').length}/{maxLength}
+            {stringValue.length}/{maxLength}
           </Text>
         )}
       </View>

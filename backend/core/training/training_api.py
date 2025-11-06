@@ -25,6 +25,7 @@ from core.training.schemas.question_schemas import (
     CreateWeekRequest,
     PersonalInfo,
     AIQuestion,
+    QuestionType,
 )
 from core.training.training_coach import TrainingCoach
 from core.training.schemas.training_schemas import TrainingPlan
@@ -264,13 +265,23 @@ async def get_initial_questions(
         )
         
         # Store questions (non-critical - log but continue)
+        # Use same serialization as API response to ensure multiselect is preserved
+        serialized_questions_for_storage = []
+        for q in questions_response.questions:
+            sq = q.model_dump(exclude_none=False, mode='json')
+            # Safety check: ensure multiselect is included for multiple_choice/dropdown
+            if q.response_type in [QuestionType.MULTIPLE_CHOICE, QuestionType.DROPDOWN]:
+                if 'multiselect' not in sq or sq.get('multiselect') is None:
+                    sq['multiselect'] = q.multiselect
+            serialized_questions_for_storage.append(sq)
+        
         await safe_db_update(
             "Store initial questions",
             db_service.update_user_profile,
             user_id=user_id,
             data={
                 "initial_questions": {
-                    "questions": [q.model_dump() for q in questions_response.questions],
+                    "questions": serialized_questions_for_storage,
                     "ai_message": questions_response.ai_message,
                 }
             },
@@ -279,10 +290,21 @@ async def get_initial_questions(
         
         logger.info(f"✅ Generated {questions_response.total_questions} initial questions")
         
+        # Explicitly serialize questions to ensure multiselect is included
+        # Use exclude_none=False to ensure all fields including multiselect are included
+        serialized_questions = []
+        for q in questions_response.questions:
+            sq = q.model_dump(exclude_none=False, mode='json')
+            # Safety check: ensure multiselect is included for multiple_choice/dropdown
+            if q.response_type in [QuestionType.MULTIPLE_CHOICE, QuestionType.DROPDOWN]:
+                if 'multiselect' not in sq or sq.get('multiselect') is None:
+                    sq['multiselect'] = q.multiselect
+            serialized_questions.append(sq)
+        
         return {
             "success": True,
             "data": {
-                "questions": questions_response.questions,
+                "questions": serialized_questions,
                 "total_questions": questions_response.total_questions,
                 "estimated_time_minutes": questions_response.estimated_time_minutes,
                 "ai_message": questions_response.ai_message,
@@ -353,13 +375,23 @@ async def get_follow_up_questions(
         )
         
         # Store follow-up questions
+        # Use same serialization as API response to ensure multiselect is preserved
+        serialized_questions_for_storage = []
+        for q in questions_response.questions:
+            sq = q.model_dump(exclude_none=False, mode='json')
+            # Safety check: ensure multiselect is included for multiple_choice/dropdown
+            if q.response_type in [QuestionType.MULTIPLE_CHOICE, QuestionType.DROPDOWN]:
+                if 'multiselect' not in sq or sq.get('multiselect') is None:
+                    sq['multiselect'] = q.multiselect
+            serialized_questions_for_storage.append(sq)
+        
         await safe_db_update(
             "Store follow-up questions",
             db_service.update_user_profile,
             user_id=user_id,
             data={
                 "follow_up_questions": {
-                    "questions": [q.model_dump() for q in questions_response.questions],
+                    "questions": serialized_questions_for_storage,
                     "ai_message": questions_response.ai_message,
                 }
             },
@@ -368,10 +400,21 @@ async def get_follow_up_questions(
         
         logger.info(f"✅ Generated {questions_response.total_questions} follow-up questions")
         
+        # Explicitly serialize questions to ensure multiselect is included
+        # Use exclude_none=False to ensure all fields including multiselect are included
+        serialized_questions = []
+        for q in questions_response.questions:
+            sq = q.model_dump(exclude_none=False, mode='json')
+            # Safety check: ensure multiselect is included for multiple_choice/dropdown
+            if q.response_type in [QuestionType.MULTIPLE_CHOICE, QuestionType.DROPDOWN]:
+                if 'multiselect' not in sq or sq.get('multiselect') is None:
+                    sq['multiselect'] = q.multiselect
+            serialized_questions.append(sq)
+        
         return {
             "success": True,
             "data": {
-                "questions": questions_response.questions,
+                "questions": serialized_questions,
                 "total_questions": questions_response.total_questions,
                 "estimated_time_minutes": questions_response.estimated_time_minutes,
                 "ai_message": questions_response.ai_message,
@@ -466,7 +509,7 @@ async def generate_training_plan(
         # If we hit idempotency check above, we return early, so at this point it's first generation
         # Skip DB call and extract lessons directly
         logger.info("📘 Extracting initial lessons from onboarding responses...")
-        initial_analyses = coach.extract_initial_lessons_from_onboarding(
+        initial_analyses = await coach.extract_initial_lessons_from_onboarding(
             personal_info=personal_info_with_user_id,
             formatted_initial_responses=formatted_initial_responses,
             formatted_follow_up_responses=formatted_follow_up_responses,
@@ -800,7 +843,7 @@ async def _handle_playbook_extraction_for_satisfied(
         logger.info("✅ Using playbook from request")
         
         # Extract lessons from conversation history
-        conversation_analyses = coach.extract_lessons_from_conversation_history(
+        conversation_analyses = await coach.extract_lessons_from_conversation_history(
             conversation_history=conversation_history,
             personal_info=personal_info,
             accepted_training_plan=training_plan,

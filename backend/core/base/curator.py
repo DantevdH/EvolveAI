@@ -10,6 +10,7 @@ The Curator manages the user's playbook by:
 
 import uuid
 import asyncio
+import time
 from typing import List, Optional, Any
 from datetime import datetime
 from logging_config import get_logger
@@ -21,6 +22,7 @@ from core.base.schemas.playbook_schemas import (
     UpdatedUserPlaybook,
 )
 from core.training.helpers.llm_client import LLMClient
+from core.training.helpers.database_service import db_service
 
 
 class Curator:
@@ -228,7 +230,12 @@ class Curator:
             """
 
             # Call LLM with schema (returns validated Pydantic model or dict)
-            updated_playbook_result, _ = self.llm.chat_parse(prompt, UpdatedUserPlaybook)
+            ai_start = time.time()
+            updated_playbook_result, completion = self.llm.chat_parse(prompt, UpdatedUserPlaybook)
+            ai_duration = time.time() - ai_start
+            
+            # Track latency
+            await db_service.log_latency_event("curator_process_batch", ai_duration, completion)
             
             # Handle both Pydantic model instance and dict (depending on LLM provider)
             if updated_playbook_result is None:

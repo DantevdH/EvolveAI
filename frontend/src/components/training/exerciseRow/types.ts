@@ -25,6 +25,8 @@ export interface ExerciseInfoProps {
   isExpanded: boolean;
   isLocked: boolean;
   onToggleExpand: () => void;
+  hideExpandButton?: boolean;
+  compactMode?: boolean;
 }
 
 export interface ExerciseActionsProps {

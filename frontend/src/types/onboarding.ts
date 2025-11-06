@@ -20,6 +20,7 @@ export interface AIQuestion {
   text: string;
   response_type: QuestionType;
   options?: QuestionOption[];
+  multiselect?: boolean; // Whether user can select multiple options (for multiple_choice and dropdown)
   min_value?: number;
   max_value?: number;
   step?: number;

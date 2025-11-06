@@ -1,7 +1,7 @@
 {
   "what_to_ask": [
-    "Current fitness level including personal records for distances or times",
-    "Specific endurance goals such as completing races or achieving target times",
-    "Training environment preferences including indoor versus outdoor or pool versus open water"
+    "Current endurance fitness level including personal records for distances or times in their primary endurance activity",
+    "Specific endurance goals such as completing races, achieving target times, or improving distance capacity",
+    "Training environment preferences including indoor versus outdoor training or pool versus open water for swimming"
   ]
 }

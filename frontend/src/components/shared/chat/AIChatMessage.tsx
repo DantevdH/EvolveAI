@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../../constants/designSystem';
+import { createColorWithOpacity } from '../../../constants/colors';
 import { TypingDots } from './TypingDots';
 
 interface AIChatMessageProps {
@@ -31,12 +33,15 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
   const typingStartedRef = useRef(false);
   const mountedRef = useRef(true);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const fullMessage = useMemo(() => {
+    // If loading, return empty string to prevent default message from showing
+    if (isLoading) return '';
     if (customMessage) return customMessage;
     if (aiMessage) return aiMessage;
     return `Hi ${username}! 👋\n\nI'm preparing your personalized training journey. Let's get started! 🚀`;
-  }, [customMessage, aiMessage, username]);
+  }, [customMessage, aiMessage, username, isLoading]);
 
   const memoizedOnTypingComplete = useCallback(() => {
     onTypingComplete?.();
@@ -50,16 +55,41 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
       useNativeDriver: true,
     }).start();
     
+    // Pulse animation for online indicator
+    const pulseAnimation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.3,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulseAnimation.start();
+    
     return () => {
       mountedRef.current = false;
+      pulseAnimation.stop();
     };
-  }, [fadeAnim]);
+  }, [fadeAnim, pulseAnim]);
 
   useEffect(() => {
     typingStartedRef.current = false;
     setDisplayedText('');
     setShowTypingIndicator(true);
     setTypingComplete(false);
+    
+    // If loading, don't start typing animation - just show loading dots
+    if (isLoading) {
+      setDisplayedText('');
+      setShowTypingIndicator(false);
+      return;
+    }
     
     if (skipAnimation) {
       setDisplayedText(fullMessage);
@@ -96,22 +126,43 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
       clearTimeout(startTimeout);
       clearTimeout(timeoutId);
     };
-  }, [fullMessage, skipAnimation, memoizedOnTypingComplete]);
+  }, [fullMessage, skipAnimation, isLoading, memoizedOnTypingComplete]);
 
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.messageWrapper, { opacity: fadeAnim }]}>
-        <View style={styles.aiAvatar}>
-          <MaterialIcons name="psychology" size={18} color="white" />
-        </View>
+        <LinearGradient
+          colors={[createColorWithOpacity(colors.primary, 0.4), createColorWithOpacity(colors.primary, 0.35)]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.aiAvatar}
+        >
+          <MaterialIcons name="psychology" size={18} color={colors.text} />
+        </LinearGradient>
         <View style={styles.chatBubble}>
           {showHeader && (
             <View style={styles.chatHeader}>
-              <View style={styles.aiNameContainer}>
+              <LinearGradient
+                colors={[createColorWithOpacity(colors.primary, 0.3), createColorWithOpacity(colors.primary, 0.2)]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.aiNameContainer}
+              >
                 <Text style={styles.aiName}>AI Coach</Text>
-              </View>
+              </LinearGradient>
               <View style={styles.onlineIndicator}>
-                <View style={styles.onlineDot} />
+                <Animated.View 
+                  style={[
+                    styles.onlineDot,
+                    {
+                      transform: [{ scale: pulseAnim }],
+                      opacity: pulseAnim.interpolate({
+                        inputRange: [1, 1.3],
+                        outputRange: [0.8, 1],
+                      }),
+                    }
+                  ]} 
+                />
                 <Text style={styles.onlineText}>online</Text>
               </View>
             </View>
@@ -148,32 +199,33 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   aiAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primary,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    marginRight: 10,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 4,
   },
   chatBubble: {
     backgroundColor: colors.inputBackground,
-    borderRadius: 18,
-    borderBottomLeftRadius: 4,
+    borderRadius: 20,
+    borderBottomLeftRadius: 6,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
     maxWidth: '85%',
     position: 'relative',
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.text, 0.1),
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   bubbleTail: {
     position: 'absolute',
@@ -195,15 +247,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   aiNameContainer: {
-    backgroundColor: colors.primaryTransparentLight || `${colors.primary}20`,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   aiName: {
     fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
+    fontWeight: '700',
+    color: colors.text,
+    letterSpacing: 0.3,
   },
   onlineIndicator: {
     flexDirection: 'row',
@@ -213,12 +270,12 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.tertiary,
     marginRight: 4,
   },
   onlineText: {
     fontSize: 11,
-    color: '#4CAF50',
+    color: colors.tertiary,
     fontWeight: '500',
   },
   messageContent: {

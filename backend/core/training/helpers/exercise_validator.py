@@ -16,8 +16,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 
 logger = logging.getLogger(__name__)
-# Reduce log verbosity - only show warnings and errors
-logger.setLevel(logging.WARNING)
+# Keep INFO for step transitions, but reduce detailed logs
+# Individual exercise matching details will be DEBUG
 
 
 class ExerciseValidator:
@@ -470,7 +470,7 @@ class ExerciseValidator:
             best_idx = np.argmax(similarities)
             best_similarity = similarities[best_idx]
 
-            logger.info(
+            logger.debug(
                 f"Best similarity score: {best_similarity:.3f} for exercise: {candidates[best_idx]['name']}"
             )
 
@@ -758,7 +758,7 @@ class ExerciseValidator:
                                     if similarity_score < 0.70:
                                         stats["low_similarity_count"] += 1
                                     
-                                    logger.info(
+                                    logger.debug(
                                         f"Matched exercise: '{exercise_name}' -> "
                                         f"'{matched_exercise_name}' (ID: {matched_exercise_id}, "
                                         f"score: {similarity_score:.3f}, status: {status})"
@@ -812,7 +812,7 @@ class ExerciseValidator:
                                         exercise["equipment"] = fallback_exercise.get("equipment")
                                         stats["exercises_matched"] += 1
                                         
-                                        logger.info(
+                                        logger.debug(
                                             f"✅ Fallback replacement: '{exercise_name}' -> "
                                             f"'{fallback_exercise_name}' (ID: {fallback_exercise_id})"
                                         )
@@ -900,7 +900,7 @@ class ExerciseValidator:
                             )
                         
                         daily_training["strength_exercises"] = final_exercises
-                        logger.info(
+                        logger.debug(
                             f"✅ Filtered exercises for {daily_training.get('day_of_week', 'Unknown')}: "
                             f"kept {len(final_exercises)} exercise(s), removed {len(strength_exercises) - len(final_exercises)} exercise(s)"
                         )
@@ -918,7 +918,7 @@ class ExerciseValidator:
                 try:
                     bulk_stats = ai_exercise_logger.log_ai_exercises_bulk(exercises_to_log)
                     stats["exercises_logged"] = bulk_stats["inserted"] + bulk_stats["updated"]
-                    logger.info(
+                    logger.debug(
                         f"Bulk logged {stats['exercises_logged']} exercises "
                         f"({bulk_stats['inserted']} inserted, {bulk_stats['updated']} updated)"
                     )
@@ -931,7 +931,7 @@ class ExerciseValidator:
                     stats["exercises_logged"] = 0
             
             logger.info(
-                f"Post-processing complete: {stats['exercises_processed']} processed, "
+                f"✅ Exercise matching complete: {stats['exercises_processed']} processed, "
                 f"{stats['exercises_matched']} matched, {stats['low_similarity_count']} low similarity"
             )
             

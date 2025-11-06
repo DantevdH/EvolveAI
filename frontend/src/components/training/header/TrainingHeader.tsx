@@ -18,6 +18,7 @@ const TrainingHeader: React.FC<TrainingHeaderComponentProps> = ({
   dayIndicators,
   onDaySelect,
   currentWeek,
+  hideWeekTitle,
 }) => {
   return (
     <View style={styles.container}>
@@ -35,7 +36,11 @@ const TrainingHeader: React.FC<TrainingHeaderComponentProps> = ({
         {onBackToMap && <BackButton onPress={onBackToMap} />}
 
         {/* Progress Ring Section */}
-        <ProgressSection progressRing={progressRing} currentWeek={currentWeek} />
+        <ProgressSection 
+          progressRing={progressRing} 
+          currentWeek={currentWeek}
+          hideWeekTitle={hideWeekTitle}
+        />
 
         {/* Connected Weekday Path */}
         <WeekdayPath dayIndicators={dayIndicators} onDaySelect={onDaySelect} />

@@ -1,8 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
-import { colors } from '../../../constants/colors';
+import { colors } from '../../../constants/designSystem';
+import { createColorWithOpacity } from '../../../constants/colors';
 import { TypingDots } from './TypingDots';
 
 interface ChatMessageProps {
@@ -26,9 +28,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       isUser ? styles.userContainer : styles.aiContainer
     ]}>
       {!isUser && showAvatar && (
-        <View style={styles.avatar}>
-          <MaterialIcons name="psychology" size={16} color="white" />
-        </View>
+        <LinearGradient
+          colors={[createColorWithOpacity(colors.primary, 0.4), createColorWithOpacity(colors.primary, 0.35)]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.avatar}
+        >
+          <MaterialIcons name="psychology" size={16} color={colors.text} />
+        </LinearGradient>
       )}
       
       <View style={[
@@ -58,9 +65,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
       </View>
       
       {isUser && showAvatar && (
-        <View style={styles.userAvatar}>
+        <LinearGradient
+          colors={[createColorWithOpacity(colors.primary, 0.2), createColorWithOpacity(colors.primary, 0.15)]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.userAvatar}
+        >
           <Ionicons name="person" size={16} color={colors.primary} />
-        </View>
+        </LinearGradient>
       )}
     </View>
   );
@@ -80,39 +92,62 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
   },
   avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    marginRight: 10,
     marginBottom: 4,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
   userAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary + '20',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
+    marginLeft: 10,
     marginBottom: 4,
+    borderWidth: 1.5,
+    borderColor: createColorWithOpacity(colors.primary, 0.3),
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
   },
   messageBubble: {
     maxWidth: '80%',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 18,
+    paddingVertical: 14,
+    borderRadius: 20,
     position: 'relative',
+    borderWidth: 1,
   },
   userBubble: {
     backgroundColor: colors.primary,
-    borderBottomRightRadius: 4,
+    borderBottomRightRadius: 6,
+    borderColor: createColorWithOpacity(colors.primary, 0.3),
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   aiBubble: {
     backgroundColor: colors.inputBackground || colors.card,
-    borderBottomLeftRadius: 4,
+    borderBottomLeftRadius: 6,
+    borderColor: createColorWithOpacity(colors.text, 0.1),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   messageText: {
     fontSize: 15,

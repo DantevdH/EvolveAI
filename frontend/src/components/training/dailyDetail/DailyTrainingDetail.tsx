@@ -27,6 +27,11 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
   onRemoveExercise,
   onToggleChange,
   isStrengthMode,
+  hideDayName = false,
+  hideExerciseCompletionButton = false,
+  hideExerciseExpandButton = false,
+  hideExerciseInfoButton = false,
+  exerciseCompactMode = false,
 }) => {
   const isLocked = dailyTraining?.completed || false;
   
@@ -79,6 +84,7 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
           isTodaysWorkout={isTodaysWorkout}
           isPastWeek={isPastWeek}
           isRestDay={false}
+          hideDayName={hideDayName}
         />
 
         {/* Training completion status - At top for immediate visibility */}
@@ -114,6 +120,10 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
                     onRemoveExercise(exercise.id, isEndurance);
                   } : undefined}
                   isLocked={isLocked}
+                  hideCompletionButton={hideExerciseCompletionButton}
+                  hideExpandButton={hideExerciseExpandButton}
+                  hideInfoButton={hideExerciseInfoButton}
+                  compactMode={exerciseCompactMode}
                 />
               );
             })}

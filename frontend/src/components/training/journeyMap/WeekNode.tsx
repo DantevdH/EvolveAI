@@ -25,7 +25,8 @@ const WeekNode: React.FC<WeekNodeProps> = ({ node, onPress, animations }) => {
     node.status === 'current' ? colors.primary :
     colors.muted;
   
-  const nodeSize = isCurrentWeek ? 65 : 60;
+  // Node size increased to 50px for better visibility
+  const nodeSize = 50;
 
   return (
     <TouchableOpacity
@@ -42,7 +43,7 @@ const WeekNode: React.FC<WeekNodeProps> = ({ node, onPress, animations }) => {
       onPress={() => onPress(node)}
       activeOpacity={0.7}
     >
-      <View style={styles.inner}>
+      <View style={[styles.inner, { borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.7)' }]}>
         {/* Subtle glow effect for current week */}
         {isCurrentWeek && animations && (
           <Animated.View
@@ -60,26 +61,17 @@ const WeekNode: React.FC<WeekNodeProps> = ({ node, onPress, animations }) => {
         
         <Text style={styles.weekNumber}>{node.weekNumber}</Text>
         
-        {/* Stars for completed weeks */}
-        {node.status === 'completed' && node.stars > 0 && (
-          <View style={styles.stars}>
-            {[...Array(node.stars)].map((_, i) => (
-              <Ionicons key={i} name="star" size={10} color={colors.warning} />
-            ))}
-          </View>
-        )}
-        
         {/* Badge for current week */}
         {isCurrentWeek && (
           <View style={styles.currentBadge}>
-            <Ionicons name="flash" size={16} color={colors.text} />
+            <Ionicons name="flash" size={12} color={colors.text} />
           </View>
         )}
         
         {/* Lock icon for locked weeks */}
         {node.status === 'locked' && (
           <View style={styles.lockIcon}>
-            <Ionicons name="lock-closed" size={20} color={colors.text} />
+            <Ionicons name="lock-closed" size={14} color={colors.text} />
           </View>
         )}
       </View>
@@ -93,11 +85,12 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 10, // Ensure nodes render on top of path
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
   inner: {
     width: '100%',
@@ -114,20 +107,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   weekNumber: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: colors.text,
   },
-  stars: {
-    flexDirection: 'row',
-    position: 'absolute',
-    bottom: 4,
-    gap: 2,
-  },
   currentBadge: {
     position: 'absolute',
-    top: -8,
-    right: -8,
+    top: -5,
+    right: -5,
     backgroundColor: colors.warning,
     borderRadius: 12,
     width: 24,

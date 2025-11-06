@@ -18,10 +18,12 @@ const ExerciseInfo: React.FC<ExerciseInfoProps> = ({
   isExpanded,
   isLocked,
   onToggleExpand,
+  hideExpandButton = false,
+  compactMode = false,
 }) => {
   return (
-    <View style={styles.exerciseInfo}>
-      <View style={styles.exerciseHeader}>
+    <View style={[styles.exerciseInfo, compactMode && styles.exerciseInfoCompact]}>
+      <View style={[styles.exerciseHeader, compactMode && styles.exerciseHeaderCompact]}>
         <Text style={styles.exerciseName} numberOfLines={1}>
           {displayName}
         </Text>
@@ -38,17 +40,19 @@ const ExerciseInfo: React.FC<ExerciseInfoProps> = ({
           </Text>
         )}
         
-        <TouchableOpacity
-          style={[styles.expandButton, isLocked && styles.expandButtonLocked]}
-          onPress={isLocked ? undefined : onToggleExpand}
-          disabled={isLocked}
-        >
-          <Ionicons 
-            name={isExpanded ? "chevron-up" : "chevron-down"} 
-            size={16} 
-            color={isLocked ? colors.muted : colors.primary} 
-          />
-        </TouchableOpacity>
+        {!hideExpandButton && (
+          <TouchableOpacity
+            style={[styles.expandButton, isLocked && styles.expandButtonLocked]}
+            onPress={isLocked ? undefined : onToggleExpand}
+            disabled={isLocked}
+          >
+            <Ionicons 
+              name={isExpanded ? "chevron-up" : "chevron-down"} 
+              size={16} 
+              color={isLocked ? colors.muted : colors.primary} 
+            />
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -60,6 +64,10 @@ const styles = StyleSheet.create({
     gap: 4,
     padding: 4
   },
+  exerciseInfoCompact: {
+    gap: 2,
+    padding: 2
+  },
   exerciseHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -67,6 +75,10 @@ const styles = StyleSheet.create({
     width: '100%',
     minHeight: 32,
     gap: 8,
+  },
+  exerciseHeaderCompact: {
+    minHeight: 24,
+    gap: 6,
   },
   exerciseName: {
     fontSize: 14,

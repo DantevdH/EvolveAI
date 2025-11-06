@@ -7,7 +7,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { colors } from '../../../constants/colors';
 import { TrainingPlan } from '../../../types/training';
-import JourneyMapHeader from './JourneyMapHeader';
+import JourneyCardContainer from './JourneyCardContainer';
 import CurvedRoadPath from './CurvedRoadPath';
 import WeekNode from './WeekNode';
 import WeekDetailModal from './WeekDetailModal';
@@ -145,13 +145,12 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
   // Note: completedWeeks and totalStars are calculated but no longer used in header
   // Keeping for potential future use
 
+  const mapHeight = weekNodes.length * 105 + 150; // Adjusted for new segment height (105px)
+
   return (
     <View style={styles.container}>
-      {/* Header - Plan Title */}
-      <JourneyMapHeader
-        trainingPlan={trainingPlan}
-      />
-
+      {/* Journey Card Container with Header */}
+      <JourneyCardContainer title={trainingPlan?.title || 'YOUR JOURNEY'}>
       {/* Scrollable Map */}
       <ScrollView
         style={styles.scrollView}
@@ -159,10 +158,10 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.mapContainer}>
-          {/* Curved Road Path - Segmented with colors */}
+            {/* Main Road Path */}
           <CurvedRoadPath
             segments={roadSegments}
-            height={weekNodes.length * 160 + 200}
+              height={mapHeight}
             width={SCREEN_WIDTH}
           />
 
@@ -177,6 +176,7 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
           ))}
         </View>
       </ScrollView>
+      </JourneyCardContainer>
 
       {/* Lightning Explosion Animation */}
       <LightningExplosion
@@ -199,16 +199,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+    minHeight: 0, // Important for flex children to shrink
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 80,
+    paddingTop: 12,
   },
   mapContainer: {
     position: 'relative',
-    minHeight: SCREEN_HEIGHT * 2,
+    minHeight: SCREEN_HEIGHT * 1.5,
   },
 });
 

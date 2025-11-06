@@ -7,6 +7,7 @@ export interface DayHeaderProps {
   isTodaysWorkout: boolean;
   isPastWeek: boolean;
   isRestDay: boolean;
+  hideDayName?: boolean;
 }
 
 export interface TrainingCompletionBadgeProps {

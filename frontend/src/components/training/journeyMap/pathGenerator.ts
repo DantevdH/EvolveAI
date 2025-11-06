@@ -39,8 +39,8 @@ export const generateCurvedPath = (
   const defaultConfig: PathConfig = {
     startX: SCREEN_WIDTH / 2,
     startY: 80,
-    segmentHeight: 160,
-    curveAmplitude: SCREEN_WIDTH * 0.25,
+    segmentHeight: 105, // Increased from 90 to give more space for larger nodes
+    curveAmplitude: SCREEN_WIDTH * 0.23, // Increased from 0.17 for more pronounced curves
   };
 
   const finalConfig = { ...defaultConfig, ...config };

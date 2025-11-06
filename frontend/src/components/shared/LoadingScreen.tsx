@@ -5,8 +5,10 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, StatusBar } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SimpleSpinner } from '../ui/SimpleSpinner';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/designSystem';
+import { createColorWithOpacity } from '../../constants/colors';
 import { IconSymbol } from '../../../components/ui/IconSymbol';
 
 interface LoadingScreenProps {
@@ -27,9 +29,14 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
       <View style={styles.content}>
         {/* Welcome Header */}
         <View style={styles.header}>
-          <View style={styles.welcomeIcon}>
-            <IconSymbol name="person.fill" size={32} color={colors.primary} />
-          </View>
+          <LinearGradient
+            colors={[createColorWithOpacity(colors.primary, 0.4), createColorWithOpacity(colors.primary, 0.35)]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.welcomeIcon}
+          >
+            <IconSymbol name="person.fill" size={32} color={colors.text} />
+          </LinearGradient>
           <Text style={styles.welcomeTitle}>
             Welcome back!
           </Text>
@@ -77,13 +84,16 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: colors.primaryTransparent,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.xl,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    ...shadows.md,
+    borderWidth: 1.5,
+    borderColor: createColorWithOpacity(colors.primary, 0.4),
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
   },
   welcomeTitle: {
     fontSize: typography.fontSizes.xxxl,

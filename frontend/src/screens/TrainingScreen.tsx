@@ -377,11 +377,7 @@ const TrainingScreen: React.FC = () => {
   if (selectedWeekFromMap === null) {
     return (
       <SafeAreaView style={styles.container}>
-        <ScrollView 
-          style={styles.scrollView}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
-        >
+        <View style={styles.journeyPageContainer}>
           {/* Welcome Header */}
           <WelcomeHeader username={authState.userProfile?.username} />
           
@@ -392,13 +388,15 @@ const TrainingScreen: React.FC = () => {
             weeksCompleted={completedWeeks}
           />
           
-          {/* Journey Map */}
-          <FitnessJourneyMap
-            trainingPlan={trainingPlan}
-            currentWeek={trainingPlan.currentWeek}
-            onWeekSelect={handleWeekSelectFromMap}
-          />
-        </ScrollView>
+          {/* Journey Map - Scrollable Card */}
+          <View style={styles.journeyMapContainer}>
+            <FitnessJourneyMap
+              trainingPlan={trainingPlan}
+              currentWeek={trainingPlan.currentWeek}
+              onWeekSelect={handleWeekSelectFromMap}
+            />
+          </View>
+        </View>
       </SafeAreaView>
     );
   }
@@ -528,11 +526,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollView: {
+  journeyPageContainer: {
     flex: 1,
   },
-  scrollContent: {
-    paddingBottom: 100, // Extra padding for tab bar
+  journeyMapContainer: {
+    flex: 1,
+    minHeight: 0, // Important for flex children to shrink
   },
   bottomSpacing: {
     height: 20

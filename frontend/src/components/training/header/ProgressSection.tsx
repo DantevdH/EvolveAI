@@ -12,7 +12,13 @@ import { ProgressSectionProps } from './types';
 const ProgressSection: React.FC<ProgressSectionProps> = ({
   progressRing,
   currentWeek,
+  hideWeekTitle = false,
 }) => {
+  // If both progress ring and week title are hidden, don't render anything
+  if (!progressRing && hideWeekTitle) {
+    return null;
+  }
+
   return (
     <View style={styles.progressSection}>
       {progressRing && (
@@ -29,7 +35,9 @@ const ProgressSection: React.FC<ProgressSectionProps> = ({
       )}
 
       {/* Week Title */}
-      <Text style={styles.weekTitle}>Week {currentWeek}</Text>
+      {!hideWeekTitle && (
+        <Text style={styles.weekTitle}>Week {currentWeek}</Text>
+      )}
     </View>
   );
 };

@@ -281,6 +281,11 @@ export interface DailyTrainingDetailProps {
   onRemoveExercise?: (exerciseId: string, isEndurance: boolean) => void;
   onToggleChange?: (isStrength: boolean) => void;
   isStrengthMode?: boolean;
+  hideDayName?: boolean;
+  hideExerciseCompletionButton?: boolean; // Hide the completion star button
+  hideExerciseExpandButton?: boolean; // Hide the expand/collapse button
+  hideExerciseInfoButton?: boolean; // Hide the info (i) button
+  exerciseCompactMode?: boolean; // Reduce exercise card height/padding
 }
 
 export interface ExerciseRowProps {
@@ -293,6 +298,10 @@ export interface ExerciseRowProps {
   onSwapExercise?: () => void;
   onRemoveExercise?: () => void;
   isLocked?: boolean;
+  hideCompletionButton?: boolean; // Hide the completion star button
+  hideExpandButton?: boolean; // Hide the expand/collapse button
+  hideInfoButton?: boolean; // Hide the info (i) button
+  compactMode?: boolean; // Reduce card height/padding
 }
 
 export interface SetRowProps {

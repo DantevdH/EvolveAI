@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, PanResponder, Animated, Dimensions, TouchableOpacity } from 'react-native';
 import { colors } from '../../constants/designSystem';
+import { createColorWithOpacity } from '../../constants/colors';
 
 interface CoolSliderProps {
   value: number;
@@ -12,6 +13,7 @@ interface CoolSliderProps {
   title: string;
   style?: any;
   size?: 'small' | 'large';
+  color?: string; // Custom color for the slider
 }
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -30,6 +32,7 @@ export const CoolSlider: React.FC<CoolSliderProps> = ({
   title,
   style,
   size = 'small',
+  color = colors.primary, // Default to primary if not provided
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const scale = useRef(new Animated.Value(1)).current;
@@ -155,7 +158,14 @@ export const CoolSlider: React.FC<CoolSliderProps> = ({
         <View style={styles.sliderWithButtons}>
           {/* Decrease Button */}
           <TouchableOpacity 
-            style={[styles.button, value <= min && styles.buttonDisabled]} 
+            style={[
+              styles.button, 
+              { 
+                backgroundColor: createColorWithOpacity(color, 0.6),
+                shadowColor: color
+              },
+              value <= min && styles.buttonDisabled
+            ]} 
             onPress={handleDecrease}
             disabled={value <= min}
           >
@@ -168,25 +178,39 @@ export const CoolSlider: React.FC<CoolSliderProps> = ({
               <View 
                 style={[
                   styles.progress, 
-                  { width: `${progressPercentage}%` }
+                  { 
+                    width: `${progressPercentage}%`,
+                    backgroundColor: createColorWithOpacity(color, 0.6)
+                  }
                 ]} 
               />
             </View>
             
             {/* Draggable Thumb */}
             <Animated.View 
-              style={[styles.thumb, translateStyle]}
+              style={[
+                styles.thumb, 
+                translateStyle,
+                { shadowColor: color }
+              ]}
               {...panResponder.panHandlers}
             >
               <Animated.View style={scaleStyle}>
-                <View style={styles.thumbInner} />
+                <View style={[styles.thumbInner, { backgroundColor: color }]} />
               </Animated.View>
             </Animated.View>
           </View>
 
           {/* Increase Button */}
           <TouchableOpacity 
-            style={[styles.button, value >= max && styles.buttonDisabled]} 
+            style={[
+              styles.button, 
+              { 
+                backgroundColor: createColorWithOpacity(color, 0.6),
+                shadowColor: color
+              },
+              value >= max && styles.buttonDisabled
+            ]} 
             onPress={handleIncrease}
             disabled={value >= max}
           >
@@ -280,7 +304,6 @@ const styles = StyleSheet.create({
   },
   progress: {
     height: TRACK_HEIGHT,
-    backgroundColor: colors.primary,
     borderRadius: TRACK_HEIGHT / 2,
     position: 'absolute',
     top: 0,
@@ -294,7 +317,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.text,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.primary,
     shadowOffset: {
       width: 0,
       height: 2,
@@ -307,7 +329,6 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.primary,
   },
   labelsContainer: {
     flexDirection: 'row',
@@ -323,15 +344,13 @@ const styles = StyleSheet.create({
     width: BUTTON_SIZE,
     height: BUTTON_SIZE,
     borderRadius: BUTTON_SIZE / 2,
-    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.primary,
     shadowOffset: {
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 4,
   },

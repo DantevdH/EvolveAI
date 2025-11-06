@@ -25,14 +25,14 @@ export const CandyTabIcon: React.FC<CandyTabIconProps> = ({
   gradientColors
 }) => {
   // Inactive buttons use primary color with reduced opacity (not grey to avoid looking disabled)
-  const inactiveColor = createColorWithOpacity(colors.primary, 0.4); // Primary color at 40% opacity
+  const inactiveColor = createColorWithOpacity(colors.primary, 0.25); // Primary color at 25% opacity
   const inactiveGradient: [string, string] = [
-    createColorWithOpacity(colors.primary, 0.4), 
-    createColorWithOpacity(colors.primary, 0.4)
+    createColorWithOpacity(colors.primary, 0.25), 
+    createColorWithOpacity(colors.primary, 0.25)
   ]; // Primary gradient with opacity for inactive
   
-  // Active buttons always use primary color at full opacity
-  const activeColor = colors.primary; // Always use primary color when focused
+  // Active buttons always use primary red color
+  const activeColor = colors.primary; // Always use primary red when focused
   const activeGradient: [string, string] = [colors.primary, '#6B1A1A']; // Darker red gradient
   
   return (
@@ -40,9 +40,9 @@ export const CandyTabIcon: React.FC<CandyTabIconProps> = ({
       {/* Icon that pops out above the button */}
       <View style={[styles.iconBubble, { 
         backgroundColor: focused ? activeColor : inactiveColor,
-        transform: [{ scale: focused ? 1.1 : 1 }],
-        borderWidth: focused ? 4 : 3,
-        borderColor: focused ? '#FFFFFF' : 'rgba(255, 255, 255, 0.6)',
+        transform: [{ scale: focused ? 1.05 : 1 }],
+        borderWidth: 2,
+        borderColor: focused ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.4)',
       }]}>
         <Ionicons 
           name={icon} 
@@ -94,9 +94,9 @@ const styles = StyleSheet.create({
     // Shadow for depth
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 6,
   },
   button: {
     width: '100%',
@@ -109,9 +109,9 @@ const styles = StyleSheet.create({
     // Shadow for button
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
   },
   label: {
     fontSize: 10,

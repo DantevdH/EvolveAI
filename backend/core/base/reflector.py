@@ -13,6 +13,7 @@ consistency and enable the ACE learning loop.
 
 import os
 import uuid
+import time
 from typing import List, Optional, Dict, Any
 from logging_config import get_logger
 
@@ -26,6 +27,7 @@ from pydantic import BaseModel, Field
 
 
 from core.training.helpers.llm_client import LLMClient
+from core.training.helpers.database_service import db_service
 
 
 class Reflector:
@@ -66,7 +68,7 @@ class Reflector:
         - Experience: {personal_info.experience_level}
         """
 
-    def extract_initial_lessons(
+    async def extract_initial_lessons(
         self,
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
@@ -164,7 +166,13 @@ class Reflector:
                 Remember: Each lesson should cover a different dimension of the user's profile.
             """
 
-            analyses_list, _ = self.llm.chat_parse(prompt, ReflectorAnalysisList)
+            ai_start = time.time()
+            analyses_list, completion = self.llm.chat_parse(prompt, ReflectorAnalysisList)
+            ai_duration = time.time() - ai_start
+            
+            # Track latency
+            await db_service.log_latency_event("reflector_extract_initial", ai_duration, completion)
+            
             analyses = analyses_list.analyses
 
             self.logger.info(f"Extracted {len(analyses)} initial lesson analyses from onboarding")
@@ -178,7 +186,7 @@ class Reflector:
             self.logger.error(f"Error extracting initial lessons: {e}")
             return []
 
-    def extract_lessons_from_conversation_history(
+    async def extract_lessons_from_conversation_history(
         self,
         conversation_history: List[Dict[str, str]],
         personal_info: PersonalInfo,
@@ -288,9 +296,15 @@ class Reflector:
                 Remember: It's better to extract fewer truly unique lessons than many duplicate ones.
             """
             
-            analyses_list, _ = self.llm.chat_parse(prompt, ReflectorAnalysisList)
-            analyses = analyses_list.analyses
+            ai_start = time.time()
+            analyses_list, completion = self.llm.chat_parse(prompt, ReflectorAnalysisList)
+            ai_duration = time.time() - ai_start
             
+            # Track latency
+            await db_service.log_latency_event("reflector_extract_conversation", ai_duration, completion)
+            
+            analyses = analyses_list.analyses
+
             # Store analyses for curator processing (return both for flexibility)
             # Note: Curator expects ReflectorAnalysis, so we'll process those directly
             # The caller can convert to PlaybookLesson after curator processing
@@ -470,7 +484,7 @@ class Reflector:
                 Return in ReflectorAnalysisList format.
                 Each lesson must include: lesson (text), tags (array), confidence (0.0-1.0), positive (boolean), reasoning (why extracted), priority (string)."""
 
-    def identify_applied_lessons(
+    async def identify_applied_lessons(
         self, training_plan: dict, playbook_lessons: List[dict], personal_info: PersonalInfo
     ) -> List[str]:
         """
@@ -595,6 +609,7 @@ class Reflector:
                 Return the comma-separated list of applied lesson IDs or "none".
             """
 
+            ai_start = time.time()
             response = self.llm.chat_text([
                 {
                     "role": "system",
@@ -602,6 +617,10 @@ class Reflector:
                 },
                 {"role": "user", "content": prompt},
             ]).strip()
+            ai_duration = time.time() - ai_start
+            
+            # Track latency (chat_text doesn't return completion object, so pass None)
+            await db_service.log_latency_event("reflector_identify_applied", ai_duration, None)
 
             if response.lower() == "none":
                 self.logger.info("No lessons were identified as applied")

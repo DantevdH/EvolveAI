@@ -413,15 +413,60 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     };
   }, [state.planGenerationLoading, state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, authState.userProfile, authState.userProfile?.id, authState.session?.access_token, setTrainingPlan, setExercises, onError]);
 
-  // Step 1: Username
+  // Step 1: Username and Gender
   const handleUsernameChange = useCallback((username: string) => {
     const isValid = username.trim().length >= 3;
     
-    setState(prev => ({
-      ...prev,
-      username,
-      usernameValid: isValid,
-    }));
+    setState(prev => {
+      // Initialize personalInfo with default gender if it doesn't exist
+      const defaultPersonalInfo: PersonalInfo = {
+        username: username.trim(),
+        age: 25,
+        weight: 70,
+        height: 175,
+        weight_unit: 'kg',
+        height_unit: 'cm',
+        measurement_system: 'metric',
+        gender: prev.personalInfo?.gender || 'male', // Use existing gender or default to 'male'
+        goal_description: prev.personalInfo?.goal_description || '',
+      };
+      
+      return {
+        ...prev,
+        username,
+        usernameValid: isValid,
+        // Ensure personalInfo exists with default gender
+        personalInfo: prev.personalInfo || defaultPersonalInfo,
+      };
+    });
+  }, []);
+
+  const handleGenderChange = useCallback((gender: 'male' | 'female' | 'other') => {
+    setState(prev => {
+      // If personalInfo doesn't exist, create it with default values
+      const defaultPersonalInfo: PersonalInfo = {
+        username: prev.username || '',
+        age: 25,
+        weight: 70,
+        height: 175,
+        weight_unit: 'kg',
+        height_unit: 'cm',
+        measurement_system: 'metric',
+        gender: 'male',
+        goal_description: '',
+      };
+      
+      return {
+        ...prev,
+        personalInfo: prev.personalInfo ? {
+          ...prev.personalInfo,
+          gender,
+        } : {
+          ...defaultPersonalInfo,
+          gender,
+        },
+      };
+    });
   }, []);
 
   const handleWelcomeNext = useCallback(() => {
@@ -429,6 +474,30 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       Alert.alert('Error', 'Please enter a valid username (3-20 characters)');
       return;
     }
+    
+    // Ensure personalInfo exists with default gender 'male' if not set
+    setState(prev => {
+      if (!prev.personalInfo || !prev.personalInfo.gender) {
+        const defaultPersonalInfo: PersonalInfo = {
+          username: prev.username || '',
+          age: 25,
+          weight: 70,
+          height: 175,
+          weight_unit: 'kg',
+          height_unit: 'cm',
+          measurement_system: 'metric',
+          gender: 'male', // Default to 'male'
+          goal_description: '',
+        };
+        
+        return {
+          ...prev,
+          personalInfo: prev.personalInfo || defaultPersonalInfo,
+        };
+      }
+      return prev;
+    });
+    
     setCurrentStep('personal');
   }, [state.usernameValid]);
 
@@ -888,6 +957,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           <WelcomeStep
             username={state.username}
             onUsernameChange={handleUsernameChange}
+            gender={(state.personalInfo?.gender || 'male') as 'male' | 'female' | 'other'}
+            onGenderChange={handleGenderChange}
             onNext={handleWelcomeNext}
             isValid={state.usernameValid}
             error={state.error || undefined}

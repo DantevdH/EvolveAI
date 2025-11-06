@@ -65,6 +65,10 @@ class AIQuestion(BaseModel):
         default=None,
         description="Options list - REQUIRED for multiple_choice and dropdown ONLY",
     )
+    multiselect: Optional[bool] = Field(
+        default=None,
+        description="REQUIRED for multiple_choice and dropdown: Whether user can select multiple options (true) or only one option (false). Must be explicitly set.",
+    )
     min_value: Optional[float] = Field(
         default=None, description="Minimum value - REQUIRED for slider and rating ONLY"
     )
@@ -127,6 +131,10 @@ class GeminiAIQuestion(BaseModel):
     response_type: str
 
     options: Optional[List[QuestionOption]] = None
+    multiselect: Optional[bool] = Field(
+        default=None,
+        description="REQUIRED for multiple_choice and dropdown: Whether user can select multiple options (true) or only one option (false)."
+    )
     min_value: Optional[float] = None
     max_value: Optional[float] = None
     step: Optional[float] = None

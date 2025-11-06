@@ -15,7 +15,13 @@ const DayHeader: React.FC<DayHeaderProps> = ({
   isTodaysWorkout,
   isPastWeek,
   isRestDay,
+  hideDayName = false,
 }) => {
+  // If hiding day name, return null to remove the entire header
+  if (hideDayName) {
+    return null;
+  }
+  
   return (
     <View style={styles.dayHeaderContainer}>
       <LinearGradient

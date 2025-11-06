@@ -275,7 +275,15 @@ class RAGTool:
             return final_results
 
         except Exception as e:
-            print(f"❌ Error searching knowledge base: {e}")
+            error_msg = str(e)
+            if "timed out" in error_msg.lower():
+                print(
+                    f"❌ Database query timed out while searching knowledge base. "
+                    f"This may indicate slow database performance or network issues. "
+                    f"Error: {error_msg}"
+                )
+            else:
+                print(f"❌ Error searching knowledge base: {error_msg}")
             return []
 
     @staticmethod

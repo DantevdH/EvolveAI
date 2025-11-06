@@ -57,6 +57,7 @@ const convertToAIQuestions = (questionsData: any): AIQuestion[] | null => {
     text: question.text || '',
     response_type: question.response_type || 'free_text',
     options: question.options || null,
+    multiselect: question.multiselect ?? null, // Include multiselect for multiple_choice/dropdown
     category: question.category || '',
     required: question.required || false,
     help_text: question.help_text || '',
