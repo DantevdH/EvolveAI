@@ -1,10 +1,11 @@
 // Training Screen - Main training interface
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, SafeAreaView, TouchableOpacity } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTraining } from '../hooks/useTraining';
 import { useAuth } from '../context/AuthContext';
-import { colors } from '../constants/colors';
+import { colors, createColorWithOpacity, goldenGradient } from '../constants/colors';
 import { TrainingHeader } from '../components/training/header';
 import { DailyTrainingDetail } from '../components/training/dailyDetail';
 import ConfirmationDialog from '../components/shared/ConfirmationDialog';
@@ -373,6 +374,24 @@ const TrainingScreen: React.FC = () => {
   const streak = calculateStreak();
   const weeklyTrainings = calculateWeeklyTrainings();
 
+  const renderJourneyAccessory = (
+    <TouchableOpacity
+      style={styles.journeyHeaderButtonWrapper}
+      activeOpacity={0.9}
+      onPress={() => handleWeekSelectFromMap(trainingPlan.currentWeek)}
+    >
+      <LinearGradient
+        colors={goldenGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.journeyHeaderButton}
+      >
+        <Text style={styles.journeyHeaderButtonText}>Continue</Text>
+        <Ionicons name="arrow-forward" size={16} color={colors.primary} />
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+
   // Show map view if no week is selected from map
   if (selectedWeekFromMap === null) {
     return (
@@ -387,13 +406,14 @@ const TrainingScreen: React.FC = () => {
             weeklyTrainings={weeklyTrainings}
             weeksCompleted={completedWeeks}
           />
-          
           {/* Journey Map - Scrollable Card */}
           <View style={styles.journeyMapContainer}>
             <FitnessJourneyMap
               trainingPlan={trainingPlan}
               currentWeek={trainingPlan.currentWeek}
               onWeekSelect={handleWeekSelectFromMap}
+              headerTitle={trainingPlan.title}
+              headerAccessory={renderJourneyAccessory}
             />
           </View>
         </View>
@@ -528,10 +548,32 @@ const styles = StyleSheet.create({
   },
   journeyPageContainer: {
     flex: 1,
+    paddingTop: 12,
+    gap: 12,
   },
   journeyMapContainer: {
     flex: 1,
     minHeight: 0, // Important for flex children to shrink
+  },
+  journeyHeaderButtonWrapper: {
+    borderRadius: 999,
+    overflow: 'hidden',
+    maxWidth: 180,
+  },
+  journeyHeaderButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 1,
+  },
+  journeyHeaderButtonText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.25,
   },
   bottomSpacing: {
     height: 20

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AIQuestion } from '../../types/onboarding';
 import { colors } from '../../constants/designSystem';
+import { createColorWithOpacity, goldenGradient } from '../../constants/colors';
 import { TextInput } from './TextInput';
 
 interface ConditionalBooleanQuestionProps {
@@ -12,6 +14,11 @@ interface ConditionalBooleanQuestionProps {
   disabled?: boolean;
   noBackground?: boolean;
 }
+
+const gradientConfig = {
+  start: { x: 0, y: 0 },
+  end: { x: 1, y: 1 },
+};
 
 export const ConditionalBooleanQuestion: React.FC<ConditionalBooleanQuestionProps> = ({
   question,
@@ -47,45 +54,48 @@ export const ConditionalBooleanQuestion: React.FC<ConditionalBooleanQuestionProp
   const minLength = 20;
   const isTextValid = !isTextRequired || textValue.trim().length >= minLength;
 
+  const renderBooleanButton = (label: string, targetValue: boolean) => {
+    const isActive = booleanValue === targetValue;
+    const textStyle = [
+      styles.buttonText,
+      isActive && styles.buttonTextActive,
+      disabled && styles.buttonTextDisabled,
+    ];
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.button,
+          isActive && styles.buttonActive,
+          disabled && styles.buttonDisabled,
+        ]}
+        onPress={() => handleBooleanChange(targetValue)}
+        disabled={disabled}
+        activeOpacity={0.82}
+      >
+        {isActive ? (
+          <LinearGradient
+            colors={goldenGradient}
+            {...gradientConfig}
+            style={[styles.buttonInner, styles.buttonInnerActive]}
+          >
+            <Text style={textStyle}>{label}</Text>
+          </LinearGradient>
+        ) : (
+          <View style={styles.buttonInner}>
+            <Text style={textStyle}>{label}</Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={[styles.container, noBackground && styles.noBackground]}>
       {/* Boolean Buttons */}
       <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={[
-            styles.button,
-            booleanValue === true && styles.buttonActive,
-            disabled && styles.buttonDisabled
-          ]}
-          onPress={() => handleBooleanChange(true)}
-          disabled={disabled}
-        >
-          <Text style={[
-            styles.buttonText,
-            booleanValue === true && styles.buttonTextActive,
-            disabled && styles.buttonTextDisabled
-          ]}>
-            Yes
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.button,
-            booleanValue === false && styles.buttonActive,
-            disabled && styles.buttonDisabled
-          ]}
-          onPress={() => handleBooleanChange(false)}
-          disabled={disabled}
-        >
-          <Text style={[
-            styles.buttonText,
-            booleanValue === false && styles.buttonTextActive,
-            disabled && styles.buttonTextDisabled
-          ]}>
-            No
-          </Text>
-        </TouchableOpacity>
+        {renderBooleanButton('Yes', true)}
+        {renderBooleanButton('No', false)}
       </View>
 
       {/* Conditional Text Input */}
@@ -133,29 +143,39 @@ const styles = StyleSheet.create({
   },
   button: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: colors.inputBorder,
-    backgroundColor: colors.inputBackground,
-    alignItems: 'center',
-    justifyContent: 'center',
+    overflow: 'hidden',
   },
   buttonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    borderColor: createColorWithOpacity(colors.secondary, 0.6),
+    shadowColor: colors.secondary,
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   buttonDisabled: {
     opacity: 0.5,
   },
+  buttonInner: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: colors.inputBackground,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  buttonInnerActive: {
+    backgroundColor: 'transparent',
+  },
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.muted,
+    color: colors.text,
   },
   buttonTextActive: {
-    color: colors.text,
+    color: colors.primary,
   },
   buttonTextDisabled: {
     color: colors.muted,

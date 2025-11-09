@@ -24,12 +24,16 @@ interface FitnessJourneyMapProps {
   trainingPlan: TrainingPlan;
   currentWeek: number;
   onWeekSelect: (weekNumber: number) => void;
+  headerTitle?: string;
+  headerAccessory?: React.ReactNode;
 }
 
 const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
   trainingPlan,
   currentWeek,
   onWeekSelect,
+  headerTitle,
+  headerAccessory,
 }) => {
   const [weekNodes, setWeekNodes] = useState<WeekNodeData[]>([]);
   const [selectedWeekModal, setSelectedWeekModal] = useState<WeekModalData | null>(null);
@@ -150,7 +154,10 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
   return (
     <View style={styles.container}>
       {/* Journey Card Container with Header */}
-      <JourneyCardContainer title={trainingPlan?.title || 'YOUR JOURNEY'}>
+      <JourneyCardContainer
+        title={headerTitle || trainingPlan?.title || 'YOUR JOURNEY'}
+        headerAccessory={headerAccessory}
+      >
       {/* Scrollable Map */}
       <ScrollView
         style={styles.scrollView}

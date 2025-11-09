@@ -31,7 +31,7 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ username }) => {
             end={{ x: 1, y: 0 }}
             style={styles.greetingBadge}
           >
-            <Ionicons name={timeOfDayIcon} size={20} color={colors.text} />
+            <Ionicons name={timeOfDayIcon} size={20} color={colors.primary} />
             <Text style={styles.greeting}>Good {timeOfDay}</Text>
           </LinearGradient>
         </View>
@@ -50,12 +50,12 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ username }) => {
         activeOpacity={0.7}
       >
         <LinearGradient
-          colors={[createColorWithOpacity(colors.primary, 0.8), createColorWithOpacity(colors.primary, 0.6)]}
+          colors={[createColorWithOpacity(colors.secondary, 0.4), createColorWithOpacity(colors.secondary, 0.2)]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.settingsGradient}
         >
-          <Ionicons name="settings" size={18} color={colors.text} />
+          <Ionicons name="settings" size={18} color={colors.primary} />
         </LinearGradient>
       </TouchableOpacity>
     </View>
@@ -65,29 +65,34 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ username }) => {
 const getTimeOfDay = () => {
   const hour = new Date().getHours();
   
+  const gradient = [
+    createColorWithOpacity(colors.secondary, 0.4),
+    createColorWithOpacity(colors.secondary, 0.2),
+  ];
+
   if (hour >= 5 && hour < 12) {
     return {
       timeOfDay: 'Morning',
       timeOfDayIcon: 'sunny' as keyof typeof Ionicons.glyphMap,
-      gradientColors: [createColorWithOpacity('#FFD700', 0.3), createColorWithOpacity('#FFA500', 0.25)], // Softer golden
+      gradientColors: gradient,
     };
   } else if (hour >= 12 && hour < 17) {
     return {
       timeOfDay: 'Afternoon',
       timeOfDayIcon: 'partly-sunny' as keyof typeof Ionicons.glyphMap,
-      gradientColors: [createColorWithOpacity('#4DD0E1', 0.3), createColorWithOpacity('#00897B', 0.25)], // Softer teal
+      gradientColors: gradient,
     };
   } else if (hour >= 17 && hour < 22) {
     return {
       timeOfDay: 'Evening',
       timeOfDayIcon: 'moon' as keyof typeof Ionicons.glyphMap,
-      gradientColors: [createColorWithOpacity('#A78BFA', 0.3), createColorWithOpacity('#805AD5', 0.25)], // Softer purple
+      gradientColors: gradient,
     };
   } else {
     return {
       timeOfDay: 'Night',
       timeOfDayIcon: 'moon' as keyof typeof Ionicons.glyphMap,
-      gradientColors: [createColorWithOpacity('#6B7280', 0.3), createColorWithOpacity('#4B5563', 0.25)], // Softer grey
+      gradientColors: gradient,
     };
   }
 };

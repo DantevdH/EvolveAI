@@ -4,7 +4,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, useWindowDimensions, KeyboardAvoidingView, Platform } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { OnboardingCard } from '../../components/onboarding/OnboardingCard';
 import { OnboardingNavigation } from '../../components/onboarding/OnboardingNavigation';
@@ -101,18 +100,13 @@ export const ExperienceLevelStep: React.FC<ExperienceLevelStepProps> = ({
         activeOpacity={0.7}
       >
         {isSelected ? (
-          <LinearGradient
-            colors={[createColorWithOpacity(levelColor, 0.3), createColorWithOpacity(levelColor, 0.2)]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.compactOptionGradient}
-          >
+          <View style={[styles.compactOption, styles.compactOptionSelected, { borderColor: createColorWithOpacity(colors.secondary, 0.45) }]}>
             <View style={styles.compactOptionContent}>
-              <View style={styles.compactOptionIconWrapper}>
+              <View style={[styles.compactOptionIconWrapper, styles.compactOptionIconWrapperSelected]}>
                 <IconSymbol
                   name={iconName}
                   size={18}
-                  color={colors.text}
+                  color={colors.primary}
                 />
               </View>
               <View style={styles.compactOptionText}>
@@ -124,12 +118,8 @@ export const ExperienceLevelStep: React.FC<ExperienceLevelStepProps> = ({
                 </Text>
               </View>
             </View>
-            <IconSymbol
-              name="checkmark.circle.fill"
-              size={20}
-              color={colors.text}
-            />
-          </LinearGradient>
+            <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+          </View>
         ) : (
           <View style={styles.compactOption}>
             <View style={styles.compactOptionContent}>
@@ -137,7 +127,7 @@ export const ExperienceLevelStep: React.FC<ExperienceLevelStepProps> = ({
                 <IconSymbol
                   name={iconName}
                   size={18}
-                  color={levelColor}
+                  color={colors.primary}
                 />
               </View>
               <View style={styles.compactOptionText}>
@@ -171,15 +161,10 @@ export const ExperienceLevelStep: React.FC<ExperienceLevelStepProps> = ({
             {/* Experience Level Options - Gamified */}
             <View style={[styles.optionsContainer, { marginBottom: sectionSpacing }]}>
               <View style={styles.experienceHeader}>
-                <LinearGradient
-                  colors={[createColorWithOpacity(colors.primary, 0.3), createColorWithOpacity(colors.primary, 0.2)]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.experienceHeaderBadge}
-                >
-                  <Ionicons name="trophy" size={14} color={colors.text} />
+                <View style={styles.experienceHeaderBadge}>
+                  <Ionicons name="trophy" size={14} color={colors.primary} />
                   <Text style={styles.experienceLabel}>Experience Level</Text>
-                </LinearGradient>
+                </View>
               </View>
               <View style={styles.compactOptionsList}>
                 {experienceLevels.map(renderCompactOption)}
@@ -236,20 +221,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 999,
     alignSelf: 'flex-start',
     gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
   },
   experienceLabel: {
-    fontSize: 13,
+    fontSize: 10,
     fontWeight: '700',
-    color: colors.text,
-    letterSpacing: 0.5,
+    color: colors.primary,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   compactOptionsList: {
     gap: 10,
@@ -257,39 +241,26 @@ const styles = StyleSheet.create({
   compactOptionContainer: {
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
+    shadowColor: createColorWithOpacity(colors.text, 0.08),
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 3,
   },
   compactOption: {
-    backgroundColor: createColorWithOpacity(colors.text, 0.1),
+    backgroundColor: colors.card,
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderWidth: 1.5,
-    borderColor: createColorWithOpacity(colors.text, 0.15),
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.35),
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: 70,
   },
-  compactOptionGradient: {
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderWidth: 1.5,
-    borderColor: createColorWithOpacity(colors.primary, 0.4),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 70,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+  compactOptionSelected: {
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.18),
   },
   compactOptionContent: {
     flexDirection: 'row',
@@ -300,12 +271,16 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: createColorWithOpacity(colors.text, 0.15),
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.1),
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
     borderWidth: 1,
-    borderColor: createColorWithOpacity(colors.text, 0.2),
+    borderColor: createColorWithOpacity(colors.secondary, 0.25),
+  },
+  compactOptionIconWrapperSelected: {
+    backgroundColor: createColorWithOpacity(colors.card, 1),
+    borderColor: createColorWithOpacity(colors.secondary, 0.4),
   },
   compactOptionText: {
     flex: 1,
@@ -313,29 +288,28 @@ const styles = StyleSheet.create({
   compactOptionTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.primary,
     marginBottom: 4,
     letterSpacing: 0.2,
   },
   compactOptionTitleSelected: {
     fontSize: 15,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.primary,
     marginBottom: 4,
     letterSpacing: 0.2,
   },
   compactOptionDescription: {
     fontSize: 12,
-    color: colors.muted,
+    color: createColorWithOpacity(colors.primary, 0.65),
     lineHeight: 16,
     fontWeight: '400',
   },
   compactOptionDescriptionSelected: {
     fontSize: 12,
-    color: colors.text,
+    color: createColorWithOpacity(colors.primary, 0.75),
     lineHeight: 16,
     fontWeight: '500',
-    opacity: 0.9,
   },
   // Error Section - Gamified
   errorContainer: {

@@ -150,15 +150,15 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.overlay,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
+    shadowColor: createColorWithOpacity(colors.text, 0.08),
     shadowOffset: {
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 3,
     gap: 16
   },
   exercisesContainer: {

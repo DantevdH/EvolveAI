@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { colors, createColorWithOpacity } from '../../../constants/colors';
 import { PathSegment } from './pathGenerator';
 
@@ -19,60 +19,52 @@ interface CurvedRoadPathProps {
   width: number;
 }
 
+const gradientId = 'journeyRoadGradient';
+
+const STROKE_LOOKUP = {
+  completed: `url(#${gradientId}-completed)` as const,
+  current: `url(#${gradientId}-current)` as const,
+  locked: `url(#${gradientId}-locked)` as const,
+};
+
+const OPACITY_LOOKUP = {
+  completed: 1,
+  current: 1,
+  locked: 0.6,
+};
+
+const STROKE_WIDTH = 42;
+
 const CurvedRoadPath: React.FC<CurvedRoadPathProps> = ({ segments, height, width }) => {
-  // Lighter color of the card background (#1A1A26 -> #2A2A36)
-  const roadColor = '#2A2A36'; // Lighter shade of card background
-
-  const getSegmentOpacity = (status: 'completed' | 'current' | 'locked'): number => {
-    if (status === 'completed') {
-      return 0.9;
-    } else if (status === 'current') {
-      return 1.0; // Full brightness for current week
-    } else {
-      return 0.3; // Faded for locked
-    }
-  };
-
-  // Thick road width increased to accommodate larger nodes (35px)
-  const getStrokeWidth = (status: 'completed' | 'current' | 'locked'): number => {
-    return 42; // Increased from 26 to better accommodate 35px nodes
-  };
-
   return (
     <Svg height={height} width={width}>
-      {/* Render each segment with clean road styling */}
-      {segments.map(({ segment, status }, index) => {
-        const opacity = getSegmentOpacity(status);
-        const strokeWidth = getStrokeWidth(status);
+      <Defs>
+        <SvgLinearGradient id={`${gradientId}-completed`} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0%" stopColor={createColorWithOpacity(colors.secondary, 0.35)} stopOpacity="1" />
+          <Stop offset="100%" stopColor={createColorWithOpacity(colors.secondary, 0.15)} stopOpacity="1" />
+        </SvgLinearGradient>
+        <SvgLinearGradient id={`${gradientId}-current`} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0%" stopColor={createColorWithOpacity(colors.primary, 0.45)} stopOpacity="1" />
+          <Stop offset="100%" stopColor={createColorWithOpacity(colors.secondary, 0.25)} stopOpacity="1" />
+        </SvgLinearGradient>
+        <SvgLinearGradient id={`${gradientId}-locked`} x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0%" stopColor={createColorWithOpacity(colors.text, 0.18)} stopOpacity="1" />
+          <Stop offset="100%" stopColor={createColorWithOpacity(colors.text, 0.08)} stopOpacity="1" />
+        </SvgLinearGradient>
+      </Defs>
 
-        return (
-          <React.Fragment key={`segment-${segment.weekNumber}`}>
-            {/* Subtle shadow for depth - only on active segments */}
-            {status !== 'locked' && (
-              <Path
-                d={segment.pathData}
-                stroke={colors.card}
-                strokeWidth={strokeWidth + 3}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                fill="none"
-                opacity={0.15}
-              />
-            )}
-            
-            {/* Main road segment - lighter background color */}
-            <Path
-              d={segment.pathData}
-              stroke={roadColor}
-              strokeWidth={strokeWidth}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              fill="none"
-              opacity={opacity}
-            />
-          </React.Fragment>
-        );
-      })}
+      {segments.map(({ segment, status }) => (
+        <Path
+          key={`segment-${segment.weekNumber}`}
+          d={segment.pathData}
+          stroke={STROKE_LOOKUP[status]}
+          strokeWidth={STROKE_WIDTH}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+          opacity={OPACITY_LOOKUP[status]}
+        />
+      ))}
     </Svg>
   );
 };

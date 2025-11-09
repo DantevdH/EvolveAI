@@ -6,7 +6,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../../constants/colors';
+import { colors, createColorWithOpacity } from '../../../constants/colors';
 import { WeekNodeData } from './types';
 import { WeekNodeAnimations } from './WeekNodeAnimations';
 
@@ -16,16 +16,27 @@ interface WeekNodeProps {
   animations?: WeekNodeAnimations;
 }
 
+const STATUS_NODE_STYLE = {
+  completed: {
+    background: createColorWithOpacity(colors.secondary, 0.9),
+    text: colors.card,
+    border: createColorWithOpacity(colors.card, 0.65),
+  },
+  current: {
+    background: colors.primary,
+    text: colors.card,
+    border: createColorWithOpacity(colors.card, 0.65),
+  },
+  locked: {
+    background: createColorWithOpacity(colors.text, 0.1),
+    text: createColorWithOpacity(colors.text, 0.55),
+    border: createColorWithOpacity(colors.text, 0.12),
+  },
+};
+
 const WeekNode: React.FC<WeekNodeProps> = ({ node, onPress, animations }) => {
   const isCurrentWeek = node.status === 'current';
-  
-  // Node colors based on status
-  const nodeColor = 
-    node.status === 'completed' ? colors.tertiary :
-    node.status === 'current' ? colors.primary :
-    colors.muted;
-  
-  // Node size increased to 50px for better visibility
+  const statusStyle = STATUS_NODE_STYLE[node.status];
   const nodeSize = 50;
 
   return (
@@ -37,14 +48,21 @@ const WeekNode: React.FC<WeekNodeProps> = ({ node, onPress, animations }) => {
           top: node.y - nodeSize / 2,
           width: nodeSize,
           height: nodeSize,
-          backgroundColor: nodeColor,
+          backgroundColor: statusStyle.background,
         },
       ]}
       onPress={() => onPress(node)}
       activeOpacity={0.7}
     >
-      <View style={[styles.inner, { borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.7)' }]}>
-        {/* Subtle glow effect for current week */}
+      <View
+        style={[
+          styles.inner,
+          {
+            borderWidth: node.status === 'locked' ? 1 : 1.5,
+            borderColor: statusStyle.border,
+          },
+        ]}
+      >
         {isCurrentWeek && animations && (
           <Animated.View
             style={[
@@ -58,20 +76,18 @@ const WeekNode: React.FC<WeekNodeProps> = ({ node, onPress, animations }) => {
             ]}
           />
         )}
-        
-        <Text style={styles.weekNumber}>{node.weekNumber}</Text>
-        
-        {/* Badge for current week */}
+
+        <Text style={[styles.weekNumber, { color: statusStyle.text }]}>{node.weekNumber}</Text>
+
         {isCurrentWeek && (
-          <View style={styles.currentBadge}>
-            <Ionicons name="flash" size={12} color={colors.text} />
+          <View style={[styles.currentBadge, { backgroundColor: createColorWithOpacity(colors.secondary, 0.25) }] }>
+            <Ionicons name="flash" size={12} color={colors.primary} />
           </View>
         )}
-        
-        {/* Lock icon for locked weeks */}
+
         {node.status === 'locked' && (
           <View style={styles.lockIcon}>
-            <Ionicons name="lock-closed" size={14} color={colors.text} />
+            <Ionicons name="lock-closed" size={14} color={createColorWithOpacity(colors.text, 0.6)} />
           </View>
         )}
       </View>
@@ -85,12 +101,12 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 10, // Ensure nodes render on top of path
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 4,
+    zIndex: 10,
+    shadowColor: createColorWithOpacity(colors.tertiary, 0.14),
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 6,
   },
   inner: {
     width: '100%',
@@ -109,13 +125,11 @@ const styles = StyleSheet.create({
   weekNumber: {
     fontSize: 22,
     fontWeight: '700',
-    color: colors.text,
   },
   currentBadge: {
     position: 'absolute',
     top: -5,
     right: -5,
-    backgroundColor: colors.warning,
     borderRadius: 12,
     width: 24,
     height: 24,

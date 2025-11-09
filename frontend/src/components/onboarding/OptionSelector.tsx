@@ -2,9 +2,12 @@
  * Multiple choice selector component for onboarding
  */
 
-import React, { memo } from 'react';import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { memo } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '../../../components/ui/IconSymbol';
 import { colors } from '../../constants/designSystem';
+import { createColorWithOpacity, goldenGradient } from '../../constants/colors';
 
 export interface Option {
   value: string;
@@ -22,17 +25,21 @@ interface OptionSelectorProps {
   style?: any;
 }
 
+const gradientConfig = {
+  start: { x: 0, y: 0 },
+  end: { x: 1, y: 1 },
+};
+
 export const OptionSelector: React.FC<OptionSelectorProps> = memo(({
   options,
   selectedValues = [],
   onSelectionChange,
   multiple = false,
   columns = 2,
-  style
+  style,
 }) => {
-  // Ensure selectedValues is always an array
   const safeSelectedValues = Array.isArray(selectedValues) ? selectedValues : [];
-  
+
   const handleOptionPress = (optionValue: string) => {
     if (multiple) {
       const newSelection = safeSelectedValues.includes(optionValue)
@@ -44,56 +51,62 @@ export const OptionSelector: React.FC<OptionSelectorProps> = memo(({
     }
   };
 
-  const isSelected = (optionValue: string) => {
-    return safeSelectedValues.includes(optionValue);
-  };
+  const isSelected = (optionValue: string) => safeSelectedValues.includes(optionValue);
 
   const renderOption = (option: Option) => {
     const selected = isSelected(option.value);
-    
+
+    const content = (
+      <>
+        {option.icon && (
+          <IconSymbol
+            name={option.icon as any}
+            size={32}
+            color={selected ? colors.primary : colors.text}
+            style={styles.optionIcon}
+          />
+        )}
+
+        <Text style={[styles.optionTitle, selected && styles.optionTitleSelected]}>
+          {option.title}
+        </Text>
+
+        {option.description && (
+          <Text style={[styles.optionDescription, selected && styles.optionDescriptionSelected]}>
+            {option.description}
+          </Text>
+        )}
+
+        {selected && (
+          <View style={styles.selectedIndicator}>
+            <IconSymbol name="checkmark.circle.fill" size={20} color={colors.primary} />
+          </View>
+        )}
+      </>
+    );
+
     return (
       <TouchableOpacity
         key={option.value}
         style={[
           styles.optionCard,
+          { width: `${100 / columns - 4}%` },
           selected && styles.optionCardSelected,
-          { width: `${100 / columns - 4}%` }
         ]}
         onPress={() => handleOptionPress(option.value)}
-        activeOpacity={0.8}
+        activeOpacity={0.82}
       >
-        {option.icon && (
-          <IconSymbol
-            name={option.icon as any}
-            size={32}
-            color={selected ? colors.text : colors.primary}
-            style={styles.optionIcon}
-          />
-        )}
-        
-        <Text style={[
-          styles.optionTitle,
-          selected && styles.optionTitleSelected
-        ]}>
-          {option.title}
-        </Text>
-        
-        {option.description && (
-          <Text style={[
-            styles.optionDescription,
-            selected && styles.optionDescriptionSelected
-          ]}>
-            {option.description}
-          </Text>
-        )}
-        
-        {selected && (
-          <View style={styles.selectedIndicator}>
-            <IconSymbol
-              name="checkmark.circle.fill"
-              size={20}
-              color={colors.text}
-            />
+        {selected ? (
+          <LinearGradient
+            colors={goldenGradient}
+            {...gradientConfig}
+            style={[styles.optionInner, styles.optionInnerSelected]}
+          >
+            {content}
+          </LinearGradient>
+        ) : (
+          <View style={styles.optionInner}>
+            {content}
           </View>
         )}
       </TouchableOpacity>
@@ -109,7 +122,6 @@ export const OptionSelector: React.FC<OptionSelectorProps> = memo(({
   );
 });
 
-// Single selection variant
 interface SingleOptionSelectorProps {
   options: Option[];
   selectedValue: string;
@@ -123,21 +135,18 @@ export const SingleOptionSelector: React.FC<SingleOptionSelectorProps> = memo(({
   selectedValue,
   onSelectionChange,
   columns = 2,
-  style
-}) => {
-  return (
-    <OptionSelector
-      options={options}
-      selectedValues={selectedValue ? [selectedValue] : []}
-      onSelectionChange={(values) => onSelectionChange(values[0] || '')}
-      multiple={false}
-      columns={columns}
-      style={style}
-    />
-  );
-});
+  style,
+}) => (
+  <OptionSelector
+    options={options}
+    selectedValues={selectedValue ? [selectedValue] : []}
+    onSelectionChange={(values) => onSelectionChange(values[0] || '')}
+    multiple={false}
+    columns={columns}
+    style={style}
+  />
+));
 
-// List variant for single column
 interface OptionListProps {
   options: Option[];
   selectedValues?: string[];
@@ -151,11 +160,10 @@ export const OptionList: React.FC<OptionListProps> = ({
   selectedValues = [],
   onSelectionChange,
   multiple = false,
-  style
+  style,
 }) => {
-  // Ensure selectedValues is always an array
   const safeSelectedValues = Array.isArray(selectedValues) ? selectedValues : [];
-  
+
   const handleOptionPress = (optionValue: string) => {
     if (multiple) {
       const newSelection = safeSelectedValues.includes(optionValue)
@@ -167,60 +175,62 @@ export const OptionList: React.FC<OptionListProps> = ({
     }
   };
 
-  const isSelected = (optionValue: string) => {
-    return safeSelectedValues.includes(optionValue);
-  };
+  const isSelected = (optionValue: string) => safeSelectedValues.includes(optionValue);
 
   return (
     <View style={[styles.listContainer, style]}>
       {options.map((option) => {
         const selected = isSelected(option.value);
-        
-        return (
-          <TouchableOpacity
-            key={option.value}
-            style={[
-              styles.listOption,
-              selected && styles.listOptionSelected
-            ]}
-            onPress={() => handleOptionPress(option.value)}
-            activeOpacity={0.8}
-          >
+        const content = (
+          <>
             <View style={styles.listOptionContent}>
               {option.icon && (
                 <IconSymbol
                   name={option.icon as any}
                   size={24}
-                  color={selected ? colors.text : colors.primary}
+                  color={selected ? colors.primary : colors.text}
                   style={styles.listOptionIcon}
                 />
               )}
-              
+
               <View style={styles.listOptionText}>
-                <Text style={[
-                  styles.listOptionTitle,
-                  selected && styles.listOptionTitleSelected
-                ]}>
+                <Text style={[styles.listOptionTitle, selected && styles.listOptionTitleSelected]}>
                   {option.title}
                 </Text>
-                
+
                 {option.description && (
-                  <Text style={[
-                    styles.listOptionDescription,
-                    selected && styles.listOptionDescriptionSelected
-                  ]}>
+                  <Text style={[styles.listOptionDescription, selected && styles.listOptionDescriptionSelected]}>
                     {option.description}
                   </Text>
                 )}
               </View>
             </View>
-            
+
             {selected && (
-              <IconSymbol
-                name="checkmark.circle.fill"
-                size={24}
-                color={colors.text}
-              />
+              <IconSymbol name="checkmark.circle.fill" size={24} color={colors.primary} />
+            )}
+          </>
+        );
+
+        return (
+          <TouchableOpacity
+            key={option.value}
+            style={[styles.listOption, selected && styles.listOptionSelected]}
+            onPress={() => handleOptionPress(option.value)}
+            activeOpacity={0.82}
+          >
+            {selected ? (
+              <LinearGradient
+                colors={goldenGradient}
+                {...gradientConfig}
+                style={[styles.listOptionInner, styles.listOptionInnerSelected]}
+              >
+                {content}
+              </LinearGradient>
+            ) : (
+              <View style={styles.listOptionInner}>
+                {content}
+              </View>
             )}
           </TouchableOpacity>
         );
@@ -239,18 +249,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   optionCard: {
-    backgroundColor: colors.inputBackground,
     borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    marginBottom: 16,
     borderWidth: 1,
     borderColor: colors.inputBorder,
-    position: 'relative',
+    overflow: 'hidden',
+    marginBottom: 16,
+    backgroundColor: colors.inputBackground,
   },
   optionCardSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    borderColor: createColorWithOpacity(colors.secondary, 0.6),
+    shadowColor: colors.secondary,
+    shadowOpacity: 0.4,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  optionInner: {
+    padding: 16,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  optionInnerSelected: {
+    backgroundColor: 'transparent',
   },
   optionIcon: {
     marginBottom: 12,
@@ -263,7 +283,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   optionTitleSelected: {
-    color: colors.text,
+    color: colors.primary,
   },
   optionDescription: {
     fontSize: 12,
@@ -272,30 +292,40 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   optionDescriptionSelected: {
-    color: colors.text,
+    color: colors.primary,
   },
   selectedIndicator: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 10,
+    right: 10,
   },
   listContainer: {
     flex: 1,
   },
   listOption: {
-    backgroundColor: colors.inputBackground,
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
     borderWidth: 1,
     borderColor: colors.inputBorder,
+    overflow: 'hidden',
+    marginBottom: 12,
+    backgroundColor: colors.inputBackground,
+  },
+  listOptionSelected: {
+    borderColor: createColorWithOpacity(colors.secondary, 0.6),
+    shadowColor: colors.secondary,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  listOptionInner: {
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  listOptionSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+  listOptionInnerSelected: {
+    backgroundColor: 'transparent',
   },
   listOptionContent: {
     flexDirection: 'row',
@@ -315,7 +345,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   listOptionTitleSelected: {
-    color: colors.text,
+    color: colors.primary,
   },
   listOptionDescription: {
     fontSize: 14,
@@ -323,6 +353,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   listOptionDescriptionSelected: {
-    color: colors.text,
+    color: colors.primary,
   },
 });

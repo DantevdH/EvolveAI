@@ -7,13 +7,12 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, createColorWithOpacity } from '../../constants/colors';
+import { colors, createColorWithOpacity, goldenGradient } from '../../constants/colors';
 
 interface StatData {
   title: string;
   value: string;
   subtitle: string;
-  color: string;
   icon: keyof typeof Ionicons.glyphMap;
 }
 
@@ -50,21 +49,18 @@ export const ProgressSummary: React.FC<ProgressSummaryProps> = ({
       title: 'Streak',
       value: streak.toString(),
       subtitle: 'days',
-      color: colors.primary,
       icon: 'flame',
     },
     {
       title: 'This Week',
       value: weeklyTrainings.toString(),
       subtitle: 'trainings',
-      color: colors.tertiary,
       icon: 'calendar',
     },
     {
       title: 'Weeks',
       value: weeksCompleted.toString(),
       subtitle: 'completed',
-      color: colors.secondary,
       icon: 'checkmark-circle',
     },
   ];
@@ -90,11 +86,9 @@ const StatCard: React.FC<StatCardProps> = ({
   title,
   value,
   subtitle,
-  color,
   icon,
   cardWidth,
 }) => {
-  // Calculate responsive font sizes based on card width
   const fontSize = useMemo(() => {
     if (cardWidth < 100) {
       return { title: 9, value: 14, subtitle: 8, icon: 10 };
@@ -105,53 +99,58 @@ const StatCard: React.FC<StatCardProps> = ({
     }
   }, [cardWidth]);
 
-  // Get gradient colors based on card type - using only color template
-  const getGradientColors = () => {
-    if (title === 'Streak') {
-      return [createColorWithOpacity(colors.primary, 0.4), createColorWithOpacity(colors.primary, 0.35)]; // Primary red
-    } else if (title === 'This Week') {
-      return [createColorWithOpacity(colors.tertiary, 0.4), createColorWithOpacity(colors.tertiary, 0.35)]; // Tertiary teal
-    } else {
-      return [createColorWithOpacity(colors.secondary, 0.4), createColorWithOpacity(colors.secondary, 0.35)]; // Secondary blue
-    }
-  };
+  const iconBadgeBackground = createColorWithOpacity(colors.secondary, 0.18);
+  const iconBadgeBorder = createColorWithOpacity(colors.secondary, 0.35);
+  const primaryTextColor = colors.primary;
+  const secondaryTextColor = createColorWithOpacity(colors.primary, 0.65);
 
   return (
-    <View style={[styles.statCard, { width: cardWidth }]}>
+    <View style={[styles.statCard, { width: cardWidth }]}> 
       <LinearGradient
-        colors={getGradientColors()}
+        colors={goldenGradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.gradientBackground}
       >
-        {/* Icon Badge */}
-        <View style={styles.iconBadge}>
-          <Ionicons name={icon} size={fontSize.icon + 4} color={colors.text} />
+        <View
+          style={[styles.iconBadge, {
+            backgroundColor: iconBadgeBackground,
+            borderColor: iconBadgeBorder,
+          }]}
+        >
+          <Ionicons
+            name={icon}
+            size={fontSize.icon + 4}
+            color={primaryTextColor}
+          />
         </View>
-        
-        {/* Value - Large and prominent */}
-        <Text 
-          style={[styles.statValue, { fontSize: fontSize.value + 4 }]} 
+
+        <Text
+          style={[styles.statValue, {
+            fontSize: fontSize.value + 4,
+            color: primaryTextColor,
+          }]}
           numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.6}
         >
           {value}
         </Text>
-        
-        {/* Title and Subtitle */}
+
         <View style={styles.statTextContainer}>
-          <Text 
-            style={[styles.statTitle, { fontSize: fontSize.title }]} 
-            numberOfLines={1} 
-            ellipsizeMode="tail"
+          <Text
+            style={[styles.statTitle, {
+              fontSize: fontSize.title,
+              color: primaryTextColor,
+            }]}
+            numberOfLines={1}
           >
             {title}
           </Text>
-          <Text 
-            style={[styles.statSubtitle, { fontSize: fontSize.subtitle }]} 
+          <Text
+            style={[styles.statSubtitle, {
+              fontSize: fontSize.subtitle,
+              color: secondaryTextColor,
+            }]}
             numberOfLines={1}
-            ellipsizeMode="tail"
           >
             {subtitle}
           </Text>
@@ -172,13 +171,15 @@ const styles = StyleSheet.create({
   statCard: {
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: colors.card, // Base background for gradient overlay
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
-    minWidth: 80, // Absolute minimum for very small screens
+    backgroundColor: colors.card,
+    shadowColor: createColorWithOpacity(colors.tertiary, 0.08),
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
+    minWidth: 80,
   },
   gradientBackground: {
     alignItems: 'center',
@@ -191,12 +192,10 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: createColorWithOpacity(colors.text, 0.15),
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
     borderWidth: 1.5,
-    borderColor: createColorWithOpacity(colors.text, 0.2),
   },
   statTextContainer: {
     alignItems: 'center',
@@ -205,7 +204,6 @@ const styles = StyleSheet.create({
   },
   statTitle: {
     fontWeight: '700',
-    color: colors.text,
     textAlign: 'center',
     includeFontPadding: false,
     textAlignVertical: 'center',
@@ -213,15 +211,12 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontWeight: '800',
-    color: colors.text,
     textAlign: 'center',
     width: '100%',
     includeFontPadding: false,
     textAlignVertical: 'center',
   },
   statSubtitle: {
-    color: colors.text,
-    opacity: 0.9,
     textAlign: 'center',
     width: '100%',
     includeFontPadding: false,
@@ -229,3 +224,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+export default ProgressSummary;

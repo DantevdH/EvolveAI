@@ -52,8 +52,8 @@ export default function FloatingTabBar() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const bottomPadding = Platform.OS === 'ios' ? Math.max(insets.bottom, 20) : 12;
-  const totalHeight = Platform.OS === 'ios' ? 110 + bottomPadding - 20 : 96;
+  const bottomPadding = Platform.OS === 'ios' ? Math.max(insets.bottom, 16) : 10;
+  const totalHeight = Platform.OS === 'ios' ? 96 + bottomPadding - 20 : 88;
 
   const isFocused = (route: string) => {
     // Normalize both paths by removing trailing slashes

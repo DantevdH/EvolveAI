@@ -6,6 +6,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, createColorWithOpacity } from '../../../constants/colors';
 import { WeekdayButtonProps } from './types';
 
@@ -16,62 +17,99 @@ const WeekdayButton: React.FC<WeekdayButtonProps> = ({ day, index, onPress }) =>
   const isRestDay = day.isRestDay;
   const isToday = day.isToday;
 
-  // Determine button size and style
-  const buttonSize = isSelected ? 42 : 36;
-  
-  // Determine colors
-  let buttonColor: string = createColorWithOpacity(colors.primary, 0.3);
-  let borderColor: string = colors.border;
-  let iconColor = colors.text;
-  
+  const buttonSize = isSelected ? 44 : 38;
+  const innerPadding = 4;
+
+  const baseGradient: [string, string] = [
+    createColorWithOpacity(colors.secondary, 0.24),
+    createColorWithOpacity(colors.secondary, 0.12),
+  ];
+  const selectedGradient: [string, string] = [
+    createColorWithOpacity(colors.primary, 0.9),
+    createColorWithOpacity(colors.primary, 0.7),
+  ];
+  const completedGradient: [string, string] = [
+    createColorWithOpacity(colors.primary, 0.85),
+    createColorWithOpacity(colors.primary, 0.6),
+  ];
+  const restGradient: [string, string] = [
+    createColorWithOpacity(colors.purple, 0.5),
+    createColorWithOpacity(colors.purple, 0.3),
+  ];
+
+  let ringGradient: [string, string] = baseGradient;
+  let innerBackground = colors.card;
+  let iconColor = colors.primary;
+
+  if (isSelected) {
+    ringGradient = selectedGradient;
+    innerBackground = createColorWithOpacity(colors.primary, 0.12);
+    iconColor = '#FFFFFF';
+  }
+
   if (isCompleted && !isRestDay) {
-    buttonColor = colors.tertiary;
-    borderColor = colors.tertiary;
-  } else if (isSelected) {
-    buttonColor = colors.primary;
-    borderColor = colors.primary;
-  } else if (isRestDay) {
-    buttonColor = createColorWithOpacity(colors.purple, 0.6);
-    borderColor = createColorWithOpacity(colors.purple, 0.8);
+    ringGradient = completedGradient;
+    innerBackground = createColorWithOpacity(colors.primary, 0.15);
+    iconColor = '#FFFFFF';
+  }
+
+  if (isRestDay) {
+    ringGradient = restGradient;
+    innerBackground = createColorWithOpacity(colors.purple, 0.15);
+    iconColor = '#FFFFFF';
   }
 
   return (
     <View style={styles.weekdayButtonWrapper}>
-      <TouchableOpacity
-        style={[
-          styles.weekdayButton,
-          {
-            width: buttonSize,
-            height: buttonSize,
-            backgroundColor: buttonColor,
-            borderColor: borderColor,
-            borderWidth: isSelected ? 3 : 2,
-          },
-          isSelected && styles.weekdayButtonSelected,
-        ]}
-        onPress={onPress}
-      >
-        {isRestDay ? (
-          <Ionicons name="moon" size={isSelected ? 16 : 14} color={iconColor} />
-        ) : isCompleted ? (
-          <Ionicons name="checkmark" size={isSelected ? 18 : 16} color={colors.text} />
-        ) : (
-          <Ionicons name="radio-button-on" size={isSelected ? 18 : 16} color={iconColor} />
-        )}
+      <TouchableOpacity activeOpacity={0.85} onPress={onPress}>
+        <LinearGradient
+          colors={ringGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[
+            styles.weekdayButton,
+            {
+              width: buttonSize,
+              height: buttonSize,
+              borderRadius: buttonSize / 2,
+            },
+            isSelected && styles.weekdayButtonSelected,
+          ]}
+        >
+          <View
+            style={[
+              styles.innerCircle,
+              {
+                width: buttonSize - innerPadding * 2,
+                height: buttonSize - innerPadding * 2,
+                borderRadius: (buttonSize - innerPadding * 2) / 2,
+                backgroundColor: innerBackground,
+              },
+            ]}
+          >
+            {isRestDay ? (
+              <Ionicons name="moon" size={isSelected ? 16 : 14} color={iconColor} />
+            ) : isCompleted ? (
+              <Ionicons name="checkmark" size={isSelected ? 18 : 16} color={'#FFFFFF'} />
+            ) : (
+              <Ionicons name="radio-button-on" size={isSelected ? 18 : 16} color={iconColor} />
+            )}
+          </View>
+        </LinearGradient>
       </TouchableOpacity>
-      
-      {/* Today Indicator */}
+
       {isToday && !isCompleted && (
         <View style={styles.todayBadge}>
           <Ionicons name="flame" size={10} color={colors.warning} />
         </View>
       )}
-      
-      {/* Day Label */}
-      <Text style={[
-        styles.dayLabel,
-        isSelected && styles.dayLabelSelected
-      ]}>
+
+      <Text
+        style={[
+          styles.dayLabel,
+          isSelected && styles.dayLabelSelected
+        ]}
+      >
         {dayName}
       </Text>
     </View>
@@ -84,22 +122,22 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   weekdayButton: {
-    borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.overlay,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowColor: createColorWithOpacity(colors.text, 0.12),
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowRadius: 6,
     elevation: 4,
   },
   weekdayButtonSelected: {
-    shadowOpacity: 0.5,
-    shadowRadius: 12,
-    elevation: 10,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 9,
+  },
+  innerCircle: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   todayBadge: {
     position: 'absolute',
@@ -117,12 +155,12 @@ const styles = StyleSheet.create({
   dayLabel: {
     fontSize: 10,
     fontWeight: '500',
-    color: colors.muted,
+    color: createColorWithOpacity(colors.text, 0.55),
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   dayLabelSelected: {
-    color: colors.text,
+    color: colors.primary,
     fontWeight: '600',
   },
 });

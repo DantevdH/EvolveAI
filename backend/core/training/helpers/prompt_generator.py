@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 from core.training.schemas.question_schemas import PersonalInfo, AIQuestion
 
-SAVE_PROMPTS = True
+SAVE_PROMPTS = False
 
 def _save_prompt_to_file(prompt_name: str, prompt_content: str):
     """

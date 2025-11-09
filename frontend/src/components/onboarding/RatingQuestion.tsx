@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { AIQuestion } from '../../types/onboarding';
 import { colors } from '../../constants/designSystem';
+import { createColorWithOpacity, goldenGradient } from '../../constants/colors';
 
 interface RatingQuestionProps {
   question: AIQuestion;
@@ -11,6 +13,11 @@ interface RatingQuestionProps {
   disabled?: boolean;
   noBackground?: boolean;
 }
+
+const gradientConfig = {
+  start: { x: 0, y: 0 },
+  end: { x: 1, y: 1 },
+};
 
 export const RatingQuestion: React.FC<RatingQuestionProps> = ({
   question,
@@ -92,6 +99,31 @@ export const RatingQuestion: React.FC<RatingQuestionProps> = ({
     const isSelected = value === rating;
     const description = getRatingDescription(rating);
 
+    const content = (
+      <>
+        <Text
+          style={[
+            styles.ratingNumber,
+            isSelected && styles.ratingNumberSelected,
+            disabled && styles.ratingNumberDisabled,
+          ]}
+        >
+          {rating}
+        </Text>
+        {description && (
+          <Text
+            style={[
+              styles.ratingDescription,
+              isSelected && styles.ratingDescriptionSelected,
+              disabled && styles.ratingDescriptionDisabled,
+            ]}
+          >
+            {description}
+          </Text>
+        )}
+      </>
+    );
+
     return (
       <TouchableOpacity
         key={rating}
@@ -102,23 +134,20 @@ export const RatingQuestion: React.FC<RatingQuestionProps> = ({
         ]}
         onPress={() => handleRatingPress(rating)}
         disabled={disabled}
-        activeOpacity={0.8}
+        activeOpacity={0.82}
       >
-        <Text style={[
-          styles.ratingNumber,
-          isSelected && styles.ratingNumberSelected,
-          disabled && styles.ratingNumberDisabled,
-        ]}>
-          {rating}
-        </Text>
-        {description && (
-          <Text style={[
-            styles.ratingDescription,
-            isSelected && styles.ratingDescriptionSelected,
-            disabled && styles.ratingDescriptionDisabled,
-          ]}>
-            {description}
-          </Text>
+        {isSelected ? (
+          <LinearGradient
+            colors={goldenGradient}
+            {...gradientConfig}
+            style={[styles.ratingButtonInner, styles.ratingButtonInnerSelected]}
+          >
+            {content}
+          </LinearGradient>
+        ) : (
+          <View style={styles.ratingButtonInner}>
+            {content}
+          </View>
         )}
       </TouchableOpacity>
     );
@@ -170,23 +199,33 @@ const styles = StyleSheet.create({
   },
   ratingButton: {
     flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 8,
     marginHorizontal: 2,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.inputBorder,
+    overflow: 'hidden',
     backgroundColor: colors.inputBackground,
-    minHeight: 60,
   },
   ratingButtonSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-    borderWidth: 2,
+    borderColor: createColorWithOpacity(colors.secondary, 0.6),
+    shadowColor: colors.secondary,
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
   ratingButtonDisabled: {
-    opacity: 0.5,
+    opacity: 0.55,
+  },
+  ratingButtonInner: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    minHeight: 60,
+    justifyContent: 'center',
+  },
+  ratingButtonInnerSelected: {
+    backgroundColor: 'transparent',
   },
   ratingNumber: {
     fontSize: 20,
@@ -195,7 +234,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   ratingNumberSelected: {
-    color: colors.text,
+    color: colors.primary,
     fontSize: 22,
   },
   ratingNumberDisabled: {
@@ -208,7 +247,7 @@ const styles = StyleSheet.create({
     lineHeight: 13,
   },
   ratingDescriptionSelected: {
-    color: colors.text,
+    color: colors.primary,
     fontWeight: '600',
   },
   ratingDescriptionDisabled: {

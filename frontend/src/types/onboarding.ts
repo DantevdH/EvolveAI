@@ -31,6 +31,7 @@ export interface AIQuestion {
   min_description?: string;
   max_description?: string;
   order?: number; // Display order for this question (1-based, lower numbers appear first)
+  required?: boolean;
 }
 
 export interface AIQuestionResponse {
@@ -108,13 +109,15 @@ export interface OnboardingState {
   initialQuestionsLoading: boolean;
   currentInitialQuestionIndex: number;
   initialAiMessage?: string; // AI message for initial questions
-  
+  initialIntroShown: boolean;
+ 
   // Step 6: Follow-up Questions
   followUpQuestions: AIQuestion[];
   followUpResponses: Map<string, any>;
   followUpQuestionsLoading: boolean;
   currentFollowUpQuestionIndex: number;
   followUpAiMessage?: string; // AI message for follow-up questions
+  followUpIntroShown: boolean;
   
   // Step 7: Plan Generation
   planGenerationLoading: boolean;
@@ -122,9 +125,6 @@ export interface OnboardingState {
   completionMessage: string | null; // AI completion message after plan generation
   hasSeenCompletionMessage: boolean; // Track if user has seen the completion message
   error: string | null;
-  aiHasQuestions: boolean;
-  aiAnalysisPhase: 'initial' | 'followup' | 'generation' | null;
-  
   // Plan metadata for feedback updates
   planMetadata?: {
     exerciseInfo?: string;
@@ -266,20 +266,9 @@ export interface QuestionsStepProps extends OnboardingStepProps {
   onResponseChange: (questionId: string, value: any) => void;
   currentQuestionIndex: number;
   totalQuestions: number;
-  isLoading: boolean;
   stepTitle: string;
   username?: string;
   aiMessage?: string; // AI message from backend
-}
-
-export interface PlanGenerationStepProps {
-  isLoading: boolean;
-  error?: string;
-  onRetry: () => void;
-  onStartGeneration?: () => void;
-  username?: string;
-  isCompleted?: boolean;
-  completionMessage?: string;
-  onContinue?: () => void;
-  onViewPlan?: () => void;
+  introAlreadyCompleted?: boolean;
+  onIntroComplete?: () => void;
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { IconSymbol } from '../../../components/ui/IconSymbol';
 import { colors } from '../../constants/designSystem';
 import { createColorWithOpacity } from '../../constants/colors';
@@ -52,22 +53,21 @@ export const OnboardingButton: React.FC<OnboardingButtonProps> = ({
       case 'secondary':
         return colors.text;
       default:
-        return colors.text;
+        return colors.primary;
     }
   };
 
-  // For primary button, use gradient with same opacity as feature cards (both enabled and disabled)
   if (variant === 'primary') {
     const gradientColors = disabled
-      ? [createColorWithOpacity(colors.primary, 0.15), createColorWithOpacity(colors.primary, 0.1)] // Lower opacity when disabled
-      : [createColorWithOpacity(colors.primary, 0.3), createColorWithOpacity(colors.primary, 0.2)]; // Normal opacity when enabled
-    
+      ? [createColorWithOpacity(colors.secondary, 0.2), createColorWithOpacity(colors.secondary, 0.1)]
+      : [createColorWithOpacity(colors.secondary, 0.35), createColorWithOpacity(colors.secondary, 0.15)];
+
     return (
       <TouchableOpacity
         style={[styles.button, style]}
         onPress={onPress}
         disabled={disabled}
-        activeOpacity={0.7}
+        activeOpacity={0.85}
       >
         <LinearGradient
           colors={gradientColors}
@@ -78,10 +78,10 @@ export const OnboardingButton: React.FC<OnboardingButtonProps> = ({
           <View style={styles.buttonContent}>
             <Text style={getTextStyle()} numberOfLines={1}>{title}</Text>
             {icon && (
-              <IconSymbol 
-                name={icon} 
-                size={16} 
-                color={getIconColor()} 
+              <Ionicons
+                name={icon as keyof typeof Ionicons.glyphMap}
+                size={16}
+                color={getIconColor()}
               />
             )}
           </View>
@@ -98,11 +98,7 @@ export const OnboardingButton: React.FC<OnboardingButtonProps> = ({
     >
       <View style={styles.buttonContent}>
         {variant === 'back' && (
-          <IconSymbol 
-            name="arrow.left.circle.fill" 
-            size={16} 
-            color={getIconColor()} 
-          />
+          <Ionicons name="arrow-back" size={16} color={getIconColor()} />
         )}
         <Text style={getTextStyle()} numberOfLines={1}>{title}</Text>
         {icon && variant !== 'back' && (
@@ -121,7 +117,7 @@ const styles = StyleSheet.create({
   button: {
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 14,
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -131,11 +127,13 @@ const styles = StyleSheet.create({
   gradientButton: {
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 14,
     width: '100%',
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
   },
   buttonContent: {
     flexDirection: 'row',
@@ -152,28 +150,29 @@ const styles = StyleSheet.create({
   },
   // Primary Button
   primaryButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: 'transparent',
   },
   primaryButtonText: {
-    color: colors.text,
+    color: colors.primary,
+    letterSpacing: 0.4,
   },
   // Secondary Button
   secondaryButton: {
-    backgroundColor: colors.inputBackground,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: colors.inputBorder,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
   },
   secondaryButtonText: {
-    color: colors.text,
+    color: colors.primary,
   },
   // Back Button
   backButton: {
-    backgroundColor: colors.inputBackground,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: colors.inputBorder,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
   },
   backButtonText: {
-    color: colors.text,
+    color: colors.primary,
   },
   // Disabled State - handled by gradient opacity, no separate style needed
   buttonDisabled: {

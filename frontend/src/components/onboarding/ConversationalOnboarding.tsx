@@ -6,25 +6,30 @@ import { PersonalInfoStep } from '../../screens/onboarding/PersonalInfoStep';
 import { GoalDescriptionStep } from '../../screens/onboarding/GoalDescriptionStep';
 import { ExperienceLevelStep } from '../../screens/onboarding/ExperienceLevelStep';
 import { QuestionsStep } from '../../screens/onboarding/QuestionsStep';
-import { PlanGenerationStep } from '../../screens/onboarding/PlanGenerationStep';
 import PlanPreviewStep from '../../screens/onboarding/PlanPreviewStep';
+import { ProgressOverlay } from './ProgressOverlay';
 import { ErrorDisplay } from '../ui/ErrorDisplay';
 import { trainingService } from '../../services/onboardingService';
-import { 
-  OnboardingState, 
-  PersonalInfo, 
+import {
+  OnboardingState,
+  PersonalInfo,
   AIQuestion,
 } from '../../types/onboarding';
 import { useAuth } from '../../context/AuthContext';
+import { useProgressOverlay } from '../../hooks/useProgressOverlay';
 import { supabase } from '../../config/supabase';
-import { UserService } from '../../services/userService';
 import { cleanUserProfileForResume, isValidFormattedResponse } from '../../utils/validation';
 import { logStep, logData, logError, logNavigation } from '../../utils/logger';
+
+const introTracker = {
+  initial: false,
+  followup: false,
+};
 
 interface ConversationalOnboardingProps {
   onComplete: (trainingPlan: any) => Promise<void>;
   onError: (error: string) => void;
-  startFromStep?: 'welcome' | 'initial' | 'followup' | 'generation';
+  startFromStep?: 'welcome' | 'initial' | 'followup';
 }
 
 export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> = ({
@@ -47,41 +52,37 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     initialQuestionsLoading: false,
     currentInitialQuestionIndex: 0,
     initialAiMessage: undefined,
+    initialIntroShown: introTracker.initial,
     followUpQuestions: [],
     followUpResponses: new Map(),
     followUpQuestionsLoading: false,
     currentFollowUpQuestionIndex: 0,
     followUpAiMessage: undefined,
+    followUpIntroShown: introTracker.followup,
     planGenerationLoading: false,
     trainingPlan: null,
     completionMessage: null,
     hasSeenCompletionMessage: false,
     error: null,
-    aiHasQuestions: false,
-    aiAnalysisPhase: null,
     planMetadata: undefined,
   });
+
+  const { progressState, runWithProgress } = useProgressOverlay();
 
   // Add retry state for error recovery
   const [retryCount, setRetryCount] = useState(0);
   const [retryStep, setRetryStep] = useState<string | null>(null);
   const MAX_RETRIES = 3;
 
-  // Configurable AI thinking delays (can be made environment-specific)
-  const AI_DELAYS = {
-    initialQuestions: 2000,    // 2 seconds for initial questions
-    followUpQuestions: 2000,   // 2 seconds for follow-up questions
-    planGeneration: 3000,      // 3 seconds for final plan generation
-  };
-
   // Determine starting step - either from prop or default to welcome
   const initialStep = startFromStep || 'welcome';
-  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial' | 'followup' | 'generation' | 'preview'>(initialStep);
+  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial' | 'followup' | 'preview'>(initialStep);
 
   // Track if we've initialized from profile (run only once per component mount)
   const hasInitializedFromProfileRef = useRef(false);
 
   // Initialize state based on existing user profile when starting from specific steps
+  // IMPORTANT: Only runs ONCE on mount to prevent re-initialization when profile updates
   useEffect(() => {
     // Only run once per component mount
     if (hasInitializedFromProfileRef.current) {
@@ -105,8 +106,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         setCurrentStep('initial');
       } else if (startFromStep === 'followup') {
         setCurrentStep('followup');
-      } else if (startFromStep === 'generation') {
-        setCurrentStep('generation');
       }
       
       // Initialize with cleaned and validated profile data
@@ -139,11 +138,14 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         // Load AI messages from database
         initialAiMessage: cleanedProfile.initial_ai_message,
         followUpAiMessage: cleanedProfile.follow_up_ai_message,
+        initialIntroShown: introTracker.initial,
+        followUpIntroShown: introTracker.followup,
       }));
       
       console.log(`📍 Onboarding Resume: Starting from ${startFromStep} - Initial: ${cleanedProfile.initial_questions?.length || 0} questions, Follow-up: ${cleanedProfile.follow_up_questions?.length || 0} questions, Initial AI Message: ${cleanedProfile.initial_ai_message?.substring(0, 50) || 'NONE'}`);
     }
-  }, [authState.userProfile, startFromStep, onError]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ Empty deps - only run on mount, ref prevents duplicate runs
 
   // Check if user has a plan but hasn't accepted it yet - show preview step
   useEffect(() => {
@@ -186,7 +188,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   // Track if we've already triggered loading for each step
   const hasTriggeredInitialQuestionsRef = useRef(false);
   const hasTriggeredFollowUpQuestionsRef = useRef(false);
-  const hasTriggeredPlanGenerationRef = useRef(false);
   const previousStepRef = useRef<string | null>(null);
 
   // Reset trigger flags ONLY when step changes (not on every render)
@@ -196,8 +197,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         hasTriggeredInitialQuestionsRef.current = false;
       } else if (currentStep === 'followup') {
         hasTriggeredFollowUpQuestionsRef.current = false;
-      } else if (currentStep === 'generation') {
-        hasTriggeredPlanGenerationRef.current = false;
       }
       previousStepRef.current = currentStep;
     }
@@ -205,213 +204,133 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   // Load questions when step changes to 'initial'
   useEffect(() => {
-    if (currentStep === 'initial' && 
-        state.initialQuestions.length === 0 && 
-        !state.initialQuestionsLoading && 
+    if (currentStep === 'initial' &&
+        state.initialQuestions.length === 0 &&
+        !state.initialQuestionsLoading &&
         !hasTriggeredInitialQuestionsRef.current) {
       hasTriggeredInitialQuestionsRef.current = true;
       loadInitialQuestions();
     }
-  }, [currentStep, state.initialQuestions.length, state.initialQuestionsLoading]);
+  }, [currentStep, state.initialQuestions.length, state.initialQuestionsLoading, loadInitialQuestions]);
 
   // Load follow-up questions when step changes to 'followup'
   useEffect(() => {
-    if (currentStep === 'followup' && 
-        state.followUpQuestions.length === 0 && 
-        !state.followUpQuestionsLoading && 
+    if (currentStep === 'followup' &&
+        state.followUpQuestions.length === 0 &&
+        !state.followUpQuestionsLoading &&
         !hasTriggeredFollowUpQuestionsRef.current) {
       hasTriggeredFollowUpQuestionsRef.current = true;
       loadFollowUpQuestions();
     }
-  }, [currentStep, state.followUpQuestions.length, state.followUpQuestionsLoading]);
+  }, [currentStep, state.followUpQuestions.length, state.followUpQuestionsLoading, loadFollowUpQuestions]);
 
-  // Auto-trigger plan generation when we have all required data
-  useEffect(() => {
-    if (currentStep === 'generation' && 
-        state.personalInfo && 
-        !state.planGenerationLoading && 
-        !state.trainingPlan && 
-        !state.error &&
-        !hasTriggeredPlanGenerationRef.current) {
-      console.log('🚀 Auto-triggering plan generation with complete state');
-      hasTriggeredPlanGenerationRef.current = true;
-      handlePlanGeneration();
+  const planGenerationInProgressRef = useRef(false);
+
+  const handlePlanGeneration = useCallback(async () => {
+    if (planGenerationInProgressRef.current) {
+      return;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep, state.personalInfo, state.planGenerationLoading, state.trainingPlan, state.error]);
 
-  // Track plan generation in progress to prevent race conditions
-  const planGenerationRef = useRef<{ inProgress: boolean; timeoutId?: ReturnType<typeof setTimeout> }>({ inProgress: false });
-
-  // Handle plan generation (extracted from handleOutlineNext)
-  const handlePlanGeneration = useCallback(() => {
-    logStep('Plan Generation', 'started');
-    
     if (!state.personalInfo) {
       logError('Plan Generation: Missing personal info');
       return;
     }
 
-    // Prevent duplicate calls
-    if (planGenerationRef.current.inProgress) {
-      logError('Plan Generation: Already in progress');
-      return;
-    }
+    planGenerationInProgressRef.current = true;
 
-    setState(prev => ({ 
-      ...prev, 
+    setState(prev => ({
+      ...prev,
       planGenerationLoading: true,
-      aiAnalysisPhase: 'generation'
     }));
 
-    // Mark as in progress
-    planGenerationRef.current.inProgress = true;
-  }, [state.personalInfo]);
+    try {
+      const jwtToken = authState.session?.access_token;
+      if (!jwtToken) {
+        throw new Error('JWT token is missing - cannot generate training plan');
+      }
 
-  // useEffect to handle plan generation with proper cleanup
-  useEffect(() => {
-    if (!state.planGenerationLoading || !planGenerationRef.current.inProgress) {
-      return;
-    }
+      const effectiveUserProfileId = authState.userProfile?.id;
+      if (!effectiveUserProfileId) {
+        throw new Error('User profile not found. Please complete initial questions first.');
+      }
 
-    // Clear any existing timeout
-    if (planGenerationRef.current.timeoutId) {
-      clearTimeout(planGenerationRef.current.timeoutId);
-    }
+      const fullPersonalInfo = {
+        ...state.personalInfo,
+        username: state.username,
+        goal_description: state.goalDescription,
+        experience_level: state.experienceLevel,
+      };
 
-    // Set timeout for AI thinking simulation
-    const timeoutId = setTimeout(async () => {
-      try {
-        // Check if component is still mounted and still in loading state
-        if (!planGenerationRef.current.inProgress) {
-          return;
-        }
+      const initialResponsesObject = Object.fromEntries(state.initialResponses);
+      const followUpResponsesObject = Object.fromEntries(state.followUpResponses);
 
-        // Get JWT token from AuthContext state
-        const jwtToken = authState.session?.access_token;
-        
-        if (!jwtToken) {
-          throw new Error('JWT token is missing - cannot generate training plan');
-        }
-        
-        // Get raw responses - backend will handle formatting
-        const initialResponses = Object.fromEntries(state.initialResponses);
-        const followUpResponses = Object.fromEntries(state.followUpResponses);
-        
-        // VALIDATION: Ensure userProfile exists (backend requires user_profile_id)
-        if (!authState.userProfile?.id) {
-          console.error('❌ User profile not found - cannot generate training plan');
-          setState(prev => ({
-            ...prev,
-            planGenerationLoading: false,
-            error: 'User profile not found. Please complete initial questions first.',
-          }));
-          return;
-        }
-        
-        const fullPersonalInfo = {
-          ...state.personalInfo!,
-          username: state.username,
-          goal_description: state.goalDescription,
-          experience_level: state.experienceLevel,
-        };
-        
-        const response = await trainingService.generateTrainingPlan(
+      const response = await runWithProgress('plan', () =>
+        trainingService.generateTrainingPlan(
           fullPersonalInfo,
-          initialResponses,
-          followUpResponses,
+          initialResponsesObject,
+          followUpResponsesObject,
           state.initialQuestions,
           state.followUpQuestions,
-          authState.userProfile.id, // Now guaranteed to exist
+          effectiveUserProfileId,
           jwtToken
-        );
-        
-        // Check again if still in progress (component might have unmounted)
-        if (!planGenerationRef.current.inProgress) {
-          return;
-        }
-        
-        logData('Generate Plan', response.success ? 'success' : 'error');
-        
-        if (response.success && response.data) {
-          // Backend now returns the complete enriched plan with database IDs
-          // Transform from backend format (snake_case) to frontend format (camelCase)
-          logStep('Plan Generation', 'completed', 'Training plan received from backend with database IDs');
-          console.log('✅ ConversationalOnboarding: Using enriched plan from backend (no refetch needed)');
-          
-          // Transform the plan from backend format to frontend format
-          const { transformTrainingPlan } = await import('../../utils/trainingPlanTransformer');
-          const transformedPlan = transformTrainingPlan(response.data);
-          console.log('✅ ConversationalOnboarding: Transformed plan to frontend format');
-          
-          // Update userProfile with playbook from response
-          if (response.playbook && authState.userProfile) {
-            dispatch({
-              type: 'SET_USER_PROFILE',
-              payload: {
-                ...authState.userProfile,
-                playbook: response.playbook
-              }
-            });
-          }
-              
-          // Set plan in AuthContext - already has all database IDs
-          setTrainingPlan(transformedPlan);
-              
-          // Store exercises in AuthContext for future use
-          if (response.metadata?.exercises) {
-            setExercises(response.metadata.exercises);
-          }
-              
-          // Stop spinner and show plan
-          setState(prev => ({
-            ...prev,
-            trainingPlan: transformedPlan,
-            completionMessage: response.completion_message || "🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨",
-            planGenerationLoading: false,
-            planMetadata: {
-              formattedInitialResponses: response.metadata?.formatted_initial_responses,
-              formattedFollowUpResponses: response.metadata?.formatted_follow_up_responses,
+        )
+      );
+
+      logData('Generate Plan', response.success ? 'success' : 'error');
+
+      if (response.success && response.data) {
+        const { transformTrainingPlan } = await import('../../utils/trainingPlanTransformer');
+        const transformedPlan = transformTrainingPlan(response.data);
+
+        if (response.playbook && authState.userProfile) {
+          dispatch({
+            type: 'SET_USER_PROFILE',
+            payload: {
+              ...authState.userProfile,
+              playbook: response.playbook,
             },
-          }));
-          
-          // Automatically transition to preview/feedback step (skip completion message)
-          setCurrentStep('preview');
-          
-          // Reset in progress flag
-          planGenerationRef.current.inProgress = false;
-        } else {
-          logError('Plan generation failed', response.message);
-          throw new Error(response.message || 'Failed to generate training plan');
+          });
         }
-      } catch (error) {
-        // Only update state if still in progress (component still mounted)
-        if (planGenerationRef.current.inProgress) {
-          logError('Plan generation error', error);
-          const errorMessage = error instanceof Error ? error.message : 'Failed to generate training plan';
-          setState(prev => ({
-            ...prev,
-            planGenerationLoading: false,
-            aiAnalysisPhase: null,
-            error: errorMessage,
-          }));
-          onError(errorMessage);
-          planGenerationRef.current.inProgress = false;
+
+        setTrainingPlan(transformedPlan);
+
+        if (response.metadata?.exercises) {
+          setExercises(response.metadata.exercises);
         }
-      }
-    }, AI_DELAYS.planGeneration);
 
-    planGenerationRef.current.timeoutId = timeoutId;
+        setState(prev => ({
+          ...prev,
+          trainingPlan: transformedPlan,
+          completionMessage:
+            response.completion_message ||
+            "🎉 Amazing! I've created your personalized plan! We work in focused 2-week blocks so we can track your progress and adapt as you grow stronger. Take a look at your plan - I'm curious what you think! 💪✨",
+          planGenerationLoading: false,
+          hasSeenCompletionMessage: false,
+          planMetadata: {
+            formattedInitialResponses: response.metadata?.formatted_initial_responses,
+            formattedFollowUpResponses: response.metadata?.formatted_follow_up_responses,
+          },
+        }));
 
-    // Cleanup function
-    return () => {
-      if (planGenerationRef.current.timeoutId) {
-        clearTimeout(planGenerationRef.current.timeoutId);
-        planGenerationRef.current.timeoutId = undefined;
+        setRetryStep(null);
+        setCurrentStep('preview');
+      } else {
+        throw new Error(response.message || 'Failed to generate training plan');
       }
-      planGenerationRef.current.inProgress = false;
-    };
-  }, [state.planGenerationLoading, state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, authState.userProfile, authState.userProfile?.id, authState.session?.access_token, setTrainingPlan, setExercises, onError]);
+    } catch (error) {
+      logError('Plan generation error', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate training plan';
+      setState(prev => ({
+        ...prev,
+        planGenerationLoading: false,
+        error: errorMessage,
+      }));
+      setRetryStep('preview');
+      onError(errorMessage);
+    } finally {
+      planGenerationInProgressRef.current = false;
+    }
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.followUpResponses, state.initialQuestions, state.followUpQuestions, authState.session?.access_token, authState.userProfile, runWithProgress, dispatch, setTrainingPlan, setExercises, onError]);
 
   // Step 1: Username and Gender
   const handleUsernameChange = useCallback((username: string) => {
@@ -561,12 +480,13 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   // Simple function to load initial questions
   const loadInitialQuestions = useCallback(async () => {
-    if (!state.personalInfo) return;
+    if (!state.personalInfo) {
+      return;
+    }
 
-    setState(prev => ({ 
-      ...prev, 
+    setState(prev => ({
+      ...prev,
       initialQuestionsLoading: true,
-      aiAnalysisPhase: 'initial'
     }));
 
     try {
@@ -578,33 +498,40 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       };
 
       const jwtToken = authState.session?.access_token;
-      
-      const response = await trainingService.getInitialQuestions(
-        fullPersonalInfo,
-        authState.userProfile?.id,
-        jwtToken
+
+      const response = await runWithProgress('initial', () =>
+        trainingService.getInitialQuestions(
+          fullPersonalInfo,
+          authState.userProfile?.id,
+          jwtToken
+        )
       );
-      
-      // Refresh user profile if backend just created it
-      if (response.user_profile_id && !authState.userProfile?.id) {
-        await refreshUserProfile();
+
+      if (response.user_profile_id && response.user_profile_id !== authState.userProfile?.id) {
+        if (authState.userProfile) {
+          dispatch({
+            type: 'SET_USER_PROFILE',
+            payload: { ...authState.userProfile, id: response.user_profile_id },
+          });
+        } else {
+          await refreshUserProfile();
+        }
       }
-      
-      // Sort questions by order field (backend should already sort, but ensure it here too)
+
       const sortedQuestions = [...(response.questions || [])].sort((a, b) => {
         const orderA = a.order ?? 999;
         const orderB = b.order ?? 999;
         return orderA - orderB;
       });
-      
+
       setState(prev => ({
         ...prev,
         initialQuestions: sortedQuestions,
         initialQuestionsLoading: false,
         currentInitialQuestionIndex: 0,
-        aiHasQuestions: true,
         initialAiMessage: response.ai_message,
       }));
+      setRetryStep(null);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load questions';
       setState(prev => ({
@@ -612,46 +539,60 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         initialQuestionsLoading: false,
         error: errorMessage,
       }));
+      setRetryStep('initial');
       onError(errorMessage);
     }
-  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, authState.userProfile, authState.session?.access_token, refreshUserProfile, onError]);
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, authState.session?.access_token, authState.userProfile, runWithProgress, dispatch, refreshUserProfile, onError]);
 
   // Simple function to load follow-up questions
   const loadFollowUpQuestions = useCallback(async () => {
-    if (!state.personalInfo) return;
+    if (!state.personalInfo) {
+      return;
+    }
 
-    setState(prev => ({ 
-      ...prev, 
+    setState(prev => ({
+      ...prev,
       followUpQuestionsLoading: true,
-      aiAnalysisPhase: 'followup'
     }));
 
     try {
       const responsesObject = Object.fromEntries(state.initialResponses);
       const jwtToken = authState.session?.access_token;
-      
+
       const fullPersonalInfo = {
         ...state.personalInfo,
         username: state.username,
         goal_description: state.goalDescription,
         experience_level: state.experienceLevel,
       };
-      
-      const response = await trainingService.getFollowUpQuestions(
-        fullPersonalInfo, 
-        responsesObject,
-        state.initialQuestions,
-        authState.userProfile?.id,
-        jwtToken
+
+      const response = await runWithProgress('followup', () =>
+        trainingService.getFollowUpQuestions(
+          fullPersonalInfo,
+          responsesObject,
+          state.initialQuestions,
+          authState.userProfile?.id,
+          jwtToken
+        )
       );
 
-      // Sort questions by order field (backend should already sort, but ensure it here too)
+      if (response.user_profile_id && response.user_profile_id !== authState.userProfile?.id) {
+        if (authState.userProfile) {
+          dispatch({
+            type: 'SET_USER_PROFILE',
+            payload: { ...authState.userProfile, id: response.user_profile_id },
+          });
+        } else {
+          await refreshUserProfile();
+        }
+      }
+
       const sortedFollowUpQuestions = [...(response.questions || [])].sort((a, b) => {
         const orderA = a.order ?? 999;
         const orderB = b.order ?? 999;
         return orderA - orderB;
       });
-      
+
       setState(prev => ({
         ...prev,
         followUpQuestions: sortedFollowUpQuestions,
@@ -660,6 +601,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         aiHasQuestions: true,
         followUpAiMessage: response.ai_message,
       }));
+      setRetryStep(null);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load follow-up questions';
       setState(prev => ({
@@ -667,9 +609,10 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         followUpQuestionsLoading: false,
         error: errorMessage,
       }));
+      setRetryStep('followup');
       onError(errorMessage);
     }
-  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.initialQuestions, authState.userProfile?.id, onError]);
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.initialResponses, state.initialQuestions, authState.session?.access_token, authState.userProfile, runWithProgress, dispatch, refreshUserProfile, onError]);
 
   // Simple step progression functions
   const handleInitialQuestionsComplete = useCallback(() => {
@@ -677,23 +620,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   }, []);
 
   const handleFollowUpQuestionsComplete = useCallback(() => {
-    setCurrentStep('generation');
-  }, []);
-
-  // Handle continue to questions after AI analysis
-  const handleContinueToQuestions = useCallback(() => {
-    if (state.aiAnalysisPhase === 'initial') {
-      setCurrentStep('initial');
-    } else if (state.aiAnalysisPhase === 'followup') {
-      setCurrentStep('followup');
-    }
-    // Reset the analysis phase and questions flag
-    setState(prev => ({
-      ...prev,
-      aiAnalysisPhase: null,
-      aiHasQuestions: false,
-    }));
-  }, [state.aiAnalysisPhase]);
+    handlePlanGeneration();
+  }, [handlePlanGeneration]);
 
   // Step 2: Initial Questions
   const handleInitialResponseChange = useCallback((questionId: string, value: any) => {
@@ -706,124 +634,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       };
     });
   }, []);
-
-  // Track follow-up questions loading to prevent race conditions
-  const followUpQuestionsRef = useRef<{ inProgress: boolean; timeoutId?: ReturnType<typeof setTimeout> }>({ inProgress: false });
-
-  const handleInitialQuestionsNext = useCallback(() => {
-    if (!state.personalInfo) return;
-
-    // Prevent duplicate calls
-    if (followUpQuestionsRef.current.inProgress) {
-      logError('Follow-up questions: Already in progress');
-      return;
-    }
-
-    setState(prev => ({ 
-      ...prev, 
-      planGenerationLoading: true,
-      aiAnalysisPhase: 'initial'
-    }));
-    setCurrentStep('initial');
-    followUpQuestionsRef.current.inProgress = true;
-  }, [state.personalInfo]);
-
-  // useEffect to handle follow-up questions with proper cleanup
-  useEffect(() => {
-    if (currentStep !== 'initial' || !state.planGenerationLoading || !followUpQuestionsRef.current.inProgress) {
-      return;
-    }
-
-    // Clear any existing timeout
-    if (followUpQuestionsRef.current.timeoutId) {
-      clearTimeout(followUpQuestionsRef.current.timeoutId);
-    }
-
-    // Set timeout for AI thinking simulation
-    const timeoutId = setTimeout(async () => {
-      try {
-        // Check if component is still mounted and still in progress
-        if (!followUpQuestionsRef.current.inProgress) {
-          return;
-        }
-
-        const responsesObject = Object.fromEntries(state.initialResponses);
-        
-        // Get JWT token from AuthContext state
-        const jwtToken = authState.session?.access_token;
-        
-        // VALIDATION: Ensure userProfile exists (backend requires user_profile_id)
-        if (!authState.userProfile?.id) {
-          console.error('❌ User profile not found - cannot generate follow-up questions');
-          setState(prev => ({
-            ...prev,
-            planGenerationLoading: false,
-            error: 'User profile not found. Please complete initial questions first.',
-          }));
-          return;
-        }
-        
-        const fullPersonalInfo = {
-          ...state.personalInfo!,
-          username: state.username,
-          goal_description: state.goalDescription,
-          experience_level: state.experienceLevel,
-        };
-        
-        const response = await trainingService.getFollowUpQuestions(
-          fullPersonalInfo, 
-          responsesObject, // Send raw responses - backend will format them
-          state.initialQuestions, // Send initial questions
-          authState.userProfile.id, // Now guaranteed to exist
-          jwtToken
-        );
-        
-        // Check again if still in progress (component might have unmounted)
-        if (!followUpQuestionsRef.current.inProgress) {
-          return;
-        }
-        
-        setState(prev => ({
-          ...prev,
-          followUpQuestions: response.questions,
-          initialQuestions: response.initial_questions || prev.initialQuestions, // Use returned questions
-          planGenerationLoading: false,
-          currentFollowUpQuestionIndex: 0,
-          aiHasQuestions: true,
-          followUpAiMessage: response.ai_message,
-        }));
-        
-        // Reset in progress flag
-        followUpQuestionsRef.current.inProgress = false;
-      } catch (error) {
-        // Only update state if still in progress (component still mounted)
-        if (followUpQuestionsRef.current.inProgress) {
-          const errorMessage = error instanceof Error ? error.message : 'Failed to load follow-up questions';
-          setState(prev => ({
-            ...prev,
-            planGenerationLoading: false,
-            error: errorMessage,
-          }));
-          
-          // Set retry step for error recovery
-          setRetryStep('followup');
-          onError(errorMessage);
-          followUpQuestionsRef.current.inProgress = false;
-        }
-      }
-    }, AI_DELAYS.followUpQuestions);
-
-    followUpQuestionsRef.current.timeoutId = timeoutId;
-
-    // Cleanup function
-    return () => {
-      if (followUpQuestionsRef.current.timeoutId) {
-        clearTimeout(followUpQuestionsRef.current.timeoutId);
-        followUpQuestionsRef.current.timeoutId = undefined;
-      }
-      followUpQuestionsRef.current.inProgress = false;
-    };
-  }, [currentStep, state.planGenerationLoading, state.initialResponses, state.initialQuestions, state.personalInfo, state.username, state.goalDescription, state.experienceLevel, authState.userProfile?.id, authState.session?.access_token, onError]);
 
   // Step 3: Follow-up Questions
   const handleFollowUpResponseChange = useCallback((questionId: string, value: any) => {
@@ -859,42 +669,31 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       case 'followup':
         setCurrentStep('initial');
         break;
-      case 'generation':
-        setCurrentStep('followup');
-        break;
     }
   }, [currentStep]);
 
   const handleRetry = useCallback(() => {
-    // Check if we've exceeded max retries
     if (retryCount >= MAX_RETRIES) {
       const stepName = retryStep || currentStep;
-      const stepDescriptions = {
-        'initial': 'initial questions',
-        'followup': 'follow-up questions', 
-        'outline': 'plan outline',
-        'generation': 'training plan generation'
+      const stepDescriptions: Record<string, string> = {
+        initial: 'initial questions',
+        followup: 'follow-up questions',
       };
-      
-      // Set error state instead of showing alert
+
       setState(prev => ({
         ...prev,
-        error: `We've tried ${MAX_RETRIES} times to load your ${stepDescriptions[stepName as keyof typeof stepDescriptions] || 'onboarding step'} but encountered an error. Please try again later or contact support.`
+        error: `We've tried ${MAX_RETRIES} times to load your ${stepDescriptions[stepName] || 'onboarding step'} but encountered an error. Please try again later or contact support.`
       }));
       return;
     }
 
-    // Increment retry count
     setRetryCount(prev => prev + 1);
     setState(prev => ({ ...prev, error: null }));
-    
-    // Retry based on the step that failed
+
     const stepToRetry = retryStep || currentStep;
-    console.log(`📍 Onboarding Retry: ${stepToRetry} (attempt ${retryCount + 1}/${MAX_RETRIES})`);
-    
+
     switch (stepToRetry) {
       case 'welcome':
-        // No retry needed for welcome step
         break;
       case 'personal':
         handleWelcomeNext();
@@ -906,16 +705,18 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         handleGoalDescriptionNext();
         break;
       case 'initial':
-        handleInitialQuestionsNext();
+        loadInitialQuestions();
         break;
       case 'followup':
-        handleInitialQuestionsComplete();
+        loadFollowUpQuestions();
         break;
-      case 'generation':
-        handleFollowUpQuestionsComplete();
+      case 'preview':
+        handlePlanGeneration();
+        break;
+      default:
         break;
     }
-  }, [currentStep, retryCount, retryStep, handleWelcomeNext, handlePersonalInfoNext, handleGoalDescriptionNext, handleExperienceLevelNext, handleInitialQuestionsNext, handleInitialQuestionsComplete, handleFollowUpQuestionsComplete]);
+  }, [currentStep, retryCount, retryStep, handleWelcomeNext, handlePersonalInfoNext, handleGoalDescriptionNext, handlePlanGeneration, loadInitialQuestions, loadFollowUpQuestions]);
 
   // Handle start over action
   const handleStartOver = useCallback(() => {
@@ -935,8 +736,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
 
   const renderCurrentStep = () => {
-    // Essential onboarding flow logging - render step
-    
     // Show custom error display for max retries or other global errors
     if (state.error && retryCount >= MAX_RETRIES) {
       return (
@@ -1018,7 +817,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             onResponseChange={handleInitialResponseChange}
             currentQuestionIndex={state.currentInitialQuestionIndex}
             totalQuestions={state.initialQuestions.length}
-            isLoading={state.initialQuestionsLoading}
             onNext={handleInitialQuestionsComplete}
             onPrevious={handlePrevious}
             onComplete={() => {}}
@@ -1026,6 +824,14 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             stepTitle="Initial Questions"
             username={state.username}
             aiMessage={state.initialAiMessage}
+            introAlreadyCompleted={state.initialIntroShown}
+            onIntroComplete={() => {
+              introTracker.initial = true;
+              setState(prev => ({
+                ...prev,
+                initialIntroShown: true,
+              }));
+            }}
           />
         );
       
@@ -1037,7 +843,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             onResponseChange={handleFollowUpResponseChange}
             currentQuestionIndex={state.currentFollowUpQuestionIndex}
             totalQuestions={state.followUpQuestions.length}
-            isLoading={state.followUpQuestionsLoading}
             onNext={handleFollowUpQuestionsComplete}
             onPrevious={handlePrevious}
             onComplete={() => {}}
@@ -1045,26 +850,13 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             stepTitle="Follow-up Questions"
             username={state.username}
             aiMessage={state.followUpAiMessage}
-          />
-        );
-      
-      case 'generation':
-        return (
-          <PlanGenerationStep
-            isLoading={state.planGenerationLoading}
-            error={state.error || undefined}
-            onRetry={handleRetry}
-            onStartGeneration={handlePlanGeneration}
-            username={state.username}
-            isCompleted={!!state.trainingPlan && !state.planGenerationLoading}
-            completionMessage={state.completionMessage || undefined}
-            onContinue={() => {
-              setState(prev => ({ ...prev, hasSeenCompletionMessage: true }));
-              handleComplete();
-            }}
-            onViewPlan={() => {
-              setState(prev => ({ ...prev, hasSeenCompletionMessage: true }));
-              setCurrentStep('preview');
+            introAlreadyCompleted={state.followUpIntroShown}
+            onIntroComplete={() => {
+              introTracker.followup = true;
+              setState(prev => ({
+                ...prev,
+                followUpIntroShown: true,
+              }));
             }}
           />
         );
@@ -1073,7 +865,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         return (
           <PlanPreviewStep
             onContinue={handleComplete}
-            onBack={() => setCurrentStep('generation')}
+            onBack={() => setCurrentStep('followup')}
             planMetadata={state.planMetadata}
             initialQuestions={state.initialQuestions}
             initialResponses={state.initialResponses}
@@ -1087,9 +879,34 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     }
   };
 
+  const lastResetStepRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (currentStep === 'welcome' && lastResetStepRef.current !== 'welcome') {
+      introTracker.initial = false;
+      introTracker.followup = false;
+      lastResetStepRef.current = 'welcome';
+      setState(prev => {
+        if (!prev.initialIntroShown && !prev.followUpIntroShown) {
+          return prev;
+        }
+        return {
+          ...prev,
+          initialIntroShown: false,
+          followUpIntroShown: false,
+        };
+      });
+    } else if (currentStep !== 'welcome') {
+      lastResetStepRef.current = currentStep;
+    }
+  }, [currentStep]);
+
   return (
     <View style={styles.container}>
       <OnboardingBackground />
+      <ProgressOverlay
+        visible={progressState.visible}
+        progress={progressState.progress}
+      />
       {renderCurrentStep()}
     </View>
   );

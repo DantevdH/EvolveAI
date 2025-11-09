@@ -1,61 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { StyleSheet, View, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { ConversationalOnboarding } from '@/src/components/onboarding/ConversationalOnboarding';
-import { LoadingScreen } from '@/src/components/shared/LoadingScreen';
 
-export default function InitialQuestionsStep() {
+const InitialQuestionsResume: React.FC = () => {
   const router = useRouter();
-  const { state, refreshUserProfile } = useAuth();
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Simulate initialization time
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 500);
-    
-    return () => clearTimeout(timer);
-  }, []);
+  const { refreshUserProfile } = useAuth();
 
   const handleComplete = async (trainingPlan: any) => {
-    // Navigate to root to continue onboarding flow
-    router.replace('/');
+    await refreshUserProfile();
+    router.replace('/(tabs)');
   };
 
   const handleError = (error: string) => {
-    console.error('❌ Initial questions error:', error);
-    
-    Alert.alert(
-      'Initial Questions Error',
-      `Failed to load initial questions: ${error}\n\nThis step helps us understand your training goals and preferences.`,
-      [
-        {
-          text: 'Try Again',
-          onPress: () => {
-            // The component will handle retry logic
-          },
-        },
-        {
-          text: 'Start Over',
-          onPress: () => {
-            router.replace('/onboarding');
-          },
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-      ]
-    );
+    console.error('❌ Onboarding error:', error);
+    Alert.alert('Error', error, [{ text: 'Try Again' }, { text: 'Go Back', onPress: () => router.replace('/onboarding') }]);
   };
-
-  if (isLoading) {
-    return (
-      <LoadingScreen message="Preparing your personalized questions..." />
-    );
-  }
 
   return (
     <View style={styles.container}>
@@ -66,10 +27,12 @@ export default function InitialQuestionsStep() {
       />
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
 });
+
+export default InitialQuestionsResume;

@@ -1,11 +1,12 @@
+'use client';
+
 import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants/designSystem';
-import { createColorWithOpacity } from '../../constants/colors';
+import { colors, createColorWithOpacity } from '../../constants/colors';
 
-interface ConfirmationDialogProps {
+type Props = {
   visible: boolean;
   title?: string;
   message: string;
@@ -15,9 +16,11 @@ interface ConfirmationDialogProps {
   onCancel: () => void;
   confirmButtonColor?: string;
   icon?: keyof typeof Ionicons.glyphMap;
-}
+};
 
-const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
+type ConfirmationDialogComponent = React.FC<Props>;
+
+const ConfirmationDialog: ConfirmationDialogComponent = ({
   visible,
   title,
   message,
@@ -26,7 +29,7 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
   onConfirm,
   onCancel,
   confirmButtonColor = colors.primary,
-  icon
+  icon,
 }) => {
   return (
     <Modal
@@ -42,12 +45,15 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
               {!!icon && (
                 <View style={styles.iconContainer}>
                   <LinearGradient
-                    colors={[createColorWithOpacity(confirmButtonColor, 0.4), createColorWithOpacity(confirmButtonColor, 0.35)]}
+                    colors={[
+                      createColorWithOpacity(confirmButtonColor, 0.35),
+                      createColorWithOpacity(confirmButtonColor, 0.18)
+                    ]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.iconGradient}
                   >
-                    <Ionicons name={icon} size={24} color={colors.text} />
+                    <Ionicons name={icon} size={22} color={colors.primary} />
                   </LinearGradient>
                 </View>
               )}
@@ -56,30 +62,33 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
               )}
             </View>
           )}
-          
+
           <Text style={styles.message}>{message}</Text>
-          
-          <View style={styles.buttonContainer}>
+
+          <View style={styles.buttonRow}>
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={onCancel}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
             >
-              <Text style={styles.cancelButtonText}>{cancelText}</Text>
+              <Text style={styles.cancelText}>{cancelText}</Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
-              style={styles.confirmButtonContainer}
+              style={styles.confirmButton}
               onPress={onConfirm}
-              activeOpacity={0.7}
+              activeOpacity={0.85}
             >
               <LinearGradient
-                colors={[createColorWithOpacity(confirmButtonColor, 0.8), createColorWithOpacity(confirmButtonColor, 0.6)]}
+                colors={[
+                  createColorWithOpacity(confirmButtonColor, 0.85),
+                  createColorWithOpacity(confirmButtonColor, 0.65)
+                ]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={styles.confirmButtonGradient}
+                style={styles.confirmGradient}
               >
-                <Text style={styles.confirmButtonText}>{confirmText}</Text>
+                <Text style={styles.confirmText}>{confirmText}</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
@@ -92,65 +101,61 @@ const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: createColorWithOpacity(colors.text, 0.35),
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 20
+    paddingHorizontal: 20,
   },
   dialog: {
     backgroundColor: colors.card,
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 24,
     width: '100%',
-    maxWidth: 400,
-    borderWidth: 1.5,
-    borderColor: createColorWithOpacity(colors.text, 0.15),
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 6
+    maxWidth: 420,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.35),
+    shadowColor: createColorWithOpacity(colors.text, 0.12),
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    elevation: 8,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 16
+    marginBottom: 18,
   },
   iconContainer: {
     marginBottom: 12,
   },
   iconGradient: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.primary,
+    shadowColor: createColorWithOpacity(colors.primary, 0.2),
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowRadius: 5,
     elevation: 4,
   },
   title: {
     fontSize: 20,
-    fontWeight: '800',
-    color: colors.text,
+    fontWeight: '700',
+    color: colors.primary,
     textAlign: 'center',
-    letterSpacing: 0.5
+    letterSpacing: 0.4,
   },
   message: {
     fontSize: 15,
-    color: colors.text,
+    color: createColorWithOpacity(colors.text, 0.85),
     lineHeight: 22,
     textAlign: 'center',
     marginBottom: 24,
-    fontWeight: '400'
   },
-  buttonContainer: {
+  buttonRow: {
     flexDirection: 'row',
-    gap: 12
+    gap: 12,
   },
   cancelButton: {
     flex: 1,
@@ -158,43 +163,39 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 16,
     alignItems: 'center',
-    backgroundColor: createColorWithOpacity(colors.text, 0.1),
-    borderWidth: 1.5,
-    borderColor: createColorWithOpacity(colors.text, 0.15),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    justifyContent: 'center',
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.08),
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.3),
   },
-  cancelButtonText: {
+  cancelText: {
     fontSize: 15,
     fontWeight: '700',
-    color: colors.text,
-    letterSpacing: 0.3
+    color: colors.primary,
+    letterSpacing: 0.3,
   },
-  confirmButtonContainer: {
+  confirmButton: {
     flex: 1,
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowColor: createColorWithOpacity(colors.primary, 0.25),
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 5,
   },
-  confirmButtonGradient: {
+  confirmGradient: {
     paddingVertical: 14,
     paddingHorizontal: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  confirmButtonText: {
+  confirmText: {
     fontSize: 15,
     fontWeight: '800',
-    color: colors.text,
-    letterSpacing: 0.3
-  }
+    color: colors.card,
+    letterSpacing: 0.4,
+  },
 });
 
 export default ConfirmationDialog;

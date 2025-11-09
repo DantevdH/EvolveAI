@@ -6,7 +6,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../../constants/colors';
+import { colors, createColorWithOpacity } from '../../../constants/colors';
 import { WeekModalData } from './types';
 
 interface WeekDetailModalProps {
@@ -16,6 +16,27 @@ interface WeekDetailModalProps {
   onViewWeek: () => void;
 }
 
+const STATUS_CONFIG = {
+  completed: {
+    icon: 'checkmark-circle' as const,
+    background: createColorWithOpacity(colors.secondary, 0.18),
+    color: colors.secondary,
+    label: 'Completed',
+  },
+  current: {
+    icon: 'flash' as const,
+    background: createColorWithOpacity(colors.primary, 0.12),
+    color: colors.primary,
+    label: "Current Week",
+  },
+  locked: {
+    icon: 'lock-closed' as const,
+    background: createColorWithOpacity(colors.text, 0.06),
+    color: colors.muted,
+    label: 'Locked',
+  },
+};
+
 const WeekDetailModal: React.FC<WeekDetailModalProps> = ({
   data,
   visible,
@@ -23,6 +44,8 @@ const WeekDetailModal: React.FC<WeekDetailModalProps> = ({
   onViewWeek,
 }) => {
   if (!data) return null;
+
+  const statusConfig = STATUS_CONFIG[data.status];
 
   return (
     <Modal
@@ -38,8 +61,7 @@ const WeekDetailModal: React.FC<WeekDetailModalProps> = ({
           </TouchableOpacity>
 
           <Text style={styles.title}>Week {data.weekNumber}</Text>
-          
-          {/* Stars for completed weeks */}
+
           {data.status === 'completed' && (
             <View style={styles.stars}>
               {[...Array(3)].map((_, i) => (
@@ -53,7 +75,6 @@ const WeekDetailModal: React.FC<WeekDetailModalProps> = ({
             </View>
           )}
 
-          {/* Progress section */}
           <View style={styles.progressSection}>
             <Text style={styles.progressText}>
               {data.completedWorkouts} / {data.totalWorkouts} workouts completed
@@ -71,59 +92,26 @@ const WeekDetailModal: React.FC<WeekDetailModalProps> = ({
             </Text>
           </View>
 
-          {/* Status badge */}
           <View
             style={[
               styles.statusBadge,
               {
-                backgroundColor:
-                  data.status === 'completed'
-                    ? colors.tertiaryTransparent
-                    : data.status === 'current'
-                    ? colors.primaryTransparent
-                    : colors.inputBackground,
+                backgroundColor: statusConfig.background,
               },
             ]}
           >
             <Ionicons
-              name={
-                data.status === 'completed'
-                  ? 'checkmark-circle'
-                  : data.status === 'current'
-                  ? 'flash'
-                  : 'lock-closed'
-              }
+              name={statusConfig.icon}
               size={20}
-              color={
-                data.status === 'completed'
-                  ? colors.tertiary
-                  : data.status === 'current'
-                  ? colors.primary
-                  : colors.muted
-              }
+              color={statusConfig.color}
             />
             <Text
-              style={[
-                styles.statusText,
-                {
-                  color:
-                    data.status === 'completed'
-                      ? colors.tertiary
-                      : data.status === 'current'
-                      ? colors.primary
-                      : colors.muted,
-                },
-              ]}
+              style={[styles.statusText, { color: statusConfig.color }]}
             >
-              {data.status === 'completed'
-                ? 'Completed'
-                : data.status === 'current'
-                ? 'Current Week'
-                : 'Locked'}
+              {statusConfig.label}
             </Text>
           </View>
 
-          {/* Action button */}
           <TouchableOpacity
             style={[
               styles.actionButton,
@@ -191,14 +179,14 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 8,
-    backgroundColor: colors.inputBackground,
+    backgroundColor: createColorWithOpacity(colors.text, 0.08),
     borderRadius: 4,
     overflow: 'hidden',
     marginBottom: 8,
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: colors.tertiary,
+    backgroundColor: colors.secondary,
     borderRadius: 4,
   },
   progressPercentage: {
@@ -233,7 +221,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.card,
   },
 });
 

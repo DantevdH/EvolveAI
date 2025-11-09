@@ -49,7 +49,7 @@ export const GoalDescriptionStep: React.FC<GoalDescriptionStepProps> = ({
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <OnboardingCard
-        title="What's your training goal?"
+        title="Your training goal"
         subtitle="Tell us what you want to achieve so we can create the perfect plan for you"
         scrollable={false}
       >
@@ -58,15 +58,10 @@ export const GoalDescriptionStep: React.FC<GoalDescriptionStepProps> = ({
             {/* Goal Input Section - Gamified */}
             <View style={[styles.inputSection, { marginBottom: sectionSpacing }]}>
               <View style={styles.inputHeader}>
-                <LinearGradient
-                  colors={[createColorWithOpacity(colors.primary, 0.3), createColorWithOpacity(colors.primary, 0.2)]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.inputHeaderBadge}
-                >
-                  <Ionicons name="flag" size={14} color={colors.text} />
-                  <Text style={styles.inputLabel}>Your training goal</Text>
-                </LinearGradient>
+                <View style={styles.inputHeaderBadge}>
+                  <Ionicons name="flag" size={14} color={colors.primary} />
+                  <Text style={styles.inputLabel}>YOUR TRAINING GOAL</Text>
+                </View>
               </View>
               <View style={styles.inputWrapper}>
                 <TextInput
@@ -84,11 +79,7 @@ export const GoalDescriptionStep: React.FC<GoalDescriptionStepProps> = ({
                   textAlignVertical="top"
                   maxLength={500}
                 />
-                {localGoal.length >= 10 && (
-                  <View style={styles.successIcon}>
-                    <Ionicons name="checkmark-circle" size={18} color={colors.tertiary} />
-                  </View>
-                )}
+                {/* No success icon, only validation text */}
               </View>
               <View style={styles.inputFooter}>
                 <View style={styles.footerRow}>
@@ -108,7 +99,6 @@ export const GoalDescriptionStep: React.FC<GoalDescriptionStepProps> = ({
                   )}
                   {localGoal.length >= 10 && (
                     <View style={styles.validationContainer}>
-                      <Ionicons name="checkmark-circle" size={10} color={colors.tertiary} />
                       <Text style={styles.validationTextSuccess}>
                         Goal description is valid
                       </Text>
@@ -127,75 +117,50 @@ export const GoalDescriptionStep: React.FC<GoalDescriptionStepProps> = ({
                   onPress={() => handleGoalChange("I want to lose weight and get in better shape")}
                   activeOpacity={0.7}
                 >
-                  <LinearGradient
-                    colors={[createColorWithOpacity(colors.primary, 0.2), createColorWithOpacity(colors.primary, 0.15)]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.suggestionChipGradient}
-                  >
+                  <View style={styles.suggestionChipGradient}>
                     <IconSymbol name="figure.walk" size={14} color={colors.primary} />
                     <Text style={styles.suggestionText}>Weight Loss</Text>
-                  </LinearGradient>
+                  </View>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.suggestionChip}
-                  onPress={() => handleGoalChange("I want to build muscle and get stronger")}
+                  onPress={() => handleGoalChange("I want to build muscle mass and strength")}
                   activeOpacity={0.7}
                 >
-                  <LinearGradient
-                    colors={[createColorWithOpacity(colors.primary, 0.2), createColorWithOpacity(colors.primary, 0.15)]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.suggestionChipGradient}
-                  >
-                    <IconSymbol name="dumbbell" size={14} color={colors.primary} />
+                  <View style={styles.suggestionChipGradient}>
+                    <IconSymbol name="bolt.fill" size={14} color={colors.primary} />
                     <Text style={styles.suggestionText}>Build Muscle</Text>
-                  </LinearGradient>
+                  </View>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.suggestionChip}
-                  onPress={() => handleGoalChange("I want to improve my cardiovascular training and endurance")}
+                  onPress={() => handleGoalChange("I want to improve my endurance and cardiovascular health")}
                   activeOpacity={0.7}
                 >
-                  <LinearGradient
-                    colors={[createColorWithOpacity(colors.tertiary, 0.2), createColorWithOpacity(colors.tertiary, 0.15)]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.suggestionChipGradient}
-                  >
-                    <IconSymbol name="heart.fill" size={14} color={colors.tertiary} />
-                    <Text style={styles.suggestionText}>Cardio training</Text>
-                  </LinearGradient>
+                  <View style={styles.suggestionChipGradient}>
+                    <IconSymbol name="figure.run" size={14} color={colors.primary} />
+                    <Text style={styles.suggestionText}>Endurance</Text>
+                  </View>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.suggestionChip}
-                  onPress={() => handleGoalChange("I want to run a 5K")}
+                  onPress={() => handleGoalChange("I want to stay active and live a healthier lifestyle")}
                   activeOpacity={0.7}
                 >
-                  <LinearGradient
-                    colors={[createColorWithOpacity(colors.tertiary, 0.2), createColorWithOpacity(colors.tertiary, 0.15)]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.suggestionChipGradient}
-                  >
-                    <IconSymbol name="figure.run" size={14} color={colors.tertiary} />
-                    <Text style={styles.suggestionText}>Running</Text>
-                  </LinearGradient>
+                  <View style={styles.suggestionChipGradient}>
+                    <IconSymbol name="heart.fill" size={14} color={colors.primary} />
+                    <Text style={styles.suggestionText}>Stay Active</Text>
+                  </View>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.suggestionChip}
-                  onPress={() => handleGoalChange("I want to get stronger for football season")}
+                  style={[styles.suggestionChip, styles.suggestionChipSingle]}
+                  onPress={() => handleGoalChange("I want to improve my perfomance in football")}
                   activeOpacity={0.7}
                 >
-                  <LinearGradient
-                    colors={[createColorWithOpacity(colors.secondary, 0.2), createColorWithOpacity(colors.secondary, 0.15)]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.suggestionChipGradient}
-                  >
-                    <IconSymbol name="trophy.fill" size={14} color={colors.secondary} />
-                    <Text style={styles.suggestionText}>Sport Athlete</Text>
-                  </LinearGradient>
+                  <View style={styles.suggestionChipGradient}>
+                    <IconSymbol name="flame.fill" size={14} color={colors.primary} />
+                    <Text style={styles.suggestionText}>Football</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
             </View>
@@ -250,20 +215,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 999,
     alignSelf: 'flex-start',
-    gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    gap: 8,
+    marginBottom: 12,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
   },
   inputLabel: {
-    fontSize: 13,
+    fontSize: 10,
     fontWeight: '700',
-    color: colors.text,
-    letterSpacing: 0.5,
+    color: colors.primary,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   inputWrapper: {
     position: 'relative',
@@ -292,8 +257,8 @@ const styles = StyleSheet.create({
     backgroundColor: createColorWithOpacity(colors.primary, 0.2),
   },
   textInputSuccess: {
-    borderColor: colors.tertiary,
-    backgroundColor: createColorWithOpacity(colors.tertiary, 0.2),
+    borderColor: colors.inputBorder,
+    backgroundColor: colors.inputBackground,
   },
   successIcon: {
     position: 'absolute',
@@ -347,33 +312,38 @@ const styles = StyleSheet.create({
   suggestionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
-    justifyContent: 'center',
+    gap: 12,
+    justifyContent: 'space-between',
   },
   suggestionChip: {
-    borderRadius: 20,
+    flexBasis: '48%',
+    flexGrow: 0,
+    borderRadius: 12,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.35),
+    shadowColor: createColorWithOpacity(colors.text, 0.08),
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
+    shadowRadius: 6,
     elevation: 2,
+  },
+  suggestionChipSingle: {
+    alignSelf: 'center',
   },
   suggestionChipGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    gap: 8,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    gap: 6,
-    borderWidth: 1.5,
-    borderColor: createColorWithOpacity(colors.text, 0.15),
-    borderRadius: 20,
   },
   suggestionText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.text,
-    letterSpacing: 0.2,
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
   // Error Section - Gamified
   errorContainer: {

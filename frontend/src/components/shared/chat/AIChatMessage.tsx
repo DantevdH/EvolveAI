@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import { View, Text, StyleSheet, Animated, StyleProp, TextStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
-import { colors } from '../../../constants/designSystem';
-import { createColorWithOpacity } from '../../../constants/colors';
+import { colors, createColorWithOpacity } from '../../../constants/colors';
 import { TypingDots } from './TypingDots';
 
 interface AIChatMessageProps {
@@ -15,6 +14,7 @@ interface AIChatMessageProps {
   skipAnimation?: boolean;
   isLoading?: boolean;
   showHeader?: boolean;
+  messageStyle?: StyleProp<TextStyle>;
 }
 
 export const AIChatMessage: React.FC<AIChatMessageProps> = ({
@@ -26,6 +26,7 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
   skipAnimation = false,
   isLoading = false,
   showHeader = true,
+  messageStyle,
 }) => {
   const [displayedText, setDisplayedText] = useState('');
   const [showTypingIndicator, setShowTypingIndicator] = useState(true);
@@ -132,18 +133,18 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
     <View style={styles.container}>
       <Animated.View style={[styles.messageWrapper, { opacity: fadeAnim }]}>
         <LinearGradient
-          colors={[createColorWithOpacity(colors.primary, 0.4), createColorWithOpacity(colors.primary, 0.35)]}
+          colors={[createColorWithOpacity(colors.secondary, 0.35), createColorWithOpacity(colors.secondary, 0.15)]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.aiAvatar}
         >
-          <MaterialIcons name="psychology" size={18} color={colors.text} />
+          <MaterialIcons name="psychology" size={18} color={colors.primary} />
         </LinearGradient>
         <View style={styles.chatBubble}>
           {showHeader && (
             <View style={styles.chatHeader}>
               <LinearGradient
-                colors={[createColorWithOpacity(colors.primary, 0.3), createColorWithOpacity(colors.primary, 0.2)]}
+                colors={[createColorWithOpacity(colors.primary, 0.18), createColorWithOpacity(colors.primary, 0.08)]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.aiNameContainer}
@@ -172,7 +173,7 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
             {isLoading && !displayedText ? (
               <TypingDots />
             ) : (
-              <Text style={styles.messageText}>
+              <Text style={[styles.messageText, messageStyle]}>
                 {displayedText}
                 {showTypingIndicator && !isLoading && <Text style={styles.cursor}>|</Text>}
               </Text>
@@ -188,10 +189,10 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     justifyContent: 'flex-start',
+    width: '100%',
   },
   messageWrapper: {
     flexDirection: 'row',
@@ -199,20 +200,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   aiAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
-    shadowColor: colors.primary,
+    shadowColor: createColorWithOpacity(colors.primary, 0.2),
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
   },
   chatBubble: {
-    backgroundColor: colors.inputBackground,
+    backgroundColor: createColorWithOpacity(colors.background, 0.95),
     borderRadius: 20,
     borderBottomLeftRadius: 6,
     paddingHorizontal: 16,
@@ -220,10 +221,10 @@ const styles = StyleSheet.create({
     maxWidth: '85%',
     position: 'relative',
     borderWidth: 1,
-    borderColor: createColorWithOpacity(colors.text, 0.1),
-    shadowColor: '#000',
+    borderColor: createColorWithOpacity(colors.text, 0.08),
+    shadowColor: createColorWithOpacity(colors.text, 0.15),
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 3,
   },
@@ -238,7 +239,7 @@ const styles = StyleSheet.create({
     borderRightWidth: 6,
     borderTopColor: 'transparent',
     borderBottomColor: 'transparent',
-    borderRightColor: colors.inputBackground,
+    borderRightColor: createColorWithOpacity(colors.background, 0.95),
   },
   chatHeader: {
     flexDirection: 'row',
@@ -250,7 +251,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,
-    shadowColor: '#000',
+    shadowColor: createColorWithOpacity(colors.primary, 0.2),
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
@@ -259,7 +260,7 @@ const styles = StyleSheet.create({
   aiName: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.text,
+    color: createColorWithOpacity(colors.text, 0.9),
     letterSpacing: 0.3,
   },
   onlineIndicator: {
@@ -270,22 +271,22 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.tertiary,
+    backgroundColor: colors.primary,
     marginRight: 4,
   },
   onlineText: {
     fontSize: 11,
-    color: colors.tertiary,
+    color: createColorWithOpacity(colors.primary, 0.8),
     fontWeight: '500',
   },
   messageContent: {
     minHeight: 20,
   },
   messageText: {
-    fontSize: 15,
-    color: colors.text,
-    lineHeight: 20,
-    fontWeight: '400',
+    fontSize: 16,
+    color: createColorWithOpacity(colors.text, 0.85),
+    lineHeight: 23,
+    fontWeight: '500',
   },
   cursor: {
     color: colors.primary,

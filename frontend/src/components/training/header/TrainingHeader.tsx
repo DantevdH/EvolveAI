@@ -5,7 +5,6 @@
 
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { colors, createColorWithOpacity } from '../../../constants/colors';
 import BackButton from './BackButton';
 import ProgressSection from './ProgressSection';
@@ -22,29 +21,15 @@ const TrainingHeader: React.FC<TrainingHeaderComponentProps> = ({
 }) => {
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={[
-          colors.card,
-          createColorWithOpacity(colors.card, 0.95),
-          colors.card
-        ]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.gradientCard}
-      >
-        {/* Floating Back Button */}
+      <View style={styles.card}>
         {onBackToMap && <BackButton onPress={onBackToMap} />}
-
-        {/* Progress Ring Section */}
-        <ProgressSection 
-          progressRing={progressRing} 
+        <ProgressSection
+          progressRing={progressRing}
           currentWeek={currentWeek}
           hideWeekTitle={hideWeekTitle}
         />
-
-        {/* Connected Weekday Path */}
         <WeekdayPath dayIndicators={dayIndicators} onDaySelect={onDaySelect} />
-      </LinearGradient>
+      </View>
     </View>
   );
 };
@@ -55,19 +40,20 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 8,
   },
-  gradientCard: {
+  card: {
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.overlay,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
+    backgroundColor: colors.card,
+    shadowColor: createColorWithOpacity(colors.text, 0.08),
     shadowOffset: {
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 4,
     position: 'relative',
   },
 });

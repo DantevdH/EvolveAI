@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '../../../components/ui/IconSymbol';
 import { AIQuestion } from '../../types/onboarding';
 import { colors } from '../../constants/designSystem';
+import { createColorWithOpacity, goldenGradient } from '../../constants/colors';
+
+const gradientConfig = {
+  start: { x: 0, y: 0 },
+  end: { x: 1, y: 1 },
+};
 
 interface DropdownQuestionProps {
   question: AIQuestion;
@@ -125,43 +132,52 @@ export const DropdownQuestion: React.FC<DropdownQuestionProps> = ({
                 const isSelected = isMultiselect
                   ? Array.isArray(currentValue) && currentValue.includes(option.value)
                   : (typeof currentValue === 'string' && currentValue === option.value);
-                
-                return (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.optionItem,
-                      isSelected && styles.optionItemSelected,
-                    ]}
-                    onPress={() => handleOptionSelect(option.value)}
-                    activeOpacity={0.8}
-                  >
+
+                const optionBody = (
+                  <>
                     {isMultiselect && (
-                      <View style={[
-                        styles.checkbox,
-                        isSelected && styles.checkboxSelected,
-                      ]}>
+                      <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
                         {isSelected && (
                           <IconSymbol
                             name="checkmark"
                             size={12}
-                            color={colors.text}
+                            color={colors.primary}
                           />
                         )}
                       </View>
                     )}
-                    <Text style={[
-                      styles.optionText,
-                      isSelected && styles.optionTextSelected,
-                    ]}>
+                    <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
                       {option.text}
                     </Text>
                     {!isMultiselect && isSelected && (
                       <IconSymbol
-                        name="checkmark"
-                        size={16}
+                        name="checkmark.circle.fill"
+                        size={20}
                         color={colors.primary}
                       />
+                    )}
+                  </>
+                );
+
+                return (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[styles.optionItem, isSelected && styles.optionItemSelected]}
+                    onPress={() => handleOptionSelect(option.value)}
+                    activeOpacity={0.82}
+                  >
+                    {isSelected ? (
+                      <LinearGradient
+                        colors={goldenGradient}
+                        {...gradientConfig}
+                        style={[styles.optionItemInner, styles.optionItemInnerSelected]}
+                      >
+                        {optionBody}
+                      </LinearGradient>
+                    ) : (
+                      <View style={styles.optionItemInner}>
+                        {optionBody}
+                      </View>
                     )}
                   </TouchableOpacity>
                 );
@@ -256,34 +272,49 @@ const styles = StyleSheet.create({
     maxHeight: 300,
   },
   optionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.inputBorder,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
+    borderRadius: 12,
+    borderWidth: 1,
     borderColor: colors.inputBorder,
-    marginRight: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  checkboxSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    overflow: 'hidden',
+    marginBottom: 12,
+    backgroundColor: colors.inputBackground,
   },
   optionItemSelected: {
-    backgroundColor: colors.primaryTransparentLight || `${colors.primary}10`,
+    borderColor: createColorWithOpacity(colors.secondary, 0.6),
+    shadowColor: colors.secondary,
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+  optionItemInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    gap: 12,
+  },
+  optionItemInnerSelected: {
+    backgroundColor: 'transparent',
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.card,
+  },
+  checkboxSelected: {
+    borderColor: createColorWithOpacity(colors.secondary, 0.75),
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.25),
   },
   optionText: {
+    flex: 1,
     fontSize: 16,
     color: colors.text,
-    flex: 1,
     marginRight: 8,
   },
   optionTextSelected: {

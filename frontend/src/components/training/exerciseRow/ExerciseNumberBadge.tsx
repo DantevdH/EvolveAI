@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * Exercise Number Badge Component
  * Displays the exercise number with gradient background
@@ -14,8 +16,8 @@ const ExerciseNumberBadge: React.FC<ExerciseNumberBadgeProps> = ({ exerciseNumbe
     <View style={styles.numberBadgeContainer}>
       <LinearGradient
         colors={[
-          createColorWithOpacity(colors.primary, 0.8),
-          createColorWithOpacity(colors.secondary, 0.8)
+          createColorWithOpacity(colors.secondary, 0.32),
+          createColorWithOpacity(colors.secondary, 0.18),
         ]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -33,18 +35,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   numberBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: createColorWithOpacity(colors.primary, 0.3),
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.35),
+    shadowColor: createColorWithOpacity(colors.secondary, 0.25),
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 3,
   },
   numberText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.primary,
   },
 });
 

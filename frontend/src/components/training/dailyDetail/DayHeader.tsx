@@ -24,34 +24,22 @@ const DayHeader: React.FC<DayHeaderProps> = ({
   
   return (
     <View style={styles.dayHeaderContainer}>
-      <LinearGradient
-        colors={[
-          colors.card,
-          createColorWithOpacity(colors.card, 0.95),
-          colors.card
-        ]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.dayHeaderGradient}
-      >
+      <View style={styles.dayHeaderCard}>
         <View style={styles.dayHeader}>
-          {/* Day Icon */}
           <View style={styles.dayIconContainer}>
             {isTodaysWorkout && !isPastWeek ? (
               <Ionicons name="flame" size={18} color={colors.warning} />
             ) : isRestDay ? (
-              <Ionicons name="moon" size={18} color={colors.purple} />
+              <Ionicons name="moon" size={18} color={colors.primary} />
             ) : (
               <Ionicons name="fitness" size={18} color={colors.primary} />
             )}
           </View>
-          
-          {/* Day Name Badge */}
+
           <View style={styles.dayNameBadge}>
             <Text style={styles.dayName}>{dayOfWeek}</Text>
           </View>
-          
-          {/* Past Week Indicator */}
+
           {isPastWeek && (
             <View style={styles.pastWeekIndicator}>
               <Ionicons name="lock-closed" size={12} color={colors.muted} />
@@ -59,7 +47,7 @@ const DayHeader: React.FC<DayHeaderProps> = ({
             </View>
           )}
         </View>
-      </LinearGradient>
+      </View>
     </View>
   );
 };
@@ -70,11 +58,14 @@ const styles = StyleSheet.create({
     marginTop: -16,
     marginBottom: 8,
   },
-  dayHeaderGradient: {
-    paddingVertical: 12,
+  dayHeaderCard: {
+    paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: createColorWithOpacity(colors.secondary, 0.2),
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
   },
   dayHeader: {
     flexDirection: 'row',
@@ -85,7 +76,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: createColorWithOpacity(colors.primary, 0.2),
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.2),
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -95,7 +86,7 @@ const styles = StyleSheet.create({
   dayName: {
     fontSize: 16,
     fontWeight: '600',
-    color: colors.text,
+    color: createColorWithOpacity(colors.text, 0.85),
     letterSpacing: 0.5,
   },
   pastWeekIndicator: {

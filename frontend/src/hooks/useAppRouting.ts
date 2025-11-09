@@ -77,7 +77,6 @@ export const useAppRouting = (): AppRoutingState => {
     const hasTrainingPlan = !!state.trainingPlan;
     const isPlanAccepted = !!state.userProfile.planAccepted;
 
-    // Granular routing based on what's missing
     if (!hasInitialQuestions || !hasInitialResponses) {
       return {
         targetRoute: '/onboarding/initial-questions',

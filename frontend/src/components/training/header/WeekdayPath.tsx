@@ -12,7 +12,6 @@ import { WeekdayPathProps } from './types';
 const WeekdayPath: React.FC<WeekdayPathProps> = ({ dayIndicators, onDaySelect }) => {
   return (
     <View style={styles.weekdayPathContainer}>
-      <View style={styles.pathLine} />
       <View style={styles.weekdayButtons}>
         {dayIndicators.map((day, index) => (
           <WeekdayButton
@@ -30,18 +29,8 @@ const WeekdayPath: React.FC<WeekdayPathProps> = ({ dayIndicators, onDaySelect })
 const styles = StyleSheet.create({
   weekdayPathContainer: {
     position: 'relative',
-    marginTop: 8,
-    paddingVertical: 8,
-  },
-  pathLine: {
-    position: 'absolute',
-    top: 21,
-    left: '8%',
-    right: '8%',
-    height: 3,
-    backgroundColor: createColorWithOpacity(colors.primary, 0.2),
-    borderRadius: 2,
-    zIndex: 0,
+    marginTop: 12,
+    paddingVertical: 4,
   },
   weekdayButtons: {
     flexDirection: 'row',

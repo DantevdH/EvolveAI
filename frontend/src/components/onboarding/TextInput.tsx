@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
     minHeight: 100,
   },
   textInputFocused: {
-    borderColor: colors.primary,
+    borderColor: colors.secondary,
     borderWidth: 2,
   },
   textInputError: {

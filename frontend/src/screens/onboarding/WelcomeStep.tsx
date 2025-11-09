@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Alert, useWindowDimensions, KeyboardAvoidingView, Platform, TouchableOpacity } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, Text, StyleSheet, TextInput, Alert, useWindowDimensions, KeyboardAvoidingView, Platform, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { OnboardingCard } from '../../components/onboarding/OnboardingCard';
 import { OnboardingNavigation } from '../../components/onboarding/OnboardingNavigation';
 import { colors } from '../../constants/designSystem';
 import { createColorWithOpacity } from '../../constants/colors';
 import { IconSymbol } from '../../../components/ui/IconSymbol';
+
+const EVOLVE_LOGO = require('../../../assets/images/evolve-logo.png');
 
 interface WelcomeStepProps {
   username: string;
@@ -55,11 +56,9 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
   const sectionSpacing = isVerySmallScreen ? 8 : isSmallScreen ? 10 : 12; // Reduced spacing
   const cardPadding = screenWidth < 375 ? 16 : 20;
   
-  // Dynamic font sizes - Reduced icon size significantly
-  const heroIconSize = isVerySmallScreen ? 16 : isSmallScreen ? 18 : 20; // Much smaller icon
-  const heroTitleSize = isVerySmallScreen ? 18 : isSmallScreen ? 20 : 22;
-  const heroSubtitleSize = isVerySmallScreen ? 12 : 14;
+  const heroLogoSize = isVerySmallScreen ? 100 : isSmallScreen ? 116 : 136;
   const featureCardPadding = isVerySmallScreen ? 8 : 10;
+  const heroSpacing = sectionSpacing;
 
   return (
     <KeyboardAvoidingView
@@ -68,7 +67,7 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <OnboardingCard
-        title="Ready to evolve yourself?"
+        title="Ready to Relievr?"
         subtitle="Your personalized training journey starts here"
         scrollable={false}
       >
@@ -76,30 +75,41 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
           {/* Content Area - Takes available space */}
           <View style={[styles.contentArea, { paddingHorizontal: cardPadding, paddingBottom: 100, paddingTop: 4 }]}>
             {/* Gamified Hero Section - Compact */}
-            <View style={[styles.heroSection, { marginBottom: sectionSpacing - 4 }]}>
-              <LinearGradient
-                colors={[createColorWithOpacity(colors.primary, 0.4), createColorWithOpacity(colors.primary, 0.35)]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.iconContainer, { width: heroIconSize + 16, height: heroIconSize + 16, borderRadius: (heroIconSize + 16) / 2 }]}
+            <View style={[
+              styles.heroSection,
+              {
+                marginBottom: heroSpacing + 50,
+                marginTop: heroSpacing,
+              },
+            ]}>
+              <View style={[
+                styles.iconContainer,
+                {
+                  width: heroLogoSize,
+                  height: heroLogoSize,
+                  borderRadius: heroLogoSize / 2,
+                },
+              ]}
               >
-                <Ionicons name="sparkles" size={heroIconSize} color={colors.text} />
-              </LinearGradient>
+                <Image
+                  source={EVOLVE_LOGO}
+                  style={[styles.heroLogo, { width: heroLogoSize, height: heroLogoSize }]}
+                  resizeMode="contain"
+                />
+              </View>
+              <Text style={styles.heroTagline} numberOfLines={1} adjustsFontSizeToFit>
+                The smart way to lift the weight off your shoulders.
+              </Text>
             </View>
             
             {/* Gender Section - Above username */}
             {onGenderChange && (
-              <View style={[styles.genderSection, { marginBottom: sectionSpacing }]}>
+              <View style={[styles.genderSection, { marginBottom: sectionSpacing + 20 }]}>
                 <View style={styles.genderHeader}>
-                  <LinearGradient
-                    colors={[createColorWithOpacity(colors.primary, 0.3), createColorWithOpacity(colors.primary, 0.2)]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.genderHeaderBadge}
-                  >
-                    <Ionicons name="person-circle" size={14} color={colors.text} />
-                    <Text style={styles.genderLabel}>Gender</Text>
-                  </LinearGradient>
+                  <View style={styles.genderHeaderBadge}>
+                    <Ionicons name="person-circle" size={14} color={colors.primary} />
+                    <Text style={styles.genderLabel}>GENDER</Text>
+                  </View>
                 </View>
                 <View style={styles.genderOptions}>
                   <TouchableOpacity
@@ -107,22 +117,10 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
                     onPress={() => handleGenderChange('male')}
                     activeOpacity={0.7}
                   >
-                    {localGender === 'male' ? (
-                      <LinearGradient
-                        colors={[createColorWithOpacity(colors.primary, 0.3), createColorWithOpacity(colors.primary, 0.2)]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.genderOptionGradient}
-                      >
-                        <IconSymbol name="person.fill" size={14} color={colors.text} />
-                        <Text style={styles.genderOptionTextActive}>Male</Text>
-                      </LinearGradient>
-                    ) : (
-                      <View style={styles.genderOption}>
-                        <IconSymbol name="person.fill" size={14} color={colors.muted} />
-                        <Text style={styles.genderOptionText}>Male</Text>
-                      </View>
-                    )}
+                    <View style={[styles.genderOption, localGender === 'male' && styles.genderOptionActive]}>
+                      <IconSymbol name="person.fill" size={14} color={colors.primary} />
+                      <Text style={[styles.genderOptionText, localGender === 'male' && styles.genderOptionTextActive]}>Male</Text>
+                    </View>
                   </TouchableOpacity>
                   
                   <TouchableOpacity
@@ -130,22 +128,10 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
                     onPress={() => handleGenderChange('female')}
                     activeOpacity={0.7}
                   >
-                    {localGender === 'female' ? (
-                      <LinearGradient
-                        colors={[createColorWithOpacity(colors.primary, 0.3), createColorWithOpacity(colors.primary, 0.2)]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.genderOptionGradient}
-                      >
-                        <IconSymbol name="person.fill" size={14} color={colors.text} />
-                        <Text style={styles.genderOptionTextActive}>Female</Text>
-                      </LinearGradient>
-                    ) : (
-                      <View style={styles.genderOption}>
-                        <IconSymbol name="person.fill" size={14} color={colors.muted} />
-                        <Text style={styles.genderOptionText}>Female</Text>
-                      </View>
-                    )}
+                    <View style={[styles.genderOption, localGender === 'female' && styles.genderOptionActive]}>
+                      <IconSymbol name="person.fill" size={14} color={colors.primary} />
+                      <Text style={[styles.genderOptionText, localGender === 'female' && styles.genderOptionTextActive]}>Female</Text>
+                    </View>
                   </TouchableOpacity>
                   
                   <TouchableOpacity
@@ -153,22 +139,10 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
                     onPress={() => handleGenderChange('other')}
                     activeOpacity={0.7}
                   >
-                    {localGender === 'other' ? (
-                      <LinearGradient
-                        colors={[createColorWithOpacity(colors.primary, 0.3), createColorWithOpacity(colors.primary, 0.2)]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={styles.genderOptionGradient}
-                      >
-                        <IconSymbol name="person.2.fill" size={14} color={colors.text} />
-                        <Text style={styles.genderOptionTextActive}>Other</Text>
-                      </LinearGradient>
-                    ) : (
-                      <View style={styles.genderOption}>
-                        <IconSymbol name="person.2.fill" size={14} color={colors.muted} />
-                        <Text style={styles.genderOptionText}>Other</Text>
-                      </View>
-                    )}
+                    <View style={[styles.genderOption, localGender === 'other' && styles.genderOptionActive]}>
+                      <IconSymbol name="person.2.fill" size={14} color={colors.primary} />
+                      <Text style={[styles.genderOptionText, localGender === 'other' && styles.genderOptionTextActive]}>Other</Text>
+                    </View>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -177,15 +151,10 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
             {/* Gamified Username Section */}
             <View style={[styles.usernameContainer, { marginBottom: sectionSpacing }]}>
               <View style={styles.usernameHeader}>
-                <LinearGradient
-                  colors={[createColorWithOpacity(colors.primary, 0.3), createColorWithOpacity(colors.primary, 0.2)]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.usernameHeaderBadge}
-                >
-                  <Ionicons name="person-circle" size={14} color={colors.text} />
-                  <Text style={styles.usernameLabel}>Choose your username</Text>
-                </LinearGradient>
+                <View style={styles.usernameHeaderBadge}>
+                  <Ionicons name="person-circle" size={14} color={colors.primary} />
+                  <Text style={styles.usernameLabel}>CHOOSE YOUR USERNAME</Text>
+                </View>
               </View>
               
               <View style={styles.inputWrapper}>
@@ -204,11 +173,7 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
                   maxLength={20}
                   autoFocus={true}
                 />
-                {localUsername.length >= 3 && (
-                  <View style={styles.successIcon}>
-                    <Ionicons name="checkmark-circle" size={18} color={colors.tertiary} />
-                  </View>
-                )}
+                {/* No success icon; validation handled via text below */}
               </View>
               
               {/* Validation container with fixed height to prevent layout shift */}
@@ -233,36 +198,38 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
             </View>
             
             {/* Gamified Features Section - Compact */}
-            <View style={[styles.featuresContainer, { marginTop: 4, marginBottom: 0 }]}>
-              <View style={styles.featuresList}>
-                <FeatureCard
-                  icon="barbell"
-                  title="Strength Training Programs"
-                  description="Complete workout plans with exercises, sets, reps, and progressions"
-                  color={colors.primary}
-                  compact={isVerySmallScreen}
-                  padding={featureCardPadding}
-                />
-                
-                <FeatureCard
-                  icon="fitness"
-                  title="Endurance Training"
-                  description="Running, cycling, swimming, and cardio plans tailored to your goals"
-                  color={colors.tertiary}
-                  compact={isVerySmallScreen}
-                  padding={featureCardPadding}
-                />
-                
-                <FeatureCard
-                  icon="trophy"
-                  title="Sport Athlete Support"
-                  description="Supplemental strength & conditioning that fits around your practice schedule"
-                  color={colors.secondary}
-                  compact={isVerySmallScreen}
-                  padding={featureCardPadding}
-                />
+            {false && (
+              <View style={[styles.featuresContainer, { marginTop: 4, marginBottom: 0 }]}>
+                <View style={styles.featuresList}>
+                  <FeatureCard
+                    icon="barbell"
+                    title="Strength Training Programs"
+                    description="Complete workout plans with exercises, sets, reps, and progressions"
+                    color={colors.primary}
+                    compact={isVerySmallScreen}
+                    padding={featureCardPadding}
+                  />
+                  
+                  <FeatureCard
+                    icon="fitness"
+                    title="Endurance Training"
+                    description="Running, cycling, swimming, and cardio plans tailored to your goals"
+                    color={colors.tertiary}
+                    compact={isVerySmallScreen}
+                    padding={featureCardPadding}
+                  />
+                  
+                  <FeatureCard
+                    icon="trophy"
+                    title="Sport Athlete Support"
+                    description="Supplemental strength & conditioning that fits around your practice schedule"
+                    color={colors.secondary}
+                    compact={isVerySmallScreen}
+                    padding={featureCardPadding}
+                  />
+                </View>
               </View>
-            </View>
+            )}
 
             {error && (
               <View style={styles.errorContainer}>
@@ -302,20 +269,41 @@ interface FeatureCardProps {
 const FeatureCard: React.FC<FeatureCardProps> = ({ icon, title, description, color, compact = false, padding = 10 }) => {
   return (
     <View style={styles.featureCard}>
-      <LinearGradient
-        colors={[createColorWithOpacity(color, 0.3), createColorWithOpacity(color, 0.2)]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.featureGradient, { padding }]}
-      >
-        <View style={[styles.featureIconWrapper, compact && styles.featureIconWrapperCompact]}>
+      <View style={[styles.featureCardContent, { padding }]}>
+        <View
+          style={[
+            styles.featureIconWrapper,
+            compact && styles.featureIconWrapperCompact,
+            {
+              backgroundColor: createColorWithOpacity(color, 0.12),
+              borderColor: createColorWithOpacity(color, 0.4),
+            },
+          ]}
+        >
           <Ionicons name={icon} size={compact ? 14 : 16} color={color} />
         </View>
         <View style={styles.featureContent}>
-          <Text style={[styles.featureTitle, compact && styles.featureTitleCompact]} numberOfLines={1}>{title}</Text>
-          <Text style={[styles.featureDescription, compact && styles.featureDescriptionCompact]} numberOfLines={2}>{description}</Text>
+          <Text
+            style={[
+              styles.featureTitle,
+              { color },
+              compact && styles.featureTitleCompact,
+            ]}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+          <Text
+            style={[
+              styles.featureDescription,
+              compact && styles.featureDescriptionCompact,
+            ]}
+            numberOfLines={2}
+          >
+            {description}
+          </Text>
         </View>
-      </LinearGradient>
+      </View>
     </View>
   );
 };
@@ -323,6 +311,7 @@ const FeatureCard: React.FC<FeatureCardProps> = ({ icon, title, description, col
 const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   flexContainer: {
     flex: 1,
@@ -342,22 +331,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 0, // Removed bottom margin
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+  },
+  heroLogo: {
+    width: '100%',
+    height: '100%',
+  },
+  heroTagline: {
+    marginTop: 0,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.muted,
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   welcomeTitle: {
     fontWeight: '800',
-    color: colors.text,
+    color: colors.primary,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 6,
     letterSpacing: 0.5,
   },
   welcomeSubtitle: {
-    color: colors.muted,
+    color: createColorWithOpacity(colors.primary, 0.6),
     textAlign: 'center',
     lineHeight: 18,
     paddingHorizontal: 16,
@@ -378,16 +377,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignSelf: 'flex-start',
     gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
   },
   usernameLabel: {
-    fontSize: 13,
+    fontSize: 10,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.primary,
     letterSpacing: 0.5,
   },
   inputWrapper: {
@@ -396,27 +393,27 @@ const styles = StyleSheet.create({
   },
   usernameInput: {
     backgroundColor: colors.inputBackground,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: colors.inputBorder,
     borderRadius: 16,
     padding: 16,
     paddingRight: 48,
     fontSize: 15,
-    color: colors.text,
+    color: colors.primary,
     fontWeight: '500',
-    shadowColor: '#000',
+    shadowColor: createColorWithOpacity(colors.text, 0.08),
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1,
   },
   usernameInputError: {
     borderColor: colors.primary, // Match Strength Training Programs color
     backgroundColor: createColorWithOpacity(colors.primary, 0.2), // Match feature card opacity
   },
   usernameInputSuccess: {
-    borderColor: colors.tertiary, // Match Endurance Training color
-    backgroundColor: createColorWithOpacity(colors.tertiary, 0.2), // Match feature card opacity
+    borderColor: colors.inputBorder,
+    backgroundColor: colors.inputBackground,
   },
   successIcon: {
     position: 'absolute',
@@ -457,34 +454,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   featureCard: {
-    borderRadius: 10, // Smaller radius
-    overflow: 'hidden',
+    borderRadius: 12,
     backgroundColor: colors.card,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
+    shadowColor: createColorWithOpacity(colors.text, 0.08),
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
     elevation: 2,
   },
-  featureGradient: {
+  featureCardContent: {
     flexDirection: 'row',
-    alignItems: 'center', // Vertically center icons
-    gap: 10, // Reduced gap
+    alignItems: 'center',
+    gap: 10,
   },
   featureIconWrapper: {
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: createColorWithOpacity(colors.text, 0.08), // Lighter background
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.12),
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: createColorWithOpacity(colors.text, 0.12), // Lighter border
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, // Softer shadow
-    shadowRadius: 2,
-    elevation: 1, // Lower elevation
+    borderColor: createColorWithOpacity(colors.secondary, 0.35),
     flexShrink: 0, // Don't shrink icon
   },
   featureIconWrapperCompact: {
@@ -499,7 +492,7 @@ const styles = StyleSheet.create({
   featureTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.primary,
     marginBottom: 3,
     letterSpacing: 0.2,
     lineHeight: 16,
@@ -563,16 +556,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignSelf: 'flex-start',
     gap: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
   },
   genderLabel: {
-    fontSize: 13,
+    fontSize: 10,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.primary,
     letterSpacing: 0.5,
   },
   genderOptions: {
@@ -584,53 +575,34 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     minHeight: 70, // Fixed minimum height for consistency
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 3,
   },
   genderOption: {
     flex: 1,
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: createColorWithOpacity(colors.text, 0.1),
-    borderWidth: 1.5,
-    borderColor: createColorWithOpacity(colors.text, 0.15),
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 8,
     gap: 6,
     minHeight: 70, // Match container height
   },
-  genderOptionGradient: {
-    flex: 1,
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    gap: 6,
-    borderWidth: 1.5,
-    borderColor: createColorWithOpacity(colors.primary, 0.4),
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
-    minHeight: 70, // Match container height
+  genderOptionActive: {
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.18),
+    borderColor: createColorWithOpacity(colors.secondary, 0.55),
   },
   genderOptionText: {
     fontSize: 13,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.primary,
   },
   genderOptionTextActive: {
     fontSize: 13,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.primary,
   },
 });
 
