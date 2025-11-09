@@ -1,60 +1,45 @@
 /**
- * Color constants matching the Swift app design system
+ * Color constants matching the Swift app design system (Rebrand palette only)
  */
 
-// Primary brand colors
-export const colors = {
-  // Background colors
-  background: '#0D0D1A', // evolveBackground: Color(red: 0.05, green: 0.05, blue: 0.1)
-  card: '#1A1A26', // evolveCard: Color(red: 0.1, green: 0.1, blue: 0.15)
-  
-  // Brand colors
-  primary: '#932322', // evolvePrimary: Color(hex:"#932322")
-  secondary: '#236193', // evolveSecondary: Color(hex: "#236193")
-  tertiary: '#16B89F', // evolveTertiary: Color(hex: "#16B89F")
-  purple: '#A78BFA', // Purple color for rest days and special elements
-  
-  // Text colors
-  text: '#FFFFFF', // evolveText: Color.white
-  muted: '#B3B3B3', // evolveMuted: Color(white: 0.7)
-  
-  // Semantic colors
+// Rebrand palette (light theme)
+const palette = {
+  background: '#F8F8F8',
+  card: '#FFFFFF',
+  primary: '#7A1E1E',
+  secondary: '#CBB26A',
+  tertiary: '#1E1E1E',
+  purple: '#A78BFA',
+  text: '#1E1E1E',
+  muted: '#6B6B6B',
   success: '#4CAF50',
   warning: '#FF9800',
   error: '#F44336',
-  info: '#2196F3',
-  
-  // UI element colors
-  border: 'rgba(255, 255, 255, 0.2)',
-  borderLight: 'rgba(255, 255, 255, 0.1)',
-  overlay: 'rgba(0, 0, 0, 0.5)',
-  overlayLight: 'rgba(0, 0, 0, 0.3)',
-  
-  // Transparent variants
-  primaryTransparent: 'rgba(147, 35, 34, 0.2)',
-  primaryTransparentLight: 'rgba(147, 35, 34, 0.1)',
-  secondaryTransparent: 'rgba(35, 97, 147, 0.2)',
-  tertiaryTransparent: 'rgba(22, 184, 159, 0.2)',
-  
-  // Input colors
-  inputBackground: 'rgba(255, 255, 255, 0.1)',
-  inputBorder: 'rgba(255, 255, 255, 0.2)',
-  inputPlaceholder: 'rgba(255, 255, 255, 0.5)',
-  
-  // Button colors
-  buttonPrimary: '#932322',
-  buttonSecondary: 'rgba(255, 255, 255, 0.1)',
-  buttonDisabled: 'rgba(255, 255, 255, 0.1)',
-  
-  // Status colors
+  info: '#236193',
+  border: 'rgba(30, 30, 30, 0.1)',
+  borderLight: 'rgba(30, 30, 30, 0.05)',
+  overlay: 'rgba(30, 30, 30, 0.25)',
+  overlayLight: 'rgba(30, 30, 30, 0.12)',
+  primaryTransparent: 'rgba(122, 30, 30, 0.2)',
+  primaryTransparentLight: 'rgba(122, 30, 30, 0.1)',
+  secondaryTransparent: 'rgba(203, 178, 106, 0.2)',
+  tertiaryTransparent: 'rgba(30, 30, 30, 0.1)',
+  inputBackground: '#FFFFFF',
+  inputBorder: '#E5E5E5',
+  inputPlaceholder: 'rgba(30, 30, 30, 0.45)',
+  inputDisabled: 'rgba(30, 30, 30, 0.08)',
+  buttonPrimary: '#7A1E1E',
+  buttonSecondary: '#E5E5E5',
+  buttonDisabled: 'rgba(30, 30, 30, 0.15)',
   online: '#4CAF50',
   offline: '#9E9E9E',
   loading: '#FF9800',
 } as const;
 
+export const colors = palette;
+
 // Helper functions for creating color variants
 export const createColorWithOpacity = (color: string, opacity: number): string => {
-  // Convert hex to rgba
   if (color.startsWith('#')) {
     const hex = color.replace('#', '');
     const r = parseInt(hex.substr(0, 2), 16);
@@ -65,16 +50,24 @@ export const createColorWithOpacity = (color: string, opacity: number): string =
   return color;
 };
 
+// Shared gradient tokens
+export const goldenGradient = [
+  createColorWithOpacity(colors.secondary, 0.55),
+  createColorWithOpacity(colors.secondary, 0.2),
+] as const;
+
+export const subtleGoldenGradient = [
+  createColorWithOpacity(colors.secondary, 0.45),
+  createColorWithOpacity(colors.secondary, 0.15),
+] as const;
+
 // Common color combinations for components
 export const colorSchemes = {
-  // Card styles
   card: {
     background: colors.card,
     border: colors.border,
     shadow: colors.overlay,
   },
-  
-  // Button styles
   button: {
     primary: {
       background: colors.primary,
@@ -92,8 +85,6 @@ export const colorSchemes = {
       border: colors.borderLight,
     },
   },
-  
-  // Input styles
   input: {
     background: colors.inputBackground,
     border: colors.inputBorder,
@@ -101,8 +92,6 @@ export const colorSchemes = {
     placeholder: colors.inputPlaceholder,
     error: colors.error,
   },
-  
-  // Status styles
   status: {
     success: colors.success,
     warning: colors.warning,
@@ -136,6 +125,7 @@ export const {
   inputBackground,
   inputBorder,
   inputPlaceholder,
+  inputDisabled,
   buttonPrimary,
   buttonSecondary,
   buttonDisabled,

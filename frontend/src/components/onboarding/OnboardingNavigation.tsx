@@ -21,7 +21,7 @@ export const OnboardingNavigation: React.FC<OnboardingNavigationProps> = ({
   backTitle = 'Back',
   nextDisabled = false,
   backDisabled = false,
-  nextIcon = 'arrow.right.circle.fill',
+  nextIcon = 'arrow-forward',
   showBack = true,
   variant = 'dual',
 }) => {
@@ -87,6 +87,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
     marginBottom: 40,
-    gap: 16,
+    paddingHorizontal: 20,
+    gap: 12,
   },
 });

@@ -14,6 +14,35 @@ import { CoachProvider } from '@/src/context/CoachContext';
 import { ErrorBoundary } from '@/src/components/ErrorBoundary';
 import { NetworkStatus } from '@/src/components/NetworkStatus';
 import { NavigationProvider } from '@/src/navigation/NavigationProvider';
+import { colors } from '@/src/constants/colors';
+import FloatingChatButton from '@/components/FloatingChatButton';
+
+// Custom theme with transparent tab bar
+const CustomDarkTheme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: colors.primary,
+    background: colors.background,
+    card: colors.background, // This affects the tab bar wrapper
+    text: colors.text,
+    border: 'transparent',
+    notification: colors.primary,
+  },
+};
+
+const CustomDefaultTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: colors.primary,
+    background: colors.background,
+    card: colors.background, // This affects the tab bar wrapper
+    text: colors.text,
+    border: 'transparent',
+    notification: colors.primary,
+  },
+};
 
 function RootLayoutNav() {
   const { state } = useAuth();
@@ -56,7 +85,7 @@ function RootLayoutNav() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={colorScheme === 'dark' ? CustomDarkTheme : CustomDefaultTheme}>
       <Stack>
         {/* Always show all screens, but use initialRouteName to control which one shows first */}
         <Stack.Screen 
@@ -83,6 +112,8 @@ function RootLayoutNav() {
       </Stack>
       <NetworkStatus />
       <StatusBar style="auto" />
+      {/* Floating Chat Button - Only show when authenticated */}
+      {state.user && state.session && <FloatingChatButton />}
     </ThemeProvider>
   );
 }

@@ -1,60 +1,46 @@
+import { colors as baseColors, createColorWithOpacity } from './colors';
+
 /**
  * Central Design System - Single source of truth for all styling
  * Matches your Swift app design system
  */
 
 // ===== COLORS =====
-export const colors = {
-  // Background colors
-  background: '#0D0D1A', // evolveBackground: Color(red: 0.05, green: 0.05, blue: 0.1)
-  card: '#1A1A26', // evolveCard: Color(red: 0.1, green: 0.1, blue: 0.15)
-  
-  // Brand colors
-  primary: '#932322', // evolvePrimary: Color(hex:"#932322")
-  secondary: '#236193', // evolveSecondary: Color(hex: "#236193")
-  tertiary: '#16B89F', // evolveTertiary: Color(hex: "#16B89F")
-  
-  // Text colors
-  text: '#FFFFFF', // evolveText: Color.white
-  muted: '#B3B3B3', // evolveMuted: Color(white: 0.7)
-  
-  // Semantic colors
-  success: '#4CAF50',
-  warning: '#FF9800',
-  error: '#F44336',
-  info: '#2196F3',
-  
-  // UI element colors
-  border: 'rgba(255, 255, 255, 0.2)',
-  borderLight: 'rgba(255, 255, 255, 0.1)',
-  overlay: 'rgba(0, 0, 0, 0.5)',
-  overlayLight: 'rgba(0, 0, 0, 0.3)',
-  
-  // Transparent variants
-  primaryTransparent: 'rgba(147, 35, 34, 0.2)',
-  primaryTransparentLight: 'rgba(147, 35, 34, 0.1)',
-  secondaryTransparent: 'rgba(35, 97, 147, 0.2)',
-  tertiaryTransparent: 'rgba(22, 184, 159, 0.2)',
-  
-  // Input colors
-  inputBackground: 'rgba(255, 255, 255, 0.1)',
-  inputBorder: 'rgba(255, 255, 255, 0.2)',
-  inputPlaceholder: 'rgba(255, 255, 255, 0.5)',
-  inputDisabled: 'rgba(255, 255, 255, 0.05)',
-  
-  // Button colors
-  buttonPrimary: '#932322',
-  buttonSecondary: 'rgba(255, 255, 255, 0.1)',
-  buttonDisabled: 'rgba(255, 255, 255, 0.1)',
-  
-  // Status colors
-  online: '#4CAF50',
-  offline: '#9E9E9E',
-  loading: '#FF9800',
-  
-  // Error states
-  errorBackground: 'rgba(244, 67, 54, 0.1)',
+const designColors = {
+  background: baseColors.background,
+  card: baseColors.card,
+  primary: baseColors.primary,
+  secondary: baseColors.secondary,
+  tertiary: baseColors.tertiary,
+  purple: baseColors.purple,
+  text: baseColors.text,
+  muted: baseColors.muted,
+  success: baseColors.success,
+  warning: baseColors.warning,
+  error: baseColors.error,
+  info: baseColors.info,
+  border: baseColors.border,
+  borderLight: baseColors.borderLight,
+  overlay: baseColors.overlay,
+  overlayLight: baseColors.overlayLight,
+  primaryTransparent: baseColors.primaryTransparent,
+  primaryTransparentLight: baseColors.primaryTransparentLight,
+  secondaryTransparent: baseColors.secondaryTransparent,
+  tertiaryTransparent: baseColors.tertiaryTransparent,
+  inputBackground: baseColors.inputBackground,
+  inputBorder: baseColors.inputBorder,
+  inputPlaceholder: baseColors.inputPlaceholder,
+  inputDisabled: baseColors.inputDisabled,
+  buttonPrimary: baseColors.buttonPrimary,
+  buttonSecondary: baseColors.buttonSecondary,
+  buttonDisabled: baseColors.buttonDisabled,
+  online: baseColors.online,
+  offline: baseColors.offline,
+  loading: baseColors.loading,
+  errorBackground: createColorWithOpacity(baseColors.error, 0.1),
 } as const;
+
+export const colors = designColors;
 
 // ===== SPACING =====
 export const spacing = {
@@ -142,7 +128,6 @@ export const animation = {
 
 // ===== COMPONENT STYLES =====
 export const componentStyles = {
-  // Button styles
   button: {
     primary: {
       backgroundColor: colors.primary,
@@ -171,8 +156,6 @@ export const componentStyles = {
       borderColor: colors.inputBorder,
     },
   },
-  
-  // Input styles
   input: {
     container: {
       marginBottom: spacing.xxl,
@@ -183,79 +166,20 @@ export const componentStyles = {
       color: colors.text,
       marginBottom: spacing.sm,
     },
-    field: {
-      backgroundColor: colors.inputBackground,
-      borderRadius: borderRadius.lg,
-      padding: spacing.lg,
-      fontSize: typography.fontSizes.md,
-      color: colors.text,
-      borderWidth: 1,
-      borderColor: colors.inputBorder,
-    },
-    fieldError: {
-      borderColor: colors.error,
-      backgroundColor: colors.primaryTransparentLight,
-    },
-    textArea: {
-      backgroundColor: colors.inputBackground,
-      borderRadius: borderRadius.lg,
-      padding: spacing.lg,
-      fontSize: typography.fontSizes.md,
-      color: colors.text,
-      borderWidth: 1,
-      borderColor: colors.inputBorder,
-      minHeight: 120,
-      textAlignVertical: 'top' as const,
+    helper: {
+      fontSize: typography.fontSizes.sm,
+      color: colors.muted,
+      marginTop: spacing.xs,
     },
   },
-  
-  // Loading styles
-  loading: {
-    overlay: {
-      flex: 1,
-      backgroundColor: colors.overlay,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    container: {
-      backgroundColor: colors.background,
-      borderRadius: borderRadius.lg,
+  card: {
+    base: {
+      backgroundColor: colors.card,
+      borderRadius: borderRadius.xl,
       padding: spacing.xxl,
-      alignItems: 'center',
-      minWidth: 200,
-      ...shadows.lg,
-    },
-    spinner: {
-      size: 'large' as const,
-      color: colors.primary,
-    },
-    text: {
-      marginTop: spacing.lg,
-      fontSize: typography.fontSizes.md,
-      color: colors.text,
-      textAlign: 'center' as const,
+      borderWidth: 1,
+      borderColor: colors.border,
+      ...shadows.md,
     },
   },
 } as const;
-
-// ===== EXPORTS =====
-export const designSystem = {
-  colors,
-  spacing,
-  typography,
-  borderRadius,
-  shadows,
-  animation,
-  componentStyles,
-} as const;
-
-// Export individual items for convenience
-export {
-  colors,
-  spacing,
-  typography,
-  borderRadius,
-  shadows,
-  animation,
-  componentStyles,
-};

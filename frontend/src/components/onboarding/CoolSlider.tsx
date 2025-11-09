@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, PanResponder, Animated, Dimensions, TouchableOpacity } from 'react-native';
 import { colors } from '../../constants/designSystem';
+import { createColorWithOpacity } from '../../constants/colors';
 
 interface CoolSliderProps {
   value: number;
@@ -12,12 +13,13 @@ interface CoolSliderProps {
   title: string;
   style?: any;
   size?: 'small' | 'large';
+  color?: string; // Custom color for the slider
 }
 
 const { width: screenWidth } = Dimensions.get('window');
 const SLIDER_WIDTH = screenWidth - 160; // Account for padding and buttons
-const THUMB_SIZE = 24;
-const TRACK_HEIGHT = 8;
+const THUMB_SIZE = 22;
+const TRACK_HEIGHT = 6;
 const BUTTON_SIZE = 28;
 
 export const CoolSlider: React.FC<CoolSliderProps> = ({
@@ -30,6 +32,7 @@ export const CoolSlider: React.FC<CoolSliderProps> = ({
   title,
   style,
   size = 'small',
+  color = colors.secondary, // Default to secondary (golden) accent
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const scale = useRef(new Animated.Value(1)).current;
@@ -155,7 +158,10 @@ export const CoolSlider: React.FC<CoolSliderProps> = ({
         <View style={styles.sliderWithButtons}>
           {/* Decrease Button */}
           <TouchableOpacity 
-            style={[styles.button, value <= min && styles.buttonDisabled]} 
+            style={[
+              styles.button, 
+              value <= min && styles.buttonDisabled
+            ]} 
             onPress={handleDecrease}
             disabled={value <= min}
           >
@@ -168,25 +174,35 @@ export const CoolSlider: React.FC<CoolSliderProps> = ({
               <View 
                 style={[
                   styles.progress, 
-                  { width: `${progressPercentage}%` }
+                  { 
+                    width: `${progressPercentage}%`,
+                    backgroundColor: createColorWithOpacity(color, 0.35)
+                  }
                 ]} 
               />
             </View>
             
             {/* Draggable Thumb */}
             <Animated.View 
-              style={[styles.thumb, translateStyle]}
+              style={[
+                styles.thumb, 
+                translateStyle,
+                { shadowColor: color }
+              ]}
               {...panResponder.panHandlers}
             >
               <Animated.View style={scaleStyle}>
-                <View style={styles.thumbInner} />
+                <View style={[styles.thumbInner, { backgroundColor: color }]} />
               </Animated.View>
             </Animated.View>
           </View>
 
           {/* Increase Button */}
           <TouchableOpacity 
-            style={[styles.button, value >= max && styles.buttonDisabled]} 
+            style={[
+              styles.button, 
+              value >= max && styles.buttonDisabled
+            ]} 
             onPress={handleIncrease}
             disabled={value >= max}
           >
@@ -206,13 +222,11 @@ export const CoolSlider: React.FC<CoolSliderProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.inputBackground,
-    borderRadius: 8,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: colors.inputBorder,
-    flex: 0, // Don't expand
-    minHeight: 60, // Ultra compact height
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    padding: 0,
+    flex: 0,
+    minHeight: 56,
   },
   title: {
     fontSize: 16,
@@ -263,24 +277,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 4,
-    paddingHorizontal: 1,
+    paddingHorizontal: 0,
   },
   trackContainer: {
-    width: SLIDER_WIDTH,
+    width: SLIDER_WIDTH - 32,
     height: THUMB_SIZE,
     justifyContent: 'center',
     position: 'relative',
-    marginHorizontal: 12,
+    marginHorizontal: 8,
   },
   track: {
     height: TRACK_HEIGHT,
-    backgroundColor: colors.inputBorder,
+    backgroundColor: colors.card,
     borderRadius: TRACK_HEIGHT / 2,
     position: 'relative',
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.25),
   },
   progress: {
     height: TRACK_HEIGHT,
-    backgroundColor: colors.primary,
     borderRadius: TRACK_HEIGHT / 2,
     position: 'absolute',
     top: 0,
@@ -291,23 +306,17 @@ const styles = StyleSheet.create({
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: THUMB_SIZE / 2,
-    backgroundColor: colors.text,
+    backgroundColor: colors.card,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    borderWidth: 2,
+    borderColor: createColorWithOpacity(colors.secondary, 0.65),
   },
   thumbInner: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.primary,
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.8),
   },
   labelsContainer: {
     flexDirection: 'row',
@@ -320,32 +329,25 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   button: {
-    width: BUTTON_SIZE,
-    height: BUTTON_SIZE,
-    borderRadius: BUTTON_SIZE / 2,
-    backgroundColor: colors.primary,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: colors.primary,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.35),
   },
   buttonDisabled: {
-    backgroundColor: colors.inputBorder,
-    shadowOpacity: 0,
-    elevation: 0,
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.12),
+    borderColor: createColorWithOpacity(colors.secondary, 0.2),
   },
   buttonText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '700',
-    color: 'white',
+    color: colors.primary,
   },
   buttonTextDisabled: {
-    color: colors.muted,
+    color: createColorWithOpacity(colors.primary, 0.4),
   },
 });

@@ -1,81 +1,161 @@
 /**
  * Progress Summary Component - Quick stats overview
+ * Responsive design that adapts to all screen sizes
  */
 
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants/colors';
+import { colors, createColorWithOpacity, goldenGradient } from '../../constants/colors';
 
 interface StatData {
   title: string;
   value: string;
   subtitle: string;
-  color: string;
   icon: keyof typeof Ionicons.glyphMap;
 }
 
 interface ProgressSummaryProps {
   streak?: number;
   weeklyTrainings?: number;
-  goalProgress?: number;
+  weeksCompleted?: number;
 }
 
 export const ProgressSummary: React.FC<ProgressSummaryProps> = ({
   streak = 0,
   weeklyTrainings = 0,
-  goalProgress = 0,
+  weeksCompleted = 0,
 }) => {
+  const { width: screenWidth } = useWindowDimensions();
+  
+  // Calculate responsive dimensions
+  const cardDimensions = useMemo(() => {
+    const HORIZONTAL_PADDING = 16;
+    const CARD_GAP = 8;
+    const TOTAL_GAPS = CARD_GAP * 2; // 2 gaps between 3 cards
+    const AVAILABLE_WIDTH = screenWidth - (HORIZONTAL_PADDING * 2);
+    const CARD_WIDTH = Math.floor((AVAILABLE_WIDTH - TOTAL_GAPS) / 3);
+    
+    return {
+      cardWidth: CARD_WIDTH,
+      gap: CARD_GAP,
+      padding: HORIZONTAL_PADDING,
+    };
+  }, [screenWidth]);
+
   const stats: StatData[] = [
     {
       title: 'Streak',
       value: streak.toString(),
       subtitle: 'days',
-      color: colors.primary,
       icon: 'flame',
     },
     {
       title: 'This Week',
       value: weeklyTrainings.toString(),
       subtitle: 'trainings',
-      color: colors.tertiary,
       icon: 'calendar',
     },
     {
-      title: 'Progress',
-      value: `${goalProgress}%`,
-      subtitle: 'complete',
-      color: colors.secondary,
-      icon: 'flag',
+      title: 'Weeks',
+      value: weeksCompleted.toString(),
+      subtitle: 'completed',
+      icon: 'checkmark-circle',
     },
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingHorizontal: cardDimensions.padding, gap: cardDimensions.gap }]}>
       {stats.map((stat, index) => (
-        <StatCard key={index} {...stat} />
+        <StatCard 
+          key={index} 
+          {...stat} 
+          cardWidth={cardDimensions.cardWidth}
+        />
       ))}
     </View>
   );
 };
 
-interface StatCardProps extends StatData {}
+interface StatCardProps extends StatData {
+  cardWidth: number;
+}
 
 const StatCard: React.FC<StatCardProps> = ({
   title,
   value,
   subtitle,
-  color,
   icon,
+  cardWidth,
 }) => {
+  const fontSize = useMemo(() => {
+    if (cardWidth < 100) {
+      return { title: 9, value: 14, subtitle: 8, icon: 10 };
+    } else if (cardWidth < 120) {
+      return { title: 10, value: 16, subtitle: 8, icon: 11 };
+    } else {
+      return { title: 11, value: 18, subtitle: 9, icon: 12 };
+    }
+  }, [cardWidth]);
+
+  const iconBadgeBackground = createColorWithOpacity(colors.secondary, 0.18);
+  const iconBadgeBorder = createColorWithOpacity(colors.secondary, 0.35);
+  const primaryTextColor = colors.primary;
+  const secondaryTextColor = createColorWithOpacity(colors.primary, 0.65);
+
   return (
-    <View style={styles.statCard}>
-      <View style={styles.statHeader}>
-        <Ionicons name={icon} size={14} color={color} />
-        <Text style={styles.statTitle}>{title}</Text>
-      </View>
-      <Text style={[styles.statValue, { color }]}>{value}</Text>
-      <Text style={styles.statSubtitle}>{subtitle}</Text>
+    <View style={[styles.statCard, { width: cardWidth }]}> 
+      <LinearGradient
+        colors={goldenGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientBackground}
+      >
+        <View
+          style={[styles.iconBadge, {
+            backgroundColor: iconBadgeBackground,
+            borderColor: iconBadgeBorder,
+          }]}
+        >
+          <Ionicons
+            name={icon}
+            size={fontSize.icon + 4}
+            color={primaryTextColor}
+          />
+        </View>
+
+        <Text
+          style={[styles.statValue, {
+            fontSize: fontSize.value + 4,
+            color: primaryTextColor,
+          }]}
+          numberOfLines={1}
+        >
+          {value}
+        </Text>
+
+        <View style={styles.statTextContainer}>
+          <Text
+            style={[styles.statTitle, {
+              fontSize: fontSize.title,
+              color: primaryTextColor,
+            }]}
+            numberOfLines={1}
+          >
+            {title}
+          </Text>
+          <Text
+            style={[styles.statSubtitle, {
+              fontSize: fontSize.subtitle,
+              color: secondaryTextColor,
+            }]}
+            numberOfLines={1}
+          >
+            {subtitle}
+          </Text>
+        </View>
+      </LinearGradient>
     </View>
   );
 };
@@ -83,41 +163,66 @@ const StatCard: React.FC<StatCardProps> = ({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    gap: 16,
-    paddingHorizontal: 16,
-    marginVertical: 8,
+    marginVertical: 12,
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+    gap: 8,
   },
   statCard: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 14,
+    borderRadius: 16,
+    overflow: 'hidden',
     backgroundColor: colors.card,
-    borderRadius: 14,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
+    shadowColor: createColorWithOpacity(colors.tertiary, 0.08),
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
     elevation: 4,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
+    minWidth: 80,
   },
-  statHeader: {
-    flexDirection: 'row',
+  gradientBackground: {
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    minHeight: 80,
+  },
+  iconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 4,
+    borderWidth: 1.5,
+  },
+  statTextContainer: {
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 2,
   },
   statTitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.text,
+    fontWeight: '700',
+    textAlign: 'center',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    letterSpacing: 0.5,
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 2,
+    fontWeight: '800',
+    textAlign: 'center',
+    width: '100%',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   statSubtitle: {
-    fontSize: 10,
-    color: colors.text,
-    opacity: 0.8,
+    textAlign: 'center',
+    width: '100%',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    fontWeight: '600',
   },
 });
+
+export default ProgressSummary;

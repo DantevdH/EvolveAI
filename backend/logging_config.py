@@ -10,6 +10,24 @@ import sys
 from typing import Optional
 
 
+class ColoredFormatter(logging.Formatter):
+    """Custom formatter that adds colors to WARNING and ERROR log levels."""
+    
+    # ANSI color codes
+    YELLOW = '\033[93m'  # Warning color
+    RED = '\033[91m'     # Error color
+    RESET = '\033[0m'    # Reset color
+    
+    def format(self, record):
+        # Add color based on log level
+        if record.levelno == logging.WARNING:
+            record.levelname = f"{self.YELLOW}{record.levelname}{self.RESET}"
+        elif record.levelno >= logging.ERROR:
+            record.levelname = f"{self.RED}{record.levelname}{self.RESET}"
+        
+        return super().format(record)
+
+
 def setup_logging() -> None:
     """
     Set up logging configuration for the application.
@@ -27,14 +45,20 @@ def setup_logging() -> None:
     # Configure logging format
     log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
+    # Create colored formatter
+    colored_formatter = ColoredFormatter(log_format)
+    
+    # Create console handler with colored formatter
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(colored_formatter)
+
     # Configure root logger
     logging.basicConfig(
         level=numeric_level,
-        format=log_format,
-        handlers=[logging.StreamHandler(sys.stdout)],
+        handlers=[console_handler],
     )
 
-    # Add file handler if LOG_FILE is specified
+    # Add file handler if LOG_FILE is specified (no colors in file)
     log_file = os.getenv("LOG_FILE")
     if log_file:
         file_handler = logging.FileHandler(log_file)

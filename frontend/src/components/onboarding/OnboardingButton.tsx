@@ -1,7 +1,10 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { IconSymbol } from '../../../components/ui/IconSymbol';
 import { colors } from '../../constants/designSystem';
+import { createColorWithOpacity } from '../../constants/colors';
 
 interface OnboardingButtonProps {
   title: string;
@@ -50,9 +53,42 @@ export const OnboardingButton: React.FC<OnboardingButtonProps> = ({
       case 'secondary':
         return colors.text;
       default:
-        return colors.text;
+        return colors.primary;
     }
   };
+
+  if (variant === 'primary') {
+    const gradientColors = disabled
+      ? [createColorWithOpacity(colors.secondary, 0.2), createColorWithOpacity(colors.secondary, 0.1)]
+      : [createColorWithOpacity(colors.secondary, 0.35), createColorWithOpacity(colors.secondary, 0.15)];
+
+    return (
+      <TouchableOpacity
+        style={[styles.button, style]}
+        onPress={onPress}
+        disabled={disabled}
+        activeOpacity={0.85}
+      >
+        <LinearGradient
+          colors={gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientButton}
+        >
+          <View style={styles.buttonContent}>
+            <Text style={getTextStyle()} numberOfLines={1}>{title}</Text>
+            {icon && (
+              <Ionicons
+                name={icon as keyof typeof Ionicons.glyphMap}
+                size={16}
+                color={getIconColor()}
+              />
+            )}
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  }
 
   return (
     <TouchableOpacity
@@ -62,13 +98,9 @@ export const OnboardingButton: React.FC<OnboardingButtonProps> = ({
     >
       <View style={styles.buttonContent}>
         {variant === 'back' && (
-          <IconSymbol 
-            name="arrow.left.circle.fill" 
-            size={16} 
-            color={getIconColor()} 
-          />
+          <Ionicons name="arrow-back" size={16} color={getIconColor()} />
         )}
-        <Text style={getTextStyle()}>{title}</Text>
+        <Text style={getTextStyle()} numberOfLines={1}>{title}</Text>
         {icon && variant !== 'back' && (
           <IconSymbol 
             name={icon} 
@@ -83,53 +115,68 @@ export const OnboardingButton: React.FC<OnboardingButtonProps> = ({
 
 const styles = StyleSheet.create({
   button: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
     paddingVertical: 14,
-    borderRadius: 12,
-    minWidth: 120,
+    borderRadius: 14,
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+    minHeight: 48,
+  },
+  gradientButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    width: '100%',
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
   },
   buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
+    flexShrink: 0,
+  },
+  // Base Text Style
+  buttonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   // Primary Button
   primaryButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: 'transparent',
   },
   primaryButtonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.primary,
+    letterSpacing: 0.4,
   },
   // Secondary Button
   secondaryButton: {
-    backgroundColor: colors.inputBackground,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: colors.inputBorder,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
   },
   secondaryButtonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.primary,
   },
   // Back Button
   backButton: {
-    backgroundColor: colors.inputBackground,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: colors.inputBorder,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
   },
   backButtonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
+    color: colors.primary,
   },
-  // Disabled State
+  // Disabled State - handled by gradient opacity, no separate style needed
   buttonDisabled: {
-    opacity: 0.5,
+    // No opacity change - gradient handles disabled state
   },
   buttonTextDisabled: {
     color: colors.muted,

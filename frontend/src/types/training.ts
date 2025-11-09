@@ -243,11 +243,12 @@ export interface UseTrainingReturn {
 
 // Component Props Types
 export interface TrainingHeaderProps {
-  trainingPlan: TrainingPlan | null;
-  progressRing: ProgressRingData;
-  currentWeek: number;
-  completedTrainingsThisWeek: number;
-  totalTrainingsThisWeek: number;
+  trainingPlan?: TrainingPlan | null;
+  progressRing?: ProgressRingData; // Optional - removed from weekly overview, kept in journey map
+  currentWeek?: number;
+  completedTrainingsThisWeek?: number;
+  totalTrainingsThisWeek?: number;
+  onBackToMap?: () => void;
 }
 
 export interface WeekNavigationProps {
@@ -261,11 +262,9 @@ export interface WeeklyOverviewProps {
 }
 
 export interface WeekNavigationAndOverviewProps {
-  weekNavigation: WeekNavigationData;
   dayIndicators: DayIndicator[];
-  onWeekChange: (week: number) => void;
   onDaySelect: (dayIndex: number) => void;
-  hideNavigation?: boolean;
+  currentWeek: number;
 }
 
 export interface DailyTrainingDetailProps {
@@ -282,10 +281,16 @@ export interface DailyTrainingDetailProps {
   onRemoveExercise?: (exerciseId: string, isEndurance: boolean) => void;
   onToggleChange?: (isStrength: boolean) => void;
   isStrengthMode?: boolean;
+  hideDayName?: boolean;
+  hideExerciseCompletionButton?: boolean; // Hide the completion star button
+  hideExerciseExpandButton?: boolean; // Hide the expand/collapse button
+  hideExerciseInfoButton?: boolean; // Hide the info (i) button
+  exerciseCompactMode?: boolean; // Reduce exercise card height/padding
 }
 
 export interface ExerciseRowProps {
   exercise: TrainingExercise;
+  exerciseNumber?: number; // Exercise number in the sequence (1, 2, 3, etc.)
   onToggle: () => void;
   onSetUpdate: (setIndex: number, reps: number, weight: number) => Promise<void>;
   onShowDetail: () => void;
@@ -293,6 +298,10 @@ export interface ExerciseRowProps {
   onSwapExercise?: () => void;
   onRemoveExercise?: () => void;
   isLocked?: boolean;
+  hideCompletionButton?: boolean; // Hide the completion star button
+  hideExpandButton?: boolean; // Hide the expand/collapse button
+  hideInfoButton?: boolean; // Hide the info (i) button
+  compactMode?: boolean; // Reduce card height/padding
 }
 
 export interface SetRowProps {

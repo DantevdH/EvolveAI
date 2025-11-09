@@ -9,6 +9,8 @@ The Curator manages the user's playbook by:
 """
 
 import uuid
+import asyncio
+import time
 from typing import List, Optional, Any
 from datetime import datetime
 from logging_config import get_logger
@@ -20,6 +22,7 @@ from core.base.schemas.playbook_schemas import (
     UpdatedUserPlaybook,
 )
 from core.training.helpers.llm_client import LLMClient
+from core.training.helpers.database_service import db_service
 
 
 class Curator:
@@ -204,6 +207,9 @@ class Curator:
                 - Include tags, confidence (0.0-1.0), positive (bool), helpful_count, harmful_count
                 - Include created_at, last_used_at (current timestamp if newly used)
                 - Include source_plan_id if provided
+                - **Set requires_context field**: Determine if this lesson can be backed by documentation/knowledge base
+                  - If lesson involves training methodologies, best practices, or general principles that can be found in knowledge base → set `requires_context="context"`
+                  - If lesson is user-specific preference/constraint that cannot be backed by documentation → set `requires_context="not_found"`
                 - Set total_lessons to the count of final lessons
                 - Provide reasoning explaining what was added, merged, removed, and why
 
@@ -224,7 +230,12 @@ class Curator:
             """
 
             # Call LLM with schema (returns validated Pydantic model or dict)
-            updated_playbook_result, _ = self.llm.chat_parse(prompt, UpdatedUserPlaybook)
+            ai_start = time.time()
+            updated_playbook_result, completion = self.llm.chat_parse(prompt, UpdatedUserPlaybook)
+            ai_duration = time.time() - ai_start
+            
+            # Track latency
+            await db_service.log_latency_event("curator_process_batch", ai_duration, completion)
             
             # Handle both Pydantic model instance and dict (depending on LLM provider)
             if updated_playbook_result is None:
@@ -318,6 +329,85 @@ class Curator:
             total_lessons=updated_playbook.total_lessons,
             last_updated=datetime.utcnow().isoformat(),
         )
+
+    async def enrich_lessons_with_context(
+        self,
+        playbook: UserPlaybook,
+        rag_service: Optional[Any] = None,
+    ) -> UserPlaybook:
+        """
+        Enrich playbook lessons with validated context from knowledge base.
+        
+        This method runs AFTER curation and processes lessons with requires_context="context"
+        to retrieve and validate relevant context from the knowledge base.
+        
+        Args:
+            playbook: UserPlaybook with curated lessons (requires_context field already set)
+            rag_service: RAGTool instance for context retrieval (optional, will use TrainingCoach if None)
+            
+        Returns:
+            UserPlaybook with context field populated for lessons that require it
+        """
+        if not rag_service:
+            self.logger.warning("No RAGTool provided - cannot enrich lessons with context")
+            return playbook
+        
+        try:
+            self.logger.info(f"Enriching playbook lessons with context...")
+            
+            # Filter lessons that require context
+            lessons_requiring_context = [
+                lesson for lesson in playbook.lessons 
+                if lesson.requires_context == "context"
+            ]
+            
+            if not lessons_requiring_context:
+                self.logger.info("No lessons require context - skipping enrichment")
+                return playbook
+            
+            self.logger.info(f"Found {len(lessons_requiring_context)} lessons requiring context")
+            
+            # Process lessons in parallel with concurrency limit
+            # Semaphore limits concurrent operations to prevent API rate limits
+            MAX_CONCURRENT_ENRICHMENTS = 5
+            semaphore = asyncio.Semaphore(MAX_CONCURRENT_ENRICHMENTS)
+            
+            async def process_lesson(lesson: PlaybookLesson) -> None:
+                """Process a single lesson's context enrichment."""
+                async with semaphore:  # Limit concurrent operations
+                    try:
+                        # Run sync operation in thread pool (non-blocking)
+                        validated_context = await asyncio.to_thread(
+                            rag_service.validate_and_retrieve_context,
+                            lesson_text=lesson.text,
+                            max_sentences=10
+                        )
+                        
+                        # Set context field on lesson
+                        lesson.context = validated_context
+                        
+                        if validated_context != "context not found":
+                            self.logger.info(
+                                f"✅ Context retrieved for lesson {lesson.id} ({len(validated_context)} chars)"
+                            )
+                        else:
+                            self.logger.info(f"⚠️  No context found for lesson {lesson.id}")
+                            
+                    except Exception as e:
+                        self.logger.error(f"Error retrieving context for lesson {lesson.id}: {e}")
+                        lesson.context = "context not found"
+            
+            # Process all lessons in parallel
+            tasks = [process_lesson(lesson) for lesson in lessons_requiring_context]
+            await asyncio.gather(*tasks)
+            
+            self.logger.info(f"✅ Enriched {len(lessons_requiring_context)} lessons with context (parallel processing)")
+            return playbook
+            
+        except Exception as e:
+            self.logger.error(f"Error enriching lessons with context: {e}", exc_info=True)
+            # Return playbook unchanged on error
+            return playbook
 
     def mark_lessons_as_applied(
         self, playbook: UserPlaybook, applied_lesson_ids: List[str]

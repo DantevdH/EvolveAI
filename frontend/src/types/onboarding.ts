@@ -20,6 +20,7 @@ export interface AIQuestion {
   text: string;
   response_type: QuestionType;
   options?: QuestionOption[];
+  multiselect?: boolean; // Whether user can select multiple options (for multiple_choice and dropdown)
   min_value?: number;
   max_value?: number;
   step?: number;
@@ -29,6 +30,8 @@ export interface AIQuestion {
   help_text?: string;
   min_description?: string;
   max_description?: string;
+  order?: number; // Display order for this question (1-based, lower numbers appear first)
+  required?: boolean;
 }
 
 export interface AIQuestionResponse {
@@ -106,13 +109,15 @@ export interface OnboardingState {
   initialQuestionsLoading: boolean;
   currentInitialQuestionIndex: number;
   initialAiMessage?: string; // AI message for initial questions
-  
+  initialIntroShown: boolean;
+ 
   // Step 6: Follow-up Questions
   followUpQuestions: AIQuestion[];
   followUpResponses: Map<string, any>;
   followUpQuestionsLoading: boolean;
   currentFollowUpQuestionIndex: number;
   followUpAiMessage?: string; // AI message for follow-up questions
+  followUpIntroShown: boolean;
   
   // Step 7: Plan Generation
   planGenerationLoading: boolean;
@@ -120,9 +125,6 @@ export interface OnboardingState {
   completionMessage: string | null; // AI completion message after plan generation
   hasSeenCompletionMessage: boolean; // Track if user has seen the completion message
   error: string | null;
-  aiHasQuestions: boolean;
-  aiAnalysisPhase: 'initial' | 'followup' | 'generation' | null;
-  
   // Plan metadata for feedback updates
   planMetadata?: {
     exerciseInfo?: string;
@@ -167,6 +169,36 @@ export interface OnboardingApiResponse<T> {
   success: boolean;
   data?: T;
   message?: string;
+  error?: string;
+}
+
+// Plan feedback/update response (update-week endpoint)
+export interface PlanFeedbackResponse {
+  success: boolean;
+  ai_response: string;
+  plan_updated: boolean;
+  updated_plan?: any; // TrainingPlan type
+  updated_playbook?: {
+    user_id: string;
+    lessons: Array<{
+      id: string;
+      text: string;
+      tags: string[];
+      helpful_count: number;
+      harmful_count: number;
+      times_applied: number;
+      confidence: number;
+      positive: boolean;
+      created_at: string;
+      last_used_at?: string | null;
+      source_plan_id?: string | null;
+      requires_context?: string | null; // 'context' or 'not_found'
+      context?: string | null; // Validated context from knowledge base
+    }>;
+    total_lessons: number;
+    last_updated: string;
+  } | null; // Updated playbook with context after processing feedback
+  navigate_to_main_app?: boolean;
   error?: string;
 }
 
@@ -234,20 +266,9 @@ export interface QuestionsStepProps extends OnboardingStepProps {
   onResponseChange: (questionId: string, value: any) => void;
   currentQuestionIndex: number;
   totalQuestions: number;
-  isLoading: boolean;
   stepTitle: string;
   username?: string;
   aiMessage?: string; // AI message from backend
-}
-
-export interface PlanGenerationStepProps {
-  isLoading: boolean;
-  error?: string;
-  onRetry: () => void;
-  onStartGeneration?: () => void;
-  username?: string;
-  isCompleted?: boolean;
-  completionMessage?: string;
-  onContinue?: () => void;
-  onViewPlan?: () => void;
+  introAlreadyCompleted?: boolean;
+  onIntroComplete?: () => void;
 }

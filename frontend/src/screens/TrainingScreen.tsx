@@ -1,21 +1,25 @@
 // Training Screen - Main training interface
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, SafeAreaView, TouchableOpacity } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useTraining } from '../hooks/useTraining';
 import { useAuth } from '../context/AuthContext';
-import { colors } from '../constants/colors';
-import TrainingHeader from '../components/training/TrainingHeader';
-import WeekNavigationAndOverview from '../components/training/WeekNavigationAndOverview';
-import DailyTrainingDetail from '../components/training/DailyTrainingDetail';
+import { colors, createColorWithOpacity, goldenGradient } from '../constants/colors';
+import { TrainingHeader } from '../components/training/header';
+import { DailyTrainingDetail } from '../components/training/dailyDetail';
 import ConfirmationDialog from '../components/shared/ConfirmationDialog';
-import ExerciseDetailView from '../components/training/ExerciseDetailView';
+import { ExerciseDetailView } from '../components/training/exerciseDetail';
 import OneRMCalculatorView from '../components/training/OneRMCalculatorView';
-import ExerciseSwapModal from '../components/training/ExerciseSwapModal';
+import { ExerciseSwapModal } from '../components/training/exerciseSwapModal';
 import SessionRPEModal from '../components/training/SessionRPEModal';
-import { DailyFeedbackModal, DailyFeedbackData } from '../components/training/DailyFeedbackModal';
+import { DailyFeedbackModal, DailyFeedbackData } from '../components/training/dailyFeedback';
 import { useDailyFeedback } from '../hooks/useDailyFeedback';
-import AddExerciseModal from '../components/training/AddExerciseModal';
-import AddEnduranceSessionModal from '../components/training/AddEnduranceSessionModal';
+import { AddExerciseModal } from '../components/training/addExerciseModal';
+import { AddEnduranceSessionModal } from '../components/training/addEnduranceSession';
+import { FitnessJourneyMap } from '../components/training/journeyMap';
+import { WelcomeHeader } from '../components/home/WelcomeHeader';
+import { ProgressSummary } from '../components/home/ProgressSummary';
 
 const TrainingScreen: React.FC = () => {
   const { state: authState } = useAuth();
@@ -23,6 +27,7 @@ const TrainingScreen: React.FC = () => {
   const [selectedExerciseForCalculator, setSelectedExerciseForCalculator] = useState<string>('');
   const [addExerciseModalVisible, setAddExerciseModalVisible] = useState(false);
   const [removeExerciseId, setRemoveExerciseId] = useState<{ id: string; isEndurance: boolean; name: string } | null>(null);
+  const [selectedWeekFromMap, setSelectedWeekFromMap] = useState<number | null>(null);
   
   const {
     trainingState,
@@ -215,6 +220,17 @@ const TrainingScreen: React.FC = () => {
     setIsStrengthMode(isStrength);
   };
 
+  // Handle week selection from map
+  const handleWeekSelectFromMap = (weekNumber: number) => {
+    setSelectedWeekFromMap(weekNumber);
+    selectWeek(weekNumber);
+  };
+
+  // Handle back to map
+  const handleBackToMap = () => {
+    setSelectedWeekFromMap(null);
+  };
+
   // Handle loading state
   if (trainingState.isLoading) {
     return (
@@ -282,6 +298,130 @@ const TrainingScreen: React.FC = () => {
 
   const isPastWeek = trainingState.currentWeekSelected < (trainingPlan?.currentWeek || 1);
 
+  // Calculate KPIs for ProgressSummary
+  const completedWeeks = trainingPlan?.weeklySchedules?.filter(
+    week => week.weekNumber < trainingPlan.currentWeek
+  ).length || 0;
+
+  // Calculate streak (consecutive completed days)
+  const calculateStreak = () => {
+    if (!trainingPlan?.weeklySchedules) return 0;
+    
+    const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const today = new Date();
+    const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, etc.
+    const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0
+    const todayName = dayOrder[mondayFirstIndex];
+    const todayIndex = dayOrder.indexOf(todayName);
+    
+    const allDailyTrainings: Array<{ weekNumber: number; dayOfWeek: string; completed: boolean }> = [];
+    
+    trainingPlan.weeklySchedules.forEach(week => {
+      week.dailyTrainings.forEach(daily => {
+        if (!daily.isRestDay) {
+          const dayIndex = dayOrder.indexOf(daily.dayOfWeek);
+          const isPastOrToday = dayIndex <= todayIndex;
+          
+          if (isPastOrToday) {
+            const isCompleted = daily.exercises.length > 0 && daily.exercises.every(ex => ex.completed);
+            allDailyTrainings.push({
+              weekNumber: week.weekNumber,
+              dayOfWeek: daily.dayOfWeek,
+              completed: isCompleted
+            });
+          }
+        }
+      });
+    });
+    
+    // Sort by week number (descending) and day order (descending) - most recent first
+    allDailyTrainings.sort((a, b) => {
+      if (a.weekNumber !== b.weekNumber) {
+        return b.weekNumber - a.weekNumber;
+      }
+      return dayOrder.indexOf(b.dayOfWeek) - dayOrder.indexOf(a.dayOfWeek);
+    });
+    
+    let streak = 0;
+    for (const training of allDailyTrainings) {
+      if (training.completed) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
+  };
+
+  // Calculate weekly trainings (completed trainings in current week)
+  const calculateWeeklyTrainings = () => {
+    if (!trainingPlan?.weeklySchedules) return 0;
+    
+    const currentWeek = trainingPlan.weeklySchedules.find(
+      week => week.weekNumber === trainingPlan.currentWeek
+    );
+    
+    if (!currentWeek) return 0;
+    
+    return currentWeek.dailyTrainings.filter(
+      training => !training.isRestDay && 
+                  training.exercises.length > 0 && 
+                  training.exercises.every(ex => ex.completed)
+    ).length;
+  };
+
+  const streak = calculateStreak();
+  const weeklyTrainings = calculateWeeklyTrainings();
+
+  const renderJourneyAccessory = (
+    <TouchableOpacity
+      style={styles.journeyHeaderButtonWrapper}
+      activeOpacity={0.9}
+      onPress={() => handleWeekSelectFromMap(trainingPlan.currentWeek)}
+    >
+      <LinearGradient
+        colors={goldenGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.journeyHeaderButton}
+      >
+        <Text style={styles.journeyHeaderButtonText}>Continue</Text>
+        <Ionicons name="arrow-forward" size={16} color={colors.primary} />
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+
+  // Show map view if no week is selected from map
+  if (selectedWeekFromMap === null) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.journeyPageContainer}>
+          {/* Welcome Header */}
+          <WelcomeHeader username={authState.userProfile?.username} />
+          
+          {/* Progress Summary - KPIs */}
+          <ProgressSummary 
+            streak={streak}
+            weeklyTrainings={weeklyTrainings}
+            weeksCompleted={completedWeeks}
+          />
+          {/* Journey Map - Scrollable Card */}
+          <View style={styles.journeyMapContainer}>
+            <FitnessJourneyMap
+              trainingPlan={trainingPlan}
+              currentWeek={trainingPlan.currentWeek}
+              onWeekSelect={handleWeekSelectFromMap}
+              headerTitle={trainingPlan.title}
+              headerAccessory={renderJourneyAccessory}
+            />
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show detail view if a week is selected
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView 
@@ -289,21 +429,13 @@ const TrainingScreen: React.FC = () => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Training Header */}
+        {/* Training Header (Unified: Back + Progress + Weekdays) */}
         <TrainingHeader
-          trainingPlan={trainingPlan}
           progressRing={progressRing}
-          currentWeek={trainingState.currentWeekSelected}
-          completedTrainingsThisWeek={completedTrainingsThisWeek}
-          totalTrainingsThisWeek={totalTrainingsThisWeek}
-        />
-
-        {/* Week Navigation and Overview */}
-        <WeekNavigationAndOverview
-          weekNavigation={weekNavigation}
+          onBackToMap={handleBackToMap}
           dayIndicators={dayIndicators}
-          onWeekChange={selectWeek}
           onDaySelect={selectDay}
+          currentWeek={trainingState.currentWeekSelected}
         />
 
         {/* Daily Training Detail */}
@@ -414,11 +546,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollView: {
+  journeyPageContainer: {
     flex: 1,
+    paddingTop: 12,
+    gap: 12,
   },
-  scrollContent: {
-    paddingBottom: 100, // Extra padding for tab bar
+  journeyMapContainer: {
+    flex: 1,
+    minHeight: 0, // Important for flex children to shrink
+  },
+  journeyHeaderButtonWrapper: {
+    borderRadius: 999,
+    overflow: 'hidden',
+    maxWidth: 180,
+  },
+  journeyHeaderButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 1,
+  },
+  journeyHeaderButtonText: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.25,
   },
   bottomSpacing: {
     height: 20

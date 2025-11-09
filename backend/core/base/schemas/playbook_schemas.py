@@ -61,6 +61,14 @@ class PlaybookLesson(BaseModel):
     source_plan_id: Optional[str] = Field(
         None, description="ID of the training plan that generated this lesson"
     )
+    requires_context: Optional[str] = Field(
+        default="not_found",
+        description="Whether this lesson requires additional context from knowledge base: 'context' or 'not_found'. Determined by Curator."
+    )
+    context: Optional[str] = Field(
+        None,
+        description="Validated context retrieved from knowledge base for this lesson. Set to 'context not found' if no relevant context exists. Populated after curator step."
+    )
 
 
 class UserPlaybook(BaseModel):

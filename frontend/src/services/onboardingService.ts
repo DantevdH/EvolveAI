@@ -6,6 +6,7 @@ import {
   FollowUpQuestionsRequest,
   PlanGenerationRequest,
   OnboardingApiResponse,
+  PlanFeedbackResponse,
   AIQuestion,
 } from '../types/onboarding';
 
@@ -226,11 +227,11 @@ export class trainingService {
     planId: number,
     feedbackMessage: string,
     trainingPlan: any,  // Full training plan data from frontend
-    playbook: any,  // Playbook from userProfile
+    playbook: any,  // Playbook from userProfile (includes context field)
     personalInfo: any,  // Personal info from userProfile
     conversationHistory: Array<{ role: string; content: string }> = [],
     jwtToken?: string
-  ): Promise<any> {
+  ): Promise<PlanFeedbackResponse> {
     try {
       const request = {
         user_profile_id: userProfileId,
@@ -243,7 +244,7 @@ export class trainingService {
         jwt_token: jwtToken,
       };
 
-      const response = await apiClient.post<any>(
+      const response = await apiClient.post<PlanFeedbackResponse>(
         `${this.BASE_URL}/update-week`,
         request
       );

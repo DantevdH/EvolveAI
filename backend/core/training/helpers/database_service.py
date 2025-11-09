@@ -180,7 +180,14 @@ class DatabaseService:
 
         except Exception as e:
             error_str = str(e)
-            self.logger.error(f"Exception during user profile update: {error_str}")
+            if "timed out" in error_str.lower():
+                self.logger.error(
+                    f"Database query timed out during user profile update. "
+                    f"Possible causes: slow database performance, network latency, or high load. "
+                    f"Error: {error_str}"
+                )
+            else:
+                self.logger.error(f"Exception during user profile update: {error_str}")
             return {
                 "success": False,
                 "error": error_str,
@@ -1215,22 +1222,6 @@ class DatabaseService:
             True if successful, False otherwise
         """
         try:
-            # Validate event type
-            valid_events = [
-                "initial_questions",
-                "followup_questions",
-                "playbook",
-                "initial_plan",
-                "feedback_classify",  # Stage 1: Lightweight intent classification
-                "feedback_parse_operations",  # Stage 2: Operation parsing (only for update_request)
-                "feedback_plan_intent",  # E2E intent-based update (classify + apply)
-                "feedback_plan",  # Legacy: combined feedback event
-                "regenerate_plan"  # Legacy: full regeneration
-            ]
-            if event not in valid_events:
-                self.logger.warning(f"Invalid latency event type: {event}")
-                return False
-            
             # Extract token usage from completion object if provided
             input_tokens = None
             output_tokens = None

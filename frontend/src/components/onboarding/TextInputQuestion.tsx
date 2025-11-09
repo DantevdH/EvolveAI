@@ -21,10 +21,13 @@ export const TextInputQuestion: React.FC<TextInputQuestionProps> = ({
   disabled = false,
   noBackground = false,
 }) => {
+  // Ensure value is always a string
+  const stringValue = typeof value === 'string' ? value : (value != null ? String(value) : '');
+  
   return (
     <View style={styles.container}>
       <TextInput
-        value={value}
+        value={stringValue}
         onChangeText={onChange}
         placeholder={question.placeholder || 'Enter your response...'}
         maxLength={question.max_length || 500}

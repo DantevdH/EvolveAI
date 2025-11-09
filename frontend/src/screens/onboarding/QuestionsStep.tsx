@@ -1,14 +1,31 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Alert } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+//@ts-ignore
+import { View, StyleSheet, Alert } from 'react-native';
+//@ts-ignore
 import { OnboardingCard } from '../../components/onboarding/OnboardingCard';
+//@ts-ignore
 import { OnboardingNavigation } from '../../components/onboarding/OnboardingNavigation';
+//@ts-ignore
 import { QuestionRenderer } from '../../components/onboarding/QuestionRenderer';
+//@ts-ignore
 import { ProgressIndicator } from '../../components/onboarding/ProgressIndicator';
-import { IconSymbol } from '../../../components/ui/IconSymbol';
+//@ts-ignore
 import { QuestionsStepProps, QuestionType } from '../../types/onboarding';
-import { colors } from '../../constants/designSystem';
-import { AIChatMessage } from '../../components/generatePlan/AIChatMessage';
-import { AILoadingScreen } from '../../components/shared/AILoadingScreen';
+//@ts-ignore
+import { colors, spacing } from '../../constants/designSystem';
+//@ts-ignore
+import { AIChatMessage } from '../../components/shared/chat';
+
+//@ts-ignore
+const deriveInitialResponses = (questions: any, responses: Map<string, any>) => {
+  const answered = new Set<number>();
+  questions.forEach((question: any, index: number) => {
+    if (responses.has(question.id)) {
+      answered.add(index);
+    }
+  });
+  return answered;
+};
 
 export const QuestionsStep: React.FC<QuestionsStepProps> = ({
   questions,
@@ -16,246 +33,254 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
   onResponseChange,
   currentQuestionIndex,
   totalQuestions,
-  isLoading,
   onNext,
   onPrevious,
   error,
   stepTitle,
   username,
-  aiMessage, // Add aiMessage prop
+  aiMessage,
+  introAlreadyCompleted = false,
+  onIntroComplete,
 }) => {
-  const [currentIndex, setCurrentIndex] = useState(currentQuestionIndex);
+  const hasQuestions = questions.length > 0;
+  const [currentIndex, setCurrentIndex] = useState(Math.min(currentQuestionIndex, Math.max(0, questions.length - 1)));
   const [localResponses, setLocalResponses] = useState(responses);
-  const [showAnswerInterface, setShowAnswerInterface] = useState(false);
-  const [showAIIntro, setShowAIIntro] = useState(true); // Show AI intro when questions first load
-   
-  // Essential onboarding flow logging
-  
-  // Initialize answered questions based on existing responses
-  const [answeredQuestions, setAnsweredQuestions] = useState(() => {
-    const answered = new Set<number>();
-    questions.forEach((question, index) => {
-      if (responses.has(question.id)) {
-        answered.add(index);
-      }
-    });
-    return answered;
+  const [answeredQuestions, setAnsweredQuestions] = useState(() => deriveInitialResponses(questions, responses));
+  const [introPhase, setIntroPhase] = useState<'intro' | 'ready'>(() => {
+    if (!hasQuestions || introAlreadyCompleted || !aiMessage) {
+      return 'ready';
+    }
+    return 'intro';
   });
+  const [introMessageFinished, setIntroMessageFinished] = useState(() => introAlreadyCompleted || !aiMessage);
+  const [showAnswerInterface, setShowAnswerInterface] = useState(introPhase === 'ready' && answeredQuestions.has(currentIndex));
+  const currentQuestion = hasQuestions ? questions[currentIndex] : undefined;
+  const currentResponse = currentQuestion ? localResponses.get(currentQuestion.id) : undefined;
+  const showIntroMessage = introPhase === 'intro' && !!aiMessage;
+  const showQuestionMessage = introPhase === 'ready' && !!currentQuestion;
+  const shouldAnimateIntro = showIntroMessage;
+  const shouldAnimateQuestion = introPhase === 'ready' && currentQuestion && !answeredQuestions.has(currentIndex);
 
-  // Sync internal currentIndex with prop changes
   useEffect(() => {
-    setCurrentIndex(currentQuestionIndex);
-  }, [currentQuestionIndex]);
+    setLocalResponses(responses);
+  }, [responses]);
 
-  const currentQuestion = questions[currentIndex];
-  const currentResponse = localResponses.get(currentQuestion?.id);
+  useEffect(() => {
+    if (!hasQuestions) {
+      return;
+    }
+    setCurrentIndex(Math.min(currentQuestionIndex, questions.length - 1));
+  }, [currentQuestionIndex, hasQuestions, questions.length]);
 
-  // Update answered questions when questions or responses change
-  React.useEffect(() => {
-    const answered = new Set<number>();
-    questions.forEach((question, index) => {
-      if (localResponses.has(question.id)) {
-        answered.add(index);
-      }
-    });
-    setAnsweredQuestions(answered);
-  }, [questions, localResponses]);
+  useEffect(() => {
+    if (!hasQuestions) {
+      return;
+    }
+    setAnsweredQuestions(deriveInitialResponses(questions, responses));
+  }, [questions, responses, hasQuestions]);
+
+  useEffect(() => {
+    if (!hasQuestions) {
+      return;
+    }
+
+    const nextPhase = introAlreadyCompleted || !aiMessage ? 'ready' : 'intro';
+    setIntroPhase(nextPhase);
+    setIntroMessageFinished(introAlreadyCompleted || !aiMessage);
+    setShowAnswerInterface(nextPhase === 'ready' && answeredQuestions.has(currentIndex));
+  }, [questions, introAlreadyCompleted, aiMessage, answeredQuestions, currentIndex, hasQuestions]);
+
+  const handleIntroTypingComplete = useCallback(() => {
+    setIntroMessageFinished(true);
+  }, []);
+
+  const handleQuestionTypingComplete = useCallback(() => {
+    setShowAnswerInterface(true);
+  }, []);
 
   const handleResponseChange = useCallback((value: any) => {
-    if (!currentQuestion) return;
-    
+    if (!currentQuestion) {
+      return;
+    }
+
     const newResponses = new Map(localResponses);
     newResponses.set(currentQuestion.id, value);
     setLocalResponses(newResponses);
     onResponseChange(currentQuestion.id, value);
-    
-    // Mark this question as answered
     setAnsweredQuestions(prev => new Set(prev).add(currentIndex));
-  }, [currentQuestion, localResponses, onResponseChange, currentIndex]);
+  }, [currentQuestion, currentIndex, localResponses, onResponseChange]);
 
-  const handleTypingComplete = useCallback(() => {
-    setShowAnswerInterface(true);
-  }, []);
-
-  // Reset AI intro and current index when questions change
-  React.useEffect(() => {
-    if (questions.length > 0) {
-      setShowAIIntro(true);
-      // Reset to first question when questions array changes
-      setCurrentIndex(0);
-    }
-  }, [questions.length]);
-
-  // Reset showAnswerInterface when question changes
-  React.useEffect(() => {
-    // If this question has been answered before, show answer interface immediately
-    if (answeredQuestions.has(currentIndex)) {
-      setShowAnswerInterface(true);
-    } else {
+  useEffect(() => {
+    if (introPhase === 'intro') {
       setShowAnswerInterface(false);
     }
-  }, [currentIndex, answeredQuestions]);
+  }, [introPhase]);
 
-  // Auto-set default value for slider questions if not already answered
-  React.useEffect(() => {
-    if (!currentQuestion) return;
-    
-    // Only for slider questions that haven't been answered yet
+  useEffect(() => {
+    if (!currentQuestion) {
+      return;
+    }
+
     if (currentQuestion.response_type === QuestionType.SLIDER && !localResponses.has(currentQuestion.id)) {
       const defaultValue = currentQuestion.min_value ?? 0;
       const newResponses = new Map(localResponses);
       newResponses.set(currentQuestion.id, defaultValue);
       setLocalResponses(newResponses);
       onResponseChange(currentQuestion.id, defaultValue);
-      
-      // Mark as answered so the user can proceed without adjusting
       setAnsweredQuestions(prev => new Set(prev).add(currentIndex));
     }
   }, [currentQuestion, currentIndex, localResponses, onResponseChange]);
 
   const handleNext = useCallback(() => {
+    if (!hasQuestions) {
+      return;
+    }
+
     if (currentIndex < totalQuestions - 1) {
       setCurrentIndex(currentIndex + 1);
-    } else {
-      // Check if all required questions are answered
-      const unansweredRequired = questions.filter(q => 
-        q.required && !localResponses.has(q.id)
-      );
-      
-      if (unansweredRequired.length > 0) {
-        Alert.alert(
-          'Incomplete Questions',
-          `Please answer all required questions. You have ${unansweredRequired.length} remaining.`
-        );
-        return;
-      }
-      
-      onNext();
+      setShowAnswerInterface(answeredQuestions.has(currentIndex + 1));
+      return;
     }
-  }, [currentIndex, totalQuestions, questions, localResponses, onNext]);
+
+    const unansweredRequired = questions.filter(question => question.required && !localResponses.has(question.id));
+    if (unansweredRequired.length > 0) {
+      Alert.alert(
+        'Incomplete Questions',
+        `Please answer all required questions. You have ${unansweredRequired.length} remaining.`
+      );
+      return;
+    }
+
+    onNext();
+  }, [currentIndex, totalQuestions, questions, localResponses, onNext, answeredQuestions, hasQuestions]);
 
   const handlePrevious = useCallback(() => {
     if (currentIndex > 0) {
-      setCurrentIndex(currentIndex - 1);
+      const nextIndex = currentIndex - 1;
+      setCurrentIndex(nextIndex);
+      setShowAnswerInterface(answeredQuestions.has(nextIndex));
     } else {
       onPrevious();
     }
-  }, [currentIndex, onPrevious]);
+  }, [currentIndex, onPrevious, answeredQuestions]);
 
   const isCurrentQuestionValid = useCallback(() => {
-    if (!currentQuestion) return false;
-    if (!currentQuestion.required) return true;
-    
-    const response = localResponses.get(currentQuestion.id);
-    if (!response) return false;
-    
-    // Special validation for conditional boolean questions
-    if (currentQuestion.response_type === QuestionType.CONDITIONAL_BOOLEAN) {
-      // Must have a boolean value
-      if (response.boolean === null || response.boolean === undefined) return false;
-      
-      // If "No" is selected, that's valid
-      if (response.boolean === false) return true;
-      
-      // If "Yes" is selected, must have at least 20 characters
-      if (response.boolean === true) {
-        return response.text && response.text.trim().length >= 20;
-      }
+    if (!currentQuestion) {
+      return false;
     }
-    
-    // For other question types, check if response exists and is not empty
+
+    if (!currentQuestion.required) {
+      return true;
+    }
+
+    const response = localResponses.get(currentQuestion.id);
+    if (!response) {
+      return false;
+    }
+
+    if (currentQuestion.response_type === QuestionType.CONDITIONAL_BOOLEAN) {
+      if (response.boolean === null || response.boolean === undefined) {
+        return false;
+      }
+      if (response.boolean === false) {
+        return true;
+      }
+      return Boolean(response.text && response.text.trim().length >= 20);
+    }
+
     return response !== '';
   }, [currentQuestion, localResponses]);
 
-  if (isLoading) {
-    // Determine analysis phase based on step title
-    const analysisPhase = stepTitle?.includes('Initial') ? 'initial' : 
-                         stepTitle?.includes('Follow') ? 'followup' : null;
-    
-    return (
-      <AILoadingScreen 
-        username={username}
-        analysisPhase={analysisPhase}
-        aiMessage={aiMessage}
-      />
-    );
+  const advanceToQuestions = useCallback(() => {
+    if (!introAlreadyCompleted) {
+      onIntroComplete?.();
+    }
+    setIntroPhase('ready');
+    setShowAnswerInterface(answeredQuestions.has(currentIndex));
+  }, [answeredQuestions, currentIndex, introAlreadyCompleted, onIntroComplete]);
+
+  if (!hasQuestions) {
+    return null;
   }
 
   if (!currentQuestion) {
+    return null;
+  }
+
+  if (showIntroMessage) {
     return (
-      <OnboardingCard
-        title=""
-        subtitle=""
-        scrollable={true}
-      >
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>No questions available</Text>
+      <OnboardingCard title="" subtitle="" scrollable>
+        <View style={styles.introContainer}>
+          <View style={styles.introMessageWrapper}>
+            <AIChatMessage
+              customMessage={aiMessage}
+              username={username}
+              onTypingComplete={handleIntroTypingComplete}
+              skipAnimation={!shouldAnimateIntro}
+            />
+          </View>
+          <OnboardingNavigation
+            onNext={advanceToQuestions}
+            onBack={onPrevious}
+            nextTitle="Start"
+            showBack={false}
+            variant="single"
+            nextDisabled={!introMessageFinished}
+          />
         </View>
       </OnboardingCard>
     );
   }
 
-  // Show AI intro after questions are loaded, before showing questions
-  if (showAIIntro && questions.length > 0) {
-    const analysisPhase = stepTitle?.includes('Initial') ? 'initial' : 
-                         stepTitle?.includes('Follow') ? 'followup' : null;
-    
-    return (
-      <AILoadingScreen 
-        username={username}
-        analysisPhase={analysisPhase}
-        aiMessage={aiMessage}
-        showContinueButton={true}
-        onContinue={() => setShowAIIntro(false)}
-      />
-    );
-  }
-
   return (
-    <OnboardingCard
-      title=""
-      subtitle=""
-      scrollable={true}
-    >
+    <OnboardingCard title="" subtitle="" scrollable>
       <View style={styles.container}>
-        {/* Progress Indicator at the top */}
         <View style={styles.progressSection}>
           <ProgressIndicator
             currentStep={currentIndex + 1}
             totalSteps={totalQuestions}
             showStepNumbers={false}
             showPercentage={false}
-            thick={true}
+            thick
             style={styles.progressIndicator}
           />
         </View>
 
         <View style={styles.contentArea}>
-          {/* AI Chat Message with Current Question Text */}
-          <View style={styles.chatContainer}>
-            <AIChatMessage
-              customMessage={currentQuestion.text}
-              onTypingComplete={handleTypingComplete}
-              skipAnimation={answeredQuestions.has(currentIndex)}
-            />
-          </View>
+          {showIntroMessage && (
+            <View style={styles.chatContainer}>
+              <AIChatMessage
+                customMessage={aiMessage}
+                username={username}
+                skipAnimation={!shouldAnimateIntro}
+              />
+            </View>
+          )}
 
-          {/* Answer Interface - shown after typing is complete */}
-          {showAnswerInterface && (
+          {showQuestionMessage && (
+            <View style={styles.chatContainer}>
+              <AIChatMessage
+                customMessage={currentQuestion.text}
+                onTypingComplete={handleQuestionTypingComplete}
+                skipAnimation={!shouldAnimateQuestion}
+              />
+            </View>
+          )}
+
+          {introPhase === 'ready' && showAnswerInterface && (
             <View style={styles.answerContainer}>
               <QuestionRenderer
                 question={currentQuestion}
                 value={currentResponse}
                 onChange={handleResponseChange}
                 error={error}
-                noBackground={true}
+                noBackground
               />
             </View>
           )}
         </View>
 
-        {/* Navigation - shown after typing is complete */}
-        {showAnswerInterface && (
+        {introPhase === 'ready' && showAnswerInterface && (
           <OnboardingNavigation
             onNext={handleNext}
             onBack={handlePrevious}
@@ -264,7 +289,7 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
             nextDisabled={!isCurrentQuestionValid()}
             backDisabled={false}
             showBack={currentIndex > 0}
-            variant={currentIndex > 0 ? "dual" : "single"}
+            variant={currentIndex > 0 ? 'dual' : 'single'}
           />
         )}
       </View>
@@ -276,6 +301,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 20,
+  },
+  introContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: spacing.xxl,
+    justifyContent: 'space-between',
+  },
+  introMessageWrapper: {
+    marginBottom: spacing.xxl,
   },
   progressSection: {
     marginTop: -20,
@@ -292,16 +326,5 @@ const styles = StyleSheet.create({
   },
   progressIndicator: {
     marginBottom: 12,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 60,
-  },
-  errorText: {
-    fontSize: 16,
-    color: colors.error,
-    textAlign: 'center',
   },
 });

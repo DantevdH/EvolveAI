@@ -48,9 +48,9 @@ export const ExpoNavigation = {
   goToHome: () => router.push('/(tabs)'),
   
   /**
-   * Navigate to trainings tab
+   * Navigate to trainings tab (Journey)
    */
-  goToTrainings: () => router.push('/(tabs)/explore'),
+  goToTrainings: () => router.push('/(tabs)'),
   
   /**
    * Navigate to profile tab

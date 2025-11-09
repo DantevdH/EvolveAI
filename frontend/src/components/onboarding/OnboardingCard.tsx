@@ -35,9 +35,6 @@ export const OnboardingCard: React.FC<OnboardingCardProps> = ({
           </View>
         )}
         {title && <Text style={styles.title}>{title}</Text>}
-        {subtitle && (
-          <Text style={styles.subtitle}>{subtitle}</Text>
-        )}
       </View>
       
       {/* Content */}
@@ -78,21 +75,17 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
-    paddingTop: 20,
+    marginBottom: 36,
+    paddingTop: 16,
   },
   title: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: 'bold',
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
     color: colors.muted,
     textAlign: 'center',
-    lineHeight: 22,
+    marginBottom: 0,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
   },
   content: {
     flex: 1,

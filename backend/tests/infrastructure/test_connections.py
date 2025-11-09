@@ -103,10 +103,10 @@ class TestInfrastructure:
         except ImportError as e:
             pytest.fail(f"Failed to import BaseAgent: {e}")
 
-    def test_rag_tool_import(self):
+    def test_rag_service_import(self):
         """Test that RAGTool can be imported."""
         try:
-            from core.base.rag_tool import RAGTool
+            from core.base.rag_service import RAGTool
 
             assert RAGTool is not None, "RAGTool should be importable"
         except ImportError as e:
@@ -129,9 +129,9 @@ class TestInfrastructure:
 
         assert inspect.isabstract(BaseAgent), "BaseAgent should be an abstract class"
 
-    def test_rag_tool_structure(self):
+    def test_rag_service_structure(self):
         """Test that RAGTool has required methods."""
-        from core.base.rag_tool import RAGTool
+        from core.base.rag_service import RAGTool
 
         # Check that required methods exist
         assert hasattr(

@@ -27,9 +27,9 @@ const ProgressRing: React.FC<ProgressRingProps> = ({
         lineCap="round"
         duration={0} // No animation - instant update
       >
-        {(fill) => (
+        {(fill: number) => (
           <View style={styles.textContainer}>
-            <Text style={styles.progressText}>{progressPercentage}%</Text>
+            <Text style={styles.progressText}>{progressPercentage.toFixed(1)}%</Text>
           </View>
         )}
       </AnimatedCircularProgress>

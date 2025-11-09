@@ -20,9 +20,6 @@ from core.training.schemas.question_schemas import (
     AIQuestion,
     QuestionOption,
     QuestionType,
-    TrainingPlanOutline,
-    TrainingPeriod,
-    DailyTraining,
 )
 
 # Mock user profile data
@@ -407,66 +404,8 @@ def create_mock_follow_up_questions() -> AIQuestionResponse:
     )
 
 
-def create_mock_training_plan_outline() -> TrainingPlanOutline:
-    """Create a mock training plan outline for debug mode."""
-
-    periods = [
-        TrainingPeriod(
-            period_name="Foundation Phase",
-            duration_weeks=1,  # 1-week schedule duplicated to 4 weeks
-            explanation="Build a solid foundation with fundamental movement patterns and proper form",
-            daily_trainings=[
-                DailyTraining(
-                    day=1,
-                    training_name="Upper Body Strength",
-                    description="Push focus: chest, shoulders, triceps - 60 min",
-                    tags=["strength", "upper-body", "push"],
-                ),
-                DailyTraining(
-                    day=3,
-                    training_name="Lower Body Strength",
-                    description="Squats, deadlifts, lunges - 60 min",
-                    tags=["strength", "lower-body", "compound"],
-                ),
-                DailyTraining(
-                    day=5,
-                    training_name="Full Body Strength",
-                    description="Compound movements, core work - 45 min",
-                    tags=["strength", "full-body", "compound"],
-                ),
-            ],
-        ),
-        TrainingPeriod(
-            period_name="Progressive Overload Phase",
-            duration_weeks=1,  # 1-week schedule duplicated to 4 weeks
-            explanation="Gradually increase weights and volume to stimulate muscle growth and strength gains",
-            daily_trainings=[
-                DailyTraining(
-                    day=1,
-                    training_name="Upper Body Power",
-                    description="Heavy compounds, accessory work - 75 min",
-                    tags=["strength", "upper-body", "power"],
-                ),
-                DailyTraining(
-                    day=3,
-                    training_name="Lower Body Strength",
-                    description="Progressive squats, deadlifts - 75 min",
-                    tags=["strength", "lower-body", "progressive"],
-                ),
-                DailyTraining(
-                    day=5,
-                    training_name="Full Body Power",
-                    description="Heavy compounds, explosive movements - 60 min",
-                    tags=["strength", "full-body", "power"],
-                ),
-            ],
-        ),
-    ]
-    return TrainingPlanOutline(
-        title="Strength Builder Pro",
-        duration_weeks=8,
-        explanation="A comprehensive 8-week strength training program designed to build muscle mass and increase strength through progressive overload and proper periodization.",
-        training_periods=periods,
-        user_observations="The user is a 27 year old male who weighs 95.0 kg and is 195.0 cm tall. They want to focus on building muscle and strength and have advanced experience level. Based on their responses, their training preferences are focused on strength training with compound movements, they have access to barbell, dumbbell, and machine equipment, can train 4 days per week, has 60-75 minutes per session availability, prefers strength training with some endurance work, has no major limitations or injuries, and is motivated by progressive strength gains and muscle development. Their current performance level is advanced with experience in compound movements and progressive overload training.",
-        ai_message="🎯 Great news! I've analyzed your goals and created a personalized training plan outline that will help you build strength effectively! 💪 This program is designed specifically for your experience level and will progress you safely through foundation building to advanced strength gains. Ready to see your complete plan? 🚀",
-    )
+# DEPRECATED: TrainingPlanOutline schema no longer exists - this function is not used
+# def create_mock_training_plan_outline() -> TrainingPlanOutline:
+#     """Create a mock training plan outline for debug mode."""
+#     # This function is no longer used as TrainingPlanOutline was removed
+#     pass

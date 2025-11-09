@@ -4,16 +4,17 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { colors } from '../../constants/colors';
+import { colors, createColorWithOpacity } from '../../constants/colors';
 
 interface WelcomeHeaderProps {
   username?: string;
 }
 
 export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ username }) => {
-  const { timeOfDay, timeOfDayIcon } = getTimeOfDay();
+  const { timeOfDay, timeOfDayIcon, gradientColors } = getTimeOfDay();
   const router = useRouter();
 
   const handleSettingsPress = () => {
@@ -24,21 +25,38 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ username }) => {
     <View style={styles.container}>
       <View style={styles.textContainer}>
         <View style={styles.greetingRow}>
-          <Text style={styles.greeting}>Good {timeOfDay}</Text>
-          <Ionicons name={timeOfDayIcon} size={24} color={colors.primary} />
+          <LinearGradient
+            colors={gradientColors}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.greetingBadge}
+          >
+            <Ionicons name={timeOfDayIcon} size={20} color={colors.primary} />
+            <Text style={styles.greeting}>Good {timeOfDay}</Text>
+          </LinearGradient>
         </View>
         {username && (
-          <Text style={styles.username}>Welcome back, {username}!</Text>
+          <View style={styles.usernameContainer}>
+            <Text style={styles.username}>Welcome back, </Text>
+            <Text style={styles.usernameHighlight}>{username}!</Text>
+          </View>
         )}
       </View>
       
-      {/* Settings button */}
+      {/* Settings button - Gamified */}
       <TouchableOpacity 
         style={styles.settingsButton} 
         onPress={handleSettingsPress}
         activeOpacity={0.7}
       >
-        <Ionicons name="settings-outline" size={20} color={colors.primary} />
+        <LinearGradient
+          colors={[createColorWithOpacity(colors.secondary, 0.4), createColorWithOpacity(colors.secondary, 0.2)]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.settingsGradient}
+        >
+          <Ionicons name="settings" size={18} color={colors.primary} />
+        </LinearGradient>
       </TouchableOpacity>
     </View>
   );
@@ -47,25 +65,34 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ username }) => {
 const getTimeOfDay = () => {
   const hour = new Date().getHours();
   
+  const gradient = [
+    createColorWithOpacity(colors.secondary, 0.4),
+    createColorWithOpacity(colors.secondary, 0.2),
+  ];
+
   if (hour >= 5 && hour < 12) {
     return {
       timeOfDay: 'Morning',
       timeOfDayIcon: 'sunny' as keyof typeof Ionicons.glyphMap,
+      gradientColors: gradient,
     };
   } else if (hour >= 12 && hour < 17) {
     return {
       timeOfDay: 'Afternoon',
       timeOfDayIcon: 'partly-sunny' as keyof typeof Ionicons.glyphMap,
+      gradientColors: gradient,
     };
   } else if (hour >= 17 && hour < 22) {
     return {
       timeOfDay: 'Evening',
       timeOfDayIcon: 'moon' as keyof typeof Ionicons.glyphMap,
+      gradientColors: gradient,
     };
   } else {
     return {
       timeOfDay: 'Night',
       timeOfDayIcon: 'moon' as keyof typeof Ionicons.glyphMap,
+      gradientColors: gradient,
     };
   }
 };
@@ -73,7 +100,7 @@ const getTimeOfDay = () => {
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -82,26 +109,59 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   greetingRow: {
+    marginBottom: 6,
+  },
+  greetingBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 6,
+    alignSelf: 'flex-start',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    backgroundColor: colors.card, // Base background for gradient overlay
   },
   greeting: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: colors.text,
+    letterSpacing: 0.5,
+  },
+  usernameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
   },
   username: {
     fontSize: 14,
     color: colors.muted,
     fontWeight: '500',
   },
+  usernameHighlight: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '700',
+  },
   settingsButton: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: colors.primary + '10',
-    borderWidth: 1,
-    borderColor: colors.primary + '20',
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  settingsGradient: {
+    padding: 10,
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

@@ -1,0 +1,3 @@
+export const SEARCH_DEBOUNCE_MS = 300;
+export const DEFAULT_RECOMMENDATION_LIMIT = 3;
+
