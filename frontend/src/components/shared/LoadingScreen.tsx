@@ -9,7 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SimpleSpinner } from '../ui/SimpleSpinner';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/designSystem';
 import { createColorWithOpacity } from '../../constants/colors';
-import { IconSymbol } from '../../../components/ui/IconSymbol';
+import { IconSymbol } from '@/components/ui/IconSymbol';
 
 interface LoadingScreenProps {
   message?: string;

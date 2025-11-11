@@ -4,8 +4,8 @@
 
 import React, { useState, memo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { IconSymbol } from '../../../components/ui/IconSymbol';
-import { colors } from '../../constants/designSystem';
+import { IconSymbol } from '@/components/ui/IconSymbol';
+import { colors } from '../../../constants/designSystem';
 
 interface SliderInputProps {
   title: string;

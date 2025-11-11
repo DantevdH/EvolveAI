@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AIQuestion } from '../../types/onboarding';
-import { colors } from '../../constants/designSystem';
-import { createColorWithOpacity, goldenGradient } from '../../constants/colors';
-import { TextInput } from './TextInput';
+import { AIQuestion } from '../../../types/onboarding';
+import { colors } from '../../../constants/designSystem';
+import { createColorWithOpacity, goldenGradient } from '../../../constants/colors';
+import { TextInput } from '../inputs/TextInput';
 
 interface ConditionalBooleanQuestionProps {
   question: AIQuestion;

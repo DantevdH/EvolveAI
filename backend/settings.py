@@ -36,6 +36,9 @@ class Settings:
         os.getenv("PREMIUM_TIER_ENABLED", "true").lower() == "true"
     )
     FALLBACK_TO_FREE: bool = os.getenv("FALLBACK_TO_FREE", "true").lower() == "true"
+    PLAYBOOK_CONTEXT_MATCHING_ENABLED: bool = (
+        os.getenv("PLAYBOOK_CONTEXT_MATCHING_ENABLED", "false").lower() == "true"
+    )
 
     # Development Configuration
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"

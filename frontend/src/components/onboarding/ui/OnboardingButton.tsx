@@ -1,17 +1,20 @@
-import React from 'react';
+import React, { type ComponentProps } from 'react';
 import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { IconSymbol } from '../../../components/ui/IconSymbol';
-import { colors } from '../../constants/designSystem';
-import { createColorWithOpacity } from '../../constants/colors';
+import { IconSymbol } from '@/components/ui/IconSymbol';
+import { colors } from '../../../constants/designSystem';
+import { createColorWithOpacity } from '../../../constants/colors';
+
+type IconSymbolName = ComponentProps<typeof IconSymbol>['name'];
+type IoniconName = keyof typeof Ionicons.glyphMap;
 
 interface OnboardingButtonProps {
   title: string;
   onPress: () => void;
   disabled?: boolean;
   variant?: 'primary' | 'secondary' | 'back';
-  icon?: string;
+  icon?: IconSymbolName | IoniconName;
   style?: any;
 }
 
@@ -58,7 +61,7 @@ export const OnboardingButton: React.FC<OnboardingButtonProps> = ({
   };
 
   if (variant === 'primary') {
-    const gradientColors = disabled
+    const gradientColors: [string, string] = disabled
       ? [createColorWithOpacity(colors.secondary, 0.2), createColorWithOpacity(colors.secondary, 0.1)]
       : [createColorWithOpacity(colors.secondary, 0.35), createColorWithOpacity(colors.secondary, 0.15)];
 
@@ -79,7 +82,7 @@ export const OnboardingButton: React.FC<OnboardingButtonProps> = ({
             <Text style={getTextStyle()} numberOfLines={1}>{title}</Text>
             {icon && (
               <Ionicons
-                name={icon as keyof typeof Ionicons.glyphMap}
+                name={icon as IoniconName}
                 size={16}
                 color={getIconColor()}
               />
@@ -103,7 +106,7 @@ export const OnboardingButton: React.FC<OnboardingButtonProps> = ({
         <Text style={getTextStyle()} numberOfLines={1}>{title}</Text>
         {icon && variant !== 'back' && (
           <IconSymbol 
-            name={icon} 
+            name={icon as IconSymbolName} 
             size={16} 
             color={getIconColor()} 
           />

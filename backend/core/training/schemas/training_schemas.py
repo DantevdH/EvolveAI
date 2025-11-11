@@ -3,7 +3,14 @@ Pydantic schemas for the new training-focused database structure.
 This replaces the old training-focused schemas with sports-agnostic training schemas.
 """
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    field_validator,
+    model_validator,
+    AliasChoices,
+    ConfigDict,
+)
 from typing import List, Optional, Union, Literal, get_args, get_origin
 from datetime import datetime
 from enum import Enum
@@ -561,6 +568,53 @@ class TrainingPlanResponse(BaseModel):
         default=None, description="Error message if unsuccessful"
     )
     message: Optional[str] = Field(default=None, description="Success message")
+
+
+class ModalityDecision(BaseModel):
+    """Lightweight decision on modalities to include in the training plan."""
+
+    include_bodyweight_strength: bool = Field(
+        ...,
+        description="Whether to include bodyweight-only strength sessions (minimal or no equipment).",
+    )
+    include_equipment_strength: bool = Field(
+        ...,
+        description="Whether to include loaded/equipment-based strength sessions (barbells, dumbbells, machines).",
+    )
+    include_endurance: bool = Field(
+        ...,
+        description="Whether the training plan should include endurance sessions.",
+    )
+    rationale: str = Field(
+        ...,
+        description="Brief explanation tying the modalities to the user's goal, limiter, and confirmed equipment access.",
+    )
+
+
+class GeminiModalityDecision(BaseModel):
+    """
+    Gemini-friendly version of ModalityDecision.
+    
+    Simplified schema without AliasChoices to avoid JSON Schema generation issues
+    with Gemini's structured output API.
+    """
+    
+    include_bodyweight_strength: bool = Field(
+        ...,
+        description="Whether to include bodyweight-only strength sessions (true/false)."
+    )
+    include_equipment_strength: bool = Field(
+        ...,
+        description="Whether to include loaded/equipment-based strength sessions (true/false)."
+    )
+    include_endurance: bool = Field(
+        ...,
+        description="Whether to include endurance sessions (true/false)."
+    )
+    rationale: str = Field(
+        ...,
+        description="Brief explanation (max 200 chars) connecting goal, limiter, and equipment access.",
+    )
 
 
 # ===== Gemini-friendly DTOs (Enums flattened to str, omit server fields) =====

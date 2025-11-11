@@ -8,7 +8,7 @@ questions, training plan outlines, and training plans.
 import json
 import os
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Optional, Tuple
 from core.training.schemas.question_schemas import PersonalInfo, AIQuestion
 
 SAVE_PROMPTS = False
@@ -82,32 +82,78 @@ class PromptGenerator:
            - Distance training, endurance goals, aerobic fitness
            - Focus on improving cardiovascular capacity, stamina
            
-        3. **Sport Specific** - Training for a specific sport:
+        3. **Functional Fitness** - Blended strength + conditioning for overall performance or lifestyle:
+           - CrossFit, hybrid training, HIIT classes, general conditioning
+           - Goals like "get fitter overall," "increase functional capacity," "move better for life"
+           - Focus on versatility, movement quality, and time-efficient sessions
+        
+        4. **Sport Specific** - Training for a specific sport:
            - Football, hockey, basketball, tennis, martial arts, etc.
            - Team sports, individual sports, competitive sports
            - Focus on sport-specific performance and conditioning
         
         **SPECIAL CASES:**
-        - **Weight Loss**: Classify based on approach mentioned (strength if weight training, endurance if cardio-focused)
-        - **General Fitness**: If unclear, classify based on what seems most relevant (default to strength if truly ambiguous)
+        - **Weight Loss**: Classify based on approach mentioned (strength if weight training, endurance if cardio-focused, functional if balanced or class-based)
+        - **General Fitness / Move Better**: Default to functional fitness unless goal clearly emphasizes only strength or only endurance
         - **Mixed Goals**: Return primary type + secondary types (e.g., "strength" + "endurance" for someone wanting both)
         
         **OUTPUT REQUIREMENTS:**
-        - primary_type: One of "strength", "endurance", or "sport_specific"
+        Produce output that conforms to the `AthleteTypeClassification` schema:
+        - primary_type: One of "strength", "endurance", "functional_fitness", or "sport_specific"
         - secondary_types: List of additional types (can be empty if single focus)
         - confidence: 0.0-1.0 (how confident you are in this classification)
+        - reasoning: Brief explanation (2-3 sentences) of why this classification fits, referencing keywords from the goal description
         
         **EXAMPLES:**
-        - "I want to build muscle and get stronger" → primary_type: "strength", secondary_types: [], confidence: 0.95
-        - "I want to run a marathon and improve my 5K time" → primary_type: "endurance", secondary_types: [], confidence: 0.9
-        - "I play football and want to improve my conditioning" → primary_type: "sport_specific", secondary_types: [], confidence: 0.9
-        - "I want to lose weight through strength training and running" → primary_type: "strength", secondary_types: ["endurance"], confidence: 0.85
+        - "I want to build muscle and get stronger" → primary_type: "strength", secondary_types: [], confidence: 0.95, reasoning: "User explicitly mentions building muscle and strength."
+        - "I want to run a marathon and improve my 5K time" → primary_type: "endurance", secondary_types: [], confidence: 0.9, reasoning: "Goal references marathon and 5K performance."
+        - "I go to CrossFit and want to feel fitter for daily life" → primary_type: "functional_fitness", secondary_types: [], confidence: 0.9, reasoning: "Mentions CrossFit and overall functional fitness."
+        - "I play football and want to improve my conditioning" → primary_type: "sport_specific", secondary_types: [], confidence: 0.9, reasoning: "Mentions football competition and conditioning."
+        - "I want to lose weight through strength training and running" → primary_type: "strength", secondary_types: ["endurance"], confidence: 0.85, reasoning: "User cites strength training plus running for weight loss."
         """
         
         # TODO: REMOVE THIS - Prompt saving for review only
         _save_prompt_to_file("generate_athlete_type_classification_prompt", prompt)
         
         return prompt
+
+    @staticmethod
+    def generate_modality_selection_prompt(
+        personal_info: PersonalInfo,
+        user_playbook,
+    ) -> str:
+        """Prompt to decide whether to include strength and endurance sessions."""
+
+        playbook_summary = PromptGenerator.format_playbook_lessons(
+            user_playbook, personal_info, context="training"
+        )
+
+        return f"""
+        You are an expert training coach preparing to design a supplemental training plan for {personal_info.username}.
+        Before building the plan, decide which modalities should be included this week.
+
+        Consider:
+        • Primary goal: "{personal_info.goal_description}"
+        • Experience level: {personal_info.experience_level}
+        • Measurement system: {personal_info.measurement_system}
+        • Playbook lessons (if any): {playbook_summary or "No playbook lessons available"}
+        • Equipment constraints: Inspect the playbook lessons above for any mention of gym access, available equipment, or "bodyweight only." 
+          If nothing is mentioned, assume the user only has bodyweight options available.
+
+        OUTPUT REQUIREMENTS:
+        Return JSON that conforms to the ModalityDecision schema:
+        - include_bodyweight_strength: true/false
+        - include_equipment_strength: true/false
+        - include_endurance: true/false
+        - rationale: Short justification explaining the chosen modalities and explicitly referencing the user's goal, limiter, and equipment access noted in the playbook
+
+        Decision rules:
+        • include_equipment_strength → true only when the goal or limiter needs loaded strength work AND the playbook explicitly confirms access to barbells/dumbbells/machines.
+        • include_bodyweight_strength → true when strength work is still beneficial but only bodyweight/minimal tools are confirmed (or when no equipment information exists but strength is still helpful).
+        • You may set both strength flags to true if the user benefits from loaded work and also uses bodyweight sessions for variety.
+        • include_endurance → true when aerobic work directly advances the primary goal or mitigates a limiter highlighted in the playbook.
+        • If unsure about a modality, default to false and describe the uncertainty in the rationale.
+        """
 
     @staticmethod
     def get_question_generation_context() -> str:
@@ -143,11 +189,10 @@ class PromptGenerator:
         return """
         **General Themes (Apply to All Users):**
         Focus ONLY on information that directly affects plan design:
-        • **Constraints:** Injuries, equipment access, time availability, existing training commitments you need to plan around, physical limitations
-        • **Preferences:** Activities enjoyed/avoided, focus areas, training environments
-        • **Schedule:** When they can train, existing commitments, time constraints
-        • **Goals:** Specific performance targets, what they want to achieve
-        • **Current Abilities:** Baseline fitness levels, known benchmarks, experience with specific activities
+        • **Schedule:** time availability, existing training commitments you need to plan around
+        • **Preferences:** activities enjoyed/avoided, focus areas, training environments
+        • **Fitness Baseline:** baseline fitness levels, known benchmarks, experience with specific activities
+        • **Health:** injuries, physical limitations, sleep, stress, etc.
         """
     
     @staticmethod
@@ -167,19 +212,72 @@ class PromptGenerator:
         """Get the themes to avoid collecting information on."""
         return """
         **Themes to AVOID (What NOT to Ask About):**
-        The AI system decides these based on user information—don't ask users to make technical decisions:
+        The AI system decides these based on user information, don't ask users to make these kind of technical decisions:
         • How to structure training (splits, frequency, progression models)
         • What volumes/intensities to prescribe
         • How to periodize the plan
         • Technical coaching decisions
-        • Nutrition (not relevant to training plan generation)
-        • Position/role in sport (ask about conditioning goals instead)
+        • Nutrition 
+        """
+
+    @staticmethod
+    def _format_intent_summaries(
+        intents: List[Dict[str, Any]],
+        experience_level: str,
+    ) -> str:
+        lines: List[str] = []
+        for intent in intents:
+            priority = intent.get("priority", "primary").upper()
+            intent_id = intent.get("intent_id", "unknown_intent")
+            description = intent.get("description", "").strip()
+            header = f"  - [{priority}] {intent_id}: {description}"
+            lines.append(header)
+            tags = intent.get("tags") or []
+            if tags:
+                lines.append(f"    • Tags: {', '.join(tags)}")
+            experience_note = intent.get("experience_note")
+            if experience_note:
+                lines.append(
+                    f"    • {experience_level.title()} focus: {experience_note}"
+                )
+            applicability = intent.get("applicability_conditions") or []
+            if applicability:
+                lines.append(
+                    f"    • Applicability: {'; '.join(applicability)}"
+                )
+        return "\n".join(lines) if lines else "  - No athlete-specific intents available."
+
+    @staticmethod
+    def _get_app_scope_section() -> str:
+        """Shared app scope description used across prompts."""
+        return """
+        **CRITICAL - APP SCOPE:**
+        This app creates SUPPLEMENTAL training programs (strength & conditioning).
+        • ✅ We provide: Strength training, running, cycling, swimming, hiking, and general conditioning
+        • ❌ We do NOT provide: Sport-specific drills, technical skill training, or team practice schedules
+        • 🎯 For athletes: We create supportive strength/conditioning work to complement their existing sport training
+        """
+
+    @staticmethod
+    def _render_modality_decision_summary(
+        include_bodyweight_strength: bool,
+        include_equipment_strength: bool,
+        include_endurance: bool,
+        rationale: str,
+    ) -> str:
+        """Render modality summary section for plan prompts."""
+        return f"""
+            **MODALITY DECISION (BASED ON CURRENT GOAL AND PLAYBOOK):**
+            • Include Bodyweight Strength Sessions: {"Yes" if include_bodyweight_strength else "No"}
+            • Include Equipment-Based Strength Sessions: {"Yes" if include_equipment_strength else "No"}
+            • Include Endurance Sessions: {"Yes" if include_endurance else "No"}
+            • Rationale: {rationale}
         """
 
     @staticmethod
     def generate_question_content_prompt_initial(
         personal_info: PersonalInfo,
-        unified_checklist: List[str],
+        unified_checklist: List[Dict[str, Any]],
         athlete_type: Dict[str, Any]
     ) -> str:
         """Generate prompt for Step 3: Question Content Generation (Initial Questions)."""
@@ -190,7 +288,10 @@ class PromptGenerator:
         if secondary_types:
             athlete_type_desc += f" + {', '.join(secondary_types)}"
         
-        checklist_text = "\n".join([f"  - {item}" for item in unified_checklist])
+        checklist_text = PromptGenerator._format_intent_summaries(
+            unified_checklist,
+            personal_info.experience_level,
+        )
         
         prompt = f"""
         {PromptGenerator.get_question_generation_context()}
@@ -207,11 +308,13 @@ class PromptGenerator:
         • Workflow: This is the ONLY round of questions. There will be NO follow-up questions after this. You must ask ALL essential questions now—if you miss critical information, it cannot be collected later. Ensure your questions are comprehensive and cover all necessary themes.
         • User Status: {personal_info.username} has provided basic profile information (age, weight, height, goal, experience level).
         • Athlete Type: Primary: {primary_type}{" | Secondary: " + ", ".join(secondary_types) if secondary_types else ""}
+        • Classification Rationale: {athlete_type.get("reasoning", "Not provided")}
         
         {PromptGenerator.format_client_information(personal_info)}
         
         **QUESTION THEMES TO COVER:**
         Generate personalized questions that cover these themes. Each theme represents essential information needed for plan generation.
+        Treat athlete-specific themes as inspiration—translate them into tailored questions that reflect this user's goal and experience level.
         Ensure you cover ALL relevant themes below while avoiding the themes listed in the "Themes to AVOID" section.
         
         {PromptGenerator._get_general_themes_to_collect()}
@@ -221,18 +324,25 @@ class PromptGenerator:
         
         {PromptGenerator._get_themes_to_avoid()}
         
+        **META REASONING (INTERNAL ONLY):**
+        Before drafting the final output, silently list must-have information gaps for this user, map each gap to the relevant intent IDs, and decide whether it is primary or optional. Use this internal plan to guide question creation. Do NOT include the internal plan text verbatim in the final answer—summarize it in the structured `intent_plan` output instead.
+        
         **STEP-BY-STEP APPROACH:**
         
-        Step 1: Review Themes
-        - Review ALL themes above: general themes (apply to all users) and athlete-specific themes (for {athlete_type_desc})
+        Step 0: Plan Coverage
+        - Review ALL themes above: general themes (apply to all users) and athlete-specific intents (for {athlete_type_desc})
         - Identify which themes are most relevant for this user (age: {personal_info.age}, experience: {personal_info.experience_level}, goal: "{personal_info.goal_description}")
-        - Ensure you cover all relevant themes while avoiding the "Themes to AVOID" section
-        - Consider combining related themes into single comprehensive questions
+        - Map each must-have information gap to intent IDs and note whether it is primary or optional for this user
+        - Prepare to report this plan in the `intent_plan` output field
         
-        Step 2: Generate Question Content
-        - Create 7-10 questions total (quality over quantity—better to ask 5 focused questions than 8 irrelevant ones)
-        - Each question should cover one or more related themes
+        Step 1: Draft Questions
+        - Create an initial set of 7-10 questions (quality over quantity—better to ask 5 focused questions than 8 irrelevant ones)
+        - Each question should cover one or more related intents and add new insight beyond general themes
         - Ensure questions are self-contained and don't require follow-ups
+        
+        Step 2: Self-Review & Revise (Two-Pass Loop)
+        - Re-read each drafted question for clarity, uniqueness, and whether it captures the mapped intent
+        - Revise or replace questions that are redundant, unclear, or insufficiently personalized
         
         Step 3: Assign Order
         - Order questions logically: Equipment → Schedule → Goals → Constraints → Preferences
@@ -240,7 +350,7 @@ class PromptGenerator:
         
         Step 4: Validate
         - Ensure each question is ~20 words, clear, and self-contained
-        - Verify all themes are covered
+        - Verify all intents in the `intent_plan` are addressed appropriately
         - Confirm questions don't require follow-ups
         
         **CONSTRAINTS & REQUIREMENTS:**
@@ -251,6 +361,7 @@ class PromptGenerator:
            - Cover ALL relevant themes: general themes (apply to all) and athlete-specific themes (for {athlete_type_desc})
            - DO NOT ask about themes listed in "Themes to AVOID" section
            - Combine related themes into single comprehensive questions when logical
+           - Do not restate information already covered by the general themes; ensure each question contributes new theme-specific insight
            - Skip themes only if clearly not applicable to this user
            - Add questions if critical gaps are identified
         
@@ -274,7 +385,7 @@ class PromptGenerator:
         Order: 3
         Note: This question is self-contained, ~8 words, clear, and captures essential information
         
-        {PromptGenerator._get_common_output_format()}
+        {PromptGenerator._get_initial_output_format()}
         
         **VALIDATION CHECKLIST:**
         Before finalizing, ensure:
@@ -665,9 +776,27 @@ class PromptGenerator:
         """Get common output format section for question generation prompts."""
         return """
         **OUTPUT FORMAT:**
-        Return a list of question content items, each with:
-        - question_text: The actual question text (~20 words, clear, self-contained)
-        - order: Display order number (1-based, lower numbers appear first)
+        Return data that conforms to the `QuestionContent` schema:
+        - intent_plan: List of intent plan items (can be empty if not needed for this round)
+        - questions_content: List of objects, each with:
+          * question_text: The actual question text (~20 words, clear, self-contained)
+          * order: Display order number (1-based, lower numbers appear first)
+        """
+
+    @staticmethod
+    def _get_initial_output_format() -> str:
+        """Get output format for initial question generation with intent planning."""
+        return """
+        **OUTPUT FORMAT:**
+        Return data that conforms to the `QuestionContent` schema:
+        - intent_plan: Required. List of items documenting your coverage plan. Each item must include:
+          * information_gap: The critical information to gather
+          * selected_intent_ids: List of intent IDs used to address this gap
+          * priority: "primary" or "optional" for this user
+          * reasoning: Brief explanation of why this gap and intents were selected
+        - questions_content: Required. List of question content items, each with:
+          * question_text: The final, revised question (~20 words, clear, self-contained)
+          * order: Display order number (1-based, lower numbers appear first)
         """
     
     @staticmethod
@@ -833,6 +962,10 @@ class PromptGenerator:
     def generate_initial_training_plan_prompt(
         personal_info: PersonalInfo,
         user_playbook,
+        include_bodyweight_strength: bool = True,
+        include_equipment_strength: bool = False,
+        include_endurance: bool = True,
+        modality_rationale: Optional[str] = None,
     ) -> str:
         """
         Generate prompt for creating the FIRST week (Week 1) during onboarding.
@@ -855,20 +988,21 @@ class PromptGenerator:
             You gathered information in two phases and now need to create their Week 1 training plan.
             Remember: This is Week 1 only. We re-assess and adjust weekly based on their progress.
             
-            **RULES & SCOPE:**
-            • Respect CONSTRAINTS: equipment access, time availability, injuries, existing commitments
-            • You decide HOW to train (structure, periodization, programming)
-            • Only prescribe exercises matching available equipment
-            • ✅ Provide: Strength training, running, cycling, swimming, hiking, general conditioning
-            • ❌ Do NOT provide: Sport-specific drills, technical skill training, team practice schedules
-            • 🎯 For athletes: Create supportive strength/conditioning to complement existing sport training
-            • Work with what you know rather than making assumptions
 
-            {PromptGenerator._get_exercise_metadata_requirements()}
+            {PromptGenerator._get_app_scope_section()}
+             
+             {PromptGenerator._render_modality_decision_summary(
+                 include_bodyweight_strength,
+                 include_equipment_strength,
+                 include_endurance,
+                 modality_rationale or "LLM decision unavailable—defaulting to balanced coverage."
+             )}
+
+            {PromptGenerator._get_exercise_metadata_requirements(include_bodyweight_strength or include_equipment_strength, personal_info)}
 
             {PromptGenerator._get_one_week_enforcement()}
              
-            {PromptGenerator._get_modality_instructions(personal_info)}
+            {PromptGenerator._get_modality_instructions(include_bodyweight_strength, include_equipment_strength, include_endurance, personal_info)}
              
             {PromptGenerator._get_justification_requirements()}
 
@@ -915,6 +1049,10 @@ class PromptGenerator:
         week_number: int,
         current_week_summary: str,
         user_playbook,
+        include_bodyweight_strength: bool = True,
+        include_equipment_strength: bool = False,
+        include_endurance: bool = True,
+        modality_rationale: Optional[str] = None,
         conversation_history: str = None,
     ) -> str:
         """
@@ -973,17 +1111,21 @@ class PromptGenerator:
             • Schema enforces: exactly 7 days (Monday-Sunday), logical day ordering
             • Only prescribe exercises matching their available equipment from the user playbook
             
-            **RULES & SCOPE:**
-            • Respect CONSTRAINTS: equipment access, time availability, injuries, existing commitments
-            • ✅ Provide: Strength training, running, cycling, swimming, hiking, general conditioning
-            • ❌ Do NOT provide: Sport-specific drills, technical skill training, team practice schedules
-            • 🎯 For athletes: Create supportive strength/conditioning to complement existing sport training
 
-            {PromptGenerator._get_exercise_metadata_requirements()}
+            {PromptGenerator._get_app_scope_section()}
+             
+            {PromptGenerator._render_modality_decision_summary(
+                include_bodyweight_strength,
+                include_equipment_strength,
+                include_endurance,
+                modality_rationale or "Defaulting to include both modalities for flexibility."
+            )}
+
+            {PromptGenerator._get_exercise_metadata_requirements(include_bodyweight_strength or include_equipment_strength, personal_info)}
 
             {PromptGenerator._get_one_week_enforcement()}
              
-            {PromptGenerator._get_modality_instructions(personal_info)}
+            {PromptGenerator._get_modality_instructions(include_bodyweight_strength, include_equipment_strength, include_endurance, personal_info)}
              
             {PromptGenerator._get_justification_requirements()}
 
@@ -1041,6 +1183,10 @@ class PromptGenerator:
         completed_weeks_context: str,
         progress_summary: str,
         playbook_lessons: List = None,
+        include_bodyweight_strength: bool = True,
+        include_equipment_strength: bool = False,
+        include_endurance: bool = True,
+        modality_rationale: Optional[str] = None,
     ) -> str:
         """
         Generate prompt for creating a new week when previous week is completed.
@@ -1091,6 +1237,13 @@ class PromptGenerator:
             • ❌ We do NOT provide: Sport-specific drills, technical skill training, or team practice schedules
             • 🎯 For athletes: We create supportive strength/conditioning work to complement their existing sport training
 
+            {PromptGenerator._render_modality_decision_summary(
+                include_bodyweight_strength,
+                include_equipment_strength,
+                include_endurance,
+                modality_rationale or "Maintaining balanced modality coverage for continued progression."
+            )}
+
             **PROGRESSION RULES:**
             • Progressively increase volume/intensity based on completed weeks
             • Introduce appropriate exercise variations to prevent plateaus
@@ -1098,11 +1251,11 @@ class PromptGenerator:
             • Apply ALL playbook lessons learned from training history
             • Respect constraints and preferences established in previous weeks
 
-            {PromptGenerator._get_exercise_metadata_requirements()}
+            {PromptGenerator._get_exercise_metadata_requirements(include_bodyweight_strength or include_equipment_strength, personal_info)}
 
             {PromptGenerator._get_one_week_enforcement()}
              
-            {PromptGenerator._get_modality_instructions(personal_info)}
+            {PromptGenerator._get_modality_instructions(include_bodyweight_strength, include_equipment_strength, include_endurance, personal_info)}
              
             {PromptGenerator._get_justification_requirements()}
 
@@ -1179,6 +1332,8 @@ class PromptGenerator:
         """Shared section enforcing exactly 1-week output."""
         return """
             ⚠️ **CRITICAL: GENERATE EXACTLY 1 WEEK (7 DAYS)**
+            • Provide a complete 7-day overview (Monday-Sunday) with each day labeled as training or rest. 
+              If mentioned, respect the user's available training days from playbook lessons—only schedule active sessions on the days they can train.
             • Schema enforces: weekly_schedules array with exactly 1 WeeklySchedule (week_number: 1)
             • Schema enforces: daily_trainings array with exactly 7 days in Literal order (Monday-Sunday)
             • DO NOT generate multiple weeks or reference future weeks in your output
@@ -1186,18 +1341,47 @@ class PromptGenerator:
         """
     
     @staticmethod
-    def _get_modality_instructions(personal_info: PersonalInfo = None) -> str:
-        """Shared section with modality-specific instructions (STRENGTH, ENDURANCE, MIXED, REST)."""
-        # Get weight unit - use from personal_info if provided, otherwise generic instruction
+    def _get_modality_instructions(
+        include_bodyweight_strength: bool = True,
+        include_equipment_strength: bool = False,
+        include_endurance: bool = True,
+        personal_info: PersonalInfo = None,
+    ) -> str:
+        """Shared section with modality-specific instructions tailored to modality decisions."""
         weight_unit_text = personal_info.weight_unit if personal_info else "kg or lbs"
-        
-        return f"""
-            **MODALITY-SPECIFIC INSTRUCTIONS:**
-            
-            **STRENGTH days:** provide exercises with sets, reps, weight, execution_order
+        include_any_strength = include_bodyweight_strength or include_equipment_strength
+        include_mixed = include_any_strength and include_endurance
+
+        sections = ["**MODALITY-SPECIFIC INSTRUCTIONS:**"]
+
+        if include_any_strength:
+            sections.append(
+                """
+            **STRENGTH (General Rules):**
             • exercise_name: Descriptive name WITHOUT equipment type (e.g., "Chest Press", "Lateral Raise")
-            • sets, reps, weight: Training parameters (weight is actual weight in {weight_unit_text}, not percentage)
             • Schema enforces: main_muscle and equipment must be valid Enum values, execution_order is required
+            • DO NOT set exercise_id (will be matched automatically)
+            • CRITICAL: Equipment type should ONLY appear in the equipment field, NOT in exercise_name
+            """
+            )
+
+        if include_bodyweight_strength:
+            sections.append(
+                f"""
+            **BODYWEIGHT STRENGTH days:** Minimal or no equipment.
+            • Use equipment="Body weight" (or bands/suspension only when confirmed).
+            • Focus on tempo, pauses, unilateral work, range of motion, or volume to drive difficulty.
+            • Skip weight prescriptions—leave weights empty or set to 0 since body weight is the resistance.
+            • Provide sets/reps and clear execution_order for each movement.
+            """
+            )
+
+        if include_equipment_strength:
+            sections.append(
+                f"""
+            **EQUIPMENT-BASED STRENGTH days:** Loaded implements (barbells, dumbbells, machines) are available.
+            • Provide sets, reps, weight, and execution_order for each exercise (weight in {weight_unit_text}).
+            • Select movements that respect confirmed equipment access and the user's experience level.
             
             **WEIGHT GENERATION GUIDELINES:**
             • Extract benchmark lifts from assessment responses (if provided) - look for 1RM values for squat, bench press, deadlift, overhead press
@@ -1207,14 +1391,15 @@ class PromptGenerator:
               - 6-8 reps: 75-80% of 1RM
               - 9-12 reps: 70-75% of 1RM
               - 12+ reps: 65-70% of 1RM
-            • For all other exercises, use the benchmark-derived strength assessment to estimate appropriate weights relative to their strength level (e.g., if bench press is strong, upper body exercises should reflect that; if squat/deadlift are strong, lower body should reflect that)
-            • If no benchmarks provided, estimate weights based on user's body weight, age, gender, experience level, and goal from their profile
+            • For all other exercises, use the benchmark-derived strength assessment to estimate appropriate weights relative to their strength level
+            • If no benchmarks provided, estimate weights based on user's body weight, age, gender, experience level, and goal
             • Conservative estimates for beginners, progressive for experienced users
-            • Select movements for goal, equipment, experience
-            • Balance movement patterns (push/pull, upper/lower, etc.)
-            • DO NOT set exercise_id (will be matched automatically)
-            • CRITICAL: Equipment type should ONLY be in the equipment field, NOT in exercise_name
-            
+            """
+            )
+
+        if include_endurance:
+            sections.append(
+                """
             **ENDURANCE days:** Sessions with name, description (MAX 15 words), sport_type, training_volume, unit, execution_order, heart_rate_zone
             • Schema enforces: sport_type and unit must be valid Enum values, heart_rate_zone is required (1-5), execution_order is required
             • Heart rate zones:
@@ -1226,15 +1411,27 @@ class PromptGenerator:
             • Vary session types (easy, tempo, intervals, recovery)
             • Interval sessions can be created by making several endurance sessions with different heart rate zones
             • Choose sport_type based on user's goal, equipment, and preferences
-            
+            """
+            )
+
+        if include_mixed:
+            sections.append(
+                """
             **MIXED days:** strength exercises + endurance session(s)
             • Balance modalities to avoid interference
             • Consider recovery demands
             • Use execution_order to sequence training: strength exercises first (typically 1, 2, 3...), then endurance sessions (continue numbering)
             • Example: Bench Press (1), Cable Fly (2), Long Run (3) - strength first, then endurance
-            
+            """
+            )
+
+        sections.append(
+            """
             **REST days:** training_type="rest", is_rest_day=true, empty exercise/session arrays
-        """
+            """
+        )
+
+        return "\n".join(section.strip("\n") for section in sections if section)
     
     @staticmethod
     def _get_justification_requirements() -> str:
@@ -1274,13 +1471,19 @@ class PromptGenerator:
         """
     
     @staticmethod
-    def _get_exercise_metadata_requirements() -> str:
+    def _get_exercise_metadata_requirements(
+        include_strength_elements: bool = True,
+        personal_info: PersonalInfo = None,
+    ) -> str:
         """
         Get the exercise metadata requirements section for prompts.
         
         Note: main_muscle, equipment, sport_type, unit are all enforced by Pydantic schema
         (via Literal types for Gemini). Only the exercise_name formatting guidance is needed.
         """
+        if not include_strength_elements:
+            return ""
+
         return """
             **EXERCISE METADATA REQUIREMENTS:**
             

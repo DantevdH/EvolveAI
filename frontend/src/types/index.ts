@@ -82,6 +82,8 @@ export interface UserProfile {
   
   // User playbook
   playbook?: UserPlaybook | null;
+
+  // Classification metadata
   
   // Database fields (read-only)
   id?: number;

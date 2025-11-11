@@ -23,6 +23,7 @@ from core.base.schemas.playbook_schemas import (
 )
 from core.training.helpers.llm_client import LLMClient
 from core.training.helpers.database_service import db_service
+from settings import settings
 
 
 class Curator:
@@ -348,6 +349,12 @@ class Curator:
         Returns:
             UserPlaybook with context field populated for lessons that require it
         """
+        if not settings.PLAYBOOK_CONTEXT_MATCHING_ENABLED:
+            self.logger.info(
+                "Playbook context enrichment disabled via configuration flag. Skipping knowledge base matching."
+            )
+            return playbook
+
         if not rag_service:
             self.logger.warning("No RAGTool provided - cannot enrich lessons with context")
             return playbook

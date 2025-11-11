@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity } from 'react-native';
 import { colors } from '../../../constants/colors';
-import { CoolSlider } from '../../onboarding/CoolSlider';
+import { CoolSlider } from '../../onboarding/inputs';
 import { SportTypePicker } from './SportTypePicker';
 import { UnitPicker } from './UnitPicker';
 import { HeartRateZoneSelector } from './HeartRateZoneSelector';

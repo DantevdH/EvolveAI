@@ -1,19 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { ConversationalOnboarding } from '@/src/components/onboarding/ConversationalOnboarding';
-import { ProgressOverlay } from '@/src/components/onboarding/ProgressOverlay';
+import { ProgressOverlay } from '@/src/components/onboarding/ui';
 import { useProgressOverlay } from '@/src/hooks/useProgressOverlay';
 
 export default function Onboarding() {
   const router = useRouter();
-  const { refreshUserProfile } = useAuth();
+  const params = useLocalSearchParams<{ resume?: string }>();
+  const { state: authState, refreshUserProfile } = useAuth();
   const { progressState, runWithProgress } = useProgressOverlay();
   const [isReady, setIsReady] = useState(false);
+  const isResumeFromGeneration = params?.resume === 'true';
 
   useEffect(() => {
     let cancelled = false;
+
+    if (isResumeFromGeneration || !!authState.trainingPlan) {
+      setIsReady(true);
+      return () => {
+        cancelled = true;
+      };
+    }
 
     runWithProgress('startup', async () => {
       await new Promise(resolve => setTimeout(resolve, 500));
@@ -26,16 +35,16 @@ export default function Onboarding() {
     return () => {
       cancelled = true;
     };
-  }, [runWithProgress]);
+  }, [isResumeFromGeneration, authState.trainingPlan, runWithProgress]);
 
   const handleComplete = async (trainingPlan: any) => {
-    console.log('✅ Onboarding: Training plan generated successfully');
-    console.log('🔄 Onboarding: Refreshing user profile before navigation...');
+    console.log('✅ Onboarding: Plan accepted by user');
+    console.log('🔄 Onboarding: Refreshing user profile...');
 
     await refreshUserProfile();
 
-    console.log('✅ Onboarding: User profile refreshed, navigating to main app');
-    router.replace('/(tabs)');
+    console.log('✅ Onboarding: Profile refreshed. Centralized routing will navigate to main app.');
+    // No manual navigation - useAppRouting will handle the transition to /(tabs)
   };
 
   const handleError = (error: string) => {
@@ -61,6 +70,7 @@ export default function Onboarding() {
       <ProgressOverlay
         visible={progressState.visible}
         progress={progressState.progress}
+        title="Preparing your onboarding experience…"
       />
       {isReady && (
         <ConversationalOnboarding

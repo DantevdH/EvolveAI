@@ -2,13 +2,9 @@ import React, { useState, useCallback, useEffect } from 'react';
 //@ts-ignore
 import { View, StyleSheet, Alert } from 'react-native';
 //@ts-ignore
-import { OnboardingCard } from '../../components/onboarding/OnboardingCard';
+import { OnboardingCard, OnboardingNavigation, ProgressIndicator } from '../../components/onboarding/ui';
 //@ts-ignore
-import { OnboardingNavigation } from '../../components/onboarding/OnboardingNavigation';
-//@ts-ignore
-import { QuestionRenderer } from '../../components/onboarding/QuestionRenderer';
-//@ts-ignore
-import { ProgressIndicator } from '../../components/onboarding/ProgressIndicator';
+import { QuestionRenderer } from '../../components/onboarding/questions';
 //@ts-ignore
 import { QuestionsStepProps, QuestionType } from '../../types/onboarding';
 //@ts-ignore
