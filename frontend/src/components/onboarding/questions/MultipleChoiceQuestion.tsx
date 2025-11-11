@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { OptionSelector } from './OptionSelector';
-import { IconSymbol } from '../../../components/ui/IconSymbol';
-import { AIQuestion } from '../../types/onboarding';
-import { colors } from '../../constants/designSystem';
+import { OptionSelector } from '../inputs/OptionSelector';
+import { IconSymbol } from '@/components/ui/IconSymbol';
+import { AIQuestion } from '../../../types/onboarding';
+import { colors } from '../../../constants/designSystem';
 
 interface MultipleChoiceQuestionProps {
   question: AIQuestion;

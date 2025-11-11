@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, PanResponder, Animated, Dimensions, TouchableOpacity } from 'react-native';
-import { colors } from '../../constants/designSystem';
-import { createColorWithOpacity } from '../../constants/colors';
+import { colors } from '../../../constants/designSystem';
+import { createColorWithOpacity } from '../../../constants/colors';
 
 interface CoolSliderProps {
   value: number;

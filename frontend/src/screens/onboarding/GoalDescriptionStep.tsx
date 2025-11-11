@@ -2,12 +2,11 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Alert, TouchableOpacity, useWindowDimensions, KeyboardAvoidingView, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { OnboardingCard } from '../../components/onboarding/OnboardingCard';
-import { OnboardingNavigation } from '../../components/onboarding/OnboardingNavigation';
+import { OnboardingCard, OnboardingNavigation } from '../../components/onboarding/ui';
 import { GoalDescriptionStepProps } from '../../types/onboarding';
 import { colors } from '../../constants/designSystem';
 import { createColorWithOpacity } from '../../constants/colors';
-import { IconSymbol } from '../../../components/ui/IconSymbol';
+import { IconSymbol } from '@/components/ui/IconSymbol';
 
 export const GoalDescriptionStep: React.FC<GoalDescriptionStepProps> = ({
   goalDescription,

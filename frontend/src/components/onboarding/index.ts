@@ -1,31 +1,22 @@
 /**
  * Onboarding components exports
+ * Barrel export for all onboarding components
  */
 
-export { ProgressIndicator } from './ProgressIndicator';
-export { OnboardingCard } from './OnboardingCard';
-export { 
-  OptionSelector, 
-  SingleOptionSelector, 
-  OptionList 
-} from './OptionSelector';
-export { 
-  SliderInput,
-  DaysPerWeekSlider,
-  MinutesPerSessionSlider,
-  MotivationLevelSlider,
-  AgeSlider
-} from './SliderInput';
-export { OnboardingButton } from './OnboardingButton';
-export { OnboardingNavigation } from './OnboardingNavigation';
-export { OnboardingBackground } from './OnboardingBackground';
-
-// New AI-driven onboarding components
+// Main orchestrator
 export { ConversationalOnboarding } from './ConversationalOnboarding';
-export { QuestionRenderer } from './QuestionRenderer';
-export { DropdownQuestion } from './DropdownQuestion';
-export { MultipleChoiceQuestion } from './MultipleChoiceQuestion';
-export { TextInputQuestion } from './TextInputQuestion';
-export { SliderQuestion } from './SliderQuestion';
-export { BooleanQuestion } from './BooleanQuestion';
-export { RatingQuestion } from './RatingQuestion';
+
+// UI Components
+export * from './ui';
+
+// Question Components
+export * from './questions';
+
+// Input Components
+export * from './inputs';
+
+// Preview Components
+export * from './preview';
+
+// Chat Components
+export * from './chat';

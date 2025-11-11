@@ -161,22 +161,33 @@ class DatabaseService:
             )
 
             if result.data and len(result.data) > 0:
+                updated = result.data[0]
+            else:
+                fetch = (
+                    supabase_client.table("user_profiles")
+                    .select("*")
+                    .eq("user_id", user_id)
+                    .execute()
+                )
+                updated = fetch.data[0] if fetch.data else None
+
+            if updated:
                 updated_fields = list(update_data.keys())
                 self.logger.info(
                     f"User profile updated successfully with fields: {updated_fields}"
                 )
                 return {
                     "success": True,
-                    "data": result.data[0],
+                    "data": updated,
                     "message": f"User profile updated successfully with fields: {updated_fields}",
                 }
-            else:
-                self.logger.error("Failed to update user profile")
-                return {
-                    "success": False,
-                    "error": "No data returned from update",
-                    "message": "Failed to update user profile",
-                }
+
+            self.logger.error("Failed to update user profile")
+            return {
+                "success": False,
+                "error": "No data returned from update",
+                "message": "Failed to update user profile",
+            }
 
         except Exception as e:
             error_str = str(e)
@@ -228,6 +239,84 @@ class DatabaseService:
             return {
                 "success": False,
                 "error": f"Failed to fetch user profile: {str(e)}",
+            }
+
+    async def update_user_profile_by_id(
+        self, user_profile_id: int, data: Dict[str, Any], jwt_token: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Update user profile using the numeric profile ID.
+        """
+        try:
+            if jwt_token:
+                supabase_client = self._get_authenticated_client(jwt_token)
+            else:
+                supabase_client = self.supabase
+
+            update_data = {
+                **data,
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+            update_data = {k: v for k, v in update_data.items() if v is not None}
+
+            if not update_data:
+                self.logger.warning(
+                    f"No valid fields to update for user_profile_id {user_profile_id}"
+                )
+                return {
+                    "success": False,
+                    "error": "No valid fields to update",
+                    "message": "No non-null fields provided for update",
+                }
+
+            result = (
+                supabase_client.table("user_profiles")
+                .update(update_data)
+                .eq("id", user_profile_id)
+                .execute()
+            )
+
+            if result.data and len(result.data) > 0:
+                updated = result.data[0]
+            else:
+                fetch = (
+                    supabase_client.table("user_profiles")
+                    .select("*")
+                    .eq("id", user_profile_id)
+                    .execute()
+                )
+                updated = fetch.data[0] if fetch.data else None
+
+            if updated:
+                updated_fields = list(update_data.keys())
+                self.logger.info(
+                    f"User profile {user_profile_id} updated successfully with fields: {updated_fields}"
+                )
+                return {
+                    "success": True,
+                    "data": updated,
+                    "message": f"User profile updated successfully with fields: {updated_fields}",
+                }
+
+            self.logger.error(
+                f"Failed to update user profile by ID {user_profile_id}"
+            )
+            return {
+                "success": False,
+                "error": "No data returned from update",
+                "message": "Failed to update user profile",
+            }
+        except Exception as e:
+            error_str = str(e)
+            self.logger.error(
+                f"Exception during user profile update by ID {user_profile_id}: {error_str}"
+            )
+            return {
+                "success": False,
+                "error": error_str,
+                "error_type": type(e).__name__,
+                "user_profile_id": user_profile_id,
+                "fields": list(data.keys()) if data else [],
             }
 
     async def save_training_plan(

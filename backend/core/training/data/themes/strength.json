@@ -1,8 +1,66 @@
 {
-  "what_to_ask": [
-    "Current strength levels including one-rep max values for key lifts (squat, bench press, deadlift, overhead press) if known",
-    "Equipment preferences and experience level with free weights versus machines",
-    "Body areas or muscle groups they want to focus on or develop most",
-    "Specific strength-related goals such as increasing max lifts, building muscle size, or improving functional strength"
+  "intents": [
+    {
+      "intent_id": "strength.priority_outcome",
+      "description": "Determine the primary strength adaptation the plan must target (max force, power, hypertrophy) so sessions emphasize the right methods.",
+      "experience_modifiers": {
+        "beginner": "Anchor the question in developing fundamental strength without overwhelming with technical language.",
+        "intermediate": "Connect the desired outcome to current training emphasis or performance markers.",
+        "advanced": "Surface precise outcome nuances that influence periodization or competition prep."
+      },
+      "applicability_conditions": [
+        "Always relevant for strength-focused goals regardless of secondary focuses."
+      ],
+      "tags": ["strength_core", "priority_focus"]
+    },
+    {
+      "intent_id": "strength.movement_focus",
+      "description": "Identify movement patterns or body regions that need focused development so exercise selection and volume target those areas.",
+      "experience_modifiers": {
+        "beginner": "Frame movement categories simply (full-body vs lower-body) with minimal jargon.",
+        "intermediate": "Encourage specificity around stubborn lifts or movement classes.",
+        "advanced": "Invite references to specialized movement patterns that influence programming micro-cycles."
+      },
+      "applicability_conditions": [
+        "Prioritize when the goal references imbalances, physique goals, or lift-specific targets."
+      ],
+      "tags": ["movement_focus", "strength_context"]
+    },
+    {
+      "intent_id": "strength.limiters",
+      "description": "Surface sticking points or plateaus that require programming adjustments (e.g., stalled squat, deadlift lockout weaknesses).",
+      "experience_modifiers": {
+        "beginner": "Explore general obstacles like inconsistency or form breakdown.",
+        "intermediate": "Target plateaus tied to specific lifts or rep ranges.",
+        "advanced": "Probe for precise mechanical or recovery-related limiters."
+      },
+      "applicability_conditions": [
+        "Use when user history mentions stalled progress or frustration.",
+        "Skip if the goal is purely exploratory without prior strength training."
+      ],
+      "tags": ["limiter_insight", "progress_history"]
+    },
+    {
+      "intent_id": "strength.movement_confidence",
+      "description": "Gauge confidence with key lift variations so the plan assigns movements the athlete can execute safely and effectively.",
+      "experience_modifiers": {
+        "beginner": "Confirm comfort with foundational patterns and bodyweight progressions.",
+        "intermediate": "Assess readiness for more complex variations or loading strategies.",
+        "advanced": "Clarify appetite for high-skill variations that demand technical mastery."
+      },
+      "applicability_conditions": [
+        "Apply when introducing new variations or when goal implies technical refinement."
+      ],
+      "tags": ["skill_readiness", "movement_variation"]
+    },
+    {
+      "intent_id": "strength.equipment_environment",
+      "description": "Document equipment access and space constraints to ensure every prescribed lift or accessory is actually achievable.",
+      "applicability_conditions": [
+        "Always collect—equipment access determines feasible loading strategies.",
+        "Include travel or home gym considerations if mentioned."
+      ],
+      "tags": ["equipment_access", "environment"]
+    }
   ]
 }

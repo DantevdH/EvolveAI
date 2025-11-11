@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { IconSymbol } from '../../../components/ui/IconSymbol';
-import { AIQuestion } from '../../types/onboarding';
-import { colors } from '../../constants/designSystem';
-import { createColorWithOpacity, goldenGradient } from '../../constants/colors';
+import { IconSymbol } from '@/components/ui/IconSymbol';
+import { AIQuestion } from '../../../types/onboarding';
+import { colors } from '../../../constants/designSystem';
+import { createColorWithOpacity, goldenGradient } from '../../../constants/colors';
 
 const gradientConfig = {
   start: { x: 0, y: 0 },

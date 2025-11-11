@@ -33,6 +33,7 @@ from core.training.helpers.database_service import db_service
 # Format responses
 from core.training.helpers.response_formatter import ResponseFormatter
 from core.base.schemas.playbook_schemas import UserPlaybook
+from settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -541,11 +542,14 @@ async def generate_training_plan(
             )
             
             # Enrich lessons with context (RAG retrieval and validation)
-            logger.info("📘 Enriching lessons with context from knowledge base...")
-            initial_playbook = await coach.curator.enrich_lessons_with_context(
-                playbook=initial_playbook,
-                rag_service=coach.rag_service,
-            )
+            if settings.PLAYBOOK_CONTEXT_MATCHING_ENABLED:
+                logger.info("📘 Enriching lessons with context from knowledge base...")
+                initial_playbook = await coach.curator.enrich_lessons_with_context(
+                    playbook=initial_playbook,
+                    rag_service=coach.rag_service,
+                )
+            else:
+                logger.info("📘 Playbook context enrichment disabled; skipping knowledge base matching.")
             
             logger.info(f"📘 Curated initial playbook: {len(empty_playbook.lessons)} → {len(initial_playbook.lessons)} lessons (deduplicated)")
             
@@ -867,11 +871,14 @@ async def _handle_playbook_extraction_for_satisfied(
             )
             
             # Enrich lessons with context (RAG retrieval and validation)
-            logger.info("📘 Enriching lessons with context from knowledge base...")
-            curated_playbook = await coach.curator.enrich_lessons_with_context(
-                playbook=curated_playbook,
-                rag_service=coach.rag_service,
-            )
+            if settings.PLAYBOOK_CONTEXT_MATCHING_ENABLED:
+                logger.info("📘 Enriching lessons with context from knowledge base...")
+                curated_playbook = await coach.curator.enrich_lessons_with_context(
+                    playbook=curated_playbook,
+                    rag_service=coach.rag_service,
+                )
+            else:
+                logger.info("📘 Playbook context enrichment disabled; skipping knowledge base matching.")
             
             # Save updated playbook
             await safe_db_update(

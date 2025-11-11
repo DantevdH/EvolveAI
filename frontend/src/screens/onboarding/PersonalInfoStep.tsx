@@ -3,13 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Alert, TouchableOpacity, useWindowDimensions, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { OnboardingCard } from '../../components/onboarding/OnboardingCard';
-import { OnboardingNavigation } from '../../components/onboarding/OnboardingNavigation';
-import { CoolSlider } from '../../components/onboarding/CoolSlider';
+import { OnboardingCard, OnboardingNavigation } from '../../components/onboarding/ui';
+import { CoolSlider } from '../../components/onboarding/inputs';
 import { PersonalInfo, PersonalInfoStepProps } from '../../types/onboarding';
 import { colors } from '../../constants/designSystem';
 import { createColorWithOpacity } from '../../constants/colors';
-import { IconSymbol } from '../../../components/ui/IconSymbol';
+import { IconSymbol } from '@/components/ui/IconSymbol';
 
 export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
   personalInfo,

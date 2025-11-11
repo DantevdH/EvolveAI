@@ -12,6 +12,7 @@ export interface AppRoutingState {
   isLoading: boolean;
   hasError: boolean;
   routingReason: string;
+  skipLoaders?: boolean; // Flag to skip intro loaders when resuming
 }
 
 export const useAppRouting = (): AppRoutingState => {
@@ -65,7 +66,8 @@ export const useAppRouting = (): AppRoutingState => {
         targetRoute: '/onboarding',
         isLoading: false,
         hasError: false,
-        routingReason: 'Onboarding Start'
+        routingReason: 'Onboarding Start',
+        skipLoaders: false, // Fresh start, show intro loader
       };
     }
 
@@ -77,12 +79,14 @@ export const useAppRouting = (): AppRoutingState => {
     const hasTrainingPlan = !!state.trainingPlan;
     const isPlanAccepted = !!state.userProfile.planAccepted;
 
+    // Route to appropriate onboarding stage
     if (!hasInitialQuestions || !hasInitialResponses) {
       return {
         targetRoute: '/onboarding/initial-questions',
         isLoading: false,
         hasError: false,
-        routingReason: 'Initial Questions'
+        routingReason: 'Initial Questions',
+        skipLoaders: true, // Resume state, skip intro
       };
     }
 
@@ -91,7 +95,8 @@ export const useAppRouting = (): AppRoutingState => {
         targetRoute: '/onboarding/follow-up-questions',
         isLoading: false,
         hasError: false,
-        routingReason: 'Follow-up Questions'
+        routingReason: 'Follow-up Questions',
+        skipLoaders: true, // Resume state, skip intro
       };
     }
 
@@ -100,7 +105,8 @@ export const useAppRouting = (): AppRoutingState => {
         targetRoute: '/generate-plan',
         isLoading: false,
         hasError: false,
-        routingReason: 'Generate Plan'
+        routingReason: 'Generate Plan',
+        skipLoaders: true, // Direct action, no intro needed
       };
     }
 
@@ -110,7 +116,8 @@ export const useAppRouting = (): AppRoutingState => {
         targetRoute: '/onboarding',
         isLoading: false,
         hasError: false,
-        routingReason: 'Plan Preview - Awaiting Acceptance'
+        routingReason: 'Plan Preview - Awaiting Acceptance',
+        skipLoaders: true, // Resume for plan preview, skip intro
       };
     }
 

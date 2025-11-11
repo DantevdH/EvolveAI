@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { colors } from '../../constants/designSystem';
-import { IconSymbol } from '../../../components/ui/IconSymbol';
+import { IconSymbol } from '@/components/ui/IconSymbol';
 
 export interface ErrorDisplayProps {
   error: string | Error;

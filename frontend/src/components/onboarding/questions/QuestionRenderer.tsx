@@ -1,9 +1,9 @@
 import React from 'react';
-import { AIQuestion, QuestionType } from '../../types/onboarding';
+import { AIQuestion, QuestionType } from '../../../types/onboarding';
 import { DropdownQuestion } from './DropdownQuestion';
 import { MultipleChoiceQuestion } from './MultipleChoiceQuestion';
 import { TextInputQuestion } from './TextInputQuestion';
-import { CoolSlider } from './CoolSlider';
+import { CoolSlider } from '../inputs/CoolSlider';
 import { ConditionalBooleanQuestion } from './ConditionalBooleanQuestion';
 import { RatingQuestion } from './RatingQuestion';
 

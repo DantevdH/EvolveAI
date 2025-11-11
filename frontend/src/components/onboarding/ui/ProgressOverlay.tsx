@@ -1,12 +1,13 @@
 import React, { useMemo } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { colors, borderRadius, spacing, typography, shadows } from '../../constants/designSystem';
-import { createColorWithOpacity } from '../../constants/colors';
+import { colors, borderRadius, spacing, typography, shadows } from '../../../constants/designSystem';
+import { createColorWithOpacity } from '../../../constants/colors';
 
 interface ProgressOverlayProps {
   visible: boolean;
   progress: number;
+  title?: string;
 }
 
 const CIRCLE_RADIUS = 56;
@@ -15,7 +16,7 @@ const CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS;
 const trackColor = createColorWithOpacity(colors.secondary, 0.18);
 const progressColor = colors.secondary;
 
-export const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, progress }) => {
+export const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, progress, title }) => {
   if (!visible) {
     return null;
   }
@@ -32,6 +33,9 @@ export const ProgressOverlay: React.FC<ProgressOverlayProps> = ({ visible, progr
   return (
     <View style={styles.overlay} pointerEvents="auto">
       <View style={styles.card}>
+        <Text style={styles.title}>
+          {title ?? 'Loading…'}
+        </Text>
         <View style={styles.circleContainer}>
           <Svg width={(CIRCLE_RADIUS + CIRCLE_STROKE_WIDTH) * 2} height={(CIRCLE_RADIUS + CIRCLE_STROKE_WIDTH) * 2}>
             <Circle
@@ -73,17 +77,23 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   card: {
-    width: 200,
-    height: 200,
+    minWidth: 220,
+    paddingVertical: spacing.xxl,
+    paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.xxl,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingVertical: spacing.xxl,
-    paddingHorizontal: spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.lg,
+  },
+  title: {
+    fontSize: typography.fontSizes.lg,
+    fontWeight: typography.fontWeights.semibold,
+    color: colors.text,
+    marginBottom: spacing.xl,
+    textAlign: 'center',
   },
   circleContainer: {
     alignItems: 'center',

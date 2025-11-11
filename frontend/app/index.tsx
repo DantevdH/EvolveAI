@@ -17,7 +17,10 @@ export default function Index() {
   // Use useEffect to handle navigation based on routing state
   useEffect(() => {
     // Create a state signature to detect actual changes
-    const currentState = `${state.isLoading}-${state.trainingPlanLoading}-${!!state.user}-${!!state.userProfile}-${!!state.trainingPlan}-${!!state.error}`;
+    // Include responses to detect when they're added to context
+    const hasInitialResponses = !!state.userProfile?.initial_responses && Object.keys(state.userProfile.initial_responses).length > 0;
+    const hasFollowUpResponses = !!state.userProfile?.follow_up_responses && Object.keys(state.userProfile.follow_up_responses).length > 0;
+    const currentState = `${state.isLoading}-${state.trainingPlanLoading}-${!!state.user}-${!!state.userProfile}-${!!state.trainingPlan}-${!!state.error}-${hasInitialResponses}-${hasFollowUpResponses}`;
     
     // Skip if state hasn't actually changed
     if (currentState === lastStateRef.current) {
@@ -36,7 +39,7 @@ export default function Index() {
     isNavigatingRef.current = false;
 
     // Use centralized routing logic
-    const { targetRoute, routingReason } = routingState;
+    const { targetRoute, routingReason, skipLoaders } = routingState;
 
     // Only navigate if we have a target route and it's different from the last navigation
     if (targetRoute && targetRoute !== lastNavigationRef.current) {
@@ -56,11 +59,20 @@ export default function Index() {
       // Add a small delay to prevent rapid navigation calls and allow state to stabilize
       navigationTimeoutRef.current = setTimeout(() => {
         try {
-          router.push(targetRoute as any);
+          // Pass skipLoaders flag when available
+          if (skipLoaders && targetRoute === '/onboarding') {
+            router.push({ pathname: targetRoute, params: { resume: 'true' } } as any);
+          } else {
+            router.push(targetRoute as any);
+          }
         } catch (error) {
           logWarn('Navigation failed, trying replace', error);
           try {
-            router.replace(targetRoute as any);
+            if (skipLoaders && targetRoute === '/onboarding') {
+              router.replace({ pathname: targetRoute, params: { resume: 'true' } } as any);
+            } else {
+              router.replace(targetRoute as any);
+            }
           } catch (replaceError) {
             logWarn('Replace navigation also failed', replaceError);
           }

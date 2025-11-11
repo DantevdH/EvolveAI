@@ -119,8 +119,6 @@ export interface OnboardingState {
   followUpAiMessage?: string; // AI message for follow-up questions
   followUpIntroShown: boolean;
   
-  // Step 7: Plan Generation
-  planGenerationLoading: boolean;
   trainingPlan: any | null; // TrainingPlan type
   completionMessage: string | null; // AI completion message after plan generation
   hasSeenCompletionMessage: boolean; // Track if user has seen the completion message

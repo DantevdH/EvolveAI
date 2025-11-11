@@ -7,7 +7,7 @@ import os
 import json
 import openai
 import time
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 
 from core.base.base_agent import BaseAgent
@@ -30,6 +30,8 @@ from core.training.schemas.training_schemas import (
     AIStrengthExercise,
     MainMuscleEnum,
     EquipmentEnum,
+    ModalityDecision,
+    GeminiModalityDecision,
 )
 from core.training.helpers.exercise_selector import ExerciseSelector
 from core.training.helpers.exercise_validator import ExerciseValidator
@@ -92,6 +94,8 @@ class TrainingCoach(BaseAgent):
             agent_description="Expert in strength training, muscle building, weight loss routines, and training planning",
             topic="training",  # This automatically filters documents by topic
         )
+
+        self.last_modality_rationale: Optional[str] = None
 
         # Initialize RAG tool for training-specific knowledge retrieval
         self.rag_service = RAGTool(self)
@@ -262,6 +266,73 @@ class TrainingCoach(BaseAgent):
         
         return postprocessed
 
+    async def _decide_modalities(
+        self,
+        personal_info: PersonalInfo,
+        user_playbook,
+    ) -> Tuple[bool, bool, bool]:
+        """
+        Lightweight LLM call to decide whether to include bodyweight strength, equipment strength, and endurance modalities.
+        Falls back to bodyweight strength + endurance on failure.
+        """
+        self.last_modality_rationale = None
+        prompt = PromptGenerator.generate_modality_selection_prompt(
+            personal_info=personal_info,
+            user_playbook=user_playbook,
+        )
+
+        try:
+            ai_start = time.time()
+            decision_obj, completion = self.llm.parse_structured(
+                prompt,
+                ModalityDecision,
+                GeminiModalityDecision,
+            )
+            duration = time.time() - ai_start
+            if isinstance(decision_obj, ModalityDecision):
+                decision = decision_obj
+            else:
+                decision_payload = (
+                    decision_obj.model_dump()
+                    if hasattr(decision_obj, "model_dump")
+                    else decision_obj
+                )
+                decision = ModalityDecision.model_validate(decision_payload)
+            await db_service.log_latency_event("modality_selection", duration, completion)
+
+            rationale = (decision.rationale or "").strip()
+            if not rationale:
+                rationale = "Model returned modalities without an explicit rationale."
+
+            self.logger.info(
+                (
+                    "Modality decision → bodyweight_strength=%s equipment_strength=%s "
+                    "endurance=%s | rationale=%s"
+                ),
+                decision.include_bodyweight_strength,
+                decision.include_equipment_strength,
+                decision.include_endurance,
+                rationale,
+            )
+            self.last_modality_rationale = rationale
+            return (
+                decision.include_bodyweight_strength,
+                decision.include_equipment_strength,
+                decision.include_endurance,
+            )
+        except Exception as exc:
+            # Log detailed error info for debugging
+            error_context = f"Provider: {self.llm.provider}, Model: {self.llm.chat_model}"
+            self.logger.error(
+                "Modality selection failed: %s | Context: %s | "
+                "Falling back to include both modalities.",
+                str(exc),
+                error_context,
+                exc_info=True,
+            )
+            self.last_modality_rationale = "Fallback: include bodyweight strength + endurance due to decision error"
+            return True, False, True
+
     def process_request(self, user_request: str) -> str:
         """Process a user request - required by BaseAgent."""
         return self.process_training_request(user_request)
@@ -341,11 +412,13 @@ class TrainingCoach(BaseAgent):
                 "primary_type": classification.primary_type.value,
                 "secondary_types": [st.value for st in classification.secondary_types],
                 "confidence": classification.confidence,
+                "reasoning": classification.reasoning,
             }
             
             self.logger.info(
                 f"Classified as: {athlete_type_dict['primary_type']} "
-                f"(confidence: {classification.confidence:.2f})"
+                f"(confidence: {classification.confidence:.2f}) "
+                f"Reasoning: {classification.reasoning}"
             )
 
             # ===== STEP 2: Load & Merge Question Themes =====
@@ -376,6 +449,17 @@ class TrainingCoach(BaseAgent):
             await db_service.log_latency_event(
                 "initial_question_generation", content_duration, completion
             )
+            
+            if question_content.intent_plan:
+                self.logger.info(
+                    "Intent plan summary: %s",
+                    "; ".join(
+                        f"{item.priority.value}: {item.information_gap} via {', '.join(item.selected_intent_ids)}"
+                        for item in question_content.intent_plan
+                    ),
+                )
+            else:
+                self.logger.info("Intent plan summary: no explicit intent coverage provided.")
             
             self.logger.info(f"Generated {len(question_content.questions_content)} question content items")
 
@@ -444,7 +528,7 @@ class TrainingCoach(BaseAgent):
                 f"Check AI model availability, prompt generation, or question formatting."
             )
             # Return a fallback response
-            return AIQuestionResponse(
+            fallback_response = AIQuestionResponse(
                 questions=[
                     AIQuestion(
                         id="fallback_1",
@@ -474,6 +558,7 @@ class TrainingCoach(BaseAgent):
                 estimated_time_minutes=2,
                 ai_message="I'm here to help you create the perfect training plan! Let's start with understanding your goals. 💪",
             )
+            return fallback_response
 
     async def generate_follow_up_questions(
         self,
@@ -644,11 +729,30 @@ class TrainingCoach(BaseAgent):
                     },
                 }
             
+            # Determine modalities to include
+            (
+                include_bodyweight_strength,
+                include_equipment_strength,
+                include_endurance,
+            ) = await self._decide_modalities(
+                personal_info, user_playbook
+            )
+
             # Step 2: Generate prompt for initial Week 1
-            self.logger.info("📝 Generating training plan prompt...")
+            self.logger.info(
+                "📝 Generating training plan prompt (bodyweight_strength=%s equipment_strength=%s endurance=%s)...",
+                include_bodyweight_strength,
+                include_equipment_strength,
+                include_endurance,
+            )
+            rationale = self.last_modality_rationale or "Default: include both modalities for balanced development."
             prompt = PromptGenerator.generate_initial_training_plan_prompt(
                 personal_info=personal_info,
                 user_playbook=user_playbook,
+                include_bodyweight_strength=include_bodyweight_strength,
+                include_equipment_strength=include_equipment_strength,
+                include_endurance=include_endurance,
+                modality_rationale=rationale,
             )
             
             # Step 4: Generate full TrainingPlan with AI (but only Week 1 in weekly_schedules)
@@ -779,14 +883,33 @@ class TrainingCoach(BaseAgent):
                 if conversation_lines:
                     conversation_history_str = "\n".join(conversation_lines)
 
+            (
+                include_bodyweight_strength,
+                include_equipment_strength,
+                include_endurance,
+            ) = await self._decide_modalities(
+                personal_info, user_playbook
+            )
+
             # Step 2: Generate prompt for updating week (uses user_playbook instead of onboarding responses)
-            self.logger.info(f"📝 Generating update prompt for Week {week_number}...")
+            self.logger.info(
+                "📝 Generating update prompt for Week %s (bodyweight_strength=%s equipment_strength=%s endurance=%s)...",
+                week_number,
+                include_bodyweight_strength,
+                include_equipment_strength,
+                include_endurance,
+            )
+            rationale = self.last_modality_rationale or "Default: include both modalities for balanced development."
             prompt = PromptGenerator.update_weekly_schedule_prompt(
                 personal_info=personal_info,
                 feedback_message=feedback_message,
                 week_number=week_number,
                 current_week_summary=week_summary,
                 user_playbook=user_playbook,
+                include_bodyweight_strength=include_bodyweight_strength,
+                include_equipment_strength=include_equipment_strength,
+                include_endurance=include_endurance,
+                modality_rationale=rationale,
                 conversation_history=conversation_history_str,
             )
             
@@ -995,13 +1118,32 @@ class TrainingCoach(BaseAgent):
                 else None
             )
 
+            (
+                include_bodyweight_strength,
+                include_equipment_strength,
+                include_endurance,
+            ) = await self._decide_modalities(
+                personal_info, playbook
+            )
+
             # Step 3: Generate prompt for creating new week
-            self.logger.info(f"📝 Generating prompt for Week {next_week_number}...")
+            self.logger.info(
+                "📝 Generating prompt for Week %s (bodyweight_strength=%s equipment_strength=%s endurance=%s)...",
+                next_week_number,
+                include_bodyweight_strength,
+                include_equipment_strength,
+                include_endurance,
+            )
+            rationale = self.last_modality_rationale or "Default: include both modalities for balanced development."
             prompt = PromptGenerator.create_new_weekly_schedule_prompt(
                 personal_info=personal_info,
                 completed_weeks_context=completed_weeks_context,
                 progress_summary="",  # Not needed - context is in completed_weeks
                 playbook_lessons=playbook_lessons_dict,
+                include_bodyweight_strength=include_bodyweight_strength,
+                include_equipment_strength=include_equipment_strength,
+                include_endurance=include_endurance,
+                modality_rationale=rationale,
             )
 
             # Step 4: Generate new WeeklySchedule with AI

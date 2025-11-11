@@ -4,7 +4,7 @@
 
 import React from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
-import { colors } from '../../constants/designSystem';
+import { colors } from '../../../constants/designSystem';
 
 interface ProgressIndicatorProps {
   currentStep: number;

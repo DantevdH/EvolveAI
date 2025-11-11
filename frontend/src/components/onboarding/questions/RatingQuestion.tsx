@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AIQuestion } from '../../types/onboarding';
-import { colors } from '../../constants/designSystem';
-import { createColorWithOpacity, goldenGradient } from '../../constants/colors';
+import { AIQuestion } from '../../../types/onboarding';
+import { colors } from '../../../constants/designSystem';
+import { createColorWithOpacity, goldenGradient } from '../../../constants/colors';
 
 interface RatingQuestionProps {
   question: AIQuestion;

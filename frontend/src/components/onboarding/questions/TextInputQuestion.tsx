@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { AIQuestion } from '../../types/onboarding';
-import { colors } from '../../constants/designSystem';
-import { TextInput } from './TextInput';
+import { AIQuestion } from '../../../types/onboarding';
+import { colors } from '../../../constants/designSystem';
+import { TextInput } from '../inputs/TextInput';
 
 interface TextInputQuestionProps {
   question: AIQuestion;

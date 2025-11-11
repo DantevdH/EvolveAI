@@ -4,7 +4,7 @@
 
 import React, { ReactNode } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { colors } from '../../constants/designSystem';
+import { colors } from '../../../constants/designSystem';
 
 interface OnboardingCardProps {
   title?: string;

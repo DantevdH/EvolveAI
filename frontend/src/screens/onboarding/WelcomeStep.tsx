@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Alert, useWindowDimensions, KeyboardAvoidingView, Platform, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { OnboardingCard } from '../../components/onboarding/OnboardingCard';
-import { OnboardingNavigation } from '../../components/onboarding/OnboardingNavigation';
+import { OnboardingCard, OnboardingNavigation } from '../../components/onboarding/ui';
 import { colors } from '../../constants/designSystem';
 import { createColorWithOpacity } from '../../constants/colors';
-import { IconSymbol } from '../../../components/ui/IconSymbol';
+import { IconSymbol } from '@/components/ui/IconSymbol';
 
 const EVOLVE_LOGO = require('../../../assets/images/evolve-logo.png');
 
