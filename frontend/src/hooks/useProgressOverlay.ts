@@ -48,8 +48,7 @@ export function useProgressOverlay() {
 
     clearIntervalRef();
 
-    const segments = config.segments;
-    const totalDuration = segments.reduce((sum, durationMs) => sum + durationMs, 0);
+    const totalDuration = (config as any).durationMs ?? 0;
 
     if (isMountedRef.current) {
       setState({

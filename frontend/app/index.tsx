@@ -19,8 +19,7 @@ export default function Index() {
     // Create a state signature to detect actual changes
     // Include responses to detect when they're added to context
     const hasInitialResponses = !!state.userProfile?.initial_responses && Object.keys(state.userProfile.initial_responses).length > 0;
-    const hasFollowUpResponses = !!state.userProfile?.follow_up_responses && Object.keys(state.userProfile.follow_up_responses).length > 0;
-    const currentState = `${state.isLoading}-${state.trainingPlanLoading}-${!!state.user}-${!!state.userProfile}-${!!state.trainingPlan}-${!!state.error}-${hasInitialResponses}-${hasFollowUpResponses}`;
+    const currentState = `${state.isLoading}-${state.trainingPlanLoading}-${!!state.user}-${!!state.userProfile}-${!!state.trainingPlan}-${!!state.error}-${hasInitialResponses}`;
     
     // Skip if state hasn't actually changed
     if (currentState === lastStateRef.current) {
@@ -63,7 +62,7 @@ export default function Index() {
           if (skipLoaders && targetRoute === '/onboarding') {
             router.push({ pathname: targetRoute, params: { resume: 'true' } } as any);
           } else {
-            router.push(targetRoute as any);
+          router.push(targetRoute as any);
           }
         } catch (error) {
           logWarn('Navigation failed, trying replace', error);
@@ -71,7 +70,7 @@ export default function Index() {
             if (skipLoaders && targetRoute === '/onboarding') {
               router.replace({ pathname: targetRoute, params: { resume: 'true' } } as any);
             } else {
-              router.replace(targetRoute as any);
+            router.replace(targetRoute as any);
             }
           } catch (replaceError) {
             logWarn('Replace navigation also failed', replaceError);

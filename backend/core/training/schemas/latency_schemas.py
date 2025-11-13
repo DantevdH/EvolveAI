@@ -10,7 +10,6 @@ from datetime import datetime
 # Type alias for valid event types
 EventType = Literal[
     "initial_questions",
-    "followup_questions",
     "playbook",
     "initial_plan",
     "feedback_plan",

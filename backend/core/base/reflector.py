@@ -72,7 +72,6 @@ class Reflector:
         self,
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
-        formatted_follow_up_responses: str,
     ) -> List[ReflectorAnalysis]:
         """
         Extract initial "seed" lessons from onboarding Q&A responses.
@@ -86,7 +85,6 @@ class Reflector:
         Args:
             personal_info: User's personal information
             formatted_initial_responses: Formatted responses from initial questions
-            formatted_follow_up_responses: Formatted responses from follow-up questions
 
         Returns:
             List of ReflectorAnalysis objects (will be processed by Curator)
@@ -98,14 +96,14 @@ class Reflector:
             goal_experience_response = f"A: My goal is; {personal_info.goal_description} and I have experience_level {personal_info.experience_level}"
             fake_question_response = f"{goal_experience_question}: {goal_experience_response}"
             
-            # Build the prompt with combined responses including the fake question
-            combined_responses = f"{fake_question_response}\n\n{formatted_initial_responses}\n\n{formatted_follow_up_responses}"
+            # Build the prompt with combined initial responses including the fake question
+            combined_responses = f"{fake_question_response}\n\n{formatted_initial_responses}"
 
             prompt = f"""
                 {self._format_client_information(personal_info)}
                 
                 **WORKFLOW STATUS:**
-                ✅ Initial Questions → ✅ Follow-up Questions → ✅ Responses Collected
+                ✅ Initial Questions → ✅ Responses Collected
                 🎯 **CURRENT STEP:** Extract Seed Lessons from Onboarding
                 
                 **YOUR ROLE IN THE ACE FRAMEWORK:**

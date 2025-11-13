@@ -38,7 +38,7 @@ export interface AIQuestionResponse {
   questions: AIQuestion[];
   total_questions: number;
   estimated_time_minutes: number;
-  initial_questions?: AIQuestion[]; // For follow-up questions response
+  initial_questions?: AIQuestion[]; // Initial questions returned by AI
   ai_message?: string; // Personalized AI coach message for this phase
   user_profile_id?: number; // User profile ID (returned from backend after profile creation)
 }
@@ -111,24 +111,9 @@ export interface OnboardingState {
   initialAiMessage?: string; // AI message for initial questions
   initialIntroShown: boolean;
  
-  // Step 6: Follow-up Questions
-  followUpQuestions: AIQuestion[];
-  followUpResponses: Map<string, any>;
-  followUpQuestionsLoading: boolean;
-  currentFollowUpQuestionIndex: number;
-  followUpAiMessage?: string; // AI message for follow-up questions
-  followUpIntroShown: boolean;
+ 
   
-  trainingPlan: any | null; // TrainingPlan type
-  completionMessage: string | null; // AI completion message after plan generation
-  hasSeenCompletionMessage: boolean; // Track if user has seen the completion message
   error: string | null;
-  // Plan metadata for feedback updates
-  planMetadata?: {
-    exerciseInfo?: string;
-    formattedInitialResponses?: string;
-    formattedFollowUpResponses?: string;
-  };
 }
 
 export interface QuestionResponse {
@@ -145,20 +130,10 @@ export interface InitialQuestionsRequest {
   jwt_token?: string;
 }
 
-export interface FollowUpQuestionsRequest {
-  personal_info: PersonalInfo;
-  initial_responses: Record<string, any>;  // Raw responses from frontend
-  initial_questions?: AIQuestion[];
-  user_profile_id?: number;
-  jwt_token?: string;
-}
-
 export interface PlanGenerationRequest {
   personal_info: PersonalInfo;
   initial_responses: Record<string, any>;  // Raw responses from frontend
-  follow_up_responses: Record<string, any>;  // Raw responses from frontend
   initial_questions?: AIQuestion[];
-  follow_up_questions?: AIQuestion[];
   user_profile_id?: number;
   jwt_token?: string;
 }

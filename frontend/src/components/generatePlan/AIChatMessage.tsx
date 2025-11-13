@@ -6,7 +6,7 @@ import { colors } from '../../constants/designSystem';
 
 interface AIChatMessageProps {
   username?: string;
-  analysisPhase?: 'initial' | 'followup' | 'outline' | 'generation' | null;
+  analysisPhase?: 'initial' | 'outline' | 'generation' | null;
   customMessage?: string;
   aiMessage?: string; // AI message from backend
   onTypingComplete?: () => void;

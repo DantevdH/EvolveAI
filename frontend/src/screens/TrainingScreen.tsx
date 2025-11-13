@@ -1,5 +1,7 @@
 // Training Screen - Main training interface
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { triggerChatAutoOpen } from '@/src/utils/chatAutoOpen';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, SafeAreaView, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -99,6 +101,18 @@ const TrainingScreen: React.FC = () => {
   useEffect(() => {
     // Intentionally no-op: feedback will be triggered after full week completion in a future step
   }, [selectedDayTraining?.completed, selectedDayTraining?.isRestDay, setShowFeedbackModal]);
+
+  // Auto-open chat when user navigates INTO the week detail view (not the journey map)
+  // and a plan needs review (trainingPlan exists but planAccepted is false)
+  useEffect(() => {
+    const planNeedsReview = !!authState.trainingPlan && !authState.userProfile?.planAccepted;
+    
+    // Only trigger when user navigates into week detail view (selectedWeekFromMap is set)
+    // This ensures the chat opens when viewing exercises, not on the journey map overview
+    if (planNeedsReview && selectedWeekFromMap !== null) {
+      triggerChatAutoOpen();
+    }
+  }, [selectedWeekFromMap, authState.trainingPlan, authState.userProfile?.planAccepted]);
 
   const handleOneRMCalculator = (exerciseName: string) => {
     setSelectedExerciseForCalculator(exerciseName);

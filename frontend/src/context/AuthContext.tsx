@@ -565,7 +565,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const response = await UserService.updateUserProfile(state.user.id, updates);
 
       if (response.success && response.data) {
-        dispatch({ type: 'SET_USER_PROFILE', payload: response.data });
+        // The backend may return a trimmed profile object. Merge it with the existing
+        // profile in state to avoid losing fields like questions/responses/playbook.
+        const existingProfile = (state.userProfile as any) || {};
+        const mergedProfile = {
+          ...existingProfile,
+          ...response.data,
+        };
+        dispatch({ type: 'SET_USER_PROFILE', payload: mergedProfile });
         return true;
       } else {
         dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to update profile' });

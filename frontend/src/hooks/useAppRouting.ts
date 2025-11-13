@@ -74,8 +74,8 @@ export const useAppRouting = (): AppRoutingState => {
     // Step 4: Check onboarding progress - granular routing for resume flow
     const hasInitialQuestions = !!state.userProfile.initial_questions;
     const hasInitialResponses = !!state.userProfile.initial_responses;
-    const hasFollowUpQuestions = !!state.userProfile.follow_up_questions;
-    const hasFollowUpResponses = !!state.userProfile.follow_up_responses;
+    const hasFollowUpQuestions = false;
+    const hasFollowUpResponses = false;
     const hasTrainingPlan = !!state.trainingPlan;
     const isPlanAccepted = !!state.userProfile.planAccepted;
 
@@ -90,15 +90,7 @@ export const useAppRouting = (): AppRoutingState => {
       };
     }
 
-    if (!hasFollowUpQuestions || !hasFollowUpResponses) {
-      return {
-        targetRoute: '/onboarding/follow-up-questions',
-        isLoading: false,
-        hasError: false,
-        routingReason: 'Follow-up Questions',
-        skipLoaders: true, // Resume state, skip intro
-      };
-    }
+    
 
     if (!hasTrainingPlan) {
       return {
@@ -113,11 +105,11 @@ export const useAppRouting = (): AppRoutingState => {
     // Step 5: Check if plan is accepted - if not, show plan preview for feedback
     if (!isPlanAccepted) {
       return {
-        targetRoute: '/onboarding',
+        targetRoute: '/(tabs)',
         isLoading: false,
         hasError: false,
-        routingReason: 'Plan Preview - Awaiting Acceptance',
-        skipLoaders: true, // Resume for plan preview, skip intro
+        routingReason: 'Plan Review',
+        skipLoaders: true, // We will open chat automatically on training screen
       };
     }
 

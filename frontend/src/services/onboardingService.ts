@@ -3,7 +3,6 @@ import {
   PersonalInfo,
   AIQuestionResponse,
   InitialQuestionsRequest,
-  FollowUpQuestionsRequest,
   PlanGenerationRequest,
   OnboardingApiResponse,
   PlanFeedbackResponse,
@@ -48,6 +47,11 @@ export class trainingService {
   ): Promise<AIQuestionResponse> {
     try {
       console.log('📍 Onboarding Service: Generating initial questions');
+      console.log('📤 Request payload:', {
+        personalInfo,
+        userProfileId,
+        hasJwtToken: !!jwtToken,
+      });
       
       const request: InitialQuestionsRequest = {
         personal_info: personalInfo,
@@ -55,7 +59,7 @@ export class trainingService {
         jwt_token: jwtToken,
       };
 
-      // Making API call to backend
+      console.log('🌐 Making request to:', `${this.BACKEND_URL}${this.BASE_URL}/initial-questions`);
 
       const response = await apiClient.post<OnboardingApiResponse<AIQuestionResponse>>(
         `${this.BASE_URL}/initial-questions`,
@@ -95,68 +99,7 @@ export class trainingService {
     }
   }
 
-  /**
-   * Get follow-up questions based on initial responses
-   */
-  static async getFollowUpQuestions(
-    personalInfo: PersonalInfo,
-    initialResponses: Record<string, any>,  // Raw responses from frontend
-    initialQuestions: AIQuestion[],  // Initial questions from frontend
-    userProfileId?: number,
-    jwtToken?: string
-  ): Promise<AIQuestionResponse> {
-    try {
-      console.log('📍 Onboarding Service: Generating follow-up questions');
-      
-      const request: FollowUpQuestionsRequest = {
-        personal_info: personalInfo,
-        initial_responses: initialResponses,  // Send raw responses
-        initial_questions: initialQuestions,  // Send initial questions
-        user_profile_id: userProfileId,
-        jwt_token: jwtToken,
-      };
-
-      // Making API call to backend
-
-      const response = await apiClient.post<OnboardingApiResponse<AIQuestionResponse>>(
-        `${this.BASE_URL}/follow-up-questions`,
-        request
-      );
-
-      // API response received
-
-      // Validate response format
-      if (typeof response !== 'object' || response === null) {
-        throw new Error('Invalid response format: response is not an object');
-      }
-
-      if (typeof response.success !== 'boolean') {
-        throw new Error('Invalid response format: success field is missing or not boolean');
-      }
-
-      if (!response.success) {
-        console.error('❌ API response indicates failure:', {
-          success: response.success,
-          data: response.data,
-          message: response.message
-        });
-        throw new Error(response.message || 'Failed to get follow-up questions');
-      }
-
-      if (!response.data) {
-        throw new Error('Invalid response format: data field is missing');
-      }
-
-      const responseData = (response.data as any) as AIQuestionResponse;
-      
-      console.log(`📍 Onboarding Service: Follow-up questions generated (${responseData.questions?.length || 0} questions)`);
-
-      return responseData;
-    } catch (error) {
-      console.error(`❌ Onboarding Service: Follow-up questions failed - ${error instanceof Error ? error.message : 'Unknown error'}`);
-      throw new Error(error instanceof Error ? error.message : 'Failed to get follow-up questions');
-    }
-  }
+ 
 
   /**
    * Generate training plan using all collected data
@@ -164,9 +107,7 @@ export class trainingService {
   static async generateTrainingPlan(
     personalInfo: PersonalInfo,
     initialResponses: Record<string, any>,  // Raw responses from frontend
-    followUpResponses: Record<string, any>,  // Raw responses from frontend
     initialQuestions: AIQuestion[],  // Initial questions from frontend
-    followUpQuestions: AIQuestion[],  // Follow-up questions from frontend
     userProfileId?: number,
     jwtToken?: string
   ): Promise<any> {
@@ -174,9 +115,7 @@ export class trainingService {
       const request: PlanGenerationRequest = {
         personal_info: personalInfo,
         initial_responses: initialResponses,  // Send raw responses
-        follow_up_responses: followUpResponses,  // Send raw responses
         initial_questions: initialQuestions,  // Send initial questions
-        follow_up_questions: followUpQuestions,  // Send follow-up questions
         user_profile_id: userProfileId,
         jwt_token: jwtToken,
       };

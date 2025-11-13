@@ -363,44 +363,13 @@ def create_mock_initial_questions() -> AIQuestionResponse:
 
 
 def create_mock_follow_up_questions() -> AIQuestionResponse:
-    """Create mock follow-up questions for debug mode."""
-    questions = [
-        AIQuestion(
-            id="training_preference",
-            text="What type of training do you prefer?",
-            response_type=QuestionType.MULTIPLE_CHOICE,
-            options=[
-                QuestionOption(id="1", text="Strength training", value="strength"),
-                QuestionOption(id="2", text="Cardio/Endurance", value="cardio"),
-                QuestionOption(id="3", text="Mixed approach", value="mixed"),
-                QuestionOption(id="4", text="Sport-specific", value="sport"),
-            ],
-            required=True,
-        ),
-        AIQuestion(
-            id="recovery_importance",
-            text="How important is recovery to you?",
-            response_type=QuestionType.RATING,
-            min_value=1,
-            max_value=5,
-            required=True,
-            help_text="1 = Not important, 5 = Very important",
-        ),
-        AIQuestion(
-            id="nutrition_tracking",
-            text="Are you willing to track your nutrition?",
-            response_type=QuestionType.CONDITIONAL_BOOLEAN,
-            placeholder="Tell us about your current nutrition habits...",
-            max_length=200,
-            required=True,
-        ),
-    ]
-
+    """DEPRECATED: Follow-up mock questions removed (feature deprecated)."""
+    # Keep a minimal fallback for backward compatibility in debug mode.
     return AIQuestionResponse(
-        questions=questions,
-        total_questions=len(questions),
-        estimated_time_minutes=3,
-        ai_message="💪 Great! Based on your answers, I have a few more specific questions to fine-tune your plan. These will help me create the most effective training program for you!",
+        questions=[],
+        total_questions=0,
+        estimated_time_minutes=0,
+        ai_message=None,
     )
 
 
