@@ -404,12 +404,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       });
       console.log('📍 Onboarding: Initial responses saved to context. Routing to plan generation.');
     }
-    // Navigate to plan generation screen
-    try {
-      router.push('/generate-plan');
-    } catch (err) {
-      console.warn('Navigation to generate-plan failed:', err);
-    }
+    // Navigation handled by centralized routing hook (no direct push to avoid duplicate navigation)
   }, [state.initialResponses, authState.userProfile, dispatch, router]);
 
   // follow-up removed

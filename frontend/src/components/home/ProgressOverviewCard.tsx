@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { colors } from '../../constants/colors';
+import { colors, createColorWithOpacity } from '../../constants/colors';
 
 interface ProgressOverviewCardProps {
   onViewAll?: () => void;
@@ -57,13 +57,15 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginVertical: 8,
     padding: 16,
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: colors.background,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
+    shadowColor: createColorWithOpacity(colors.text, 0.08),
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
   },
   header: {
     flexDirection: 'row',

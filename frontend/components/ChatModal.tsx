@@ -351,7 +351,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
     <Modal
       visible={visible}
       animationType="slide"
-      transparent={false}
+      transparent={true}
       onRequestClose={onClose}
     >
       <KeyboardAvoidingView
@@ -359,130 +359,134 @@ const ChatModal: React.FC<ChatModalProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
-        <View style={[styles.modalContent, { paddingTop: insets.top }]}>
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <LinearGradient
-                colors={[createColorWithOpacity(colors.secondary, 0.35), createColorWithOpacity(colors.background, 0.9)]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.headerAvatar}
-              >
-                <Ionicons name="fitness" size={20} color={colors.primary} />
-              </LinearGradient>
-              <View>
-                <Text style={styles.headerTitle}>AI Coach</Text>
-                <Text style={styles.headerSubtitle}>Online</Text>
-              </View>
-            </View>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Messages and Example Questions - Scrollable together */}
-          <ScrollView
-            ref={scrollViewRef}
-            style={styles.messagesContainer}
-            contentContainerStyle={styles.messagesContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {messages.map((message) => {
-              if (message.isUser) {
-                return (
-                  <ChatBubble
-                    key={message.id}
-                    message={message.message}
-                    isUser={true}
-                    timestamp={message.timestamp}
-                    isTyping={message.isTyping}
-                  />
-                );
-              }
-
-              const isTypingIndicator = message.id === 'typing';
-              const isWelcomeMessage = message.id === 'welcome';
-
-              return (
-                <AIChatMessage
-                  key={message.id}
-                  customMessage={isTypingIndicator ? undefined : message.message}
-                  username={state.userProfile?.username}
-                  isLoading={isTypingIndicator}
-                  skipAnimation={isTypingIndicator ? true : !isWelcomeMessage}
-                  showHeader={false}
-                />
-              );
-            })}
-          </ScrollView>
-
-          {shouldShowExamples && (
-            <View style={styles.exampleQuestionsWrapper}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.exampleQuestionsScroll}
-                contentContainerStyle={styles.exampleQuestionsContent}
-              >
-                {exampleQuestions.map((question, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.exampleQuestionChip}
-                    onPress={() => handleExampleQuestionPress(question)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.exampleQuestionText}>{question}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-
-          {/* Input field */}
-          <View style={[styles.inputContainer, { paddingBottom: insets.bottom + 12 }]}>
-            <View style={styles.inputWrapper}>
-              <TextInput
-                style={styles.textInput}
-                value={inputMessage}
-                onChangeText={setInputMessage}
-                placeholder="Ask your AI Coach..."
-                placeholderTextColor={colors.muted}
-                multiline
-                maxLength={500}
-                editable={!isLoading}
-              />
-            </View>
-            <TouchableOpacity
-              style={[
-                styles.sendButton,
-                (!inputMessage.trim() || isLoading) && styles.sendButtonDisabled
-              ]}
-              onPress={handleSendMessage}
-              disabled={!inputMessage.trim() || isLoading}
-              activeOpacity={0.7}
-            >
-              {!inputMessage.trim() || isLoading ? (
-                <Ionicons 
-                  name="send" 
-                  size={20} 
-                  color={colors.muted} 
-                />
-              ) : (
+        <View style={styles.overlay}>
+          <View style={styles.modalBox}>
+            {/* Header */}
+            <View style={[styles.header, { paddingTop:  18}]}>
+              <View style={styles.headerLeft}>
                 <LinearGradient
-                  colors={[createColorWithOpacity(colors.primary, 0.8), createColorWithOpacity(colors.primary, 0.6)]}
+                  colors={[createColorWithOpacity(colors.secondary, 0.35), createColorWithOpacity(colors.background, 0.9)]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
-                  style={styles.sendButtonGradient}
+                  style={styles.headerAvatar}
                 >
+                  <Ionicons name="fitness" size={20} color={colors.primary} />
+                </LinearGradient>
+                <View>
+                  <Text style={styles.headerTitle}>AI Coach</Text>
+                  <Text style={styles.headerSubtitle}>Online</Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.contentWrapper}>
+              {/* Messages and Example Questions - Scrollable together */}
+              <ScrollView
+                ref={scrollViewRef}
+                style={styles.messagesContainer}
+                contentContainerStyle={styles.messagesContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {messages.map((message) => {
+                  if (message.isUser) {
+                    return (
+                      <ChatBubble
+                        key={message.id}
+                        message={message.message}
+                        isUser={true}
+                        timestamp={message.timestamp}
+                        isTyping={message.isTyping}
+                      />
+                    );
+                  }
+
+                  const isTypingIndicator = message.id === 'typing';
+                  const isWelcomeMessage = message.id === 'welcome';
+
+                  return (
+                    <AIChatMessage
+                      key={message.id}
+                      customMessage={isTypingIndicator ? undefined : message.message}
+                      username={state.userProfile?.username}
+                      isLoading={isTypingIndicator}
+                      skipAnimation={isTypingIndicator ? true : !isWelcomeMessage}
+                      showHeader={false}
+                    />
+                  );
+                })}
+              </ScrollView>
+
+              {shouldShowExamples && (
+                <View style={styles.exampleQuestionsWrapper}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.exampleQuestionsScroll}
+                    contentContainerStyle={styles.exampleQuestionsContent}
+                  >
+                    {exampleQuestions.map((question, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={styles.exampleQuestionChip}
+                        onPress={() => handleExampleQuestionPress(question)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.exampleQuestionText}>{question}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+
+            {/* Input field */}
+            <View style={[styles.inputContainer, { paddingBottom:  18 }]}>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={styles.textInput}
+                  value={inputMessage}
+                  onChangeText={setInputMessage}
+                  placeholder="Ask your AI Coach..."
+                  placeholderTextColor={colors.muted}
+                  multiline
+                  maxLength={500}
+                  editable={!isLoading}
+                />
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  (!inputMessage.trim() || isLoading) && styles.sendButtonDisabled
+                ]}
+                onPress={handleSendMessage}
+                disabled={!inputMessage.trim() || isLoading}
+                activeOpacity={0.7}
+              >
+                {!inputMessage.trim() || isLoading ? (
                   <Ionicons 
                     name="send" 
                     size={20} 
-                    color={colors.text} 
+                    color={colors.muted} 
                   />
-                </LinearGradient>
-              )}
-            </TouchableOpacity>
+                ) : (
+                  <LinearGradient
+                    colors={[createColorWithOpacity(colors.primary, 0.8), createColorWithOpacity(colors.primary, 0.6)]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.sendButtonGradient}
+                  >
+                    <Ionicons 
+                      name="send" 
+                      size={20} 
+                      color={colors.text} 
+                    />
+                  </LinearGradient>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -494,16 +498,35 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  modalContent: {
+  overlay: {
     flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)', // dimmed background but still visible
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  modalBox: {
+    width: '100%',
+    maxWidth: 980,
+    height: '70%', // 70% of screen height
     backgroundColor: colors.background,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 20,
+  },
+  contentWrapper: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: createColorWithOpacity(colors.text, 0.1),
   },
@@ -547,7 +570,7 @@ const styles = StyleSheet.create({
   },
   exampleQuestionsWrapper: {
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 4,
     marginTop: -4,
   },
   exampleQuestionsScroll: {
@@ -579,7 +602,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-end',
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop: 16,
     gap: 8,
   },
   inputWrapper: {

@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants/colors';
+import { colors, createColorWithOpacity } from '../../constants/colors';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -76,13 +76,15 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 12,
     paddingHorizontal: 18,
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: colors.background,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
+    shadowColor: createColorWithOpacity(colors.text, 0.08),
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
   },
   quoteText: {
     flex: 1,

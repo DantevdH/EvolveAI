@@ -11,7 +11,7 @@ export const ONBOARDING_PROGRESS_CONFIG: Record<OnboardingPhase, PhaseProgressCo
   },
   initial: {
     // previous segments: [2000, 2000, 1500] -> sum = 5500
-    durationMs: 5500,
+    durationMs: 8000,
   },
   // follow-up phase removed
   plan: {
