@@ -17,7 +17,6 @@ import copy
 
 from core.training.schemas.question_schemas import (
     InitialQuestionsRequest,
-    FollowUpQuestionsRequest,
     PlanGenerationRequest,
     PlanGenerationResponse,
     PlanFeedbackRequest,
@@ -321,114 +320,7 @@ async def get_initial_questions(
         raise HTTPException(status_code=500, detail=f"Failed to generate initial questions: {str(e)}")
 
 
-@router.post("/follow-up-questions")
-async def get_follow_up_questions(
-    request: FollowUpQuestionsRequest,
-    coach: TrainingCoach = Depends(get_training_coach),
-):
-    """Generate follow-up questions based on initial responses."""
-    try:
-        # Validate input
-        if not request.initial_responses:
-            raise HTTPException(status_code=400, detail="Initial responses cannot be empty")
-        
-        if not request.initial_questions or not isinstance(request.initial_questions, list):
-            raise HTTPException(status_code=400, detail="Invalid initial questions structure")
-        
-        # Extract and validate JWT token
-        user_id = extract_user_id_from_jwt(request.jwt_token)
-        
-        logger.info(f"Generating follow-up questions for: {request.personal_info.goal_description}")
-        
-        # Format responses
-        from core.training.helpers.response_formatter import ResponseFormatter
-        formatted_responses = ResponseFormatter.format_responses(
-            request.initial_responses,
-            request.initial_questions
-        )
-        
-        # OPTIMIZATION: user_profile_id should be provided by frontend
-        if not request.user_profile_id:
-            logger.error("❌ Missing user_profile_id in request - this should be provided by frontend")
-            raise HTTPException(
-                status_code=400,
-                detail="Missing user_profile_id in request"
-            )
-        
-        user_profile_id = request.user_profile_id
-        logger.info("✅ Using user_profile_id from request")
-        
-        # Store initial responses
-        await safe_db_update(
-            "Store initial responses",
-            db_service.update_user_profile,
-            user_id=user_id,
-            data={"initial_responses": request.initial_responses},
-            jwt_token=request.jwt_token
-        )
-        
-        # Generate follow-up questions (with latency tracking)
-        questions_response = await coach.generate_follow_up_questions(
-            request.personal_info,
-            formatted_responses,
-            request.initial_questions,
-            user_profile_id=user_profile_id
-        )
-        
-        # Store follow-up questions
-        # Use same serialization as API response to ensure multiselect is preserved
-        serialized_questions_for_storage = []
-        for q in questions_response.questions:
-            sq = q.model_dump(exclude_none=False, mode='json')
-            # Safety check: ensure multiselect is included for multiple_choice/dropdown
-            if q.response_type in [QuestionType.MULTIPLE_CHOICE, QuestionType.DROPDOWN]:
-                if 'multiselect' not in sq or sq.get('multiselect') is None:
-                    sq['multiselect'] = q.multiselect
-            serialized_questions_for_storage.append(sq)
-        
-        await safe_db_update(
-            "Store follow-up questions",
-            db_service.update_user_profile,
-            user_id=user_id,
-            data={
-                "follow_up_questions": {
-                    "questions": serialized_questions_for_storage,
-                    "ai_message": questions_response.ai_message,
-                }
-            },
-            jwt_token=request.jwt_token
-        )
-        
-        logger.info(f"✅ Generated {questions_response.total_questions} follow-up questions")
-        
-        # Explicitly serialize questions to ensure multiselect is included
-        # Use exclude_none=False to ensure all fields including multiselect are included
-        serialized_questions = []
-        for q in questions_response.questions:
-            sq = q.model_dump(exclude_none=False, mode='json')
-            # Safety check: ensure multiselect is included for multiple_choice/dropdown
-            if q.response_type in [QuestionType.MULTIPLE_CHOICE, QuestionType.DROPDOWN]:
-                if 'multiselect' not in sq or sq.get('multiselect') is None:
-                    sq['multiselect'] = q.multiselect
-            serialized_questions.append(sq)
-        
-        return {
-            "success": True,
-            "data": {
-                "questions": serialized_questions,
-                "total_questions": questions_response.total_questions,
-                "estimated_time_minutes": questions_response.estimated_time_minutes,
-                "ai_message": questions_response.ai_message,
-                "initial_questions": request.initial_questions,
-            },
-            "message": "Follow-up questions generated successfully",
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Error generating follow-up questions: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to generate follow-up questions: {str(e)}")
+ 
 
 
 @router.post("/generate-plan")
@@ -436,20 +328,14 @@ async def generate_training_plan(
     request: PlanGenerationRequest,
     coach: TrainingCoach = Depends(get_training_coach)
 ):
-    """Generate the final training plan using initial/follow-up questions and exercises."""
+    """Generate the final training plan using initial questions and exercises."""
     try:
         # Validate input
         if not request.initial_responses:
             raise HTTPException(status_code=400, detail="Initial responses cannot be empty")
-        
-        if not request.follow_up_responses:
-            raise HTTPException(status_code=400, detail="Follow-up responses cannot be empty")
-        
+
         if not request.initial_questions or not isinstance(request.initial_questions, list):
             raise HTTPException(status_code=400, detail="Invalid initial questions structure")
-        
-        if not request.follow_up_questions or not isinstance(request.follow_up_questions, list):
-            raise HTTPException(status_code=400, detail="Invalid follow-up questions structure")
         
         # Extract and validate JWT token
         user_id = extract_user_id_from_jwt(request.jwt_token)
@@ -488,19 +374,16 @@ async def generate_training_plan(
         formatted_initial_responses = ResponseFormatter.format_responses(
             request.initial_responses, request.initial_questions
         )
-        formatted_follow_up_responses = ResponseFormatter.format_responses(
-            request.follow_up_responses, request.follow_up_questions
-        )
         
-        # Store follow-up responses
+        # Store initial responses (non-critical)
         await safe_db_update(
-            "Store follow-up responses",
+            "Store initial responses",
             db_service.update_user_profile,
             user_id=user_id,
-            data={"follow_up_responses": request.follow_up_responses},
+            data={"initial_responses": request.initial_responses},
             jwt_token=request.jwt_token
         )
-        
+
         # Add user_id to personal_info for playbook operations
         personal_info_with_user_id = request.personal_info.model_copy(
             update={"user_id": user_id}
@@ -513,7 +396,6 @@ async def generate_training_plan(
         initial_analyses = await coach.extract_initial_lessons_from_onboarding(
             personal_info=personal_info_with_user_id,
             formatted_initial_responses=formatted_initial_responses,
-            formatted_follow_up_responses=formatted_follow_up_responses,
         )
         
         if initial_analyses and len(initial_analyses) > 0:

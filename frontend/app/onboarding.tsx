@@ -9,7 +9,7 @@ import { useProgressOverlay } from '@/src/hooks/useProgressOverlay';
 export default function Onboarding() {
   const router = useRouter();
   const params = useLocalSearchParams<{ resume?: string }>();
-  const { state: authState, refreshUserProfile } = useAuth();
+  const { state: authState } = useAuth();
   const { progressState, runWithProgress } = useProgressOverlay();
   const [isReady, setIsReady] = useState(false);
   const isResumeFromGeneration = params?.resume === 'true';
@@ -36,16 +36,6 @@ export default function Onboarding() {
       cancelled = true;
     };
   }, [isResumeFromGeneration, authState.trainingPlan, runWithProgress]);
-
-  const handleComplete = async (trainingPlan: any) => {
-    console.log('✅ Onboarding: Plan accepted by user');
-    console.log('🔄 Onboarding: Refreshing user profile...');
-
-    await refreshUserProfile();
-
-    console.log('✅ Onboarding: Profile refreshed. Centralized routing will navigate to main app.');
-    // No manual navigation - useAppRouting will handle the transition to /(tabs)
-  };
 
   const handleError = (error: string) => {
     console.error('❌ Onboarding error:', error);
@@ -74,7 +64,6 @@ export default function Onboarding() {
       />
       {isReady && (
         <ConversationalOnboarding
-          onComplete={handleComplete}
           onError={handleError}
         />
       )}

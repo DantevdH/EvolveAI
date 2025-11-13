@@ -1,6 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack, Redirect } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
 import { useEffect } from 'react';
@@ -47,6 +47,7 @@ const CustomDefaultTheme = {
 function RootLayoutNav() {
   const { state } = useAuth();
   const colorScheme = useColorScheme();
+  const pathname = usePathname();
 
   // Handle deep links for email verification
   useEffect(() => {
@@ -84,6 +85,24 @@ function RootLayoutNav() {
     );
   }
 
+  // Check if user is in main app (tabs), not on auth/onboarding screens.
+  // Best-practice: show FloatingChatButton for any tabs route and its children.
+  const isOnAuthOrOnboarding =
+    pathname?.includes('/login') ||
+    pathname?.includes('/signup') ||
+    pathname?.includes('/onboarding') ||
+    pathname?.includes('/generate-plan') ||
+    pathname?.includes('/email-verification') ||
+    pathname?.includes('/forgot-password') ||
+    pathname?.includes('/reset-password');
+
+  // Consider we are in main app when path is within the tabs layout or its children.
+  // Avoid gating visibility on `planAccepted` here — the button must be visible so it can
+  // auto-open and allow users to accept the plan.
+  const isInMainApp =
+    !isOnAuthOrOnboarding &&
+    (pathname?.startsWith('/(tabs)') || pathname?.startsWith('/(tabs)/') || pathname === '/' || false);
+
   return (
     <ThemeProvider value={colorScheme === 'dark' ? CustomDarkTheme : CustomDefaultTheme}>
       <Stack>
@@ -103,7 +122,7 @@ function RootLayoutNav() {
         <Stack.Screen name="email-verification" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding/initial-questions" options={{ headerShown: false }} />
-        <Stack.Screen name="onboarding/follow-up-questions" options={{ headerShown: false }} />
+        {/* follow-up onboarding route removed */}
         <Stack.Screen name="generate-plan" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="full-profile" options={{ headerShown: false }} />
@@ -113,7 +132,7 @@ function RootLayoutNav() {
       <NetworkStatus />
       <StatusBar style="auto" />
       {/* Floating Chat Button - Only show when authenticated */}
-      {state.user && state.session && <FloatingChatButton />}
+      {state.user && state.session && isInMainApp && <FloatingChatButton />}
     </ThemeProvider>
   );
 }

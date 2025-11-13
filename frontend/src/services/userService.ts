@@ -135,7 +135,7 @@ export class UserService {
    */
   static async updateUserProfileStage(
     userId: string,
-    stage: 'personal_info' | 'initial_questions' | 'follow_up_questions',
+    stage: 'personal_info' | 'initial_questions',
     data: any
   ): Promise<UserServiceResponse<UserProfile>> {
     try {
@@ -156,10 +156,6 @@ export class UserService {
       } else if (stage === 'initial_questions') {
         updateData = {
           initial_questions: data.initial_questions,
-        };
-      } else if (stage === 'follow_up_questions') {
-        updateData = {
-          follow_up_questions: data.follow_up_questions,
         };
       }
 
@@ -270,16 +266,13 @@ export class UserService {
           finalChatNotes: rawProfile.final_chat_notes || '',
           // Raw questions and responses (for consistency)
           initial_questions: convertToAIQuestions(rawProfile.initial_questions),
-          follow_up_questions: convertToAIQuestions(rawProfile.follow_up_questions),
           initial_responses: rawProfile.initial_responses || null,
-          follow_up_responses: rawProfile.follow_up_responses || null,
           
           // AI messages from database
           initial_ai_message: (() => {
             console.log('📍 userService: rawProfile.initial_questions:', typeof rawProfile.initial_questions, JSON.stringify(rawProfile.initial_questions)?.substring(0, 200));
             return extractAIMessage(rawProfile.initial_questions);
           })(),
-          follow_up_ai_message: extractAIMessage(rawProfile.follow_up_questions),
           outline_ai_message: rawProfile.plan_outline?.ai_message || null,
           // Plan outline and feedback (separated)
           plan_outline: rawProfile.plan_outline || null,

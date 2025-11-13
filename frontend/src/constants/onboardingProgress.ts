@@ -1,21 +1,21 @@
-export type OnboardingPhase = 'startup' | 'initial' | 'followup' | 'plan';
+export type OnboardingPhase = 'startup' | 'initial' | 'plan';
 
 export interface PhaseProgressConfig {
-  segments: number[];
+  durationMs: number;
   completionDelayMs?: number;
 }
 
 export const ONBOARDING_PROGRESS_CONFIG: Record<OnboardingPhase, PhaseProgressConfig> = {
   startup: {
-    segments: [1000],
+    durationMs: 1000,
   },
   initial: {
-    segments: [2000, 2000, 1500],
+    // previous segments: [2000, 2000, 1500] -> sum = 5500
+    durationMs: 8000,
   },
-  followup: {
-    segments: [1500, 1500, 1500],
-  },
+  // follow-up phase removed
   plan: {
-    segments: [2000, 10000, 12000],
+    // previous segments: [2000, 10000, 12000] -> sum = 24000
+    durationMs: 24000,
   },
 };

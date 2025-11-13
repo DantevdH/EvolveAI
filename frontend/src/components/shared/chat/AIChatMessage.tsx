@@ -7,7 +7,7 @@ import { TypingDots } from './TypingDots';
 
 interface AIChatMessageProps {
   username?: string;
-  analysisPhase?: 'initial' | 'followup' | 'outline' | 'generation' | null;
+  analysisPhase?: 'initial' | 'outline' | 'generation' | null;
   customMessage?: string;
   aiMessage?: string;
   onTypingComplete?: () => void;

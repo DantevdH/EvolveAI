@@ -72,13 +72,11 @@ export interface UserProfile {
   
   // Raw questions and responses (for consistency)
   initial_questions?: AIQuestion[] | null;
-  follow_up_questions?: AIQuestion[] | null;
   initial_responses?: Record<string, any> | null;
-  follow_up_responses?: Record<string, any> | null;
   
   // AI messages from database
   initial_ai_message?: string | null;
-  follow_up_ai_message?: string | null;
+ 
   
   // User playbook
   playbook?: UserPlaybook | null;

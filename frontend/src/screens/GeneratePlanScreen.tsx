@@ -37,9 +37,7 @@ export const GeneratePlanScreen: React.FC = () => {
         throw new Error('Initial questions/responses missing');
       }
 
-      if (!authState.userProfile.follow_up_questions || !authState.userProfile.follow_up_responses) {
-        throw new Error('Follow-up questions/responses missing');
-      }
+      
 
       const jwtToken = authState.session?.access_token;
       if (!jwtToken) {
@@ -71,9 +69,7 @@ export const GeneratePlanScreen: React.FC = () => {
         trainingService.generateTrainingPlan(
           personalInfo,
           authState.userProfile!.initial_responses || {},
-          authState.userProfile!.follow_up_responses || {},
           authState.userProfile!.initial_questions || [],
-          authState.userProfile!.follow_up_questions || [],
           authState.userProfile!.id,
           jwtToken
         )
@@ -107,7 +103,7 @@ export const GeneratePlanScreen: React.FC = () => {
         
         // Refresh profile to get latest state
         // The centralized routing logic will automatically navigate to /onboarding with resume flag
-        await refreshUserProfile();
+    await refreshUserProfile();
       } else {
         throw new Error(response.message || 'Failed to generate training plan');
       }
@@ -117,10 +113,10 @@ export const GeneratePlanScreen: React.FC = () => {
       setError(errorMessage);
       generationTriggeredRef.current = false;
 
-      Alert.alert(
-        'Plan Generation Error',
+    Alert.alert(
+      'Plan Generation Error',
         `Failed to generate training plan: ${errorMessage}\n\nThis step creates your final personalized training plan.`,
-        [
+      [
           { 
             text: 'Try Again',
             onPress: () => {
@@ -130,13 +126,13 @@ export const GeneratePlanScreen: React.FC = () => {
               }, 100);
             }
           },
-          {
-            text: 'Start Over',
-            onPress: () => router.replace('/onboarding'),
-          },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      );
+        {
+          text: 'Start Over',
+          onPress: () => router.replace('/onboarding'),
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
     }
   }, [authState.userProfile, authState.session, dispatch, refreshUserProfile, router, runWithProgress, setExercises, setTrainingPlan]);
 

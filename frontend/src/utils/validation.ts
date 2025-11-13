@@ -175,11 +175,10 @@ export const cleanUserProfileForResume = (profile: any) => {
     goal_description: profile.goalDescription || '',
     experience_level: profile.experienceLevel || 'novice',
     initial_questions: profile.initial_questions || null,
-    follow_up_questions: profile.follow_up_questions || null,
     initial_responses: profile.initial_responses || null,
-    follow_up_responses: profile.follow_up_responses || null,
+    
     // AI messages from backend
     initial_ai_message: profile.initial_ai_message || null,
-    follow_up_ai_message: profile.follow_up_ai_message || null,
+    
   };
 };

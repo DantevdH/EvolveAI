@@ -60,7 +60,6 @@ from core.training.helpers.prompt_generator import PromptGenerator
 from core.training.helpers.question_checklist_loader import merge_question_checklists
 from core.training.helpers.mock_data import (
     create_mock_initial_questions,
-    create_mock_follow_up_questions,
     create_mock_training_plan,
 )
 import logging
@@ -560,136 +559,7 @@ class TrainingCoach(BaseAgent):
             )
             return fallback_response
 
-    async def generate_follow_up_questions(
-        self,
-        personal_info: PersonalInfo,
-        formatted_responses: str,
-        initial_questions: List[AIQuestion] = None,
-        user_profile_id: Optional[int] = None,
-    ) -> AIQuestionResponseWithFormatted:
-        """
-        Generate follow-up questions using Steps 3-4.
-        Steps 1-2 are only for initial questions.
-        """
-        try:
-            # Check if debug mode is enabled
-            if os.getenv("DEBUG", "false").lower() == "true":
-                follow_up_questions = create_mock_follow_up_questions()
-                self.logger.debug(
-                    f"DEBUG MODE: User responses for follow-up questions: {formatted_responses}"
-                )
-                return AIQuestionResponseWithFormatted(
-                    questions=follow_up_questions.questions,
-                    total_questions=follow_up_questions.total_questions,
-                    estimated_time_minutes=follow_up_questions.estimated_time_minutes,
-                    formatted_responses=formatted_responses,
-                    ai_message=follow_up_questions.ai_message,
-                )
-
-            # ===== STEP 3: Generate Question Content (Follow-Up) =====
-            self.logger.info("Step 3: Generating follow-up question content...")
-            content_prompt = PromptGenerator.generate_question_content_prompt_followup(
-                personal_info=personal_info,
-                formatted_responses=formatted_responses,
-            )
-            
-            ai_start = time.time()
-            parsed_obj, completion = self.llm.parse_structured(
-                content_prompt, QuestionContent, GeminiQuestionContent
-            )
-            question_content = QuestionContent.model_validate(parsed_obj.model_dump())
-            content_duration = time.time() - ai_start
-            
-            await db_service.log_latency_event(
-                "followup_question_generation", content_duration, completion
-            )
-            
-            self.logger.info(f"Generated {len(question_content.questions_content)} follow-up question content items")
-
-            # ===== STEP 4: Format Questions =====
-            self.logger.info("Step 4: Formatting follow-up questions into schema...")
-            # Sort questions by order field, then convert to dict for prompt
-            sorted_questions = sorted(question_content.questions_content, key=lambda x: x.order)
-            content_dicts = [
-                {
-                    "question_text": item.question_text,
-                    "order": item.order,
-                }
-                for item in sorted_questions
-            ]
-            
-            formatting_prompt = PromptGenerator.generate_question_formatting_prompt(
-                question_content=content_dicts,
-                personal_info=personal_info,
-                is_initial=False,
-            )
-            
-            ai_start = time.time()
-            parsed_obj, completion = self.llm.parse_structured(
-                formatting_prompt, AIQuestionResponse, GeminiAIQuestionResponse
-            )
-            question_response = AIQuestionResponse.model_validate(parsed_obj.model_dump())
-            formatting_duration = time.time() - ai_start
-            
-            await db_service.log_latency_event(
-                "followup_question_formatting", formatting_duration, completion
-            )
-            
-            # Filter out invalid questions
-            valid_questions = self._filter_valid_questions(question_response.questions)
-            
-            if len(valid_questions) < len(question_response.questions):
-                self.logger.warning(
-                    f"Filtered out {len(question_response.questions) - len(valid_questions)} invalid follow-up questions"
-                )
-            
-            # Post-process: convert multiple_choice with >4 options to dropdown
-            postprocessed_questions = self._postprocess_questions(valid_questions)
-            
-            # Sort by order field to maintain logical ordering (frontend can use this)
-            valid_questions_sorted = sorted(
-                postprocessed_questions, 
-                key=lambda q: q.order if q.order is not None else 999
-            )
-            
-            total_duration = content_duration + formatting_duration
-            self.logger.info(
-                f"Successfully generated {len(valid_questions_sorted)} follow-up questions "
-                f"(total: {total_duration:.2f}s)"
-            )
-
-            # Return with formatted responses and AI message
-            return AIQuestionResponseWithFormatted(
-                questions=valid_questions_sorted,
-                total_questions=len(valid_questions_sorted),
-                estimated_time_minutes=question_response.estimated_time_minutes,
-                formatted_responses=formatted_responses,
-                ai_message=question_response.ai_message,
-            )
-
-        except Exception as e:
-            self.logger.error(
-                f"Failed to generate follow-up questions: {str(e)}. "
-                f"Check AI model availability or question formatting."
-            )
-            # Return a fallback response
-            return AIQuestionResponseWithFormatted(
-                questions=[
-                    AIQuestion(
-                        id="followup_1",
-                        text="How many days per week can you commit to training?",
-                        response_type=QuestionType.SLIDER,
-                        min_value=1,
-                        max_value=7,
-                        step=1,
-                        unit="days",
-                    )
-                ],
-                total_questions=1,
-                estimated_time_minutes=1,
-                formatted_responses=formatted_responses,
-                ai_message="I need to ask a few more questions to create your perfect training plan. 💪",
-            )
+    # follow-up question generation removed (feature deprecated)
 
     async def generate_initial_training_plan(
         self,
@@ -1264,7 +1134,6 @@ class TrainingCoach(BaseAgent):
         self,
         personal_info: PersonalInfo,
         formatted_initial_responses: str,
-        formatted_follow_up_responses: str,
     ) -> List[ReflectorAnalysis]:
         """
         Extract initial "seed" lessons from onboarding Q&A responses.
@@ -1278,7 +1147,6 @@ class TrainingCoach(BaseAgent):
         Args:
             personal_info: User's personal information
             formatted_initial_responses: Formatted responses from initial questions
-            formatted_follow_up_responses: Formatted responses from follow-up questions
             
         Returns:
             List of ReflectorAnalysis objects (will be processed by Curator)
@@ -1286,7 +1154,6 @@ class TrainingCoach(BaseAgent):
         return await self.reflector.extract_initial_lessons(
             personal_info=personal_info,
             formatted_initial_responses=formatted_initial_responses,
-            formatted_follow_up_responses=formatted_follow_up_responses,
         )
     
     async def extract_lessons_from_conversation_history(

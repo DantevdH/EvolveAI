@@ -1302,8 +1302,7 @@ class DatabaseService:
         Uses service role key to bypass RLS.
         
         Args:
-            event: Type of event (initial_questions, followup_questions, playbook, 
-                   initial_plan, feedback_plan, regenerate_plan)
+            event: Type of event (initial_questions, playbook, initial_plan, feedback_plan, regenerate_plan)
             duration_seconds: Duration of the AI API call in seconds
             completion: Optional OpenAI completion object (will extract tokens/model automatically)
             

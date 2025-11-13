@@ -3,7 +3,7 @@
  * Draggable floating button that opens a chat modal and snaps to nearest border
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -16,17 +16,28 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, createColorWithOpacity } from '@/src/constants/colors';
 import ChatModal from './ChatModal';
 import * as Haptics from 'expo-haptics';
+import { useAuth } from '@/src/context/AuthContext';
+import {
+  registerChatAutoOpenHandler,
+  unregisterChatAutoOpenHandler,
+} from '@/src/utils/chatAutoOpen';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BUTTON_SIZE = 56;
 const BUTTON_MARGIN = 16;
 const SNAP_THRESHOLD = SCREEN_WIDTH / 2; // Snap to left or right based on center
 
+const PLAN_REVIEW_SEEN_KEY = 'plan_review_seen_';
+
 const FloatingChatButton: React.FC = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [hasCheckedStorage, setHasCheckedStorage] = useState(false);
+  const [hasSeenReview, setHasSeenReview] = useState(false);
+  const { state: authState, updateUserProfile, dispatch } = useAuth();
   const insets = useSafeAreaInsets();
   
   // Calculate available screen area (excluding safe areas)
@@ -41,6 +52,27 @@ const FloatingChatButton: React.FC = () => {
     x: initialX,
     y: initialY,
   })).current;
+
+  const isPlanReviewNeeded = useMemo(
+    () => !!authState.trainingPlan && !authState.userProfile?.planAccepted,
+    [authState.trainingPlan, authState.userProfile?.planAccepted]
+  );
+
+  const currentPlanId = useMemo(() => {
+    return authState.trainingPlan?.id?.toString() || null;
+  }, [authState.trainingPlan?.id]);
+
+  const planIntroMessage = useMemo(() => {
+    if (!authState.trainingPlan) {
+      return undefined;
+    }
+    const plan = authState.trainingPlan as any;
+    return (
+      plan?.aiMessage ||
+      plan?.ai_message ||
+      `Hi ${authState.userProfile?.username || 'there'}! 👋\n\n🎉 Amazing! Here's your personalized plan. Let me know if anything needs tweaking!`
+    );
+  }, [authState.trainingPlan, authState.userProfile?.username]);
 
   // Track the current position
   const currentPosition = useRef({ x: initialX, y: initialY });
@@ -129,6 +161,100 @@ const FloatingChatButton: React.FC = () => {
     })
   ).current;
 
+  // Check AsyncStorage to see if user has seen the review modal for this plan
+  // Note: We track "seen" per plan, but the REAL gate is planAccepted in the DB
+  // The storage is just to prevent showing the modal multiple times in the same session
+  // before the user accepts or if they reload during onboarding
+  useEffect(() => {
+    const checkStorage = async () => {
+      if (!currentPlanId) {
+        setHasCheckedStorage(true);
+        return;
+      }
+
+      // If plan is already accepted, no need to check storage
+      if (!isPlanReviewNeeded) {
+        setHasSeenReview(true); // Mark as seen since plan is already accepted
+        setHasCheckedStorage(true);
+        return;
+      }
+
+      try {
+        const storageKey = `${PLAN_REVIEW_SEEN_KEY}${currentPlanId}`;
+        const seen = await AsyncStorage.getItem(storageKey);
+        setHasSeenReview(seen === 'true');
+        setHasCheckedStorage(true);
+      } catch (error) {
+        console.error('Error checking plan review storage:', error);
+        // On error, mark as checked anyway to not block the UI
+        setHasCheckedStorage(true);
+        setHasSeenReview(false); // Default to not seen on error
+      }
+    };
+
+    checkStorage();
+  }, [currentPlanId, isPlanReviewNeeded, authState.userProfile?.planAccepted]);
+
+  // Open modal handler - uses callback to get fresh state
+  const openModalIfNeeded = useCallback(async () => {
+    // Guard: plan doesn't need review
+    if (!isPlanReviewNeeded) {
+      return;
+    }
+
+    // Guard: storage check not complete yet (async operation in progress)
+    if (!hasCheckedStorage) {
+      return;
+    }
+
+    // Guard: user has already seen this plan's review in this session
+    if (hasSeenReview) {
+      return;
+    }
+
+    // All checks passed - open the modal
+    setIsModalVisible(true);
+    
+    // Mark as seen in AsyncStorage to prevent duplicate opens in this session
+    // This flag is temporary and will be cleared when the plan is accepted
+    if (currentPlanId) {
+      try {
+        const storageKey = `${PLAN_REVIEW_SEEN_KEY}${currentPlanId}`;
+        await AsyncStorage.setItem(storageKey, 'true');
+        setHasSeenReview(true);
+      } catch (error) {
+        console.error('Error saving plan review seen status:', error);
+        // Non-critical error - modal is already open, just log it
+      }
+    }
+  }, [isPlanReviewNeeded, hasCheckedStorage, hasSeenReview, currentPlanId]);
+
+  // Register handler so TrainingScreen can trigger auto-open
+  useEffect(() => {
+    registerChatAutoOpenHandler(openModalIfNeeded);
+    return () => {
+      unregisterChatAutoOpenHandler();
+    };
+  }, [openModalIfNeeded]);
+
+  const handlePlanAccepted = useCallback(async () => {
+    if (authState.userProfile?.planAccepted) {
+      return;
+    }
+
+    const success = await updateUserProfile({ planAccepted: true });
+
+    if (!success && authState.userProfile) {
+      dispatch({
+        type: 'SET_USER_PROFILE',
+        payload: {
+          ...authState.userProfile,
+          planAccepted: true,
+        },
+      });
+    }
+  }, [authState.userProfile, updateUserProfile, dispatch]);
+
   const handlePress = () => {
     // Only open modal if user didn't drag
     if (!hasDragged.current) {
@@ -138,6 +264,27 @@ const FloatingChatButton: React.FC = () => {
       }
     }
   };
+
+  const handleModalClose = useCallback(async () => {
+    setIsModalVisible(false);
+    
+    if (isPlanReviewNeeded) {
+      // Update plan acceptance in database and context
+      await handlePlanAccepted();
+      
+      // Clear the temporary storage flag since plan is now accepted
+      // The real source of truth is planAccepted in the database
+      if (currentPlanId) {
+        try {
+          const storageKey = `${PLAN_REVIEW_SEEN_KEY}${currentPlanId}`;
+          await AsyncStorage.removeItem(storageKey);
+        } catch (error) {
+          console.error('Error clearing storage flag:', error);
+          // Non-critical error - plan is already accepted in DB
+        }
+      }
+    }
+  }, [handlePlanAccepted, isPlanReviewNeeded, currentPlanId]);
 
   return (
     <>
@@ -168,7 +315,10 @@ const FloatingChatButton: React.FC = () => {
 
       <ChatModal
         visible={isModalVisible}
-        onClose={() => setIsModalVisible(false)}
+        onClose={handleModalClose}
+        mode={isPlanReviewNeeded ? 'plan-review' : 'general'}
+        initialMessage={isPlanReviewNeeded ? planIntroMessage : undefined}
+        onPlanAccepted={handlePlanAccepted}
       />
     </>
   );

@@ -127,42 +127,7 @@ export class TrainingService {
         weekly_schedules_count: data.weekly_schedules?.length || 0
       });
 
-      // Debug: Check the nested data structure
-      if (data.weekly_schedules && data.weekly_schedules.length > 0) {
-        const firstWeek = data.weekly_schedules[0];
-        console.log('📅 TrainingService: First week data:', {
-          week_id: firstWeek.id,
-          week_number: firstWeek.week_number,
-          has_daily_trainings: !!firstWeek.daily_training,
-          daily_trainings_count: firstWeek.daily_training?.length || 0
-        });
-
-        if (firstWeek.daily_training && firstWeek.daily_training.length > 0) {
-          const firstDay = firstWeek.daily_training[0];
-          console.log('🏃 TrainingService: First day data:', {
-            day_id: firstDay.id,
-            day_of_week: firstDay.day_of_week,
-            is_rest_day: firstDay.is_rest_day,
-            has_strength_exercises: !!firstDay.strength_exercise,
-            strength_exercises_count: firstDay.strength_exercise?.length || 0,
-            has_endurance_sessions: !!firstDay.endurance_session,
-            endurance_sessions_count: firstDay.endurance_session?.length || 0
-          });
-
-          if (firstDay.strength_exercise && firstDay.strength_exercise.length > 0) {
-            const firstExercise = firstDay.strength_exercise[0];
-            console.log('💪 TrainingService: First exercise data:', {
-              strength_exercise_id: firstExercise.id,
-              exercise_id: firstExercise.exercise_id,
-              has_exercises_data: !!firstExercise.exercises,
-              exercise_name: firstExercise.exercises?.name || 'NO NAME',
-              exercise_data: firstExercise.exercises
-            });
-          }
-
-        }
-      }
-
+      
       // Transform the relational data to match our TrainingTrainingPlan interface
       let trainingPlan: TrainingTrainingPlan = {
         id: data.id.toString(),

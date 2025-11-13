@@ -208,24 +208,6 @@ class InitialQuestionsRequest(BaseModel):
     )
 
 
-class FollowUpQuestionsRequest(BaseModel):
-    """Request for follow-up questions generation."""
-
-    personal_info: PersonalInfo = Field(..., description="Basic personal information")
-    initial_responses: Dict[str, Any] = Field(
-        ..., description="Raw responses to initial questions"
-    )
-    initial_questions: List[AIQuestion] = Field(
-        ..., description="Initial questions from frontend"
-    )
-    user_profile_id: Optional[int] = Field(
-        default=None, description="User profile ID for database storage"
-    )
-    jwt_token: Optional[str] = Field(
-        default=None, description="JWT token for authentication"
-    )
-
-
 class PlanGenerationRequest(BaseModel):
     """Request for training plan generation."""
 
@@ -233,14 +215,8 @@ class PlanGenerationRequest(BaseModel):
     initial_responses: Dict[str, Any] = Field(
         ..., description="Raw responses to initial questions"
     )
-    follow_up_responses: Dict[str, Any] = Field(
-        ..., description="Raw responses to follow-up questions"
-    )
     initial_questions: List[AIQuestion] = Field(
         ..., description="Initial questions from frontend"
-    )
-    follow_up_questions: List[AIQuestion] = Field(
-        ..., description="Follow-up questions from frontend"
     )
     user_profile_id: Optional[int] = Field(
         default=None, description="User profile ID for database storage"

@@ -5,9 +5,8 @@
 
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, createColorWithOpacity, goldenGradient } from '../../constants/colors';
+import { colors, createColorWithOpacity } from '../../constants/colors';
 
 interface StatData {
   title: string;
@@ -106,12 +105,7 @@ const StatCard: React.FC<StatCardProps> = ({
 
   return (
     <View style={[styles.statCard, { width: cardWidth }]}> 
-      <LinearGradient
-        colors={goldenGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.gradientBackground}
-      >
+      <View style={styles.statCardContent}>
         <View
           style={[styles.iconBadge, {
             backgroundColor: iconBadgeBackground,
@@ -155,7 +149,7 @@ const StatCard: React.FC<StatCardProps> = ({
             {subtitle}
           </Text>
         </View>
-      </LinearGradient>
+      </View>
     </View>
   );
 };
@@ -169,23 +163,22 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
+    borderRadius: 14,
     backgroundColor: colors.card,
-    shadowColor: createColorWithOpacity(colors.tertiary, 0.08),
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowColor: createColorWithOpacity(colors.text, 0.08),
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
     borderWidth: 1,
     borderColor: createColorWithOpacity(colors.secondary, 0.45),
     minWidth: 80,
   },
-  gradientBackground: {
+  statCardContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
     minHeight: 80,
   },
   iconBadge: {
