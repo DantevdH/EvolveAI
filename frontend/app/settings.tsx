@@ -127,10 +127,6 @@ const SettingsScreen: React.FC = () => {
     );
   };
 
-  const handleFullProfile = () => {
-    router.push('/full-profile' as any);
-  };
-
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
@@ -245,17 +241,6 @@ const SettingsScreen: React.FC = () => {
             <Text style={styles.settingValue}>{state.user?.email || 'Not available'}</Text>
           </View>
 
-          <TouchableOpacity 
-            style={styles.settingItem}
-            onPress={handleFullProfile}
-            activeOpacity={0.7}
-          >
-            <View style={styles.settingLeft}>
-              <Ionicons name="list-outline" size={20} color={colors.primary} />
-              <Text style={styles.settingText}>View Full Profile</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.muted} />
-          </TouchableOpacity>
         </View>
 
 

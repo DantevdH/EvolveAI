@@ -6,6 +6,7 @@ import { NotificationService } from '../services/NotificationService';
 import { ExerciseSwapService } from '../services/exerciseSwapService';
 import { supabase } from '../config/supabase';
 import SessionRPEModal from '../components/training/SessionRPEModal';
+import { colors } from '../constants/colors';
 import {
   TrainingState,
   TrainingPlan,
@@ -123,7 +124,7 @@ export const useTraining = (): UseTrainingReturn => {
 
   const progressRing = useMemo((): ProgressRingData => {
     if (!trainingPlan) {
-      return { progress: 0, total: 0, completed: 0, color: '#4CAF50' };
+      return { progress: 0, total: 0, completed: 0, color: colors.primary };
     }
 
     const currentWeek = trainingPlan.weeklySchedules.find(
@@ -131,7 +132,7 @@ export const useTraining = (): UseTrainingReturn => {
     );
 
     if (!currentWeek) {
-      return { progress: 0, total: 0, completed: 0, color: '#4CAF50' };
+      return { progress: 0, total: 0, completed: 0, color: colors.primary };
     }
 
     const totalTrainings = currentWeek.dailyTrainings.filter(training => !training.isRestDay).length;
@@ -146,7 +147,7 @@ export const useTraining = (): UseTrainingReturn => {
       progress,
       total: totalTrainings,
       completed: completedTrainings,
-      color: '#932322' // Primary red color
+      color: colors.secondary // Primary red color
     };
   }, [trainingPlan, trainingState.currentWeekSelected]);
 

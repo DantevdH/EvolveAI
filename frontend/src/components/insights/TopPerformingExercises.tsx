@@ -230,11 +230,7 @@ export const TopPerformingExercises: React.FC<TopPerformingExercisesProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginVertical: 8,
+    padding: 0,
   },
   header: {
     marginBottom: 20,

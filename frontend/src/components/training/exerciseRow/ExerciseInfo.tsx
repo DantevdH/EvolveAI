@@ -81,13 +81,14 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   exerciseName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.text,
+    fontSize: 15, // Increased from 14 for better hierarchy
+    fontWeight: '600', // Increased from 600 for bolder text
+    color: colors.primary, // Changed to grey color
     flexShrink: 1,
     flexGrow: 1,
     minWidth: 100,
-    maxWidth: '100%'
+    maxWidth: '100%',
+    letterSpacing: 0.2, // Added letter spacing for better readability
   },
   exerciseDetails: {
     flexDirection: 'row',

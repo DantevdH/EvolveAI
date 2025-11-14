@@ -148,6 +148,7 @@ export class TrainingService {
           return {
             id: schedule.id.toString(),
             weekNumber: schedule.week_number,
+            focusTheme: schedule.focus_theme || undefined,
             dailyTrainings: sortedDailyTrainings.map((daily: any) => {
                 // Combine strength exercises and endurance sessions from relational data
                 const strengthExercises = daily.strength_exercise?.map((se: any) => ({

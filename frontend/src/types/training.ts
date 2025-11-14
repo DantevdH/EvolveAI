@@ -84,6 +84,7 @@ export interface WeeklySchedule {
   dailyTrainings: DailyTraining[];
   completed: boolean;
   completedAt?: Date;
+  focusTheme?: string; // Week's focus theme (e.g., 'Hypertrophy Volume Build')
 }
 
 export interface TrainingPlan {

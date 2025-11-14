@@ -120,13 +120,22 @@ class PromptGenerator:
     @staticmethod
     def generate_modality_selection_prompt(
         personal_info: PersonalInfo,
-        user_playbook,
+        onboarding_responses: Optional[str] = None,
+        user_playbook=None,
     ) -> str:
         """Prompt to decide whether to include strength and endurance sessions."""
 
-        playbook_summary = PromptGenerator.format_playbook_lessons(
-            user_playbook, personal_info, context="training"
-        )
+        if onboarding_responses:
+            context_block = PromptGenerator.format_onboarding_responses(onboarding_responses)
+            context_label = "Onboarding Q&A"
+        else:
+            context_block = PromptGenerator.format_playbook_lessons(
+                user_playbook, personal_info, context="training"
+            )
+            context_label = "Playbook lessons"
+
+        if not context_block:
+            context_block = "No detailed context is available from onboarding or playbook lessons."
 
         return f"""
         You are an expert training coach preparing to design a supplemental training plan for {personal_info.username}.
@@ -136,22 +145,20 @@ class PromptGenerator:
         • Primary goal: "{personal_info.goal_description}"
         • Experience level: {personal_info.experience_level}
         • Measurement system: {personal_info.measurement_system}
-        • Playbook lessons (if any): {playbook_summary or "No playbook lessons available"}
-        • Equipment constraints: Inspect the playbook lessons above for any mention of gym access, available equipment, or "bodyweight only." 
-          If nothing is mentioned, assume the user only has bodyweight options available.
+        • {context_label}:\n{context_block}
 
         OUTPUT REQUIREMENTS:
         Return JSON that conforms to the ModalityDecision schema:
         - include_bodyweight_strength: true/false
         - include_equipment_strength: true/false
         - include_endurance: true/false
-        - rationale: Short justification explaining the chosen modalities and explicitly referencing the user's goal, limiter, and equipment access noted in the playbook
+        - rationale: Short justification explaining the chosen modalities and explicitly referencing the user's goal, limiter, and equipment/evironment constraints taken from the context above.
 
         Decision rules:
-        • include_equipment_strength → true only when the goal or limiter needs loaded strength work AND the playbook explicitly confirms access to barbells/dumbbells/machines.
+        • include_equipment_strength → true only when the goal or limiter needs loaded strength work AND the context explicitly confirms access to barbells/dumbbells/machines.
         • include_bodyweight_strength → true when strength work is still beneficial but only bodyweight/minimal tools are confirmed (or when no equipment information exists but strength is still helpful).
         • You may set both strength flags to true if the user benefits from loaded work and also uses bodyweight sessions for variety.
-        • include_endurance → true when aerobic work directly advances the primary goal or mitigates a limiter highlighted in the playbook.
+        • include_endurance → true when aerobic work directly advances the primary goal or mitigates a limiter highlighted in the context.
         • If unsure about a modality, default to false and describe the uncertainty in the rationale.
         """
 
@@ -846,9 +853,21 @@ class PromptGenerator:
         return header + content + footer
 
     @staticmethod
+    def format_onboarding_responses(formatted_responses: Optional[str]) -> str:
+        """Format onboarding Q&A responses for inclusion in prompts."""
+        if not formatted_responses:
+            return "No onboarding responses captured yet."
+
+        safe_responses = str(formatted_responses).replace("{", "{{").replace("}", "}}")
+        return f"""
+        **ONBOARDING RESPONSE SUMMARY (Q → A):**
+        {safe_responses}
+        """
+
+    @staticmethod
     def generate_initial_training_plan_prompt(
         personal_info: PersonalInfo,
-        user_playbook,
+        onboarding_responses: Optional[str],
         include_bodyweight_strength: bool = True,
         include_equipment_strength: bool = False,
         include_endurance: bool = True,
@@ -910,8 +929,8 @@ class PromptGenerator:
             **CLIENT PROFILE:**
             {PromptGenerator.format_client_information(personal_info)}
             
-            **USER PLAYBOOK (LEARNED LESSONS - CRITICAL CONSTRAINTS):**
-            {PromptGenerator.format_playbook_lessons(user_playbook, personal_info, context="outline")}
+            **ONBOARDING RESPONSES (CRITICAL Q&A CONSTRAINTS):**
+            {PromptGenerator.format_onboarding_responses(onboarding_responses)}
             
             ═══════════════════════════════════════════════════════════════════════════════
             YOUR TASK
@@ -1188,6 +1207,50 @@ class PromptGenerator:
         _save_prompt_to_file("create_new_weekly_schedule_prompt", prompt)
 
         return prompt
+
+    @staticmethod
+    def generate_future_week_outline_prompt(
+        personal_info: PersonalInfo,
+        onboarding_responses: Optional[str],
+        completed_weeks_summary: str,
+        start_week_number: int = 2,
+        total_weeks: int = 12,
+    ) -> str:
+        """Prompt for generating lightweight outlines for upcoming weeks."""
+
+        onboarding_context = PromptGenerator.format_onboarding_responses(
+            onboarding_responses
+        )
+
+        return f"""
+            You are an expert training coach extending {personal_info.username}'s plan beyond Week 1.
+            You already designed Week 1 (summary below). Now draft the NEXT {total_weeks} weeks (week numbers {start_week_number} through {start_week_number + total_weeks - 1})
+            as high-level outlines only—no daily programming.
+
+            **CURRENT WEEK SUMMARY (already completed):**
+            {completed_weeks_summary}
+
+            **USER PROFILE:**
+            {PromptGenerator.format_client_information(personal_info)}
+
+            **ONBOARDING RESPONSES:**
+            {onboarding_context}
+
+            **OUTPUT RULES:**
+            • Return data that conforms to the WeeklyOutlinePlan schema.
+            • Provide exactly {total_weeks} WeeklySchedule entries, starting at week_number={start_week_number} and incrementing by 1.
+            • Each WeeklySchedule must include:
+              - week_number
+              - focus_theme, primary_goal, progression_lever, justification
+              - training_plan_id: Use {personal_info.user_id or 'the user profile ID'} for every entry
+              - daily_trainings: [] (keep empty; outlines only)
+
+            **DESIGN CONSTRAINTS:**
+            • Keep progression logical (e.g., Foundation → Build → Intensify → Peak → Deload).
+            • Respect the user's equipment, experience, and preferences inferred from onboarding.
+            • Highlight how each week evolves from the prior ones (change stimulus, density, intensity, skill, etc.).
+            • Spread recovery/deload weeks strategically (e.g., after 3 hard weeks).
+        """
     
     @staticmethod
     def generate_training_plan_prompt(

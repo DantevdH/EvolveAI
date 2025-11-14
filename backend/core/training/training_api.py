@@ -7,6 +7,7 @@ Handles the complete training workflow with a clean, unified interface:
 - Plan Generation (AI)
 """
 
+import asyncio
 from fastapi import APIRouter, HTTPException, Depends, Header
 from typing import Dict, Any, Optional
 from datetime import datetime
@@ -14,6 +15,7 @@ import logging
 import os
 import jwt
 import copy
+import inspect
 
 from core.training.schemas.question_schemas import (
     InitialQuestionsRequest,
@@ -389,77 +391,101 @@ async def generate_training_plan(
             update={"user_id": user_id}
         )
         
-        # OPTIMIZATION: On first plan generation, playbook doesn't exist yet
-        # If we hit idempotency check above, we return early, so at this point it's first generation
-        # Skip DB call and extract lessons directly
-        logger.info("📘 Extracting initial lessons from onboarding responses...")
-        initial_analyses = await coach.extract_initial_lessons_from_onboarding(
-            personal_info=personal_info_with_user_id,
-            formatted_initial_responses=formatted_initial_responses,
-        )
-        
-        if initial_analyses and len(initial_analyses) > 0:
-            logger.info(f"📘 Extracted {len(initial_analyses)} initial lesson analyses from onboarding")
-            
-            # Create empty playbook (will be populated by Curator)
-            from core.base.schemas.playbook_schemas import UserPlaybook
-            empty_playbook = UserPlaybook(
-                user_id=user_id,
-                lessons=[],
-                total_lessons=0,
-            )
-            
-            # Process initial analyses through Curator (deduplication and quality assurance)
-            logger.info("📘 Processing initial lessons through Curator...")
-            curated_playbook = await coach.curator.process_batch_lessons(
-                analyses=initial_analyses,
-                existing_playbook=empty_playbook,
-                source_plan_id="onboarding",
-            )
-            
-            # Convert curated playbook to UserPlaybook format
-            initial_playbook = coach.curator.update_playbook_from_curated(
-                updated_playbook=curated_playbook,
-                user_id=user_id,
-            )
-            
-            # Enrich lessons with context (RAG retrieval and validation)
-            if settings.PLAYBOOK_CONTEXT_MATCHING_ENABLED:
-                logger.info("📘 Enriching lessons with context from knowledge base...")
-                initial_playbook = await coach.curator.enrich_lessons_with_context(
-                    playbook=initial_playbook,
-                    rag_service=coach.rag_service,
+        async def build_initial_playbook_async():
+            """Run the playbook extraction/curation pipeline without blocking plan generation."""
+            try:
+                logger.info("📘 (async) START playbook generation")
+                # yield control immediately so other background tasks can start
+                await asyncio.sleep(0)
+                # extract initial analyses (may be sync or async)
+                if inspect.iscoroutinefunction(coach.extract_initial_lessons_from_onboarding):
+                    initial_analyses = await coach.extract_initial_lessons_from_onboarding(
+                        personal_info=personal_info_with_user_id,
+                        formatted_initial_responses=formatted_initial_responses,
+                    )
+                else:
+                    initial_analyses = await asyncio.to_thread(
+                        coach.extract_initial_lessons_from_onboarding,
+                        personal_info_with_user_id,
+                        formatted_initial_responses,
+                    )
+
+                if not initial_analyses or len(initial_analyses) == 0:
+                    logger.warning("⚠️ (async) No initial lessons extracted - skipping playbook creation")
+                    return
+
+                from core.base.schemas.playbook_schemas import UserPlaybook
+
+                empty_playbook = UserPlaybook(
+                    user_id=user_id,
+                    lessons=[],
+                    total_lessons=0,
                 )
-            else:
-                logger.info("📘 Playbook context enrichment disabled; skipping knowledge base matching.")
-            
-            logger.info(f"📘 Curated initial playbook: {len(empty_playbook.lessons)} → {len(initial_playbook.lessons)} lessons (deduplicated)")
-            
-            # Store initial playbook
-            await safe_db_update(
-                "Store initial playbook",
-                db_service.update_user_profile,
-                user_id=user_id,
-                data={"user_playbook": initial_playbook.model_dump()},
-                jwt_token=request.jwt_token
-            )
-            
-            # Use the newly created playbook for plan generation
-            existing_playbook = initial_playbook
-        else:
-            # No lessons extracted - create empty playbook
-            logger.warning("⚠️ No initial lessons extracted - creating empty playbook")
-            from core.base.schemas.playbook_schemas import UserPlaybook
-            existing_playbook = UserPlaybook(
-                user_id=user_id,
-                lessons=[],
-                total_lessons=0,
-            )
-        
-        # Generate initial training plan (onboarding - uses playbook extracted from responses)
+
+                logger.info("📘 (async) Processing initial lessons through Curator...")
+                # process_batch_lessons may be sync or async (LLM wrappers sometimes sync)
+                if inspect.iscoroutinefunction(coach.curator.process_batch_lessons):
+                    curated_playbook = await coach.curator.process_batch_lessons(
+                        analyses=initial_analyses,
+                        existing_playbook=empty_playbook,
+                        source_plan_id="onboarding",
+                    )
+                else:
+                    curated_playbook = await asyncio.to_thread(
+                        coach.curator.process_batch_lessons,
+                        initial_analyses,
+                        empty_playbook,
+                        "onboarding",
+                    )
+
+                initial_playbook = coach.curator.update_playbook_from_curated(
+                    updated_playbook=curated_playbook,
+                    user_id=user_id,
+                )
+
+                if settings.PLAYBOOK_CONTEXT_MATCHING_ENABLED:
+                    logger.info("📘 (async) Enriching lessons with knowledge base context...")
+                    if inspect.iscoroutinefunction(coach.curator.enrich_lessons_with_context):
+                        initial_playbook = await coach.curator.enrich_lessons_with_context(
+                            playbook=initial_playbook,
+                            rag_service=coach.rag_service,
+                        )
+                    else:
+                        initial_playbook = await asyncio.to_thread(
+                            coach.curator.enrich_lessons_with_context,
+                            initial_playbook,
+                            coach.rag_service,
+                        )
+                else:
+                    logger.info("📘 (async) Playbook context enrichment disabled; skipping knowledge base matching.")
+
+                logger.info(
+                    f"📘 (async) Curated initial playbook: {len(empty_playbook.lessons)} → {len(initial_playbook.lessons)} lessons (deduplicated)"
+                )
+
+                await safe_db_update(
+                    "Store initial playbook",
+                    db_service.update_user_profile,
+                    user_id=user_id,
+                    data={"user_playbook": initial_playbook.model_dump()},
+                    jwt_token=request.jwt_token
+                )
+                logger.info("✅ (async) Playbook stored successfully")
+            except Exception as async_error:
+                logger.error(f"❌ (async) Playbook generation failed: {str(async_error)}")
+        # Start playbook generation immediately (runs in background while we save plan)
+        playbook_task = asyncio.create_task(build_initial_playbook_async())
+        def _task_done_logger(task: asyncio.Task, label: str):
+            try:
+                task.result()
+            except Exception as task_err:
+                logger.error(f"❌ Background task {label} failed: {task_err}")
+        playbook_task.add_done_callback(lambda t: _task_done_logger(t, "playbook"))
+
+        # === PHASE 1: Generate Week 1 (SYNCHRONOUS) ===
         result = await coach.generate_initial_training_plan(
             personal_info=personal_info_with_user_id,
-            user_playbook=existing_playbook,
+            formatted_initial_responses=formatted_initial_responses,
             user_profile_id=user_profile_id,
             jwt_token=request.jwt_token,
         )
@@ -473,20 +499,14 @@ async def generate_training_plan(
         
         logger.info("✅ Training plan generated successfully")
         
-        # Save training plan to database
+        # Save to DB immediately to get training_plan_id
         training_plan_data = result.get("training_plan")
-        
-        # Get playbook from database (created earlier in onboarding)
-        user_playbook = None
-        if existing_playbook:
-            user_playbook = existing_playbook.model_dump()
-            logger.info(f"📘 Playbook included with {len(user_playbook.get('lessons', []))} lessons")
         
         save_result = await db_service.save_training_plan(
             user_profile_id=user_profile_id,
             training_plan_data=training_plan_data,
             jwt_token=request.jwt_token,
-            user_playbook=user_playbook,
+            user_playbook=None,  # Generated asynchronously
         )
         
         if not save_result.get("success"):
@@ -500,7 +520,7 @@ async def generate_training_plan(
         enriched_plan = save_result.get("data", {}).get("training_plan")
         logger.info(f"✅ Training plan saved (ID: {training_plan_id})")
         
-        # Set plan_accepted=False since this is a new plan that needs user approval
+        # Set plan_accepted=False
         await safe_db_update(
             "Set plan_accepted=False for new plan",
             db_service.update_user_profile,
@@ -509,6 +529,57 @@ async def generate_training_plan(
             jwt_token=request.jwt_token
         )
         logger.info("✅ Set plan_accepted=False for new training plan")
+        
+        # === PHASE 2: Background Tasks (ASYNCHRONOUS, PARALLEL) ===
+        async def build_plan_outline_async(plan_id: int):
+            """Generate future week outlines and append to weekly_schedules table."""
+            try:
+                logger.info("📘 (async) START outline generation")
+                # yield control immediately so other background tasks can start
+                await asyncio.sleep(0)
+                # _generate_future_week_outlines may be async or sync
+                if inspect.iscoroutinefunction(coach._generate_future_week_outlines):
+                    outline_payload = await coach._generate_future_week_outlines(
+                        personal_info=personal_info_with_user_id,
+                        formatted_initial_responses=formatted_initial_responses,
+                        existing_plan=training_plan_data,
+                        outline_weeks=12,
+                    )
+                else:
+                    outline_payload = await asyncio.to_thread(
+                        coach._generate_future_week_outlines,
+                        personal_info_with_user_id,
+                        formatted_initial_responses,
+                        training_plan_data,
+                        12,
+                    )
+                
+                # Append outline weeks (2-13) to weekly_schedules table
+                future_weeks = outline_payload.get("weekly_schedules", [])
+                if future_weeks:
+                    for week_data in future_weeks:
+                        week_data["training_plan_id"] = plan_id
+                        week_data["daily_trainings"] = []  # Outline only, no exercises
+                    
+                    result = await db_service.append_weekly_schedules(
+                        training_plan_id=plan_id,
+                        weekly_schedules=future_weeks,
+                        jwt_token=request.jwt_token,
+                    )
+                    
+                    if result.get("success"):
+                        logger.info(
+                            "✅ (async) Appended %s future week outlines to weekly_schedules",
+                            len(future_weeks),
+                        )
+                    else:
+                        logger.error(f"❌ (async) Failed to append outlines: {result.get('error')}")
+            except Exception as async_error:
+                logger.error(f"❌ (async) Plan outline generation failed: {async_error}")
+        
+        # Start outline generation now that plan is saved (playbook already started)
+        outline_task = asyncio.create_task(build_plan_outline_async(training_plan_id))
+        outline_task.add_done_callback(lambda t: _task_done_logger(t, "outline"))
         
         # Get completion message from result (generated during plan creation)
         completion_message = result.get("completion_message")
@@ -519,7 +590,7 @@ async def generate_training_plan(
             return {
                 "success": True,
                 "data": enriched_plan,
-                "playbook": existing_playbook.model_dump() if existing_playbook else None,
+                "playbook": None,
                 "message": "Training plan generated and saved successfully",
                 "completion_message": completion_message,
                 "metadata": result.get("metadata", {}),  # Include metadata for frontend
@@ -533,23 +604,23 @@ async def generate_training_plan(
                 return {
                     "success": True,
                     "data": complete_plan,
-                    "playbook": existing_playbook.model_dump() if existing_playbook else None,
+                    "playbook": None,
                     "message": "Training plan generated and saved successfully",
                     "completion_message": completion_message,
-                        "metadata": result.get("metadata", {}),
-                    }
+                    "metadata": result.get("metadata", {}),
+                }
         except Exception as fetch_error:
             logger.error(f"❌ Error fetching complete training plan: {str(fetch_error)}")
             
             # Final fallback
             return {
-                    "success": True,
-                    "data": training_plan_data,
-                    "playbook": existing_playbook.model_dump() if existing_playbook else None,
-                    "message": "Training plan generated and saved successfully",
-                    "completion_message": completion_message,
+                "success": True,
+                "data": training_plan_data,
+                "playbook": None,
+                "message": "Training plan generated and saved successfully",
+                "completion_message": completion_message,
                 "metadata": result.get("metadata", {}),
-                }
+            }
         
     except HTTPException:
         raise

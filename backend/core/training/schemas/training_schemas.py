@@ -513,9 +513,17 @@ class WeeklySchedule(BaseModel):
     daily_trainings: List[DailyTraining] = Field(
         default=[], description="Daily training sessions"
     )
-    justification: str = Field(
-        ...,
-        description="AI justification: this week's purpose and how it progresses toward the goal",
+    focus_theme: str = Field(
+        default=None,
+        description="Headline for the week (e.g., 'Hypertrophy Volume Build')",
+    )
+    primary_goal: str = Field(
+        default=None,
+        description="One sentence describing the primary adaptation target for this week",
+    )
+    progression_lever: str = Field(
+        default=None,
+        description="How this week progresses the training (volume, intensity, skill, density, etc.)",
     )
     created_at: Optional[datetime] = Field(
         default=None, description="Creation timestamp"
@@ -523,6 +531,11 @@ class WeeklySchedule(BaseModel):
     updated_at: Optional[datetime] = Field(
         default=None, description="Last update timestamp"
     )
+
+
+class WeeklyOutlinePlan(BaseModel):
+    """Collection of future weekly focus summaries."""
+    weekly_schedules: List[WeeklySchedule]
 
 
 class TrainingPlan(BaseModel):
@@ -686,7 +699,14 @@ class GeminiDailyTraining(BaseModel):
 class GeminiWeeklySchedule(BaseModel):
     week_number: int
     daily_trainings: List[GeminiDailyTraining]
+    focus_theme: Optional[str] = None
+    primary_goal: Optional[str] = None
+    progression_lever: Optional[str] = None
     justification: str
+
+
+class GeminiWeeklyOutlinePlan(BaseModel):
+    weekly_schedules: List[GeminiWeeklySchedule]
 
 
 class WeeklyScheduleResponse(BaseModel):
@@ -701,6 +721,18 @@ class WeeklyScheduleResponse(BaseModel):
     week_number: int = Field(..., description="Week number in the plan")
     daily_trainings: List[DailyTraining] = Field(
         default=[], description="Daily training sessions"
+    )
+    focus_theme: Optional[str] = Field(
+        default=None,
+        description="Headline for the week (e.g., 'Hypertrophy Volume Build')",
+    )
+    primary_goal: Optional[str] = Field(
+        default=None,
+        description="One sentence describing the primary adaptation target for this week",
+    )
+    progression_lever: Optional[str] = Field(
+        default=None,
+        description="How this week progresses the training (volume, intensity, skill, density, etc.)",
     )
     justification: str = Field(
         ...,
@@ -721,6 +753,9 @@ class WeeklyScheduleResponse(BaseModel):
 class GeminiWeeklyScheduleResponse(BaseModel):
     """Gemini-compatible version of WeeklyScheduleResponse."""
     daily_trainings: List[GeminiDailyTraining]
+    focus_theme: Optional[str] = None
+    primary_goal: Optional[str] = None
+    progression_lever: Optional[str] = None
     justification: str
     ai_message: str
 

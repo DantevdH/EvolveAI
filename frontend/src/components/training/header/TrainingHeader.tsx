@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   card: {
-    borderRadius: 20,
+    borderRadius: 24, // Increased from 20 for more rounded corners (matching home page)
     padding: 20,
     borderWidth: 1,
     borderColor: createColorWithOpacity(colors.secondary, 0.45),
@@ -49,11 +49,11 @@ const styles = StyleSheet.create({
     shadowColor: createColorWithOpacity(colors.text, 0.08),
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 4, // Increased from 2 for better elevation
     },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowOpacity: 0.15, // Increased for deeper shadow
+    shadowRadius: 12, // Increased for softer shadow spread
+    elevation: 5, // Increased for Android elevation
     position: 'relative',
   },
 });

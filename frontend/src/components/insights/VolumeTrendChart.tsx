@@ -1,7 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
-import { Svg, Line, Polyline, Circle, Text as SvgText, G, Defs, LinearGradient, Stop } from 'react-native-svg';
-import { colors } from '@/src/constants/colors';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { Svg, Rect, Text as SvgText, G, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
+import { colors, createColorWithOpacity } from '@/src/constants/colors';
 import { VolumeTrendExplanation } from './VolumeTrendExplanation';
 
 interface VolumeTrendChartProps {
@@ -86,18 +88,24 @@ export const VolumeTrendChart: React.FC<VolumeTrendChartProps> = ({
   const chartInnerWidth = chartWidth - (padding * 2);
   const chartInnerHeight = height - (padding * 2);
   
-  // Calculate points for the line with validation
-  const points = filteredData.map((point, index) => {
+  // Calculate bar positions and dimensions
+  const barWidth = Math.max(8, (chartInnerWidth / filteredData.length) * 0.6);
+  const barSpacing = (chartInnerWidth / filteredData.length) * 0.4;
+  
+  const bars = filteredData.map((point, index) => {
     const volume = isNaN(point.volume) || !isFinite(point.volume) ? 0 : point.volume;
-    const x = padding + (index / Math.max(1, filteredData.length - 1)) * chartInnerWidth;
-    const y = padding + ((maxVolume - volume) / volumeRange) * chartInnerHeight;
-    return { x: isNaN(x) ? padding : x, y: isNaN(y) ? padding : y, volume, week: point.week };
+    const barHeight = (volume / maxVolume) * chartInnerHeight;
+    const x = padding + (index * (barWidth + barSpacing)) + (barSpacing / 2);
+    const y = padding + chartInnerHeight - barHeight;
+    return { 
+      x: isNaN(x) ? padding : x, 
+      y: isNaN(y) ? padding : y, 
+      width: barWidth,
+      height: Math.max(2, barHeight),
+      volume, 
+      week: point.week 
+    };
   });
-
-  // Create polyline path
-  const pathData = points.map((point, index) => 
-    `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`
-  ).join(' ');
 
   // Format week labels
   const formatWeekLabel = (weekString: string) => {
@@ -120,108 +128,107 @@ export const VolumeTrendChart: React.FC<VolumeTrendChartProps> = ({
   return (
     <View style={hideTitle ? styles.chartOnlyContainer : styles.container}>
       {!hideTitle && (
-        <View style={styles.header}>
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>Volume Trend</Text>
-            <VolumeTrendExplanation />
-          </View>
-          <View style={styles.periodToggle}>
-            {(['1M', '3M', '6M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
-              <TouchableOpacity
-                key={period}
-                style={[
-                  styles.periodButton,
-                  selectedPeriod === period && styles.periodButtonActive
-                ]}
-                onPress={() => setSelectedPeriod(period)}
-              >
-                <Text style={[
-                  styles.periodButtonText,
-                  selectedPeriod === period && styles.periodButtonTextActive
-                ]}>
-                  {period}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+        <>
+          <LinearGradient
+            colors={[
+              createColorWithOpacity(colors.secondary, 0.08),
+              createColorWithOpacity(colors.secondary, 0.03),
+            ]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.headerGradient}
+          >
+            <View style={styles.header}>
+              <View style={styles.headerRow}>
+                <View style={styles.titleContainer}>
+                  <Ionicons name="trending-up" size={16} color={colors.primary} />
+                  <Text style={styles.title}>VOLUME TREND</Text>
+                  <VolumeTrendExplanation />
+                </View>
+                <View style={styles.periodToggle}>
+                  {(['1M', '3M', '6M', '1Y', 'ALL'] as TimePeriod[]).map((period) => (
+                    <TouchableOpacity
+                      key={period}
+                      style={[
+                        styles.periodButton,
+                        selectedPeriod === period && styles.periodButtonActive
+                      ]}
+                      onPress={() => setSelectedPeriod(period)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[
+                        styles.periodButtonText,
+                        selectedPeriod === period && styles.periodButtonTextActive
+                      ]}>
+                        {period}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+          </LinearGradient>
+        </>
       )}
 
       {/* This Week's Value */}
       {!hideTitle && filteredData.length > 0 && (
         <View style={styles.weeklyValueContainer}>
-          <Text style={styles.weeklyValueLabel}>This Week's Volume</Text>
-          <Text style={styles.weeklyValue}>
-            {formatVolume(filteredData[filteredData.length - 1].volume, !hideTitle)}
-          </Text>
+          <View style={styles.weeklyValueContent}>
+            <View style={styles.weeklyValueLeft}>
+              <Text style={styles.weeklyValueLabel}>This Week</Text>
+              <Text style={styles.weeklyValueSubLabel}>Training Volume</Text>
+            </View>
+            <View style={styles.weeklyValueRight}>
+              <Text style={styles.weeklyValue}>
+                {formatVolume(filteredData[filteredData.length - 1].volume, !hideTitle)}
+              </Text>
+            </View>
+          </View>
         </View>
       )}
       
       <View style={styles.chartContainer}>
         <Svg width={chartWidth} height={height}>
           <Defs>
-            <LinearGradient id="volumeGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <Stop offset="0%" stopColor={colors.primary} stopOpacity="0.3" />
-              <Stop offset="100%" stopColor={colors.primary} stopOpacity="0.05" />
-            </LinearGradient>
+            <SvgLinearGradient id="volumeBarGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <Stop offset="0%" stopColor={colors.secondary} stopOpacity="0.95" />
+              <Stop offset="50%" stopColor={colors.secondary} stopOpacity="0.8" />
+              <Stop offset="100%" stopColor={colors.secondary} stopOpacity="0.6" />
+            </SvgLinearGradient>
           </Defs>
-          
-          {/* Grid lines */}
-          <G>
-            {[0, 0.25, 0.5, 0.75, 1].map((ratio, index) => {
-              const y = padding + ratio * chartInnerHeight;
-              const volume = Math.max(0, maxVolume - (ratio * volumeRange)); // Never below zero
-              return (
-                <G key={index}>
-                  <Line
-                    x1={padding}
-                    y1={y}
-                    x2={chartWidth - padding}
-                    y2={y}
-                    stroke={colors.card}
-                    strokeWidth="1"
-                    strokeDasharray="2,2"
-                  />
+
+          {/* Volume bars */}
+          {bars.map((bar, index) => (
+              <G key={index}>
+                <Rect
+                  x={bar.x}
+                  y={bar.y}
+                  width={bar.width}
+                  height={bar.height}
+                  rx={4}
+                  ry={4}
+                  fill="url(#volumeBarGradient)"
+                />
+                {/* Bar value label on top */}
+                {bar.height > 20 && (
                   <SvgText
-                    x={padding - 10}
-                    y={y + 5}
-                    fontSize="12"
-                    fill={colors.muted}
-                    textAnchor="end"
+                    x={bar.x + bar.width / 2}
+                    y={bar.y - 4}
+                    fontSize="10"
+                    fill={colors.text}
+                    textAnchor="middle"
+                    fontWeight="600"
                   >
-                    {formatVolume(volume, !hideTitle)}
+                    {formatVolume(bar.volume, !hideTitle)}
                   </SvgText>
-                </G>
-              );
-            })}
-          </G>
-
-          {/* Volume line */}
-          <Polyline
-            points={points.map(p => `${p.x},${p.y}`).join(' ')}
-            fill="none"
-            stroke={colors.primary}
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-
-          {/* Data points */}
-          {points.map((point, index) => (
-            <Circle
-              key={index}
-              cx={point.x}
-              cy={point.y}
-              r="4"
-              fill={colors.primary}
-              stroke={colors.background}
-              strokeWidth="2"
-            />
-          ))}
+                )}
+              </G>
+            ))}
 
           {/* Week labels */}
-          {points.map((point, index) => (
-            <G key={index} transform={`translate(${point.x}, ${height - 10}) rotate(-45)`}>
+          {bars.map((bar, index) => (
+            <G key={index} transform={`translate(${bar.x + bar.width / 2}, ${height - 10}) rotate(-45)`}>
               <SvgText
                 x={0}
                 y={0}
@@ -229,7 +236,7 @@ export const VolumeTrendChart: React.FC<VolumeTrendChartProps> = ({
                 fill={colors.muted}
                 textAnchor="middle"
               >
-                {formatWeekLabel(point.week)}
+                {formatWeekLabel(bar.week)}
               </SvgText>
             </G>
           ))}
@@ -238,27 +245,32 @@ export const VolumeTrendChart: React.FC<VolumeTrendChartProps> = ({
 
       {/* Stats */}
       <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>
-            {formatVolume(maxVolume, !hideTitle)}
-          </Text>
-          <Text style={styles.statLabel}>Peak Volume</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>
-            {formatVolume(filteredData.reduce((sum, d) => sum + d.volume, 0) / filteredData.length, !hideTitle)}
-          </Text>
-          <Text style={styles.statLabel}>Average</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[
-            styles.statValue,
-            { color: filteredData.length > 1 && filteredData[filteredData.length - 1].volume > filteredData[filteredData.length - 2].volume ? colors.success : colors.error }
-          ]}>
-            {filteredData.length > 1 && filteredData[filteredData.length - 1].volume > filteredData[filteredData.length - 2].volume ? '+' : ''}
-            {filteredData.length > 1 ? Math.round(((filteredData[filteredData.length - 1].volume - filteredData[filteredData.length - 2].volume) / filteredData[filteredData.length - 2].volume) * 100) : 0}%
-          </Text>
-          <Text style={styles.statLabel}>Change</Text>
+        <View style={styles.statDivider} />
+        <View style={styles.statsGrid}>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Peak</Text>
+            <Text style={styles.statValue}>
+              {formatVolume(maxVolume, !hideTitle)}
+            </Text>
+          </View>
+          <View style={styles.statDividerVertical} />
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Average</Text>
+            <Text style={styles.statValue}>
+              {formatVolume(filteredData.reduce((sum, d) => sum + d.volume, 0) / filteredData.length, !hideTitle)}
+            </Text>
+          </View>
+          <View style={styles.statDividerVertical} />
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Change</Text>
+            <Text style={[
+              styles.statValue,
+              { color: filteredData.length > 1 && filteredData[filteredData.length - 1].volume > filteredData[filteredData.length - 2].volume ? colors.success : colors.error }
+            ]}>
+              {filteredData.length > 1 && filteredData[filteredData.length - 1].volume > filteredData[filteredData.length - 2].volume ? '+' : ''}
+              {filteredData.length > 1 ? Math.round(((filteredData[filteredData.length - 1].volume - filteredData[filteredData.length - 2].volume) / filteredData[filteredData.length - 2].volume) * 100) : 0}%
+            </Text>
+          </View>
         </View>
       </View>
     </View>
@@ -267,57 +279,74 @@ export const VolumeTrendChart: React.FC<VolumeTrendChartProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginVertical: 8,
+    padding: 0,
   },
   chartOnlyContainer: {
     // No extra padding/margin when used within existing container
   },
+  headerGradient: {
+    // Gradient background for header
+  },
   header: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    gap: 12,
   },
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    flex: 1,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   periodToggle: {
     flexDirection: 'row',
     backgroundColor: colors.background,
     borderRadius: 8,
     padding: 2,
+    gap: 2,
   },
   periodButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 6,
-    minWidth: 32,
+    minWidth: 36,
     alignItems: 'center',
   },
   periodButtonActive: {
     backgroundColor: colors.primary,
   },
   periodButtonText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
+    fontWeight: '600',
     color: colors.muted,
   },
   periodButtonTextActive: {
-    color: colors.background,
+    color: colors.card,
+    fontWeight: '700',
   },
   chartContainer: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 8,
+  },
+  content: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   emptyState: {
     height: chartHeight,
@@ -329,40 +358,79 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    borderTopWidth: 1,
-    borderTopColor: colors.background,
-    paddingTop: 16,
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
-  statItem: {
+  statDivider: {
+    height: 1,
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.15),
+    marginBottom: 20,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+  },
+  statCard: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statDividerVertical: {
+    width: 1,
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.15),
+    marginHorizontal: 12,
   },
   statValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: colors.muted,
-  },
-  weeklyValueContainer: {
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.background,
-  },
-  weeklyValueLabel: {
-    fontSize: 12,
-    color: colors.muted,
-    marginBottom: 4,
-  },
-  weeklyValue: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.primary,
+    marginTop: 4,
+    letterSpacing: -0.5,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: colors.muted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  weeklyValueContainer: {
+    paddingTop: 24,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: createColorWithOpacity(colors.secondary, 0.15),
+  },
+  weeklyValueContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  weeklyValueLeft: {
+    flex: 1,
+  },
+  weeklyValueRight: {
+    alignItems: 'flex-end',
+  },
+  weeklyValueLabel: {
+    fontSize: 13,
+    color: colors.muted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  weeklyValueSubLabel: {
+    fontSize: 11,
+    color: createColorWithOpacity(colors.muted, 0.7),
+    fontWeight: '500',
+  },
+  weeklyValue: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: -1,
   },
 });

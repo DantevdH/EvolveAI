@@ -6,14 +6,22 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../../constants/colors';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, createColorWithOpacity, goldenGradient } from '../../../constants/colors';
 import { AddExerciseButtonProps } from './types';
 
 const AddExerciseButton: React.FC<AddExerciseButtonProps> = ({ onPress }) => {
   return (
     <View style={styles.addControls}>
-      <TouchableOpacity style={styles.addButton} onPress={onPress}>
-        <Ionicons name="add" size={12} color="white" />
+      <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
+        <LinearGradient
+          colors={goldenGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.addButton}
+        >
+          <Ionicons name="add" size={16} color={colors.primary} />
+        </LinearGradient>
       </TouchableOpacity>
     </View>
   );
@@ -26,19 +34,20 @@ const styles = StyleSheet.create({
   },
   addButton: {
     alignSelf: 'center',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.primary,
+    width: 32, // Increased from 28 for better visibility
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.overlay,
+    borderWidth: 1.5,
+    borderColor: createColorWithOpacity(colors.secondary, 0.4), // Golden border accent
+    shadowColor: createColorWithOpacity(colors.secondary, 0.3), // Golden shadow
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 3, // Increased for better elevation
     },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOpacity: 0.3, // Increased shadow opacity
+    shadowRadius: 5, // Increased for softer shadow
     elevation: 5,
   },
 });

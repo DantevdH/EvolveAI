@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   container: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.card, // Changed to white card color
     borderRadius: 14,
     borderWidth: 1,
     borderColor: createColorWithOpacity(colors.secondary, 0.45),
@@ -171,14 +171,15 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   containerCompleted: {
-    borderColor: createColorWithOpacity(colors.primary, 0.45),
-    shadowColor: createColorWithOpacity(colors.primary, 0.2),
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.08), // Light golden background when completed
+    borderColor: createColorWithOpacity(colors.secondary, 0.45), // Golden border
+    shadowColor: createColorWithOpacity(colors.secondary, 0.2), // Golden shadow
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
   containerExpanded: {
-    borderColor: createColorWithOpacity(colors.primary, 0.55),
+    borderColor: createColorWithOpacity(colors.secondary, 0.55), // Golden border when expanded
     shadowOpacity: 0.3,
     shadowRadius: 6,
   },
@@ -197,7 +198,7 @@ const styles = StyleSheet.create({
   setsContainer: {
     paddingHorizontal: 16,
     paddingBottom: 16,
-    backgroundColor: createColorWithOpacity(colors.background, 0.92),
+    backgroundColor: colors.card, // Changed to white card color
     borderTopWidth: 1,
     borderTopColor: createColorWithOpacity(colors.secondary, 0.2),
     gap: 8

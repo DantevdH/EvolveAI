@@ -1,12 +1,12 @@
 /**
  * Curved Road Path Component
- * Renders segmented road with alternating primary/tertiary colors
+ * Single centered line connecting circles on card edges
  */
 
 import React from 'react';
-import Svg, { Path, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
-import { colors, createColorWithOpacity, goldenGradient } from '../../../constants/colors';
+import Svg, { Path } from 'react-native-svg';
 import { PathSegment } from './pathGenerator';
+import { colors, createColorWithOpacity } from '../../../constants/colors';
 
 interface RoadSegment {
   segment: PathSegment;
@@ -19,55 +19,41 @@ interface CurvedRoadPathProps {
   width: number;
 }
 
-const gradientId = 'journeyRoadGradient';
+const STROKE_WIDTH = 3; // Slightly thicker for better visibility
 
-const STROKE_LOOKUP = {
-  completed: `url(#${gradientId}-completed)` as const,
-  current: `url(#${gradientId}-current)` as const,
-  locked: `url(#${gradientId}-locked)` as const,
+// Status-based colors
+const getPathColor = (status: 'completed' | 'current' | 'locked'): string => {
+  switch (status) {
+    case 'completed':
+      return colors.secondary; // Golden
+    case 'current':
+      return colors.secondary; // Golden
+    case 'locked':
+      return createColorWithOpacity(colors.muted, 0.3); // Muted gray
+    default:
+      return createColorWithOpacity(colors.muted, 0.3);
+  }
 };
-
-const OPACITY_LOOKUP = {
-  completed: 1,
-  current: 1,
-  locked: 0.6,
-};
-
-const STROKE_WIDTH = 42;
 
 const CurvedRoadPath: React.FC<CurvedRoadPathProps> = ({ segments, height, width }) => {
   return (
-    <Svg height={height} width={width}>
-      <Defs>
-        <SvgLinearGradient id={`${gradientId}-completed`} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0%" stopColor={colors.secondary} stopOpacity={0.55} />
-          <Stop offset="100%" stopColor={colors.secondary} stopOpacity={0.2} />
-        </SvgLinearGradient>
-        <SvgLinearGradient id={`${gradientId}-current`} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0%" stopColor={colors.secondary} stopOpacity={0.6} />
-          <Stop offset="100%" stopColor={colors.secondary} stopOpacity={0.25} />
-        </SvgLinearGradient>
-        <SvgLinearGradient id={`${gradientId}-locked`} x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0%" stopColor={colors.secondary} stopOpacity={0.3} />
-          <Stop offset="100%" stopColor={colors.secondary} stopOpacity={0.12} />
-        </SvgLinearGradient>
-      </Defs>
-
-      {segments.map(({ segment, status }) => (
-        <Path
-          key={`segment-${segment.weekNumber}`}
-          d={segment.pathData}
-          stroke={STROKE_LOOKUP[status]}
-          strokeWidth={STROKE_WIDTH}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-          opacity={OPACITY_LOOKUP[status]}
-        />
-      ))}
+    <Svg height={height} width={width} style={{ position: 'absolute', top: 0, left: 0 }}>
+      {/* Render path segments with status-based colors - lines connect circles on card edges */}
+      {segments.map(({ segment, status }, index) =>
+        segment && segment.pathData ? (
+          <Path
+            key={`segment-${segment.weekNumber}-${index}`}
+            d={segment.pathData}
+            stroke={getPathColor(status)}
+            strokeWidth={STROKE_WIDTH}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            fill="none"
+          />
+        ) : null
+      )}
     </Svg>
   );
 };
 
 export default CurvedRoadPath;
-

@@ -43,9 +43,9 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="community"
+        name="profile"
         options={{
-          title: 'Community',
+          title: 'Profile',
             tabBarButton: () => null,
         }}
       />

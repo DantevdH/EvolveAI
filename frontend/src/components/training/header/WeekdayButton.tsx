@@ -25,12 +25,12 @@ const WeekdayButton: React.FC<WeekdayButtonProps> = ({ day, index, onPress }) =>
     createColorWithOpacity(colors.secondary, 0.12),
   ];
   const selectedGradient: [string, string] = [
-    createColorWithOpacity(colors.primary, 0.9),
-    createColorWithOpacity(colors.primary, 0.7),
+    createColorWithOpacity(colors.secondary, 0.75), // Golden with opacity
+    createColorWithOpacity(colors.secondary, 0.55), // Golden with opacity
   ];
   const completedGradient: [string, string] = [
-    createColorWithOpacity(colors.primary, 0.85),
-    createColorWithOpacity(colors.primary, 0.6),
+    createColorWithOpacity(colors.secondary, 0.85),
+    createColorWithOpacity(colors.secondary, 0.6),
   ];
   const restGradient: [string, string] = [
     createColorWithOpacity(colors.purple, 0.5),
@@ -39,17 +39,17 @@ const WeekdayButton: React.FC<WeekdayButtonProps> = ({ day, index, onPress }) =>
 
   let ringGradient: [string, string] = baseGradient;
   let innerBackground = colors.card;
-  let iconColor = colors.primary;
+  let iconColor = colors.secondary;
 
   if (isSelected) {
     ringGradient = selectedGradient;
-    innerBackground = createColorWithOpacity(colors.primary, 0.12);
-    iconColor = '#FFFFFF';
+    innerBackground = createColorWithOpacity(colors.secondary, 0.2); // Golden inner circle with opacity
+    iconColor = colors.secondary; // Changed to primary red icon on golden background
   }
 
   if (isCompleted && !isRestDay) {
     ringGradient = completedGradient;
-    innerBackground = createColorWithOpacity(colors.primary, 0.15);
+    innerBackground = createColorWithOpacity(colors.secondary, 0.15);
     iconColor = '#FFFFFF';
   }
 
@@ -160,8 +160,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   dayLabelSelected: {
-    color: colors.primary,
-    fontWeight: '600',
+    color: colors.secondary, // Changed to golden
+    fontWeight: '700', // Increased from 600 for bolder text
   },
 });
 

@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/src/constants/colors';
+import { colors, createColorWithOpacity } from '@/src/constants/colors';
 import { WeakPointsExplanation } from './WeakPointsExplanation';
 import { WeakPointAnalysis } from '@/src/services/insightsAnalyticsService';
 
@@ -79,20 +80,40 @@ export const WeakPointsAnalysis: React.FC<WeakPointsAnalysisProps> = ({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.titleContainer}>
-          <Text style={styles.title}>Muscle Strength Index (MSI)</Text>
-          <WeakPointsExplanation />
+      <LinearGradient
+        colors={[
+          createColorWithOpacity(colors.secondary, 0.08),
+          createColorWithOpacity(colors.secondary, 0.03),
+        ]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <View style={styles.titleContainer}>
+              <Ionicons name="fitness" size={16} color={colors.primary} />
+              <Text style={styles.title}>MUSCLE STRENGTH INDEX (MSI)</Text>
+              <WeakPointsExplanation />
+            </View>
+          </View>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* Average Strength Value */}
       {data.length > 0 && (
         <View style={styles.weeklyValueContainer}>
-          <Text style={styles.weeklyValueLabel}>Average MSI</Text>
-          <Text style={styles.weeklyValue}>
-            {Math.round(averageStrength)}
-          </Text>
+          <View style={styles.weeklyValueContent}>
+            <View style={styles.weeklyValueLeft}>
+              <Text style={styles.weeklyValueLabel}>Average</Text>
+              <Text style={styles.weeklyValueSubLabel}>Muscle Strength Index</Text>
+            </View>
+            <View style={styles.weeklyValueRight}>
+              <Text style={styles.weeklyValue}>
+                {Math.round(averageStrength)}
+              </Text>
+            </View>
+          </View>
         </View>
       )}
       
@@ -172,30 +193,40 @@ export const WeakPointsAnalysis: React.FC<WeakPointsAnalysisProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginVertical: 8,
+    padding: 0,
+  },
+  headerGradient: {
+    // Gradient background for header
   },
   header: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    gap: 12,
   },
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    flex: 1,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   scrollContainer: {
     maxHeight: 400,
     marginTop: 8,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
   muscleCard: {
     backgroundColor: colors.card,
@@ -205,7 +236,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     marginHorizontal: 16,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: createColorWithOpacity(colors.secondary, 0.25),
     shadowColor: colors.overlay,
     shadowOffset: {
       width: 0,
@@ -295,20 +326,40 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   weeklyValueContainer: {
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 16,
+    paddingTop: 24,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: colors.background,
+    borderBottomColor: createColorWithOpacity(colors.secondary, 0.15),
+  },
+  weeklyValueContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  weeklyValueLeft: {
+    flex: 1,
+  },
+  weeklyValueRight: {
+    alignItems: 'flex-end',
   },
   weeklyValueLabel: {
-    fontSize: 12,
+    fontSize: 13,
     color: colors.muted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
     marginBottom: 4,
   },
+  weeklyValueSubLabel: {
+    fontSize: 11,
+    color: createColorWithOpacity(colors.muted, 0.7),
+    fontWeight: '500',
+  },
   weeklyValue: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 32,
+    fontWeight: '800',
     color: colors.primary,
+    letterSpacing: -1,
   },
 });

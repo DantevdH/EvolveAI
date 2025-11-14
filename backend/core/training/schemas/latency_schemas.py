@@ -13,7 +13,8 @@ EventType = Literal[
     "playbook",
     "initial_plan",
     "feedback_plan",
-    "regenerate_plan"
+    "regenerate_plan",
+    "week_outline_generation",
 ]
 
 

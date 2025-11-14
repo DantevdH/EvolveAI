@@ -40,7 +40,7 @@ const SetRow: React.FC<SetRowProps> = ({ set, setIndex, onUpdate }) => {
           style={styles.controlButton}
           onPress={() => reps > 1 && handleRepsChange(reps - 1)}
         >
-          <Ionicons name="remove-circle" size={20} color={colors.primary} />
+          <Ionicons name="remove-circle" size={20} color={colors.secondary} />
         </TouchableOpacity>
         
         <Text style={styles.repsText}>{reps}</Text>
@@ -49,7 +49,7 @@ const SetRow: React.FC<SetRowProps> = ({ set, setIndex, onUpdate }) => {
           style={styles.controlButton}
           onPress={() => handleRepsChange(reps + 1)}
         >
-          <Ionicons name="add-circle" size={20} color={colors.primary} />
+          <Ionicons name="add-circle" size={20} color={colors.secondary} />
         </TouchableOpacity>
       </View>
       
@@ -77,21 +77,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8, // Reduced from 12
     backgroundColor: colors.background,
     borderRadius: 8,
-    gap: 12
+    gap: 6, // Reduced from 12
+    flexWrap: 'nowrap',
   },
   setNumber: {
     fontSize: 12,
     fontWeight: '500',
     color: colors.muted,
-    width: 40
+    width: 45, // Optimized width
+    flexShrink: 0,
   },
   repsControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8
+    gap: 6, // Reduced from 8
+    flexShrink: 0,
   },
   controlButton: {
     // No additional styling needed
@@ -100,30 +103,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: colors.text,
-    minWidth: 30,
-    textAlign: 'center'
+    minWidth: 28, // Reduced from 30
+    textAlign: 'center',
+    flexShrink: 0,
   },
   weightInput: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6
+    gap: 4,
+    marginLeft: 'auto', // Push to right side
+    flexShrink: 0, // Don't shrink, just push to right
   },
   weightField: {
-    width: 80,
+    width: 60, // Further reduced from 70
     height: 36,
     borderWidth: 1,
     borderColor: colors.inputBorder,
     borderRadius: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4, // Further reduced
     textAlign: 'center',
     fontSize: 12,
     backgroundColor: colors.inputBackground,
     color: colors.text,
-    fontStyle: 'italic'
+    fontStyle: 'italic',
+    flexShrink: 0,
   },
   kgText: {
     fontSize: 12,
-    color: colors.muted
+    color: colors.muted,
+    flexShrink: 0,
+    paddingLeft: 0,
+    marginLeft: 0,
   },
 });
 

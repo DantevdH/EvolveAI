@@ -15,6 +15,7 @@ interface SimpleAuthState {
   exercises: any[] | null;
   isLoading: boolean;
   trainingPlanLoading: boolean;
+  isPollingPlan: boolean;  // True when polling for background plan generation
   error: string | null;
   isInitialized: boolean;
 }
@@ -23,6 +24,7 @@ interface SimpleAuthState {
 type SimpleAuthAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_WORKOUT_PLAN_LOADING'; payload: boolean }
+  | { type: 'SET_POLLING_PLAN'; payload: boolean }
   | { type: 'SET_USER'; payload: any | null }
   | { type: 'SET_SESSION'; payload: any | null }
   | { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
@@ -41,6 +43,7 @@ const initialState: SimpleAuthState = {
   exercises: null,
   isLoading: false,
   trainingPlanLoading: false,
+  isPollingPlan: false,
   error: null,
   isInitialized: false,
 };
@@ -57,6 +60,11 @@ const authReducer = (state: SimpleAuthState, action: SimpleAuthAction): SimpleAu
       return {
         ...state,
         trainingPlanLoading: action.payload,
+      };
+    case 'SET_POLLING_PLAN':
+      return {
+        ...state,
+        isPollingPlan: action.payload,
       };
     case 'SET_USER':
       return {
@@ -128,6 +136,7 @@ interface AuthContextType {
   // generateTrainingPlan: () => Promise<boolean>; // REMOVED: Use GeneratePlanScreen instead
   refreshTrainingPlan: () => Promise<void>;
   setTrainingPlan: (trainingPlan: TrainingPlan) => void;
+  setPollingPlan: (isPolling: boolean) => void;
   
   // Exercise methods
   loadAllExercises: () => Promise<void>;
@@ -713,6 +722,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     dispatch({ type: 'SET_EXERCISES', payload: null });
   };
 
+  // Set polling plan flag
+  const setPollingPlan = (isPolling: boolean): void => {
+    dispatch({ type: 'SET_POLLING_PLAN', payload: isPolling });
+  };
+
   const contextValue: AuthContextType = {
     state,
     signInWithEmail,
@@ -731,6 +745,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // generateTrainingPlan, // REMOVED: Use GeneratePlanScreen instead
     refreshTrainingPlan,
     setTrainingPlan,
+    setPollingPlan,
     loadAllExercises,
     setExercises,
     clearExercises,
