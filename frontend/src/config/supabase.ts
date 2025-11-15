@@ -9,8 +9,17 @@ if (process.env.NODE_ENV === 'test' || process.env.DETOX === 'true') {
   const { mockSupabase } = require('./supabase.mock');
   supabase = mockSupabase as any;
 } else {
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  
+  // Validate required environment variables
+  if (!supabaseUrl) {
+    throw new Error('EXPO_PUBLIC_SUPABASE_URL environment variable is not set. Please check your .env file.');
+  }
+  
+  if (!supabaseAnonKey) {
+    throw new Error('EXPO_PUBLIC_SUPABASE_ANON_KEY environment variable is not set. Please check your .env file.');
+  }
 
   // Use appropriate storage based on platform
   // On web, use localStorage (handled by Supabase automatically if storage is not provided)

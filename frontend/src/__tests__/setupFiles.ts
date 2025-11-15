@@ -1,7 +1,41 @@
 /**
- * Setup files - runs before all tests
- * Global mocks and configurations
+ * Setup files - runs before Jest environment is set up
+ * Used for polyfills and environment setup
  */
 
-// Mock environment variables
-(process.env as any).NODE_ENV = 'test';
+// Define React Native globals
+(global as any).__DEV__ = true;
+
+// Mock React Native modules that might be needed globally
+jest.mock('react-native', () => ({
+  Platform: {
+    OS: 'ios',
+    select: jest.fn((obj) => obj.ios),
+  },
+  Dimensions: {
+    get: jest.fn(() => ({ width: 375, height: 812 })),
+  },
+}));
+
+// Mock Expo modules
+jest.mock('expo-web-browser', () => ({
+  openAuthSessionAsync: jest.fn(),
+  maybeCompleteAuthSession: jest.fn(),
+}));
+
+jest.mock('expo-secure-store', () => ({
+  setItemAsync: jest.fn(),
+  getItemAsync: jest.fn(),
+  deleteItemAsync: jest.fn(),
+}));
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  default: {
+    getItem: jest.fn(),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+    getAllKeys: jest.fn(),
+    multiRemove: jest.fn(),
+  },
+}));
+

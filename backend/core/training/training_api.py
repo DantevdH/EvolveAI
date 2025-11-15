@@ -199,7 +199,7 @@ def extract_user_id_from_jwt(jwt_token: str) -> str:
         else:
             # Fallback: decode without verification (less secure, but allows development)
             logger.warning("⚠️  SUPABASE_JWT_SECRET not set - JWT verification disabled (not recommended for production)")
-            decoded_token = jwt.decode(jwt_token, options={"verify_signature": False})
+        decoded_token = jwt.decode(jwt_token, options={"verify_signature": False})
         
         user_id = decoded_token.get("sub")
         
