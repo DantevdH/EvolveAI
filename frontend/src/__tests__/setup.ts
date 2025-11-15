@@ -16,3 +16,4 @@ global.console = {
 
 // Mock timers
 jest.useFakeTimers();
+

@@ -1,5 +1,6 @@
 import * as SecureStore from 'expo-secure-store';
 import { supabase } from '../config/supabase';
+import { logger } from '../utils/logger';
 
 // Storage keys
 const STORAGE_KEYS = {
@@ -20,7 +21,7 @@ export class TokenManager {
         SecureStore.setItemAsync(STORAGE_KEYS.USER_ID, userId),
       ]);
     } catch (error) {
-      console.error('Error storing tokens:', error);
+      logger.error('Error storing tokens', error);
       throw new Error('Failed to store authentication tokens');
     }
   }
@@ -32,7 +33,7 @@ export class TokenManager {
     try {
       return await SecureStore.getItemAsync(STORAGE_KEYS.ACCESS_TOKEN);
     } catch (error) {
-      console.error('Error retrieving access token:', error);
+      logger.error('Error retrieving access token', error);
       return null;
     }
   }
@@ -44,7 +45,7 @@ export class TokenManager {
     try {
       return await SecureStore.getItemAsync(STORAGE_KEYS.REFRESH_TOKEN);
     } catch (error) {
-      console.error('Error retrieving refresh token:', error);
+      logger.error('Error retrieving refresh token', error);
       return null;
     }
   }
@@ -56,7 +57,7 @@ export class TokenManager {
     try {
       return await SecureStore.getItemAsync(STORAGE_KEYS.USER_ID);
     } catch (error) {
-      console.error('Error retrieving user ID:', error);
+      logger.error('Error retrieving user ID', error);
       return null;
     }
   }
@@ -74,7 +75,7 @@ export class TokenManager {
       ]);
 
     } catch (error) {
-      console.error('Error clearing tokens:', error);
+      logger.error('Error clearing tokens', error);
       // Don't throw error, just log it - this is not critical for auth flow
 
     }
@@ -91,7 +92,7 @@ export class TokenManager {
       ]);
       return !!(accessToken && refreshToken);
     } catch (error) {
-      console.error('Error checking token validity:', error);
+      logger.error('Error checking token validity', error);
       return false;
     }
   }
@@ -119,7 +120,7 @@ export class TokenManager {
         
         if (!isRefreshTokenError) {
           // Only log actual errors that need attention (not expected refresh token errors)
-          console.error('Error refreshing token:', error);
+          logger.error('Error refreshing token', error);
         }
         // Return null for both expected and unexpected errors
         return null;
@@ -136,7 +137,7 @@ export class TokenManager {
 
       return null;
     } catch (error) {
-      console.error('Error refreshing access token:', error);
+      logger.error('Error refreshing access token', error);
       return null;
     }
   }
@@ -149,13 +150,13 @@ export class TokenManager {
       const { data: { session }, error } = await supabase.auth.getSession();
 
       if (error) {
-        console.error('❌ TokenManager: Error getting session:', error);
+        logger.error('Error getting session', error);
         return null;
       }
 
       return session;
     } catch (error) {
-      console.error('💥 TokenManager: Error getting current session:', error);
+      logger.error('Error getting current session', error);
       return null;
     }
   }

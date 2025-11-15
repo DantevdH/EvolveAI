@@ -20,8 +20,10 @@ export const useAppRouting = (): AppRoutingState => {
   const lastResultRef = useRef<string>('');
 
   const result = useMemo(() => {
-    // If we're loading, don't navigate at all - stay on current page
-    if (state.isLoading || state.trainingPlanLoading) {
+    // BEST PRACTICE: Only block navigation for critical auth operations (sign in, sign up)
+    // Profile loading should NOT block navigation - it loads in background
+    // Only block if we're doing a critical auth operation (sign in/up, not profile loading)
+    if (state.isLoading) {
       return {
         targetRoute: null,
         isLoading: true,
@@ -29,6 +31,8 @@ export const useAppRouting = (): AppRoutingState => {
         routingReason: 'Loading'
       };
     }
+    
+    // trainingPlanLoading should not block navigation either - it's a background operation
 
     // If there's an error, don't navigate - let the user see the error
     if (state.error) {
