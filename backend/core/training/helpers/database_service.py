@@ -21,7 +21,7 @@ class DatabaseService:
             settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY
         )
 
-    def _get_authenticated_client(self, jwt_token: str) -> Client:
+    def _get_authenticated_client(self, jwt_token: Optional[str] = None) -> Client:
         """Create an authenticated Supabase client with service role key for server-side operations."""
         self.logger.debug("Creating authenticated client with service role key")
 
@@ -31,17 +31,23 @@ class DatabaseService:
                 settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY
             )
             self.logger.debug("Using service role key for authentication")
+            # Ensure service role key is never logged or exposed
+            if not settings.SUPABASE_SERVICE_ROLE_KEY:
+                self.logger.error("Service role key is empty - this should not happen")
         else:
             # Fallback to anon key with JWT token
             self.logger.warning(
                 "No service role key found, using anon key with JWT token"
             )
+            if not jwt_token:
+                raise ValueError("JWT token required when service role key is not available")
             client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
             try:
                 client.postgrest.auth(jwt_token)
                 self.logger.debug("JWT token set successfully")
             except Exception as e:
-                self.logger.error(f"Error setting JWT token: {e}")
+                # Don't log the actual token or key in error messages
+                self.logger.error(f"Error setting JWT token: {type(e).__name__}")
                 raise
 
         return client

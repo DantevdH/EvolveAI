@@ -47,9 +47,63 @@ Concise, action-oriented structure for production readiness docs.
 ## Format Guidelines
 
 ### Priority Colors (Deployment Timeline)
-- 🔴 **CRITICAL** - Must fix before TestFlight (Apple beta testing)
-- 🟡 **IMPORTANT** - Should fix before App Store public release
-- 🟢 **NICE TO HAVE** - Can fix after public launch
+
+#### 🔴 CRITICAL (Must Fix Before TestFlight)
+Items that **must** be completed before deploying to TestFlight (Apple beta testing). These include:
+
+**Code/Configuration:**
+- Security vulnerabilities (CORS, authentication, data exposure)
+- Critical bugs that break core functionality
+- Missing environment variable validation
+- Production-blocking configuration issues
+- Error handling that exposes sensitive data
+
+**Minimum Testing:**
+- Smoke tests (health check, API connectivity, database connection)
+- Critical API endpoint tests
+- Authentication/authorization tests
+- Error handling verification
+- **Unit tests for critical processing functions** (e.g., exercise matching, database matching, validation logic)
+
+**Rule of thumb:** If it breaks core functionality or is a security risk, it's CRITICAL.
+
+#### 🟡 IMPORTANT (Should Fix Before App Store Release)
+Items that **should** be completed before public App Store release. These include:
+
+**Code/Configuration:**
+- Performance optimizations
+- Enhanced monitoring and logging
+- Rate limiting and security hardening
+- API versioning
+- Connection pooling and resource management
+
+**Comprehensive Testing:**
+- Full test suite execution
+- Test coverage requirements (minimum 70% for critical paths)
+- All API endpoint tests
+- Integration tests
+- Error scenario testing
+- Configuration testing (CORS, timeouts, etc.)
+
+**Rule of thumb:** If it improves reliability, performance, or user experience significantly, it's IMPORTANT.
+
+#### 🟢 NICE TO HAVE (Can Fix After Public Launch)
+Items that **can** wait until after public launch. These include:
+
+**Code/Configuration:**
+- Advanced monitoring (APM, distributed tracing)
+- Performance optimizations beyond minimum requirements
+- Caching layers
+- Advanced error recovery patterns
+- Load testing infrastructure
+
+**Testing:**
+- Load testing
+- Performance testing
+- Advanced integration tests
+- Visual regression tests
+
+**Rule of thumb:** If it's an enhancement that doesn't block launch, it's NICE TO HAVE.
 
 ### Checklist Item Format
 ```
