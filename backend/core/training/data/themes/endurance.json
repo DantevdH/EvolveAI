@@ -1,0 +1,73 @@
+{
+  "intents": [
+    {
+      "intent_id": "endurance.priority_outcome",
+      "description": "Clarify the endurance adaptation the plan must emphasize (finish resilience, pace improvement, distance capacity) so workouts align with the result.",
+      "experience_modifiers": {
+        "beginner": "Keep language around endurance outcomes simple and relatable (finish feeling strong, build cardio).",
+        "intermediate": "Tie the desired outcome to current training structure or past event experiences.",
+        "advanced": "Dial into performance thresholds or race-day execution targets."
+      },
+      "applicability_conditions": [
+        "Always relevant for endurance-influenced goals even if secondary to another focus."
+      ],
+      "experience_applicability": ["beginner", "intermediate", "experienced"],
+      "tags": ["priority_focus", "cardio_support"]
+    },
+    {
+      "intent_id": "endurance.event_context",
+      "description": "Capture the event or activity context that training sessions must reflect (e.g., trail ultra vs road 10K) to shape workout structure.",
+      "experience_modifiers": {
+        "beginner": "Ask broadly about the type of activity or event they care about.",
+        "intermediate": "Encourage details on terrain or environmental constraints (trail vs road, pool vs open water).",
+        "advanced": "Surface nuanced demands like altitude, heat, or technical segments."
+      },
+      "applicability_conditions": [
+        "Prioritize when the goal mentions races, events, or outdoor adventures.",
+        "Treat as optional if cardio is purely for general health or weight loss."
+      ],
+      "experience_applicability": ["intermediate", "experienced"],
+      "tags": ["event_prep", "context"]
+    },
+    {
+      "intent_id": "endurance.limiters",
+      "description": "Identify key limiters during efforts (cardio strain, muscle fatigue, recovery lag) so the plan targets the bottleneck through session design.",
+      "experience_modifiers": {
+        "beginner": "Discuss broad sensations like feeling winded or legs burning.",
+        "intermediate": "Encourage noting when fatigue appears within sessions.",
+        "advanced": "Pinpoint physiological limiters such as threshold collapse or poor fueling tolerance."
+      },
+      "applicability_conditions": [
+        "Use when the goal references past struggles or inconsistent endurance progress.",
+        "Skip if the athlete is brand new and lacks prior experience."
+      ],
+      "experience_applicability": ["intermediate", "experienced"],
+      "tags": ["limiter_insight", "progress_history"]
+    },
+    {
+      "intent_id": "endurance.environment_access",
+      "description": "Confirm access to required endurance environments or tools (pool, track, trainer) to schedule only workouts the athlete can execute.",
+      "applicability_conditions": [
+        "Always relevant when endurance work requires specific venues or equipment.",
+        "Consider travel patterns if mentioned."
+      ],
+      "experience_applicability": ["beginner", "intermediate", "experienced"],
+      "tags": ["equipment_access", "environment"]
+    },
+    {
+      "intent_id": "endurance.timeline_anchors",
+      "description": "Define key race dates or checkpoints that must anchor periodization so the plan peaks at the right moment.",
+      "experience_modifiers": {
+        "beginner": "Use simple milestones (first 5K, consistent 30-minute run).",
+        "intermediate": "Tie checkpoints to races or seasonal goals.",
+        "advanced": "Reference phase timelines (base, build, peak) and taper windows."
+      },
+      "applicability_conditions": [
+        "High priority when an event is scheduled or a seasonal peak matters.",
+        "Optional for general fitness without deadlines."
+      ],
+      "experience_applicability": ["intermediate", "experienced"],
+      "tags": ["cadence_planning", "timeline"]
+    }
+  ]
+}

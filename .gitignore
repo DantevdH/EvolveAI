@@ -8,7 +8,7 @@
 # Packages/
 .build/
 .swiftpm/
-
+.vscode/
 ### Xcode ###
 # Xcode
 #
@@ -41,6 +41,7 @@ DerivedData/
 *.xcarchive
 *.xcresult
 *.xctestrun
+*.plist
 
 # Swift Package Manager
 #
@@ -182,3 +183,44 @@ env.bak/
 venv.bak/
 
 # End of https://www.toptal.com/developers/gitignore/api/swift,xcode,python,django
+
+# Supabase Configuration
+frontend/EvolveAI/Resources/Config.plist
+frontend/Pods/
+
+# React Native Global Patterns
+# Note: frontend-react/ has its own .gitignore for detailed patterns
+# These are global patterns that might escape subdirectory .gitignore
+
+# Node.js (global patterns that might escape subdirs)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# React Native Bundle artifacts (can be generated anywhere)
+*.jsbundle
+
+# Android/IntelliJ (global patterns)
+.idea/
+.gradle/
+local.properties
+*.iml
+
+# BUCK (can appear at project root)
+buck-out/
+\.buckd/
+
+# Keystore files (Note: debug.keystore is allowed in frontend-react)
+*.keystore
+!**/debug.keystore
+
+# Additional Fastlane patterns (global)
+*/fastlane/report.xml
+*/fastlane/Preview.html
+*/fastlane/screenshots
+
+# Specific files that need to be ignored
+*.pdf
+*.xlsx
+*.csv# Auto-generated frontend .env (synced from root .env)
+frontend/.env
