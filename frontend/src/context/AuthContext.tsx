@@ -379,10 +379,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         // Only load profile if we don't already have one for this user and not currently loading
         if ((!state.userProfile || state.userProfile.userId !== session.user.id) && !isLoadingProfileRef.current) {
-          console.log('🔄 Loading profile for signed in user...');
-          await loadUserProfile(session.user.id);
-        } else {
-          console.log('🚫 Skipping profile load - already have profile or loading in progress');
+          // Defer profile loading to next event loop tick to ensure PostgREST client
+          // has updated its headers after setSession() completes (prevents "Unauthorized request" error)
+          setTimeout(async () => {
+            await loadUserProfile(session.user.id);
+          }, 0);
         }
       } else if (event === 'SIGNED_OUT') {
         console.log('👋 User signed out');
