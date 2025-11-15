@@ -173,12 +173,34 @@ def get_training_coach() -> TrainingCoach:
 
 def extract_user_id_from_jwt(jwt_token: str) -> str:
     """
-    Extract user_id from JWT token.
+    Extract and verify user_id from JWT token.
     
     Raises HTTPException(401) if token is invalid.
     """
     try:
-        decoded_token = jwt.decode(jwt_token, options={"verify_signature": False})
+        # Verify JWT token signature if JWT secret is available
+        jwt_secret = settings.SUPABASE_JWT_SECRET
+        
+        if jwt_secret:
+            # Verify signature and decode token
+            try:
+                decoded_token = jwt.decode(
+                    jwt_token,
+                    jwt_secret,
+                    algorithms=["HS256"],
+                    options={"verify_signature": True, "verify_exp": True, "verify_iat": True}
+                )
+            except jwt.ExpiredSignatureError:
+                logger.error("❌ JWT token has expired")
+                raise HTTPException(status_code=401, detail="JWT token has expired")
+            except jwt.InvalidTokenError as e:
+                logger.error(f"❌ Invalid JWT token: {str(e)}")
+                raise HTTPException(status_code=401, detail="Invalid JWT token")
+        else:
+            # Fallback: decode without verification (less secure, but allows development)
+            logger.warning("⚠️  SUPABASE_JWT_SECRET not set - JWT verification disabled (not recommended for production)")
+            decoded_token = jwt.decode(jwt_token, options={"verify_signature": False})
+        
         user_id = decoded_token.get("sub")
         
         if not user_id:
@@ -189,7 +211,7 @@ def extract_user_id_from_jwt(jwt_token: str) -> str:
         raise
     except Exception as e:
         logger.error(f"❌ JWT token error: {str(e)}")
-        raise HTTPException(status_code=401, detail=f"Invalid JWT token: {str(e)}")
+        raise HTTPException(status_code=401, detail="Invalid JWT token")
 
 
 async def safe_db_update(

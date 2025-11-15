@@ -15,6 +15,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from dotenv import load_dotenv
 import openai
 from .base_agent import BaseAgent
+from logging_config import get_logger
 
 load_dotenv()
 
@@ -30,6 +31,7 @@ class RAGTool:
             base_agent: The specialist agent using this tool
         """
         self.base_agent = base_agent
+        self.logger = get_logger(__name__)
         self._init_embedding_clients()
     
     def _init_embedding_clients(self):
@@ -110,7 +112,7 @@ class RAGTool:
                 )
                 return response.data[0].embedding
         except Exception as e:
-            print(f"❌ Error generating embedding: {e}")
+            self.logger.error(f"Error generating embedding: {e}")
             return []
 
     def search_knowledge_base(
@@ -134,10 +136,10 @@ class RAGTool:
             # Step 1: Generate query embedding
             query_embedding = self.generate_embedding(query)
             if not query_embedding:
-                print("❌ Failed to generate query embedding")
+                self.logger.error("Failed to generate query embedding")
                 return []
 
-            print(f"🔍 Query embedding generated: {len(query_embedding)} dimensions")
+            self.logger.debug(f"Query embedding generated: {len(query_embedding)} dimensions")
 
             # Step 2: Get document embeddings
             embeddings_query = self.base_agent.supabase.table("document_embeddings").select(
@@ -154,8 +156,8 @@ class RAGTool:
             # Execute documents query
             docs_response = docs_query.execute()
             if not docs_response.data:
-                print(
-                    f"⚠️  No documents found for topic '{self.base_agent.topic}' with filters: {metadata_filters}"
+                self.logger.warning(
+                    f"No documents found for topic '{self.base_agent.topic}' with filters: {metadata_filters}"
                 )
                 return []
 
@@ -167,12 +169,12 @@ class RAGTool:
                 "document_id", matching_doc_ids
             ).execute()
             if not embeddings_response.data:
-                print("⚠️  No embeddings found for matching documents")
+                self.logger.warning("No embeddings found for matching documents")
                 return []
 
             # Step 5: Calculate similarity scores and rank results
             results = []
-            print(f"🔍 Processing {len(embeddings_response.data)} embeddings...")
+            self.logger.debug(f"Processing {len(embeddings_response.data)} embeddings...")
 
             for embedding_data in embeddings_response.data:
                 if "embedding" in embedding_data and embedding_data["embedding"]:
@@ -183,20 +185,20 @@ class RAGTool:
                             import json
                             embedding_vector = json.loads(embedding)
                             if not isinstance(embedding_vector, list):
-                                print(
-                                    f"⚠️  Parsed embedding is not a list: {type(embedding_vector)}"
+                                self.logger.warning(
+                                    f"Parsed embedding is not a list: {type(embedding_vector)}"
                                 )
                                 continue
                         except (json.JSONDecodeError, ValueError) as e:
-                            print(f"⚠️  Failed to parse embedding string: {e}")
+                            self.logger.warning(f"Failed to parse embedding string: {e}")
                             continue
                     else:
                         embedding_vector = embedding
 
                     # Debug: Check vector dimensions
                     if len(embedding_vector) == 0:
-                        print(
-                            f"⚠️  Empty embedding vector for document {embedding_data['document_id']}"
+                        self.logger.warning(
+                            f"Empty embedding vector for document {embedding_data['document_id']}"
                         )
                         continue
 
@@ -207,8 +209,8 @@ class RAGTool:
 
                     # Debug similarity calculation
                     if similarity == 0.0:
-                        print(
-                            f"⚠️  Zero similarity for document {embedding_data['document_id']} - query_dim: {len(query_embedding)}, doc_dim: {len(embedding_vector)}"
+                        self.logger.debug(
+                            f"Zero similarity for document {embedding_data['document_id']} - query_dim: {len(query_embedding)}, doc_dim: {len(embedding_vector)}"
                         )
 
                     # Get document info
@@ -235,7 +237,7 @@ class RAGTool:
                             }
                         )
                 else:
-                    print(f"⚠️  Skipping embedding_data without valid embedding")
+                    self.logger.warning("Skipping embedding_data without valid embedding")
 
             # Step 6: Apply cutoff score with smart fallback
             CUTOFF_SCORE = 0.5  # Minimum acceptable similarity score
@@ -247,20 +249,20 @@ class RAGTool:
 
             if high_quality_results:
                 # We have good quality results above cutoff
-                print(
-                    f"✅ Found {len(high_quality_results)} high-quality results (≥{CUTOFF_SCORE})"
+                self.logger.debug(
+                    f"Found {len(high_quality_results)} high-quality results (≥{CUTOFF_SCORE})"
                 )
                 # Return all high-quality results (up to max_results or 10, whichever is higher)
                 max_high_quality = max(max_results, 10)
                 final_results = high_quality_results[:max_high_quality]
                 if len(high_quality_results) > max_results:
-                    print(
-                        f"📈 Returning {len(final_results)} high-quality results (exceeded requested {max_results})"
+                    self.logger.debug(
+                        f"Returning {len(final_results)} high-quality results (exceeded requested {max_results})"
                     )
             else:
                 # All results below cutoff, use top 5 with "poor" quality
-                print(
-                    f"⚠️  All results below cutoff ({CUTOFF_SCORE}), using top 5 with poor quality"
+                self.logger.warning(
+                    f"All results below cutoff ({CUTOFF_SCORE}), using top 5 with poor quality"
                 )
                 final_results = results[:5]
                 # Mark all as poor quality
@@ -271,19 +273,19 @@ class RAGTool:
             # Sort final results by relevance score
             final_results.sort(key=lambda x: x["relevance_score"], reverse=True)
 
-            print(f"🎯 Returning {len(final_results)} documents")
+            self.logger.debug(f"Returning {len(final_results)} documents")
             return final_results
 
         except Exception as e:
             error_msg = str(e)
             if "timed out" in error_msg.lower():
-                print(
-                    f"❌ Database query timed out while searching knowledge base. "
+                self.logger.error(
+                    f"Database query timed out while searching knowledge base. "
                     f"This may indicate slow database performance or network issues. "
                     f"Error: {error_msg}"
                 )
             else:
-                print(f"❌ Error searching knowledge base: {error_msg}")
+                self.logger.error(f"Error searching knowledge base: {error_msg}")
             return []
 
     @staticmethod
@@ -448,7 +450,7 @@ class RAGTool:
         """
         # Step 1: Extract metadata filters
         metadata_filters = self.extract_metadata_filters(user_query)
-        print(f"🔍 Extracted metadata filters: {metadata_filters}")
+        self.logger.debug(f"Extracted metadata filters: {metadata_filters}")
 
         # Step 2: Perform filtered vector search
         filtered_results = self.search_knowledge_base(
@@ -457,8 +459,8 @@ class RAGTool:
 
         # Step 3: If filtered search returns few results, try broader search
         if len(filtered_results) < 3:
-            print(
-                f"⚠️  Filtered search returned only {len(filtered_results)} results, trying broader search..."
+            self.logger.debug(
+                f"Filtered search returned only {len(filtered_results)} results, trying broader search..."
             )
             broader_results = self.search_knowledge_base(
                 query=user_query,
@@ -647,7 +649,7 @@ Response:"""
             return content
 
         except Exception as e:
-            print(f"❌ Error generating response: {e}")
+            self.logger.error(f"Error generating response: {e}")
             return f"I apologize, but I encountered an error while processing your request. Please try again or contact support if the issue persists."
 
     def _prepare_context(self, documents: List[Dict[str, Any]]) -> str:
@@ -797,5 +799,5 @@ Keywords: {keywords_str}
             
         except Exception as e:
             # Log error but return "context not found" to not break the flow
-            print(f"⚠️  Error validating context for lesson: {e}")
+            self.logger.warning(f"Error validating context for lesson: {e}")
             return "context not found"
