@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, createColorWithOpacity } from '../../../constants/colors';
 
 interface JourneyCardContainerProps {
@@ -17,6 +18,13 @@ interface JourneyCardContainerProps {
 const JourneyCardContainer: React.FC<JourneyCardContainerProps> = ({ title, children, headerAccessory }) => {
   return (
     <View style={styles.cardContainer}>
+      {/* Elegant Header with Gradient */}
+      <LinearGradient
+        colors={[createColorWithOpacity(colors.secondary, 0.08), createColorWithOpacity(colors.secondary, 0.03)]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <Text
@@ -30,8 +38,8 @@ const JourneyCardContainer: React.FC<JourneyCardContainerProps> = ({ title, chil
           </Text>
           {headerAccessory && <View style={styles.headerAccessory}>{headerAccessory}</View>}
         </View>
-        <View style={styles.headerAccent} />
       </View>
+      </LinearGradient>
 
       <View style={styles.content}>
         {children}
@@ -44,25 +52,28 @@ const styles = StyleSheet.create({
   cardContainer: {
     flex: 1,
     backgroundColor: colors.card,
-    borderRadius: 24,
+    borderRadius: 28,
     marginHorizontal: 16,
     marginTop: 8,
     marginBottom: 16,
     overflow: 'hidden',
-    shadowColor: createColorWithOpacity(colors.tertiary, 0.1),
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.14,
-    shadowRadius: 18,
-    elevation: 4,
+    shadowColor: createColorWithOpacity(colors.secondary, 0.15),
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 8,
     minHeight: 0,
-    borderWidth: 1,
-    borderColor: createColorWithOpacity(colors.secondary, 0.45),
+    borderWidth: 1.5,
+    borderColor: createColorWithOpacity(colors.secondary, 0.2),
+  },
+  headerGradient: {
+    borderBottomWidth: 1,
+    borderBottomColor: createColorWithOpacity(colors.secondary, 0.1),
   },
   header: {
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 12,
-    backgroundColor: colors.card,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 16,
   },
   headerRow: {
     flexDirection: 'row',
@@ -76,11 +87,11 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
     fontSize: 14,
-    fontWeight: '600',
-    color: createColorWithOpacity(colors.text, 0.65),
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.8,
     overflow: 'hidden',
+    textTransform: 'uppercase',
   },
   headerAccessory: {
     flexDirection: 'row',
@@ -89,18 +100,11 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     maxWidth: 180,
   },
-  headerAccent: {
-    marginTop: 10,
-    width: 44,
-    height: 3,
-    borderRadius: 999,
-    backgroundColor: colors.secondary,
-  },
   content: {
     flex: 1,
-    paddingTop: 4,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
+    paddingHorizontal: 24,
     minHeight: 0,
   },
 });

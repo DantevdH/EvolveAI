@@ -26,18 +26,8 @@ const DayHeader: React.FC<DayHeaderProps> = ({
     <View style={styles.dayHeaderContainer}>
       <View style={styles.dayHeaderCard}>
         <View style={styles.dayHeader}>
-          <View style={styles.dayIconContainer}>
-            {isTodaysWorkout && !isPastWeek ? (
-              <Ionicons name="flame" size={18} color={colors.warning} />
-            ) : isRestDay ? (
-              <Ionicons name="moon" size={18} color={colors.primary} />
-            ) : (
-              <Ionicons name="fitness" size={18} color={colors.primary} />
-            )}
-          </View>
-
           <View style={styles.dayNameBadge}>
-            <Text style={styles.dayName}>{dayOfWeek}</Text>
+            <Text style={styles.dayName}>{dayOfWeek.toUpperCase()}</Text>
           </View>
 
           {isPastWeek && (
@@ -62,32 +52,25 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: createColorWithOpacity(colors.secondary, 0.2),
+    borderBottomColor: createColorWithOpacity(colors.secondary, 0.25), // Increased opacity for better visibility
     backgroundColor: colors.card,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    borderTopLeftRadius: 20, // Increased from 12 to match card radius
+    borderTopRightRadius: 20,
   },
   dayHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  dayIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: createColorWithOpacity(colors.secondary, 0.2),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   dayNameBadge: {
     flex: 1,
   },
   dayName: {
-    fontSize: 16,
+    fontSize: 17, // Increased for better hierarchy
     fontWeight: '600',
-    color: createColorWithOpacity(colors.text, 0.85),
+    color: colors.muted, // Changed to grey color
     letterSpacing: 0.5,
+    textTransform: 'uppercase', // Ensure all uppercase
   },
   pastWeekIndicator: {
     flexDirection: 'row',

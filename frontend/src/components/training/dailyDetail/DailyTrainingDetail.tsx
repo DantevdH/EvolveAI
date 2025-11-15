@@ -145,20 +145,20 @@ const styles = StyleSheet.create({
   },
   trainingCard: {
     backgroundColor: colors.card,
-    padding: 16,
+    padding: 20, // Increased from 16 for better spacing
     marginHorizontal: 16,
     marginTop: 8,
-    borderRadius: 12,
+    borderRadius: 20, // Increased from 12 to match home page cards
     borderWidth: 1,
     borderColor: createColorWithOpacity(colors.secondary, 0.45),
     shadowColor: createColorWithOpacity(colors.text, 0.08),
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 4, // Increased from 2 for better elevation
     },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOpacity: 0.15, // Increased for deeper shadow
+    shadowRadius: 12, // Increased for softer shadow spread
+    elevation: 4, // Increased for Android elevation
     gap: 16
   },
   exercisesContainer: {

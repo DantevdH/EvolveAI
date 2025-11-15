@@ -422,13 +422,15 @@ class DatabaseService:
                 weekly_schedule_record = {
                     "training_plan_id": training_plan_id,
                     "week_number": week_number,
-                    "justification": week_data.get("justification", ""),
+                    "focus_theme": week_data.get("focus_theme", ""),
+                    "primary_goal": week_data.get("primary_goal", ""),
+                    "progression_lever": week_data.get("progression_lever", ""),
                     "created_at": datetime.utcnow().isoformat(),
                     "updated_at": datetime.utcnow().isoformat(),
                 }
 
                 self.logger.debug(
-                    f"Saving weekly schedule {week_number} with justification: {weekly_schedule_record.get('justification', 'No justification provided')[:100]}..."
+                    f"Saving weekly schedule {week_number} with focus_theme: {weekly_schedule_record.get('focus_theme', 'N/A')}"
                 )
                 weekly_result = (
                     supabase_client.table("weekly_schedules")
@@ -1096,7 +1098,9 @@ class DatabaseService:
                 weekly_schedule_record = {
                     "training_plan_id": plan_id,
                     "week_number": week_number,
-                    "justification": week_data.get("justification", ""),
+                    "focus_theme": week_data.get("focus_theme", ""),
+                    "primary_goal": week_data.get("primary_goal", ""),
+                    "progression_lever": week_data.get("progression_lever", ""),
                     "created_at": datetime.utcnow().isoformat(),
                     "updated_at": datetime.utcnow().isoformat(),
                 }
@@ -1369,6 +1373,73 @@ class DatabaseService:
         except Exception as e:
             self.logger.error(f"Error logging latency event {event}: {e}")
             return False
+
+    async def append_weekly_schedules(
+        self,
+        training_plan_id: int,
+        weekly_schedules: List[Dict[str, Any]],
+        jwt_token: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Append future week outlines to the weekly_schedules table.
+        
+        Args:
+            training_plan_id: The training plan ID to append weeks to
+            weekly_schedules: List of weekly schedule dicts (outline only, no daily trainings)
+            jwt_token: Optional JWT token for authentication
+            
+        Returns:
+            Result dict with success/error
+        """
+        try:
+            if jwt_token:
+                supabase_client = self._get_authenticated_client(jwt_token)
+            else:
+                supabase_client = create_client(
+                    settings.SUPABASE_URL,
+                    settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY,
+                )
+            
+            inserted_weeks = []
+            
+            for week_data in weekly_schedules:
+                week_number = week_data.get("week_number")
+                
+                weekly_schedule_record = {
+                    "training_plan_id": training_plan_id,
+                    "week_number": week_number,
+                    "focus_theme": week_data.get("focus_theme", ""),
+                    "primary_goal": week_data.get("primary_goal", ""),
+                    "progression_lever": week_data.get("progression_lever", ""),
+                    "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat(),
+                }
+                
+                weekly_result = (
+                    supabase_client.table("weekly_schedules")
+                    .insert(weekly_schedule_record)
+                    .execute()
+                )
+                
+                if weekly_result.data:
+                    inserted_weeks.append(weekly_result.data[0])
+                    self.logger.debug(f"Appended week {week_number} outline")
+                else:
+                    self.logger.warning(f"Failed to append week {week_number} outline")
+            
+            self.logger.info(f"✅ Appended {len(inserted_weeks)} weekly outlines to training_plan {training_plan_id}")
+            
+            return {
+                "success": True,
+                "data": {"inserted_weeks": len(inserted_weeks)},
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error appending weekly schedules: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+            }
 
 
 # Global database service instance

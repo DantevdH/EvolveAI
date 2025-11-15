@@ -27,7 +27,7 @@ export interface ExperienceLevelInfo {
 
 // User types matching Swift UserProfile model
 export interface PlanOutline {
-  weekly_schedule?: any[];
+  weekly_schedules?: any[];
   focus_areas?: string[];
   progression?: any;
   user_feedback?: string;
@@ -80,6 +80,11 @@ export interface UserProfile {
   
   // User playbook
   playbook?: UserPlaybook | null;
+
+  // Plan outline (future weeks)
+  plan_outline?: PlanOutline | null;
+  outline_ai_message?: string | null;
+  plan_outline_feedback?: any | null;
 
   // Classification metadata
   

@@ -17,6 +17,7 @@ export interface BackendWeeklySchedule {
   training_plan_id: number;
   week_number: number;
   justification: string;
+  focus_theme?: string;
   daily_trainings: BackendDailyTraining[];
 }
 
@@ -87,6 +88,7 @@ function transformWeeklySchedule(backendWeek: BackendWeeklySchedule): any {
     id: backendWeek.id.toString(),
     weekNumber: backendWeek.week_number,
     justification: backendWeek.justification,
+    focusTheme: backendWeek.focus_theme || undefined,
     dailyTrainings: backendWeek.daily_trainings?.map(transformDailyTraining) || [],
   };
 }

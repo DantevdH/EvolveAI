@@ -16,8 +16,8 @@ const ExerciseNumberBadge: React.FC<ExerciseNumberBadgeProps> = ({ exerciseNumbe
     <View style={styles.numberBadgeContainer}>
       <LinearGradient
         colors={[
-          createColorWithOpacity(colors.secondary, 0.32),
-          createColorWithOpacity(colors.secondary, 0.18),
+          createColorWithOpacity(colors.secondary, 0.4), // Increased opacity for more visible golden accent
+          createColorWithOpacity(colors.secondary, 0.25), // Increased opacity
         ]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -40,11 +40,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: createColorWithOpacity(colors.secondary, 0.35),
-    shadowColor: createColorWithOpacity(colors.secondary, 0.25),
+    borderWidth: 1.5, // Increased from 1 for more visible golden border
+    borderColor: createColorWithOpacity(colors.secondary, 0.4), // Increased opacity for better visibility
+    shadowColor: createColorWithOpacity(colors.secondary, 0.3), // Increased shadow color opacity
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.2, // Increased shadow opacity
     shadowRadius: 4,
     elevation: 3,
   },

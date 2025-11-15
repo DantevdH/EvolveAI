@@ -22,7 +22,7 @@ const SetsHeader: React.FC<SetsHeaderProps> = ({ onAddSet, onRemoveSet, canRemov
       {/* Add/Remove set buttons */}
       <View style={styles.setControls}>
         <TouchableOpacity style={styles.setButton} onPress={onAddSet}>
-          <Ionicons name="add-circle" size={20} color={colors.primary} />
+          <Ionicons name="add-circle" size={20} color={colors.secondary} />
         </TouchableOpacity>
         
         <TouchableOpacity
@@ -33,7 +33,7 @@ const SetsHeader: React.FC<SetsHeaderProps> = ({ onAddSet, onRemoveSet, canRemov
           <Ionicons 
             name="remove-circle" 
             size={20} 
-            color={canRemoveSet ? colors.primary : colors.border} 
+            color={canRemoveSet ? colors.secondary : colors.border} 
           />
         </TouchableOpacity>
       </View>

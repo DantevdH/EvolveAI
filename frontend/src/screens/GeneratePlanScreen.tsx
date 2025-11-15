@@ -17,10 +17,54 @@ import { logError, logData } from '../utils/logger';
 
 export const GeneratePlanScreen: React.FC = () => {
   const router = useRouter();
-  const { state: authState, refreshUserProfile, setTrainingPlan, setExercises, dispatch } = useAuth();
+  const { state: authState, refreshUserProfile, refreshTrainingPlan, setTrainingPlan, setExercises, setPollingPlan, dispatch } = useAuth();
   const { progressState, runWithProgress } = useProgressOverlay();
   const [error, setError] = useState<string | null>(null);
   const generationTriggeredRef = useRef(false);
+
+  const pollForBackgroundData = useCallback(async () => {
+    const userId = authState.user?.id;
+    const userProfileId = authState.userProfile?.id;
+    
+    if (!userId || !userProfileId) {
+      console.warn('⚠️ Cannot poll: missing user ID or profile ID');
+      return;
+    }
+
+    // Set polling flag to true
+    setPollingPlan(true);
+    console.log('📍 Polling for playbook + future week outlines...');
+    
+    const { UserService } = await import('../services/userService');
+    const { TrainingService } = await import('../services/trainingService');
+    
+    for (let attempt = 0; attempt < 12; attempt++) { // 60s max at 5s intervals
+      const [profileData, planData] = await Promise.all([
+        UserService.getUserProfile(userId),
+        TrainingService.getTrainingPlan(userProfileId),
+      ]);
+      
+      const hasPlaybook = (profileData.data?.playbook?.lessons?.length || 0) > 0;
+      const weekCount = planData.data?.weeklySchedules?.length || 0;
+      
+      if (hasPlaybook && weekCount > 1) {
+        console.log(`✅ Background data ready: playbook + ${weekCount} weeks`);
+        await Promise.all([refreshUserProfile(), refreshTrainingPlan()]);
+        setPollingPlan(false); // Clear polling flag
+        return;
+      }
+      
+      console.log(`📍 Poll ${attempt + 1}/12: playbook=${hasPlaybook}, weeks=${weekCount}`);
+      
+      if (attempt < 11) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+    }
+    
+    console.warn('⚠️ Polling timeout after 60s');
+    await Promise.all([refreshUserProfile(), refreshTrainingPlan()]);
+    setPollingPlan(false); // Clear polling flag even on timeout
+  }, [authState.user?.id, authState.userProfile?.id, refreshUserProfile, refreshTrainingPlan, setPollingPlan]);
 
   const startGeneration = useCallback(async () => {
     if (generationTriggeredRef.current) {
@@ -101,9 +145,8 @@ export const GeneratePlanScreen: React.FC = () => {
 
         console.log('✅ GeneratePlanScreen: Plan generated successfully');
         
-        // Refresh profile to get latest state
-        // The centralized routing logic will automatically navigate to /onboarding with resume flag
-    await refreshUserProfile();
+        // Poll for playbook + plan outline to be ready (background jobs)
+        await pollForBackgroundData();
       } else {
         throw new Error(response.message || 'Failed to generate training plan');
       }
@@ -147,9 +190,9 @@ export const GeneratePlanScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <ProgressOverlay
-        visible={progressState.visible || !error}
+        visible={progressState.visible}
         progress={progressState.progress}
-        title="Generating your training plan…"
+        title="Gathering the upcoming weeks…"
       />
       {error && (
         <View style={styles.errorContainer}>

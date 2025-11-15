@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Dimensions, TouchableOpacity } from 'react-native';
-import { Svg, Line, Polyline, Circle, Text as SvgText, G } from 'react-native-svg';
-import { colors } from '@/src/constants/colors';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { Svg, Rect, Text as SvgText, G, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
+import { colors, createColorWithOpacity } from '@/src/constants/colors';
 import { PerformanceExplanation } from './PerformanceExplanation';
 
 type TimePeriod = '1M' | '3M' | '6M' | '1Y' | 'ALL';
@@ -87,12 +89,23 @@ export const PerformanceScoreChart: React.FC<PerformanceScoreChartProps> = ({
   const chartInnerWidth = chartWidth - (padding * 2);
   const chartInnerHeight = height - (padding * 2);
   
-  // Calculate points for the line with validation using filtered data
-  const points = filteredData.map((point, index) => {
+  // Calculate bar positions and dimensions
+  const barWidth = Math.max(8, (chartInnerWidth / filteredData.length) * 0.6);
+  const barSpacing = (chartInnerWidth / filteredData.length) * 0.4;
+  
+  const bars = filteredData.map((point, index) => {
     const score = isNaN(point.score) || !isFinite(point.score) ? 50 : point.score;
-    const x = padding + (index / Math.max(1, filteredData.length - 1)) * chartInnerWidth;
-    const y = padding + ((maxScore - score) / scoreRange) * chartInnerHeight;
-    return { x: isNaN(x) ? padding : x, y: isNaN(y) ? padding : y, score, date: point.date };
+    const barHeight = (score / maxScore) * chartInnerHeight;
+    const x = padding + (index * (barWidth + barSpacing)) + (barSpacing / 2);
+    const y = padding + chartInnerHeight - barHeight;
+    return { 
+      x: isNaN(x) ? padding : x, 
+      y: isNaN(y) ? padding : y, 
+      width: barWidth,
+      height: Math.max(2, barHeight),
+      score, 
+      date: point.date 
+    };
   });
 
   // Format date labels
@@ -124,81 +137,84 @@ export const PerformanceScoreChart: React.FC<PerformanceScoreChartProps> = ({
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.titleContainer}>
-          <Text style={styles.title}>Effective Training Index (ETI)</Text>
-          <PerformanceExplanation />
+      <LinearGradient
+        colors={[
+          createColorWithOpacity(colors.secondary, 0.08),
+          createColorWithOpacity(colors.secondary, 0.03),
+        ]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.headerGradient}
+      >
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <View style={styles.titleContainer}>
+              <Ionicons name="pulse" size={16} color={colors.primary} />
+              <Text style={styles.title}>EFFECTIVE TRAINING INDEX (ETI)</Text>
+              <PerformanceExplanation />
+            </View>
+          </View>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* This Week's Value */}
       {filteredData.length > 0 && (
         <View style={styles.weeklyValueContainer}>
-          <Text style={styles.weeklyValueLabel}>This Week's ETI</Text>
-          <Text style={styles.weeklyValue}>
-            {Math.round(filteredData[filteredData.length - 1].score)}
-          </Text>
+          <View style={styles.weeklyValueContent}>
+            <View style={styles.weeklyValueLeft}>
+              <Text style={styles.weeklyValueLabel}>This Week</Text>
+              <Text style={styles.weeklyValueSubLabel}>Training Index</Text>
+            </View>
+            <View style={styles.weeklyValueRight}>
+              <Text style={styles.weeklyValue}>
+                {Math.round(filteredData[filteredData.length - 1].score)}
+              </Text>
+            </View>
+          </View>
         </View>
       )}
       
       <View style={styles.chartContainer}>
         <Svg width={chartWidth} height={height}>
-          {/* Grid lines */}
-          <G>
-            {[0, 0.25, 0.5, 0.75, 1].map((ratio, index) => {
-              const y = padding + ratio * chartInnerHeight;
-              const score = Math.max(0, maxScore - (ratio * scoreRange)); // Never below zero
-              return (
-                <G key={index}>
-                  <Line
-                    x1={padding}
-                    y1={y}
-                    x2={chartWidth - padding}
-                    y2={y}
-                    stroke={colors.card}
-                    strokeWidth="1"
-                    strokeDasharray="2,2"
-                  />
+          <Defs>
+            <SvgLinearGradient id="scoreBarGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <Stop offset="0%" stopColor={colors.secondary} stopOpacity="0.95" />
+              <Stop offset="50%" stopColor={colors.secondary} stopOpacity="0.8" />
+              <Stop offset="100%" stopColor={colors.secondary} stopOpacity="0.6" />
+            </SvgLinearGradient>
+          </Defs>
+
+          {/* Score bars */}
+          {bars.map((bar, index) => (
+              <G key={index}>
+                <Rect
+                  x={bar.x}
+                  y={bar.y}
+                  width={bar.width}
+                  height={bar.height}
+                  rx={4}
+                  ry={4}
+                  fill="url(#scoreBarGradient)"
+                />
+                {/* Bar value label on top */}
+                {bar.height > 20 && (
                   <SvgText
-                    x={padding - 10}
-                    y={y + 5}
-                    fontSize="12"
-                    fill={colors.muted}
-                    textAnchor="end"
+                    x={bar.x + bar.width / 2}
+                    y={bar.y - 4}
+                    fontSize="10"
+                    fill={colors.text}
+                    textAnchor="middle"
+                    fontWeight="600"
                   >
-                    {Math.round(score)}
+                    {Math.round(bar.score)}
                   </SvgText>
-                </G>
-              );
-            })}
-          </G>
-
-          {/* Score line */}
-          <Polyline
-            points={points.map(p => `${p.x},${p.y}`).join(' ')}
-            fill="none"
-            stroke={colors.primary}
-            strokeWidth="3"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-
-          {/* Data points */}
-          {points.map((point, index) => (
-            <Circle
-              key={index}
-              cx={point.x}
-              cy={point.y}
-              r="4"
-              fill={colors.primary}
-              stroke={colors.background}
-              strokeWidth="2"
-            />
-          ))}
+                )}
+              </G>
+            ))}
 
           {/* Date labels */}
-          {points.map((point, index) => (
-            <G key={index} transform={`translate(${point.x}, ${height - 10}) rotate(-45)`}>
+          {bars.map((bar, index) => (
+            <G key={index} transform={`translate(${bar.x + bar.width / 2}, ${height - 10}) rotate(-45)`}>
               <SvgText
                 x={0}
                 y={0}
@@ -206,7 +222,7 @@ export const PerformanceScoreChart: React.FC<PerformanceScoreChartProps> = ({
                 fill={colors.muted}
                 textAnchor="middle"
               >
-                {formatDateLabel(point.date)}
+                {formatDateLabel(bar.date)}
               </SvgText>
             </G>
           ))}
@@ -215,27 +231,32 @@ export const PerformanceScoreChart: React.FC<PerformanceScoreChartProps> = ({
 
       {/* Stats */}
       <View style={styles.statsContainer}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>
-            {Math.round(maxScore)}
-          </Text>
-          <Text style={styles.statLabel}>Peak ETI</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>
-            {Math.round(filteredData.reduce((sum, d) => sum + d.score, 0) / filteredData.length)}
-          </Text>
-          <Text style={styles.statLabel}>Average</Text>
-        </View>
-        <View style={styles.statItem}>
-          <Text style={[
-            styles.statValue,
-            { color: filteredData.length > 1 && filteredData[filteredData.length - 1].score > filteredData[filteredData.length - 2].score ? colors.success : colors.error }
-          ]}>
-            {filteredData.length > 1 && filteredData[filteredData.length - 1].score > filteredData[filteredData.length - 2].score ? '+' : ''}
-            {filteredData.length > 1 ? Math.round(((filteredData[filteredData.length - 1].score - filteredData[filteredData.length - 2].score) / filteredData[filteredData.length - 2].score) * 100) : 0}%
-          </Text>
-          <Text style={styles.statLabel}>Change</Text>
+        <View style={styles.statDivider} />
+        <View style={styles.statsGrid}>
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Peak</Text>
+            <Text style={styles.statValue}>
+              {Math.round(maxScore)}
+            </Text>
+          </View>
+          <View style={styles.statDividerVertical} />
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Average</Text>
+            <Text style={styles.statValue}>
+              {Math.round(filteredData.reduce((sum, d) => sum + d.score, 0) / filteredData.length)}
+            </Text>
+          </View>
+          <View style={styles.statDividerVertical} />
+          <View style={styles.statCard}>
+            <Text style={styles.statLabel}>Change</Text>
+            <Text style={[
+              styles.statValue,
+              { color: filteredData.length > 1 && filteredData[filteredData.length - 1].score > filteredData[filteredData.length - 2].score ? colors.success : colors.error }
+            ]}>
+              {filteredData.length > 1 && filteredData[filteredData.length - 1].score > filteredData[filteredData.length - 2].score ? '+' : ''}
+              {filteredData.length > 1 ? Math.round(((filteredData[filteredData.length - 1].score - filteredData[filteredData.length - 2].score) / filteredData[filteredData.length - 2].score) * 100) : 0}%
+            </Text>
+          </View>
         </View>
       </View>
     </View>
@@ -244,21 +265,27 @@ export const PerformanceScoreChart: React.FC<PerformanceScoreChartProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 16,
-    marginVertical: 8,
+    padding: 0,
+  },
+  headerGradient: {
+    // Gradient background for header
   },
   header: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 10,
+  },
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    gap: 12,
   },
   titleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
+    flex: 1,
   },
   periodToggle: {
     flexDirection: 'row',
@@ -285,9 +312,11 @@ const styles = StyleSheet.create({
     color: colors.background,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   trendIndicator: {
     paddingHorizontal: 8,
@@ -301,7 +330,10 @@ const styles = StyleSheet.create({
   },
   chartContainer: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 8,
   },
   emptyState: {
     height: chartHeight,
@@ -361,41 +393,79 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    borderTopWidth: 1,
-    borderTopColor: colors.background,
-    paddingTop: 16,
-    marginBottom: 16,
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
   },
-  statItem: {
+  statDivider: {
+    height: 1,
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.15),
+    marginBottom: 20,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'stretch',
+  },
+  statCard: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statDividerVertical: {
+    width: 1,
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.15),
+    marginHorizontal: 12,
   },
   statValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: colors.muted,
-  },
-  weeklyValueContainer: {
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.background,
-  },
-  weeklyValueLabel: {
-    fontSize: 12,
-    color: colors.muted,
-    marginBottom: 4,
-  },
-  weeklyValue: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.primary,
+    marginTop: 4,
+    letterSpacing: -0.5,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: colors.muted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  weeklyValueContainer: {
+    paddingTop: 24,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: createColorWithOpacity(colors.secondary, 0.15),
+  },
+  weeklyValueContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  weeklyValueLeft: {
+    flex: 1,
+  },
+  weeklyValueRight: {
+    alignItems: 'flex-end',
+  },
+  weeklyValueLabel: {
+    fontSize: 13,
+    color: colors.muted,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 4,
+  },
+  weeklyValueSubLabel: {
+    fontSize: 11,
+    color: createColorWithOpacity(colors.muted, 0.7),
+    fontWeight: '500',
+  },
+  weeklyValue: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: -1,
   },
 });

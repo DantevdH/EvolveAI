@@ -30,9 +30,9 @@ const ExerciseCompletionStar: React.FC<ExerciseCompletionStarProps> = ({
         {isLocked ? (
           <Ionicons name="lock-closed" size={12} color={colors.muted} />
         ) : completed ? (
-          <Ionicons name="star" size={18} color={colors.tertiary} />
+          <Ionicons name="checkmark-circle" size={20} color={colors.secondary} />
         ) : (
-          <Ionicons name="star-outline" size={18} color={colors.primary} />
+          <Ionicons name="ellipse-outline" size={20} color={colors.secondary} />
         )}
       </View>
     </TouchableOpacity>
@@ -52,13 +52,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   completionStarIncomplete: {
-    backgroundColor: createColorWithOpacity(colors.primary, 0.1),
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.1), // Golden background
     borderRadius: 14,
   },
   completionStarActive: {
-    backgroundColor: createColorWithOpacity(colors.tertiary, 0.2),
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.2), // Golden background when completed
     borderRadius: 14,
-    shadowColor: colors.tertiary,
+    shadowColor: colors.secondary,
     shadowOffset: {
       width: 0,
       height: 2,

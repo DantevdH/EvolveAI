@@ -1,10 +1,11 @@
 /**
- * Week Node Component
- * Renders individual week nodes with status, stars, and animations
+ * Week Card Component
+ * Renders individual week cards with focus theme, status, and animations
  */
 
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, createColorWithOpacity } from '../../../constants/colors';
 import { WeekNodeData } from './types';
@@ -14,132 +15,234 @@ interface WeekNodeProps {
   node: WeekNodeData;
   onPress: (node: WeekNodeData) => void;
   animations?: WeekNodeAnimations;
+  totalWeeks?: number;
 }
 
-const STATUS_NODE_STYLE = {
-  completed: {
-    background: createColorWithOpacity(colors.secondary, 0.9),
-    text: colors.card,
-    border: createColorWithOpacity(colors.card, 0.65),
-  },
-  current: {
-    background: colors.primary,
-    text: colors.card,
-    border: createColorWithOpacity(colors.card, 0.65),
-  },
-  locked: {
-    background: createColorWithOpacity(colors.text, 0.1),
-    text: createColorWithOpacity(colors.text, 0.55),
-    border: createColorWithOpacity(colors.text, 0.12),
-  },
-};
-
-const WeekNode: React.FC<WeekNodeProps> = ({ node, onPress, animations }) => {
+const WeekCard: React.FC<WeekNodeProps> = ({ node, onPress, animations, totalWeeks = 1 }) => {
   const isCurrentWeek = node.status === 'current';
-  const statusStyle = STATUS_NODE_STYLE[node.status];
-  const nodeSize = 50;
+  const cardWidth = 220; // Smaller, more compact cards
+  const cardHeight = 65;
+  
+  // Determine if this is first or last card
+  const isFirstCard = node.weekNumber === 1;
+  const isLastCard = node.weekNumber === totalWeeks;
+  
+  // Circle visibility
+  const showTopCircle = !isFirstCard;    // No top circle on first card
+  const showBottomCircle = !isLastCard;  // No bottom circle on last card
+
+  // Status-based styling
+  const getCardStyle = () => {
+    switch (node.status) {
+      case 'completed':
+        return {
+          backgroundColors: [createColorWithOpacity(colors.secondary, 0.15), createColorWithOpacity(colors.secondary, 0.08)],
+          borderColor: createColorWithOpacity(colors.secondary, 0.4),
+          weekNumberBg: colors.secondary,
+          weekNumberText: colors.card,
+          focusThemeColor: createColorWithOpacity(colors.secondary, 0.9),
+          shadowColor: colors.secondary,
+        };
+      case 'current':
+        return {
+          backgroundColors: [createColorWithOpacity(colors.secondary, 0.2), createColorWithOpacity(colors.secondary, 0.12)],
+          borderColor: createColorWithOpacity(colors.secondary, 0.6),
+          weekNumberBg: colors.secondary,
+          weekNumberText: colors.card,
+          focusThemeColor: createColorWithOpacity(colors.secondary, 0.95),
+          shadowColor: colors.secondary,
+        };
+      case 'locked':
+      default:
+        return {
+          backgroundColors: [createColorWithOpacity(colors.muted, 0.08), createColorWithOpacity(colors.muted, 0.04)],
+          borderColor: createColorWithOpacity(colors.muted, 0.2),
+          weekNumberBg: colors.muted,
+          weekNumberText: colors.card,
+          focusThemeColor: createColorWithOpacity(colors.muted, 0.7),
+          shadowColor: colors.muted,
+        };
+    }
+  };
+
+  const cardStyle = getCardStyle();
 
   return (
     <TouchableOpacity
       style={[
-        styles.container,
+        styles.cardContainer,
         {
-          left: node.x - nodeSize / 2,
-          top: node.y - nodeSize / 2,
-          width: nodeSize,
-          height: nodeSize,
-          backgroundColor: statusStyle.background,
+          left: node.x - cardWidth / 2,
+          top: node.y - cardHeight / 2,
+          width: cardWidth,
+          height: cardHeight,
+          shadowColor: cardStyle.shadowColor,
+          shadowOpacity: node.status === 'locked' ? 0.15 : node.status === 'current' ? 0.35 : 0.25,
+          shadowRadius: node.status === 'current' ? 16 : 10,
+          shadowOffset: { width: 0, height: node.status === 'current' ? 6 : 3 },
+          elevation: node.status === 'current' ? 10 : 6,
         },
       ]}
       onPress={() => onPress(node)}
-      activeOpacity={0.7}
+      activeOpacity={0.85}
+      disabled={node.status === 'locked'}
     >
-      <View
-        style={[
-          styles.inner,
-          {
-            borderWidth: node.status === 'locked' ? 1 : 1.5,
-            borderColor: statusStyle.border,
-          },
-        ]}
+
+      {/* Gradient background */}
+      <LinearGradient
+        colors={cardStyle.backgroundColors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradient}
       >
-        {isCurrentWeek && animations && (
-          <Animated.View
-            style={[
-              styles.glow,
-              {
-                opacity: animations.glowAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.2, 0.5],
-                }),
-              },
-            ]}
-          />
-        )}
-
-        <Text style={[styles.weekNumber, { color: statusStyle.text }]}>{node.weekNumber}</Text>
-
-        {isCurrentWeek && (
-          <View style={[styles.currentBadge, { backgroundColor: createColorWithOpacity(colors.secondary, 0.25) }] }>
-            <Ionicons name="flash" size={12} color={colors.primary} />
+        <View style={[styles.cardInner, { borderColor: cardStyle.borderColor }]}>
+          {/* Week number badge */}
+          <View style={[styles.weekNumberBadge, { backgroundColor: cardStyle.weekNumberBg }]}>
+            <Text style={[styles.weekNumber, { color: cardStyle.weekNumberText }]}>
+              {node.weekNumber}
+            </Text>
           </View>
-        )}
 
+          {/* Content area */}
+          <View style={styles.contentArea}>
+            {/* Focus theme */}
+            {node.focusTheme ? (
+              <Text style={[styles.focusTheme, { color: cardStyle.focusThemeColor }]} numberOfLines={2} ellipsizeMode="tail">
+                {node.focusTheme}
+              </Text>
+            ) : (
+              <Text style={[styles.focusTheme, { color: cardStyle.focusThemeColor }]}>
+                Week {node.weekNumber}
+              </Text>
+            )}
+
+            {/* Status indicators */}
+            <View style={styles.statusRow}>
+              {node.status === 'completed' && (
+                <View style={styles.statusBadge}>
+                  <Ionicons name="checkmark-circle" size={12} color={colors.secondary} />
+                </View>
+              )}
+              {node.status === 'current' && (
+                <View style={styles.statusBadge}>
+                  <Ionicons name="play-circle" size={12} color={colors.secondary} />
+                </View>
+              )}
         {node.status === 'locked' && (
-          <View style={styles.lockIcon}>
-            <Ionicons name="lock-closed" size={14} color={createColorWithOpacity(colors.text, 0.6)} />
+                <View style={styles.statusBadge}>
+                  <Ionicons name="lock-closed" size={10} color={createColorWithOpacity(colors.muted, 0.6)} />
           </View>
         )}
       </View>
+          </View>
+        </View>
+      </LinearGradient>
+      
+      {/* Connection circles at card edges */}
+      {showTopCircle && (
+        <View
+          style={[
+            styles.connectionCircle,
+            {
+              left: cardWidth / 2 - 4, // Center horizontally, minus radius
+              top: -4, // Center on the top edge (half above, half below)
+              backgroundColor: node.status === 'completed' || node.status === 'current' 
+                ? colors.secondary 
+                : createColorWithOpacity(colors.muted, 0.4),
+            },
+          ]}
+        />
+      )}
+      
+      {showBottomCircle && (
+        <View
+          style={[
+            styles.connectionCircle,
+            {
+              left: cardWidth / 2 - 4, // Center horizontally, minus radius
+              bottom: -4, // Center on the bottom edge (half above, half below)
+              backgroundColor: node.status === 'completed' || node.status === 'current' 
+                ? colors.secondary 
+                : createColorWithOpacity(colors.muted, 0.4),
+            },
+          ]}
+        />
+      )}
     </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  cardContainer: {
     position: 'absolute',
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: 12,
     zIndex: 10,
-    shadowColor: createColorWithOpacity(colors.tertiary, 0.14),
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 6,
+    overflow: 'visible', // Allow circles to extend beyond card edges
   },
-  inner: {
+  gradient: {
     width: '100%',
     height: '100%',
+    borderRadius: 12,
+  },
+  cardInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: createColorWithOpacity(colors.card, 0.5),
+  },
+  weekNumberBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 50,
-  },
-  glow: {
-    position: 'absolute',
-    width: '130%',
-    height: '130%',
-    borderRadius: 50,
-    backgroundColor: colors.primary,
+    marginRight: 10,
+    shadowColor: colors.tertiary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
   },
   weekNumber: {
-    fontSize: 22,
+    fontSize: 16,
     fontWeight: '700',
+    letterSpacing: 0.3,
   },
-  currentBadge: {
-    position: 'absolute',
-    top: -5,
-    right: -5,
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
+  contentArea: {
+    flex: 1,
+    justifyContent: 'space-between',
+    height: '100%',
+    paddingVertical: 2,
+  },
+  focusTheme: {
+    fontSize: 11,
+    fontWeight: '600',
+    lineHeight: 15,
+    letterSpacing: 0.2,
+    marginBottom: 3,
+  },
+  statusRow: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  lockIcon: {
-    opacity: 0.7,
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  connectionCircle: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.card,
+    zIndex: 20, // Above the card
   },
 });
 
-export default WeekNode;
-
+export default WeekCard;

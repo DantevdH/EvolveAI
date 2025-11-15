@@ -589,6 +589,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.25,
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 100, // Extra padding for tab bar (matching home page)
+  },
   bottomSpacing: {
     height: 20
   },

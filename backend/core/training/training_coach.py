@@ -27,6 +27,8 @@ from core.training.schemas.training_schemas import (
     WeeklyScheduleResponse,
     GeminiWeeklyScheduleResponse,
     GeminiWeeklySchedule,
+    WeeklyOutlinePlan,
+    GeminiWeeklyOutlinePlan,
     AIStrengthExercise,
     MainMuscleEnum,
     EquipmentEnum,
@@ -268,7 +270,8 @@ class TrainingCoach(BaseAgent):
     async def _decide_modalities(
         self,
         personal_info: PersonalInfo,
-        user_playbook,
+        user_playbook=None,
+        formatted_initial_responses: Optional[str] = None,
     ) -> Tuple[bool, bool, bool]:
         """
         Lightweight LLM call to decide whether to include bodyweight strength, equipment strength, and endurance modalities.
@@ -277,6 +280,7 @@ class TrainingCoach(BaseAgent):
         self.last_modality_rationale = None
         prompt = PromptGenerator.generate_modality_selection_prompt(
             personal_info=personal_info,
+            onboarding_responses=formatted_initial_responses,
             user_playbook=user_playbook,
         )
 
@@ -331,6 +335,58 @@ class TrainingCoach(BaseAgent):
             )
             self.last_modality_rationale = "Fallback: include bodyweight strength + endurance due to decision error"
             return True, False, True
+
+    async def _generate_future_week_outlines(
+        self,
+        personal_info: PersonalInfo,
+        formatted_initial_responses: str,
+        existing_plan: Dict[str, Any],
+        outline_weeks: int = 12,
+    ) -> Dict[str, Any]:
+        """Generate lightweight focus summaries for upcoming weeks (outline only)."""
+        try:
+            weekly_schedules = existing_plan.get("weekly_schedules", [])
+            if not weekly_schedules:
+                self.logger.warning("Cannot generate outlines—no weekly schedules available.")
+                return {}
+
+            last_week_number = max(
+                ws.get("week_number", idx + 1) for idx, ws in enumerate(weekly_schedules)
+            )
+            start_week_number = last_week_number + 1
+
+            completed_summary = PromptGenerator.format_current_plan_summary(
+                {"weekly_schedules": weekly_schedules}
+            )
+
+            prompt = PromptGenerator.generate_future_week_outline_prompt(
+                personal_info=personal_info,
+                onboarding_responses=formatted_initial_responses,
+                completed_weeks_summary=completed_summary,
+                start_week_number=start_week_number,
+                total_weeks=outline_weeks,
+            )
+
+            self.logger.info(
+                "📝 Generating outline for weeks %s-%s...",
+                start_week_number,
+                start_week_number + outline_weeks - 1,
+            )
+
+            ai_start = time.time()
+            if self.llm.provider == "gemini":
+                outline_plan, completion = self.llm.parse_structured(
+                    prompt, WeeklyOutlinePlan, GeminiWeeklyOutlinePlan
+                )
+            else:
+                outline_plan, completion = self.llm.chat_parse(prompt, WeeklyOutlinePlan)
+            latency = time.time() - ai_start
+            await db_service.log_latency_event("week_outline_generation", latency, completion)
+
+            return outline_plan.model_dump()
+        except Exception as exc:
+            self.logger.error(f"Failed to generate future week outlines: {str(exc)}")
+            return {}
 
     def process_request(self, user_request: str) -> str:
         """Process a user request - required by BaseAgent."""
@@ -564,7 +620,7 @@ class TrainingCoach(BaseAgent):
     async def generate_initial_training_plan(
         self,
         personal_info: PersonalInfo,
-        user_playbook,
+        formatted_initial_responses: str,
         user_profile_id: int,
         jwt_token: str = None,
     ) -> Dict[str, Any]:
@@ -605,7 +661,8 @@ class TrainingCoach(BaseAgent):
                 include_equipment_strength,
                 include_endurance,
             ) = await self._decide_modalities(
-                personal_info, user_playbook
+                personal_info,
+                formatted_initial_responses=formatted_initial_responses,
             )
 
             # Step 2: Generate prompt for initial Week 1
@@ -618,7 +675,7 @@ class TrainingCoach(BaseAgent):
             rationale = self.last_modality_rationale or "Default: include both modalities for balanced development."
             prompt = PromptGenerator.generate_initial_training_plan_prompt(
                 personal_info=personal_info,
-                user_playbook=user_playbook,
+                onboarding_responses=formatted_initial_responses,
                 include_bodyweight_strength=include_bodyweight_strength,
                 include_equipment_strength=include_equipment_strength,
                 include_endurance=include_endurance,
@@ -708,8 +765,7 @@ class TrainingCoach(BaseAgent):
         user_playbook,
         existing_training_plan: Dict[str, Any],
         jwt_token: str = None,
-        conversation_history: Optional[List[Dict[str, Any]]] = None,
-        
+        conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         Update an existing week based on user feedback.

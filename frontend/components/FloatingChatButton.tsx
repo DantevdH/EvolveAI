@@ -308,7 +308,7 @@ const FloatingChatButton: React.FC = () => {
             end={{ x: 1, y: 1 }}
             style={styles.gradient}
           >
-            <Ionicons name="chatbubble-ellipses" size={24} color={colors.primary} />
+            <Ionicons name="chatbubble-ellipses" size={24} color={colors.secondary} />
           </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
     height: BUTTON_SIZE,
     borderRadius: BUTTON_SIZE / 2,
     overflow: 'hidden',
-    shadowColor: createColorWithOpacity(colors.primary, 0.2),
+    shadowColor: createColorWithOpacity(colors.secondary, 0.2),
     shadowOffset: {
       width: 0,
       height: 4,
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: createColorWithOpacity(colors.primary, 0.25),
+    borderColor: createColorWithOpacity(colors.secondary, 0.3),
   },
 });
 
