@@ -1311,6 +1311,8 @@ class PromptGenerator:
             • exercise_name: Descriptive name WITHOUT equipment type (e.g., "Chest Press", "Lateral Raise")
             • Schema enforces: main_muscle and equipment must be valid Enum values, execution_order is required
             • DO NOT set exercise_id (will be matched automatically)
+            • IMPORTANT: te number of reps should be an even number
+            • IMPORTANT: reps, and weight arrays should have the same length as the number of sets AND 
             • CRITICAL: Equipment type should ONLY appear in the equipment field, NOT in exercise_name
             """
             )

@@ -631,13 +631,16 @@ class TrainingCoach(BaseAgent):
         The AI generates the plan title, summary, and justification.
         We re-assess by week and adjust.
         
-        Uses user_playbook (extracted from onboarding responses) instead of raw assessment responses.
+        Uses formatted_initial_responses directly for plan generation.
         
         Args:
             personal_info: User's personal information and goals
-            user_playbook: User's playbook with learned lessons from onboarding
+            formatted_initial_responses: Formatted string of user responses
             user_profile_id: Database ID of the user profile (also used for latency tracking)
             jwt_token: JWT token for database authentication
+            
+        Returns:
+            Dict with "success" (bool), "training_plan" (dict), and optional "error" (str)
         """
         try:
             # Check if debug mode is enabled
@@ -701,6 +704,10 @@ class TrainingCoach(BaseAgent):
                 # Skip TrainingPlan.model_validate() - IDs don't exist yet, will be added after database save
                 # GeminiTrainingPlan already validated the structure
                 tp_input = self._normalize_gemini_training_plan_input(tp_input)
+                
+                # Post-process LLM response: Fix reps/weight arrays to match sets count and sort (high->low)
+                tp_input = self.exercise_validator.normalize_reps_weight_arrays(tp_input)
+                
                 ai_duration = time.time() - ai_start
                 training_dict = tp_input
             else:
@@ -708,6 +715,10 @@ class TrainingCoach(BaseAgent):
                 training_plan, completion = self.llm.chat_parse(prompt, TrainingPlan)
                 ai_duration = time.time() - ai_start
                 training_dict = training_plan.model_dump()
+                
+                # Post-process LLM response: Fix reps/weight arrays to match sets count and sort (high->low)
+                training_dict = self.exercise_validator.normalize_reps_weight_arrays(training_dict)
+                
                 training_dict["user_profile_id"] = user_profile_id
             
             # Verify only Week 1 is generated
@@ -894,6 +905,11 @@ class TrainingCoach(BaseAgent):
                 # Convert to WeeklySchedule (without ai_message)
                 week_dict = ws_response.model_dump(exclude={'ai_message'})
                 week_dict["week_number"] = week_number
+            
+            # Post-process LLM response: Fix reps/weight arrays to match sets count and sort (high->low)
+            temp_plan_for_normalization = {"weekly_schedules": [week_dict]}
+            normalized_plan = self.exercise_validator.normalize_reps_weight_arrays(temp_plan_for_normalization)
+            week_dict = normalized_plan.get("weekly_schedules", [week_dict])[0]
             
             # Step 5: Post-process and validate exercises
             self.logger.info("🔍 Matching AI exercises to database...")
@@ -1093,6 +1109,11 @@ class TrainingCoach(BaseAgent):
                 ai_duration = time.time() - ai_start
                 week_dict = weekly_schedule.model_dump()
                 week_dict["week_number"] = next_week_number
+            
+            # Post-process LLM response: Fix reps/weight arrays to match sets count and sort (high->low)
+            temp_plan_for_normalization = {"weekly_schedules": [week_dict]}
+            normalized_plan = self.exercise_validator.normalize_reps_weight_arrays(temp_plan_for_normalization)
+            week_dict = normalized_plan.get("weekly_schedules", [week_dict])[0]
 
             # Step 5: Post-process and validate exercises
             self.logger.info("🔍 Matching AI exercises to database...")
