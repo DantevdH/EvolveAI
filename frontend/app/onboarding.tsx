@@ -3,6 +3,7 @@ import { StyleSheet, View, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { ConversationalOnboarding } from '@/src/components/onboarding/ConversationalOnboarding';
+import { logError } from '@/src/utils/logger';
 
 export default function Onboarding() {
   const router = useRouter();
@@ -10,11 +11,11 @@ export default function Onboarding() {
   const { state: authState } = useAuth();
 
   const handleError = (error: string) => {
-    console.error('❌ Onboarding error:', error);
+    logError('Onboarding flow error', error);
 
     Alert.alert(
       'Error',
-      error,
+      'Something went wrong while setting up your onboarding. Please try again.',
       [
         { text: 'Try Again' },
         {

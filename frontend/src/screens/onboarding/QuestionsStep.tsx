@@ -11,6 +11,8 @@ import { QuestionsStepProps, QuestionType } from '../../types/onboarding';
 import { colors, spacing } from '../../constants/designSystem';
 //@ts-ignore
 import { AIChatMessage } from '../../components/shared/chat';
+//@ts-ignore
+import { validateQuestionResponse } from '../../utils/validation';
 
 //@ts-ignore
 const deriveInitialResponses = (questions: any, responses: Map<string, any>) => {
@@ -117,13 +119,24 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
       return;
     }
 
-    if (currentQuestion.response_type === QuestionType.SLIDER && !localResponses.has(currentQuestion.id)) {
-      const defaultValue = currentQuestion.min_value ?? 0;
-      const newResponses = new Map(localResponses);
-      newResponses.set(currentQuestion.id, defaultValue);
-      setLocalResponses(newResponses);
-      onResponseChange(currentQuestion.id, defaultValue);
-      setAnsweredQuestions(prev => new Set(prev).add(currentIndex));
+    // Set default values for questions that have them (SLIDER and RATING)
+    if (!localResponses.has(currentQuestion.id)) {
+      if (currentQuestion.response_type === QuestionType.SLIDER) {
+        const defaultValue = currentQuestion.min_value ?? 0;
+        const newResponses = new Map(localResponses);
+        newResponses.set(currentQuestion.id, defaultValue);
+        setLocalResponses(newResponses);
+        onResponseChange(currentQuestion.id, defaultValue);
+        setAnsweredQuestions(prev => new Set(prev).add(currentIndex));
+      } else if (currentQuestion.response_type === QuestionType.RATING) {
+        // RATING questions default to min_value (typically 1 for 1-5 scale)
+        const defaultValue = currentQuestion.min_value ?? 1;
+        const newResponses = new Map(localResponses);
+        newResponses.set(currentQuestion.id, defaultValue);
+        setLocalResponses(newResponses);
+        onResponseChange(currentQuestion.id, defaultValue);
+        setAnsweredQuestions(prev => new Set(prev).add(currentIndex));
+      }
     }
   }, [currentQuestion, currentIndex, localResponses, onResponseChange]);
 
@@ -165,26 +178,9 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
       return false;
     }
 
-    if (!currentQuestion.required) {
-      return true;
-    }
-
     const response = localResponses.get(currentQuestion.id);
-    if (!response) {
-      return false;
-    }
-
-    if (currentQuestion.response_type === QuestionType.CONDITIONAL_BOOLEAN) {
-      if (response.boolean === null || response.boolean === undefined) {
-        return false;
-      }
-      if (response.boolean === false) {
-        return true;
-      }
-      return Boolean(response.text && response.text.trim().length >= 20);
-    }
-
-    return response !== '';
+    const result = validateQuestionResponse(currentQuestion, response);
+    return result.isValid;
   }, [currentQuestion, localResponses]);
 
   const advanceToQuestions = useCallback(() => {

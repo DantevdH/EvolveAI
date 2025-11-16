@@ -139,6 +139,18 @@ describe('useAppRouting', () => {
     const { result } = renderHook(() => useAppRouting());
     expect(result.current.targetRoute).toBe('/(tabs)');
   });
+
+  test('error state holds navigation (no route)', () => {
+    setAuthState({
+      ...baseState,
+      user: { id: 'u1', email_confirmed_at: '2025-01-01', app_metadata: { provider: 'email' } },
+      userProfile: null,
+      error: 'network error',
+    });
+    const { result } = renderHook(() => useAppRouting());
+    expect(result.current.hasError).toBe(true);
+    expect(result.current.targetRoute).toBeNull();
+  });
 });
 
 

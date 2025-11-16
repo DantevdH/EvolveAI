@@ -18,7 +18,14 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useProgressOverlay } from '../../hooks/useProgressOverlay';
 import { supabase } from '../../config/supabase';
-import { cleanUserProfileForResume, isValidFormattedResponse } from '../../utils/validation';
+import {
+  cleanUserProfileForResume,
+  isValidFormattedResponse,
+  validateUsername,
+  validatePersonalInfo,
+  validateGoalDescription,
+  validateExperienceLevel,
+} from '../../utils/validation';
 import { logStep, logData, logError, logNavigation } from '../../utils/logger';
 
 const introTracker = {
@@ -152,7 +159,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   // Step 1: Username and Gender
   const handleUsernameChange = useCallback((username: string) => {
-    const isValid = username.trim().length >= 3;
+    const validation = validateUsername(username);
     
     setState(prev => {
       // Initialize personalInfo with default gender if it doesn't exist
@@ -171,7 +178,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       return {
         ...prev,
         username,
-        usernameValid: isValid,
+        usernameValid: validation.isValid,
         // Ensure personalInfo exists with default gender
         personalInfo: prev.personalInfo || defaultPersonalInfo,
       };
@@ -240,16 +247,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   // Step 2: Personal Info
   const handlePersonalInfoChange = useCallback((personalInfo: PersonalInfo) => {
-    const isValid = 
-      personalInfo.age > 0 && 
-      personalInfo.weight > 0 && 
-      personalInfo.height > 0 && 
-      personalInfo.gender.trim().length > 0;
+    const validation = validatePersonalInfo(personalInfo);
     
     setState(prev => ({
       ...prev,
       personalInfo,
-      personalInfoValid: isValid,
+      personalInfoValid: validation.isValid,
     }));
   }, []);
 
@@ -263,12 +266,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   // Step 3: Goal Description
   const handleGoalDescriptionChange = useCallback((goalDescription: string) => {
-    const isValid = goalDescription.trim().length >= 10;
+    const validation = validateGoalDescription(goalDescription);
     
     setState(prev => ({
       ...prev,
       goalDescription,
-      goalDescriptionValid: isValid,
+      goalDescriptionValid: validation.isValid,
     }));
   }, []);
 
@@ -282,12 +285,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   // Step 4: Experience Level
   const handleExperienceLevelChange = useCallback((experienceLevel: string) => {
-    const isValid = experienceLevel.trim().length > 0;
+    const validation = validateExperienceLevel(experienceLevel);
     
     setState(prev => ({
       ...prev,
       experienceLevel,
-      experienceLevelValid: isValid,
+      experienceLevelValid: validation.isValid,
     }));
   }, []);
 
