@@ -95,8 +95,8 @@ ptyprocess==0.7.0
 pure_eval==0.2.3
 pyasn1==0.6.1
 pycparser==2.22
-pydantic==2.5.0
-pydantic_core==2.14.1
+pydantic==2.10.6
+# Let pip resolve the matching core version for the chosen pydantic
 Pygments==2.19.2
 PyJWT==2.10.1
 PyPDF2==3.0.1
