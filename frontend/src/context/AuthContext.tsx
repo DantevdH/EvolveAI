@@ -5,6 +5,7 @@ import { UserProfile } from '@/src/types';
 import { TrainingPlan } from '@/src/types/training';
 import { supabase } from '@/src/config/supabase';
 import { NotificationService } from '@/src/services/NotificationService';
+import { logger } from '@/src/utils/logger';
 
 // Simplified auth state interface
 interface SimpleAuthState {
@@ -16,6 +17,7 @@ interface SimpleAuthState {
   isLoading: boolean;
   trainingPlanLoading: boolean;
   isPollingPlan: boolean;  // True when polling for background plan generation
+  profileLoading: boolean; // True while fetching user profile
   error: string | null;
   isInitialized: boolean;
 }
@@ -25,6 +27,7 @@ type SimpleAuthAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_WORKOUT_PLAN_LOADING'; payload: boolean }
   | { type: 'SET_POLLING_PLAN'; payload: boolean }
+  | { type: 'SET_PROFILE_LOADING'; payload: boolean }
   | { type: 'SET_USER'; payload: any | null }
   | { type: 'SET_SESSION'; payload: any | null }
   | { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
@@ -44,6 +47,7 @@ const initialState: SimpleAuthState = {
   isLoading: false,
   trainingPlanLoading: false,
   isPollingPlan: false,
+  profileLoading: false,
   error: null,
   isInitialized: false,
 };
@@ -65,6 +69,11 @@ const authReducer = (state: SimpleAuthState, action: SimpleAuthAction): SimpleAu
       return {
         ...state,
         isPollingPlan: action.payload,
+      };
+    case 'SET_PROFILE_LOADING':
+      return {
+        ...state,
+        profileLoading: action.payload,
       };
     case 'SET_USER':
       return {
@@ -163,6 +172,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const isLoadingProfileRef = useRef(false);
 
   // Simplified user profile loading with debouncing
+  // BEST PRACTICE: Profile loading should NOT block navigation
+  // Navigation is reactive to auth state, profile loads in background
   const loadUserProfile = useCallback(async (userId: string) => {
     // Prevent multiple simultaneous calls
     if (isLoadingProfileRef.current) {
@@ -171,50 +182,72 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     isLoadingProfileRef.current = true;
+    dispatch({ type: 'SET_PROFILE_LOADING', payload: true });
 
     try {
       console.log('👤 Loading user profile...');
-      dispatch({ type: 'SET_LOADING', payload: true });
+      // DON'T set isLoading - profile loading should not block navigation
+      // Navigation should be reactive to auth state, not profile loading state
       
-      const response = await UserService.getUserProfile(userId);
+      // Add timeout to prevent hanging - if profile query takes too long, give up
+      const profilePromise = UserService.getUserProfile(userId);
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Profile loading timeout after 3 seconds')), 3000);
+      });
+      
+      let response;
+      try {
+        response = await Promise.race([profilePromise, timeoutPromise]);
+      } catch (timeoutError) {
+        console.warn('⚠️ Profile loading timed out - treating as new user, allowing onboarding');
+        // Treat timeout as "no profile found" - allow navigation to onboarding
+        dispatch({ type: 'SET_USER_PROFILE', payload: null });
+        dispatch({ type: 'SET_ERROR', payload: null });
+        isLoadingProfileRef.current = false;
+        dispatch({ type: 'SET_PROFILE_LOADING', payload: false });
+        return;
+      }
       
       if (response.success) {
         console.log('✅ User profile loaded');
         dispatch({ type: 'SET_USER_PROFILE', payload: response.data || null });
         
-        // Load training plan if user profile exists
+        // Load training plan if user profile exists (non-blocking)
         if (response.data) {
-          try {
-            console.log('💪 Loading training plan...');
-            dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: true });
-            
-            const { TrainingService } = await import('../services/trainingService');
-            const trainingResult = await TrainingService.getTrainingPlan(response.data.id!);
-            
-            if (trainingResult.success) {
-              console.log('✅ Training plan loaded');
-            } else {
-              console.log('ℹ️ No training plan found');
-            }
-            
-            const trainingPlan = trainingResult.success ? trainingResult.data || null : null;
-            dispatch({ type: 'SET_WORKOUT_PLAN', payload: trainingPlan });
-            
-            // Schedule training reminder if training plan exists
-            if (trainingPlan) {
-              try {
-                await NotificationService.scheduleTrainingReminder(trainingPlan);
-                console.log('🔔 Training reminder scheduled');
-              } catch (notificationError) {
-                console.log('⚠️ Failed to schedule training reminder:', notificationError);
+          // Don't await - let this load in background
+          (async () => {
+            try {
+              console.log('💪 Loading training plan...');
+              dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: true });
+              
+              const { TrainingService } = await import('../services/trainingService');
+              const trainingResult = await TrainingService.getTrainingPlan(response.data!.id!);
+              
+              if (trainingResult.success) {
+                console.log('✅ Training plan loaded');
+              } else {
+                console.log('ℹ️ No training plan found');
               }
+              
+              const trainingPlan = trainingResult.success ? trainingResult.data || null : null;
+              dispatch({ type: 'SET_WORKOUT_PLAN', payload: trainingPlan });
+              
+              // Schedule training reminder if training plan exists
+              if (trainingPlan) {
+                try {
+                  await NotificationService.scheduleTrainingReminder(trainingPlan);
+                  console.log('🔔 Training reminder scheduled');
+                } catch (notificationError) {
+                  console.log('⚠️ Failed to schedule training reminder:', notificationError);
+                }
+              }
+            } catch (trainingError) {
+              console.error('❌ Error loading training plan:', trainingError instanceof Error ? trainingError.message : String(trainingError));
+              dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
+            } finally {
+              dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: false });
             }
-          } catch (trainingError) {
-            console.error('❌ Error loading training plan:', trainingError instanceof Error ? trainingError.message : String(trainingError));
-            dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
-          } finally {
-            dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: false });
-          }
+          })();
         } else {
           console.log('ℹ️ No user profile data');
           dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
@@ -222,14 +255,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       } else {
         console.log('❌ User profile not found');
-        dispatch({ type: 'SET_ERROR', payload: response.error || 'Failed to load user profile' });
+        // Don't set error - treat as "no profile" to allow onboarding
+        dispatch({ type: 'SET_USER_PROFILE', payload: null });
+        dispatch({ type: 'SET_ERROR', payload: null });
       }
     } catch (error) {
       console.error('❌ Error loading user profile:', error instanceof Error ? error.message : 'Failed to load user profile');
-      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Failed to load user profile' });
+      
+      // If query fails, treat as "no profile found" to allow onboarding to proceed
+      // This handles network errors, RLS issues, etc. gracefully
+      console.warn('⚠️ Profile loading failed - treating as new user, allowing onboarding');
+      dispatch({ type: 'SET_USER_PROFILE', payload: null });
+      dispatch({ type: 'SET_ERROR', payload: null }); // Clear error to allow navigation
     } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
+      // DON'T set isLoading to false - we never set it to true for profile loading
       isLoadingProfileRef.current = false;
+      dispatch({ type: 'SET_PROFILE_LOADING', payload: false });
     }
   }, []); // No dependencies - stable function
 
@@ -247,14 +288,33 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const initializeAuth = async () => {
       try {
         console.log('🔐 Checking user session...');
-        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        // Add timeout to prevent hanging after clearAuth()
+        const getSessionPromise = supabase.auth.getSession();
+        const sessionTimeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('getSession timeout after 3 seconds')), 3000);
+        });
+        
+        let session: any = null;
+        let error: any = null;
+        
+        try {
+          const result = await Promise.race([getSessionPromise, sessionTimeoutPromise]);
+          session = (result as any)?.data?.session;
+          error = (result as any)?.error;
+        } catch (sessionError) {
+          console.warn('⚠️ getSession failed or timed out during init:', sessionError instanceof Error ? sessionError.message : String(sessionError));
+          // Treat timeout as "no session" - user needs to sign in
+          error = { message: 'Session check timed out' };
+        }
 
         if (error) {
           // Handle expected refresh token errors gracefully
           const isRefreshTokenError = 
             error.message?.includes('Invalid Refresh Token') || 
             error.message?.includes('Refresh Token Not Found') ||
-            error.message?.includes('refresh_token_not_found');
+            error.message?.includes('refresh_token_not_found') ||
+            error.message?.includes('timeout');
           
           if (isRefreshTokenError) {
             // This is expected when a user's session has expired or token was cleared
@@ -270,6 +330,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           console.log('✅ User session found');
           dispatch({ type: 'SET_USER', payload: session.user });
           dispatch({ type: 'SET_SESSION', payload: session });
+          
+          // Set session on client before loading profile
+          if (session.access_token) {
+            try {
+              await supabase.auth.setSession({
+                access_token: session.access_token,
+                refresh_token: session.refresh_token || '',
+              });
+              console.log('✅ Session set on Supabase client during init');
+              await new Promise(resolve => setTimeout(resolve, 50));
+            } catch (setError) {
+              console.warn('⚠️ Error setting session during init:', setError);
+            }
+          }
           
           // Load user profile if we have a session
           if (session.user) {
@@ -300,15 +374,27 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Check if OAuth user needs email verification (not for email signup)
         if (session.user && !session.user.email_confirmed_at && session.user.app_metadata?.provider !== 'email') {
           console.log('📧 Email verification required');
+          // Clear profile to ensure navigation to email verification
+          dispatch({ type: 'SET_USER_PROFILE', payload: null });
           return; // Don't load profile until email is verified
         }
         
+        // Mark profile as loading in UI while we fetch, but don't trip the internal guard here
+        dispatch({ type: 'SET_PROFILE_LOADING', payload: true });
+        // Clear stale profile so routing will recompute after profile is fetched
+        if (!state.userProfile || state.userProfile.userId !== session.user.id) {
+          console.log('🔄 User signed in - clearing profile state and starting profile load…');
+          dispatch({ type: 'SET_USER_PROFILE', payload: null });
+          dispatch({ type: 'SET_ERROR', payload: null }); // Clear any errors
+        }
+        
         // Only load profile if we don't already have one for this user and not currently loading
-        if ((!state.userProfile || state.userProfile.userId !== session.user.id) && !isLoadingProfileRef.current) {
-          console.log('🔄 Loading profile for signed in user...');
-          await loadUserProfile(session.user.id);
-        } else {
-          console.log('🚫 Skipping profile load - already have profile or loading in progress');
+        if ((!state.userProfile || state.userProfile.userId !== session.user.id)) {
+          // Defer profile loading to next event loop tick to ensure PostgREST client
+          // has updated its headers after setSession() completes (prevents "Unauthorized request" error)
+          setTimeout(async () => {
+            await loadUserProfile(session.user.id);
+          }, 0);
         }
       } else if (event === 'SIGNED_OUT') {
         console.log('👋 User signed out');
@@ -324,15 +410,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Force clear all authentication data
   const forceSignOut = async () => {
-
     try {
       await AuthService.signOut();
       dispatch({ type: 'CLEAR_AUTH' });
-
     } catch (error) {
       console.error('💥 Force sign out error:', error);
     }
   };
+
+  // Clear auth function for development console
+  const clearAuth = useCallback(async () => {
+    if (!__DEV__) {
+      console.warn('⚠️ clearAuth() is only available in development mode');
+      return;
+    }
+
+    try {
+      console.log('🧹 Clearing authentication...');
+      
+      // Sign out from Supabase
+      await AuthService.signOut();
+      
+      // Clear auth state
+      dispatch({ type: 'CLEAR_AUTH' });
+      isLoadingProfileRef.current = false;
+      
+      console.log('✅ Authentication cleared');
+      console.log('💡 App will automatically redirect to login page');
+      console.log('💡 If not redirected, manually navigate or reload the app');
+    } catch (error) {
+      console.error('❌ Error clearing auth:', error);
+    }
+  }, [dispatch]);
 
   // Sign in with email
   const signInWithEmail = async (email: string, password: string): Promise<boolean> => {
@@ -406,10 +515,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           dispatch({ type: 'SET_USER', payload: response.user });
           dispatch({ type: 'SET_SESSION', payload: response.session });
           
-          // Load user profile
-          await loadUserProfile(response.user.id);
-          
-          console.log('✅ [AuthContext] User flow: Context updated, user authenticated');
+          // Don't load profile here - let the auth state listener handle it
+          // This prevents duplicate calls and race conditions
+          console.log('✅ [AuthContext] User flow: Context updated, auth state listener will load profile');
           return true;
         }
         
@@ -754,6 +862,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     getCurrentUser,
     markOnboardingComplete,
   };
+
+  // Expose clearAuth globally in development mode
+  useEffect(() => {
+    if (__DEV__) {
+      // @ts-ignore - Exposing to global scope for console access
+      global.clearAuth = clearAuth;
+      console.log('💡 Development: clearAuth() is now available in console');
+    }
+    
+    return () => {
+      if (__DEV__) {
+        // @ts-ignore
+        delete global.clearAuth;
+      }
+    };
+  }, [clearAuth]);
 
   return (
     <AuthContext.Provider value={contextValue}>

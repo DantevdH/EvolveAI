@@ -4,6 +4,7 @@
  */
 
 import { useMemo, useEffect, useRef } from 'react';
+import { usePathname } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { logDebug } from '../utils/logger';
 
@@ -18,15 +19,30 @@ export interface AppRoutingState {
 export const useAppRouting = (): AppRoutingState => {
   const { state } = useAuth();
   const lastResultRef = useRef<string>('');
+  const pathname = usePathname?.() as string | undefined;
 
   const result = useMemo(() => {
-    // If we're loading, don't navigate at all - stay on current page
-    if (state.isLoading || state.trainingPlanLoading) {
+    // BEST PRACTICE: Only block navigation for critical auth operations (sign in, sign up)
+    // Profile loading should NOT block navigation - it loads in background
+    // Only block if we're doing a critical auth operation (sign in/up, not profile loading)
+    if (state.isLoading) {
       return {
         targetRoute: null,
         isLoading: true,
         hasError: false,
         routingReason: 'Loading'
+      };
+    }
+    
+    // Unified post-auth loading gate: wait while either profile or plan is loading
+    const isProfileLoading = (state as any).profileLoading === true;
+    const isPlanLoading = state.trainingPlanLoading === true;
+    if (state.user && (isProfileLoading || isPlanLoading)) {
+      return {
+        targetRoute: null,
+        isLoading: true,
+        hasError: false,
+        routingReason: 'Profile/Plan Loading'
       };
     }
 
@@ -60,27 +76,46 @@ export const useAppRouting = (): AppRoutingState => {
       };
     }
 
-    // Step 3: Check user profile existence
-    if (!state.userProfile) {
+    // Step 3: Unified onboarding start with smart branching
+    const profileForStart = state.userProfile;
+    const iqStart = profileForStart?.initial_questions as any;
+    const initialQuestionsCountForStart = Array.isArray(iqStart)
+      ? iqStart.length
+      : (iqStart && Array.isArray(iqStart?.questions) ? iqStart.questions.length : 0);
+    if (!profileForStart || initialQuestionsCountForStart === 0) {
       return {
         targetRoute: '/onboarding',
         isLoading: false,
         hasError: false,
         routingReason: 'Onboarding Start',
-        skipLoaders: false, // Fresh start, show intro loader
+        skipLoaders: false,
       };
     }
 
     // Step 4: Check onboarding progress - granular routing for resume flow
-    const hasInitialQuestions = !!state.userProfile.initial_questions;
-    const hasInitialResponses = !!state.userProfile.initial_responses;
-    const hasFollowUpQuestions = false;
-    const hasFollowUpResponses = false;
+    // From here, userProfile is guaranteed to exist by the unified onboarding start gate
+    const profile = state.userProfile!;
+    const iq = (profile.initial_questions as any);
+    const initialQuestions = Array.isArray(iq) ? iq : (iq && Array.isArray(iq.questions) ? iq.questions : []);
+    const initialResponsesObj = profile.initial_responses || {};
+    const hasInitialQuestions = Array.isArray(initialQuestions) && initialQuestions.length > 0;
+    const hasInitialResponses = typeof initialResponsesObj === 'object' && Object.keys(initialResponsesObj).length > 0;
     const hasTrainingPlan = !!state.trainingPlan;
-    const isPlanAccepted = !!state.userProfile.planAccepted;
+    const isPlanAccepted = !!profile.planAccepted;
 
     // Route to appropriate onboarding stage
-    if (!hasInitialQuestions || !hasInitialResponses) {
+    // 1) If we have questions but no responses yet → resume at initial-questions
+    if (hasInitialQuestions && !hasInitialResponses) {
+      // Prevent redundant re-navigation if we're already on the target path
+      if (pathname && (pathname === '/onboarding/initial-questions')) {
+        return {
+          targetRoute: null,
+          isLoading: false,
+          hasError: false,
+          routingReason: 'Initial Questions (already here)',
+          skipLoaders: true,
+        };
+      }
       return {
         targetRoute: '/onboarding/initial-questions',
         isLoading: false,
@@ -89,10 +124,12 @@ export const useAppRouting = (): AppRoutingState => {
         skipLoaders: true, // Resume state, skip intro
       };
     }
+    // 2) If we don't have questions yet → handled by unified onboarding start above
 
     
 
     if (!hasTrainingPlan) {
+      // Only route to generate-plan when plan absence is confirmed (not during loading)
       return {
         targetRoute: '/generate-plan',
         isLoading: false,

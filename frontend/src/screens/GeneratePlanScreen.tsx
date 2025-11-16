@@ -180,19 +180,23 @@ export const GeneratePlanScreen: React.FC = () => {
   }, [authState.userProfile, authState.session, dispatch, refreshUserProfile, router, runWithProgress, setExercises, setTrainingPlan]);
 
   useEffect(() => {
+    // Avoid triggering generation while a plan is being fetched or already exists
+    if (authState.trainingPlanLoading || authState.trainingPlan) {
+      console.log('📍 GeneratePlanScreen: Plan already exists or is being fetched, skipping generation...');
+      return;
+    }
     const timer = setTimeout(() => {
       startGeneration();
     }, 500);
-
     return () => clearTimeout(timer);
-  }, [startGeneration]);
+  }, [authState.trainingPlanLoading, authState.trainingPlan, startGeneration]);
 
   return (
     <View style={styles.container}>
       <ProgressOverlay
         visible={progressState.visible}
         progress={progressState.progress}
-        title="Gathering the upcoming weeks…"
+        title="Creating your training plan…"
       />
       {error && (
         <View style={styles.errorContainer}>

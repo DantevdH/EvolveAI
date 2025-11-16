@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, ImageBackground, Image, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/src/context/AuthContext';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { validateSignupForm } from '@/src/utils/validation';
-import { colors } from '../../constants/designSystem';
+import { colors, secondary, createColorWithOpacity } from '../../constants/colors';
 
 // Complete auth session if needed (recommended by Expo)
 WebBrowser.maybeCompleteAuthSession();
@@ -75,11 +76,11 @@ const SocialLoginButton: React.FC<{
             resizeMode="cover"
           />
         ) : (
-          <IconSymbol
-            name={iconName as any}
-            size={20}
-            color="#FFFFFF"
-          />
+        <IconSymbol
+          name={iconName as any}
+          size={20}
+          color={secondary}
+        />
         )}
         <Text style={[styles.socialButtonText, disabled && styles.socialButtonTextDisabled]}>
           {text}
@@ -294,15 +295,22 @@ export const SignupScreen: React.FC = () => {
               <View style={styles.signupSection}>
                 {state.isLoading ? (
                   <View style={styles.loadingContainer} testID="loading-indicator">
-                    <ActivityIndicator size="large" color="#FFFFFF" />
+                    <ActivityIndicator size="large" color={colors.primary} />
                   </View>
                 ) : (
                   <TouchableOpacity
                     style={styles.signupButton}
                     onPress={handleEmailSignup}
-                    activeOpacity={0.8}
+                    disabled={state.isLoading}
+                    activeOpacity={0.85}
                     testID="signup-button">
-                    <Text style={styles.signupButtonText}>Create Account</Text>
+                    <LinearGradient
+                      colors={[createColorWithOpacity(secondary, 0.55), createColorWithOpacity(secondary, 0.25)]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.gradientButton}>
+                      <Text style={styles.signupButtonText}>Create Account</Text>
+                    </LinearGradient>
                   </TouchableOpacity>
                 )}
                 
@@ -349,7 +357,7 @@ const styles = StyleSheet.create({
   },
   dimmingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(248, 248, 248, 0.85)',
   },
   safeArea: {
     flex: 1,
@@ -370,12 +378,12 @@ const styles = StyleSheet.create({
   mainTitle: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: colors.text,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: colors.muted,
     textAlign: 'center',
   },
   
@@ -390,11 +398,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   socialButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: colors.border,
+    shadowColor: colors.overlay,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   socialButtonDisabled: {
     opacity: 0.5,
@@ -407,11 +420,11 @@ const styles = StyleSheet.create({
   socialButtonText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.text,
     marginLeft: 12,
   },
   socialButtonTextDisabled: {
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: colors.muted,
   },
   socialButtonImage: {
     width: 10,
@@ -429,12 +442,12 @@ const styles = StyleSheet.create({
   separatorLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.border,
   },
   separatorText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: colors.muted,
     marginHorizontal: 16,
   },
   
@@ -448,6 +461,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.inputBackground,
     borderRadius: 12,
     padding: 16,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
   },
   placeholderText: {
     position: 'absolute',
@@ -481,23 +496,27 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   signupButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 18,
-    paddingVertical: 18,
-    paddingHorizontal: 8,
+    borderRadius: 14,
+    overflow: 'hidden',
+    minHeight: 48,
+  },
+  gradientButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    width: '100%',
+    minHeight: 48,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.borderLight,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.7,
-    shadowRadius: 14,
-    elevation: 8,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(secondary, 0.45),
   },
   signupButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.primary,
+    letterSpacing: 0.4,
+    textAlign: 'center',
   },
   
   // Error Text

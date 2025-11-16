@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ActivityIndicator, Alert, ImageBackground, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { IconSymbol } from '@/components/ui/IconSymbol';
-import { colors } from '../../constants/designSystem';
+import { colors, secondary, createColorWithOpacity } from '../../constants/colors';
 
 
 export const EmailVerificationScreen: React.FC = () => {
@@ -104,7 +105,7 @@ export const EmailVerificationScreen: React.FC = () => {
                   <IconSymbol
                     name="checkmark.circle.fill"
                     size={80}
-                    color="#932322"
+                    color={secondary}
                   />
                 </View>
                 <Text style={styles.mainTitle}>Check Your Email</Text>
@@ -151,7 +152,7 @@ export const EmailVerificationScreen: React.FC = () => {
                   disabled={resendCooldown > 0 || isResending}
                   activeOpacity={0.8}>
                   {isResending ? (
-                    <ActivityIndicator size="small" color="#932322" />
+                    <ActivityIndicator size="small" color={secondary} />
                   ) : (
                     <Text style={[styles.resendButtonText, (resendCooldown > 0 || isResending) && styles.resendButtonTextDisabled]}>
                       {resendCooldown > 0
@@ -164,8 +165,14 @@ export const EmailVerificationScreen: React.FC = () => {
                 <TouchableOpacity
                   style={styles.backButton}
                   onPress={handleBackToLogin}
-                  activeOpacity={0.8}>
-                  <Text style={styles.backButtonText}>Back to Sign In</Text>
+                  activeOpacity={0.85}>
+                  <LinearGradient
+                    colors={[createColorWithOpacity(secondary, 0.55), createColorWithOpacity(secondary, 0.25)]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.gradientButton}>
+                    <Text style={styles.backButtonText}>Back to Sign In</Text>
+                  </LinearGradient>
                 </TouchableOpacity>
               </View>
               
@@ -196,7 +203,7 @@ const styles = StyleSheet.create({
   },
   dimmingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(248, 248, 248, 0.85)',
   },
   safeArea: {
     flex: 1,
@@ -220,19 +227,19 @@ const styles = StyleSheet.create({
   mainTitle: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: colors.text,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: colors.muted,
     textAlign: 'center',
     marginBottom: 8,
   },
   emailText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#932322',
+    color: colors.primary,
     textAlign: 'center',
   },
   
@@ -263,7 +270,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: colors.primary,
+    backgroundColor: secondary,
     color: colors.text,
     fontSize: 14,
     fontWeight: '600',
@@ -305,13 +312,28 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   backButton: {
-    alignItems: 'center',
+    borderRadius: 14,
+    overflow: 'hidden',
+    minHeight: 48,
     marginTop: 10,
   },
+  gradientButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    width: '100%',
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(secondary, 0.45),
+  },
   backButtonText: {
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '600',
     color: colors.primary,
-    fontWeight: '500',
+    letterSpacing: 0.4,
+    textAlign: 'center',
   },
   
   // Help Section
