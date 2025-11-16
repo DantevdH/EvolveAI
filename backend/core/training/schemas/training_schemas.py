@@ -431,8 +431,8 @@ class StrengthExercise(BaseModel):
     )
     
     sets: int = Field(..., description="Number of sets")
-    reps: List[int] = Field(..., description="Reps for each set")
-    weight: List[float] = Field(..., description="Actual weight (in kg or lbs) for each set")
+    reps: List[int] = Field(..., description="Reps for each set. Should have the same length as the sets field.")
+    weight: List[float] = Field(..., description="Actual weight (in kg or lbs) for each set. Should have the same length as the sets field.")
     execution_order: int = Field(
         ..., description="Order in which to execute this exercise within the day's training (1-based: 1, 2, 3, etc.)"
     )
@@ -643,8 +643,8 @@ class GeminiAIStrengthExercise(BaseModel):
     """
     
     sets: int = Field(..., description="Number of sets")
-    reps: List[int] = Field(..., description="Reps for each set")
-    weight: List[float] = Field(..., description="Actual weight (in kg or lbs) for each set")
+    reps: List[int] = Field(..., description="Reps for each set. Should have the same length as the sets field.")
+    weight: List[float] = Field(..., description="Actual weight (in kg or lbs) for each set. Should have the same length as the sets field.")
     execution_order: int = Field(
         ..., description="Order in which to execute this exercise within the day's training (1-based: 1, 2, 3, etc.)"
     )

@@ -122,12 +122,12 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
     // Set default values for questions that have them (SLIDER and RATING)
     if (!localResponses.has(currentQuestion.id)) {
       if (currentQuestion.response_type === QuestionType.SLIDER) {
-        const defaultValue = currentQuestion.min_value ?? 0;
-        const newResponses = new Map(localResponses);
-        newResponses.set(currentQuestion.id, defaultValue);
-        setLocalResponses(newResponses);
-        onResponseChange(currentQuestion.id, defaultValue);
-        setAnsweredQuestions(prev => new Set(prev).add(currentIndex));
+      const defaultValue = currentQuestion.min_value ?? 0;
+      const newResponses = new Map(localResponses);
+      newResponses.set(currentQuestion.id, defaultValue);
+      setLocalResponses(newResponses);
+      onResponseChange(currentQuestion.id, defaultValue);
+      setAnsweredQuestions(prev => new Set(prev).add(currentIndex));
       } else if (currentQuestion.response_type === QuestionType.RATING) {
         // RATING questions default to min_value (typically 1 for 1-5 scale)
         const defaultValue = currentQuestion.min_value ?? 1;

@@ -159,43 +159,33 @@ class ExerciseMatcher:
             List of candidate exercises
         """
         try:
-            # Step 1: Filter by equipment first (equipment is TEXT column, not array)
+            # OPTIMIZATION #3: Filter by equipment, main_muscle, and popularity at database level
+            # This uses database indexes and reduces data transfer by filtering before fetching
             query = self.exercise_selector.supabase.table("exercises").select("*")
             
             if equipment:
                 # Equipment is a TEXT column, so use .eq() for exact match
                 query = query.eq("equipment", equipment)
             
+            # Filter by main_muscle using Supabase array contains operator (database-level filtering)
+            # This is much more efficient than fetching all records and filtering in memory
+            if main_muscle:
+                # Use .contains() for array columns - filters at database level
+                query = query.contains("main_muscles", [main_muscle])
+            
             # Filter by popularity
             query = query.lte("popularity_score", max_popularity)
             
-            # Execute to get equipment-filtered candidates
-            equipment_response = query.execute()
-            equipment_candidates = equipment_response.data if equipment_response.data else []
-            
-            logger.debug(f"Found {len(equipment_candidates)} candidates after equipment filter")
-            
-            # Step 2: Filter by main_muscle (which is an array, check if main_muscle is IN the array)
-            main_muscle_candidates = []
-            if main_muscle:
-                for candidate in equipment_candidates:
-                    candidate_main_muscles = candidate.get("main_muscles", [])
-                    # Handle both list and string types
-                    if isinstance(candidate_main_muscles, list):
-                        if main_muscle in candidate_main_muscles:
-                            main_muscle_candidates.append(candidate)
-                    elif isinstance(candidate_main_muscles, str):
-                        if candidate_main_muscles == main_muscle:
-                            main_muscle_candidates.append(candidate)
-            else:
-                main_muscle_candidates = equipment_candidates
+            # Execute single query with all filters applied at database level
+            response = query.execute()
+            candidates = response.data if response.data else []
             
             logger.debug(
-                f"Found {len(main_muscle_candidates)} candidates after metadata filtering "
+                f"Found {len(candidates)} candidates after database filtering "
                 f"(equipment: {equipment}, main_muscle: {main_muscle})"
             )
             
-            return main_muscle_candidates
+            return candidates
             
         except Exception as e:
             error_msg = str(e)

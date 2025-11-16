@@ -127,6 +127,8 @@ class ExerciseSelector:
     ) -> Tuple[List[str], List[str]]:
         """
         Validate exercise IDs and return valid and invalid ones.
+        
+        OPTIMIZATION: Uses batch query instead of N+1 queries for better performance.
 
         Args:
             exercise_ids: List of exercise IDs to validate
@@ -134,17 +136,50 @@ class ExerciseSelector:
         Returns:
             Tuple of (valid_ids, invalid_ids)
         """
-        valid_ids = []
-        invalid_ids = []
-
-        for exercise_id in exercise_ids:
-            exercise = self.get_exercise_by_id(exercise_id)
-            if exercise:
-                valid_ids.append(exercise_id)
-            else:
-                invalid_ids.append(exercise_id)
-
-        return valid_ids, invalid_ids
+        if not exercise_ids:
+            return [], []
+        
+        try:
+            # Batch query: Fetch all exercise IDs in a single query instead of N queries
+            # This reduces database round trips from N to 1
+            
+            # CRITICAL: Convert all IDs to integers for database query (id column is integer)
+            # But normalize input to handle both int and string IDs
+            try:
+                exercise_ids_int = [int(eid) for eid in exercise_ids]
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Error converting exercise_ids to int: {e}, will try as-is")
+                exercise_ids_int = exercise_ids
+            
+            response = (
+                self.supabase.table("exercises")
+                .select("id")
+                .in_("id", exercise_ids_int)
+                .execute()
+            )
+            
+            # Create set of valid IDs from database response (normalize to strings for comparison)
+            # Database returns integers, but we want to return strings to match input format
+            valid_ids_from_db = {str(ex["id"]) for ex in (response.data or [])}
+            
+            # Normalize input IDs to strings for comparison
+            exercise_ids_normalized = [str(eid) for eid in exercise_ids]
+            
+            # Separate valid and invalid IDs
+            valid_ids = [eid for eid in exercise_ids_normalized if eid in valid_ids_from_db]
+            invalid_ids = [eid for eid in exercise_ids_normalized if eid not in valid_ids_from_db]
+            
+            logger.debug(
+                f"Batch validated {len(exercise_ids)} IDs: "
+                f"{len(valid_ids)} valid, {len(invalid_ids)} invalid"
+            )
+            
+            return valid_ids, invalid_ids
+            
+        except Exception as e:
+            logger.error(f"Error batch validating exercise IDs: {e}")
+            # On error, return all as invalid to be safe
+            return [], exercise_ids
 
     def _clean_exercise_data(self, exercises: List[Dict]) -> List[Dict]:
         """

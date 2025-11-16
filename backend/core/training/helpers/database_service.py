@@ -371,13 +371,40 @@ class DatabaseService:
 
             # First, create the main training plan record
             # Convert Pydantic model to dict if needed
-            # Convert Pydantic model to dict if needed
+            # IMPORTANT: Use copy.deepcopy to ensure we're working with a mutable copy
+            # This prevents issues where filtering in one place doesn't affect the returned structure
+            import copy
+            
+            # TRACE: Log incoming plan structure
+            self.logger.info("📥 [SAVE_PLAN] Received training_plan_data for save")
+            if isinstance(training_plan_data, dict):
+                weekly_count = len(training_plan_data.get("weekly_schedules", []))
+                total_exercises_incoming = 0
+                exercises_with_remove_flag = 0
+                exercises_without_id = 0
+                for week in training_plan_data.get("weekly_schedules", []):
+                    for day in week.get("daily_trainings", []):
+                        if not day.get("is_rest_day", False):
+                            for ex in day.get("strength_exercises", []):
+                                total_exercises_incoming += 1
+                                if ex.get("_remove_from_plan", False):
+                                    exercises_with_remove_flag += 1
+                                if ex.get("exercise_id") is None:
+                                    exercises_without_id += 1
+                self.logger.info(
+                    f"📊 [SAVE_PLAN] Incoming plan: {weekly_count} weeks, {total_exercises_incoming} exercises, "
+                    f"{exercises_with_remove_flag} marked for removal, {exercises_without_id} without exercise_id"
+                )
+            
             if hasattr(training_plan_data, "model_dump"):
-                plan_dict = training_plan_data.model_dump()
+                plan_dict = copy.deepcopy(training_plan_data.model_dump())
             elif hasattr(training_plan_data, "dict"):
-                plan_dict = training_plan_data.dict()
+                plan_dict = copy.deepcopy(training_plan_data.dict())
             else:
-                plan_dict = training_plan_data
+                # Even if it's already a dict, make a deep copy to ensure mutability
+                plan_dict = copy.deepcopy(training_plan_data)
+            
+            self.logger.info("✅ [SAVE_PLAN] Created deep copy of plan_dict")
 
             plan_record = {
                 "user_profile_id": user_profile_id,
@@ -494,113 +521,270 @@ class DatabaseService:
 
                     # Save exercises and endurance sessions if not a rest day
                     if not is_rest_day:
-                        # Save strength exercises
+                        # Save strength exercises (BULK INSERT for performance)
                         raw_strength_exercises = daily_data.get("strength_exercises", [])
-                        # Filter out any exercises without exercise_id (data hygiene)
-                        strength_exercises = [ex for ex in raw_strength_exercises if ex and ex.get("exercise_id") is not None]
+                        
+                        # TRACE: Log before filtering
+                        self.logger.debug(
+                            f"🔍 [SAVE_PLAN] Week {week_index} Day {daily_index} ({day_of_week}): "
+                            f"Processing {len(raw_strength_exercises)} raw exercises"
+                        )
+                        
+                        # Filter out any exercises without exercise_id OR marked for removal (data hygiene)
+                        filtered_exercises_list = []
+                        dropped_exercises = []
+                        for ex in raw_strength_exercises:
+                            if not ex:
+                                continue
+                            exercise_id = ex.get("exercise_id")
+                            is_marked_remove = ex.get("_remove_from_plan", False)
+                            exercise_name = ex.get("exercise_name", "Unknown")
+                            
+                            if exercise_id is None:
+                                dropped_exercises.append(f"{exercise_name} (no exercise_id)")
+                            elif is_marked_remove:
+                                dropped_exercises.append(f"{exercise_name} (marked _remove_from_plan)")
+                            else:
+                                filtered_exercises_list.append(ex)
+                        
+                        strength_exercises = filtered_exercises_list
                         dropped_count = len(raw_strength_exercises) - len(strength_exercises)
+                        
+                        if dropped_count > 0:
+                            self.logger.warning(
+                                f"🗑️ [SAVE_PLAN] Week {week_index} Day {daily_index} ({day_of_week}): "
+                                f"Dropped {dropped_count} exercise(s): {', '.join(dropped_exercises[:3])}"
+                                f"{'...' if len(dropped_exercises) > 3 else ''}"
+                            )
                         self.logger.info(
-                            f"Week {week_index} Day {daily_index} strength_exercises: kept={len(strength_exercises)}, dropped_without_id={dropped_count}"
+                            f"✅ [SAVE_PLAN] Week {week_index} Day {daily_index} ({day_of_week}): "
+                            f"kept={len(strength_exercises)}, dropped={dropped_count}"
                         )
 
-                        for exercise_index, exercise_data in enumerate(
-                            strength_exercises
-                        ):
-                            exercise_id = exercise_data.get("exercise_id")
-                            
-                            sets = exercise_data.get("sets", 3)
-                            reps = exercise_data.get("reps", [10, 10, 10])
-                            weight = exercise_data.get("weight", [0.0] * sets)
+                        if strength_exercises:
+                            # Prepare all strength exercise records for bulk insert
+                            strength_exercise_records = []
+                            for exercise_data in strength_exercises:
+                                exercise_id = exercise_data.get("exercise_id")
+                                sets = exercise_data.get("sets", 3)
+                                reps = exercise_data.get("reps", [10, 10, 10])
+                                weight = exercise_data.get("weight", [0.0] * sets)
 
-                            # Create strength exercise record
-                            strength_exercise_record = {
-                                "daily_training_id": daily_training_id,
-                                "exercise_id": exercise_id,
-                                "sets": sets,
-                                "reps": reps,
-                                "weight": weight,
-                                "execution_order": exercise_data.get("execution_order", 0),
-                                "completed": False,
-                                "created_at": datetime.utcnow().isoformat(),
-                                "updated_at": datetime.utcnow().isoformat(),
-                            }
+                                strength_exercise_records.append({
+                                    "daily_training_id": daily_training_id,
+                                    "exercise_id": exercise_id,
+                                    "sets": sets,
+                                    "reps": reps,
+                                    "weight": weight,
+                                    "execution_order": exercise_data.get("execution_order", 0),
+                                    "completed": False,
+                                    "created_at": datetime.utcnow().isoformat(),
+                                    "updated_at": datetime.utcnow().isoformat(),
+                                })
 
+                            # Bulk insert all strength exercises at once
                             exercise_result = (
                                 supabase_client.table("strength_exercise")
-                                .insert(strength_exercise_record)
+                                .insert(strength_exercise_records)
                                 .execute()
                             )
                             
-                            # Enrich exercise_data with database ID
-                            if exercise_result.data:
-                                exercise_data["id"] = exercise_result.data[0]["id"]
-                                exercise_data["daily_training_id"] = daily_training_id
+                            # Map returned IDs back to exercise_data objects (order is preserved by Supabase)
+                            if exercise_result.data and len(exercise_result.data) == len(strength_exercises):
+                                for i, exercise_data in enumerate(strength_exercises):
+                                    db_id = exercise_result.data[i]["id"]
+                                    exercise_data["id"] = db_id
+                                    exercise_data["daily_training_id"] = daily_training_id
+                                    self.logger.debug(
+                                        f"✅ [SAVE_PLAN] Enriched exercise '{exercise_data.get('exercise_name', 'Unknown')}' "
+                                        f"with DB ID: {db_id}, exercise_id: {exercise_data.get('exercise_id')}"
+                                    )
+                            else:
+                                # Fallback: if order doesn't match, log warning but continue
+                                self.logger.warning(
+                                    f"⚠️ [SAVE_PLAN] Bulk insert returned {len(exercise_result.data) if exercise_result.data else 0} records, "
+                                    f"expected {len(strength_exercises)}. IDs may not be enriched correctly."
+                                )
+                                # Still try to enrich if we have data
+                                if exercise_result.data:
+                                    for i, exercise_data in enumerate(strength_exercises):
+                                        if i < len(exercise_result.data):
+                                            db_id = exercise_result.data[i]["id"]
+                                            exercise_data["id"] = db_id
+                                            exercise_data["daily_training_id"] = daily_training_id
+                            
+                            # CRITICAL: Update daily_data with filtered and enriched exercises
+                            # This ensures plan_dict only contains exercises that were actually saved to DB
+                            daily_data["strength_exercises"] = strength_exercises
+                            self.logger.debug(
+                                f"✅ [SAVE_PLAN] Updated daily_data['strength_exercises'] with {len(strength_exercises)} "
+                                f"filtered and enriched exercises for {day_of_week}"
+                            )
+                        else:
+                            # No valid exercises - set to empty list to prevent invalid exercises from reaching frontend
+                            daily_data["strength_exercises"] = []
 
-                        # Save endurance sessions
+                        # Save endurance sessions (BULK INSERT for performance)
                         endurance_sessions = daily_data.get("endurance_sessions", [])
 
-                        for session_index, session_data in enumerate(
-                            endurance_sessions
-                        ):
-                            name = session_data.get("name", "Endurance Session")
-                            description = session_data.get("description", "")
-                            sport_type = session_data.get("sport_type", "running")
-                            training_volume = session_data.get("training_volume", 30.0)
-                            unit = session_data.get("unit", "minutes")
-                            heart_rate_zone = session_data.get("heart_rate_zone", 3)  # Default to Zone 3 if not provided
+                        if endurance_sessions:
+                            # Prepare all endurance session records for bulk insert
+                            endurance_session_records = []
+                            for session_data in endurance_sessions:
+                                name = session_data.get("name", "Endurance Session")
+                                description = session_data.get("description", "")
+                                sport_type = session_data.get("sport_type", "running")
+                                training_volume = session_data.get("training_volume", 30.0)
+                                unit = session_data.get("unit", "minutes")
+                                heart_rate_zone = session_data.get("heart_rate_zone", 3)  # Default to Zone 3 if not provided
 
-                            # Create endurance session record
-                            endurance_session_record = {
-                                "daily_training_id": daily_training_id,
-                                "name": name,
-                                "description": description,
-                                "sport_type": sport_type,
-                                "training_volume": training_volume,
-                                "unit": unit,
-                                "heart_rate_zone": heart_rate_zone,
-                                "execution_order": session_data.get("execution_order", 0),
-                                "completed": False,
-                                "created_at": datetime.utcnow().isoformat(),
-                                "updated_at": datetime.utcnow().isoformat(),
-                            }
+                                endurance_session_records.append({
+                                    "daily_training_id": daily_training_id,
+                                    "name": name,
+                                    "description": description,
+                                    "sport_type": sport_type,
+                                    "training_volume": training_volume,
+                                    "unit": unit,
+                                    "heart_rate_zone": heart_rate_zone,
+                                    "execution_order": session_data.get("execution_order", 0),
+                                    "completed": False,
+                                    "created_at": datetime.utcnow().isoformat(),
+                                    "updated_at": datetime.utcnow().isoformat(),
+                                })
 
+                            # Bulk insert all endurance sessions at once
                             session_result = (
                                 supabase_client.table("endurance_session")
-                                .insert(endurance_session_record)
+                                .insert(endurance_session_records)
                                 .execute()
                             )
                             
-                            # Enrich session_data with database ID
-                            if session_result.data:
-                                session_data["id"] = session_result.data[0]["id"]
-                                session_data["daily_training_id"] = daily_training_id
+                            # Map returned IDs back to session_data objects (order is preserved by Supabase)
+                            if session_result.data and len(session_result.data) == len(endurance_sessions):
+                                for i, session_data in enumerate(endurance_sessions):
+                                    session_data["id"] = session_result.data[i]["id"]
+                                    session_data["daily_training_id"] = daily_training_id
+                            else:
+                                # Fallback: if order doesn't match, log warning but continue
+                                self.logger.warning(
+                                    f"Bulk insert returned {len(session_result.data) if session_result.data else 0} records, "
+                                    f"expected {len(endurance_sessions)}. IDs may not be enriched correctly."
+                                )
+                                # Still try to enrich if we have data
+                                if session_result.data:
+                                    for i, session_data in enumerate(endurance_sessions):
+                                        if i < len(session_result.data):
+                                            session_data["id"] = session_result.data[i]["id"]
+                                            session_data["daily_training_id"] = daily_training_id
 
             self.logger.info(
                 f"Training plan saved successfully (ID: {training_plan_id})"
             )
 
-            # Enrich plan_dict with exercise metadata (same as get_training_plan does)
+            # Enrich plan_dict with exercise metadata (BULK QUERY for performance)
             # This ensures enriched fields (target_area, main_muscles, force) are available
-            # No additional database call needed - we enrich during the save process
+            # Collect all unique exercise_ids first, then bulk-fetch metadata
+            self.logger.info("🔍 [SAVE_PLAN] Starting exercise metadata enrichment")
             weekly_schedules = plan_dict.get("weekly_schedules", [])
+            all_exercise_ids = set()
+            
+            # First pass: collect all exercise_ids
+            exercises_found_for_enrichment = 0
+            exercises_with_remove_flag_during_enrichment = 0
             for weekly_schedule in weekly_schedules:
                 daily_trainings = weekly_schedule.get("daily_trainings", [])
                 for daily_training in daily_trainings:
                     if not daily_training.get("is_rest_day", False):
                         strength_exercises = daily_training.get("strength_exercises", [])
                         for strength_exercise in strength_exercises:
+                            exercises_found_for_enrichment += 1
+                            if strength_exercise.get("_remove_from_plan", False):
+                                exercises_with_remove_flag_during_enrichment += 1
+                                self.logger.error(
+                                    f"❌ [ENRICHMENT] CRITICAL: Found exercise '{strength_exercise.get('exercise_name', 'Unknown')}' "
+                                    f"with _remove_from_plan=True during enrichment! This should have been filtered earlier."
+                                )
                             exercise_id = strength_exercise.get("exercise_id")
                             if exercise_id:
-                                # Fetch exercise metadata from exercises table
-                                exercise_metadata_result = (
-                                    supabase_client.table("exercises")
-                                    .select("*")
-                                    .eq("id", exercise_id)
-                                    .single()
-                                    .execute()
+                                all_exercise_ids.add(exercise_id)
+            
+            self.logger.info(
+                f"📊 [ENRICHMENT] Found {exercises_found_for_enrichment} exercises for enrichment, "
+                f"{exercises_with_remove_flag_during_enrichment} with _remove_from_plan flag, "
+                f"{len(all_exercise_ids)} unique exercise_ids to fetch metadata for"
+            )
+            
+            # Bulk fetch all exercise metadata at once
+            exercise_metadata_map = {}
+            if all_exercise_ids:
+                try:
+                    exercise_ids_list = list(all_exercise_ids)
+                    if len(exercise_ids_list) == 1:
+                        # Single exercise - use .eq() for efficiency
+                        metadata_result = (
+                            supabase_client.table("exercises")
+                            .select("*")
+                            .eq("id", exercise_ids_list[0])
+                            .execute()
+                        )
+                        if metadata_result.data:
+                            exercise_metadata_map[exercise_ids_list[0]] = metadata_result.data[0]
+                    else:
+                        # Multiple exercises - use .in_() for bulk query
+                        metadata_result = (
+                            supabase_client.table("exercises")
+                            .select("*")
+                            .in_("id", exercise_ids_list)
+                            .execute()
+                        )
+                        if metadata_result.data:
+                            # Build lookup map: exercise_id -> metadata
+                            for exercise_metadata in metadata_result.data:
+                                exercise_metadata_map[exercise_metadata.get("id")] = exercise_metadata
+                except Exception as e:
+                    self.logger.warning(f"Error bulk-fetching exercise metadata: {e}. Falling back to sequential queries.")
+                    exercise_metadata_map = {}  # Will fall back to sequential if bulk fails
+            
+            # Second pass: enrich all exercises using the metadata map
+            enriched_count = 0
+            for week_idx, weekly_schedule in enumerate(weekly_schedules):
+                daily_trainings = weekly_schedule.get("daily_trainings", [])
+                for day_idx, daily_training in enumerate(daily_trainings):
+                    if not daily_training.get("is_rest_day", False):
+                        strength_exercises = daily_training.get("strength_exercises", [])
+                        # TRACE: Verify we're reading from the filtered list
+                        if strength_exercises:
+                            exercises_with_remove = [ex for ex in strength_exercises if ex.get("_remove_from_plan", False)]
+                            if exercises_with_remove:
+                                self.logger.error(
+                                    f"❌ [ENRICHMENT] CRITICAL: Week {week_idx} Day {day_idx}: Found {len(exercises_with_remove)} exercises with "
+                                    f"_remove_from_plan=True in strength_exercises list during enrichment! "
+                                    f"These should have been filtered during save. Exercise names: "
+                                    f"{', '.join([ex.get('exercise_name', 'Unknown') for ex in exercises_with_remove[:3]])}"
                                 )
-                                if exercise_metadata_result.data:
-                                    exercise_metadata = exercise_metadata_result.data
+                        
+                        for strength_exercise in strength_exercises:
+                            exercise_id = strength_exercise.get("exercise_id")
+                            if exercise_id:
+                                exercise_metadata = exercise_metadata_map.get(exercise_id)
+                                
+                                # Fallback to sequential query if bulk fetch failed or missed this exercise
+                                if not exercise_metadata:
+                                    try:
+                                        exercise_metadata_result = (
+                                            supabase_client.table("exercises")
+                                            .select("*")
+                                            .eq("id", exercise_id)
+                                            .single()
+                                            .execute()
+                                        )
+                                        if exercise_metadata_result.data:
+                                            exercise_metadata = exercise_metadata_result.data
+                                            exercise_metadata_map[exercise_id] = exercise_metadata  # Cache for future use
+                                    except Exception as e:
+                                        self.logger.warning(f"Error fetching metadata for exercise {exercise_id}: {e}")
+                                
+                                if exercise_metadata:
                                     # Store as "exercises" (plural) to match Supabase format (for frontend compatibility)
                                     strength_exercise["exercises"] = exercise_metadata
                                     # CRITICAL: Add exercise_name, main_muscle, equipment at top-level for Pydantic validation and frontend round-trip
@@ -613,9 +797,111 @@ class DatabaseService:
                                     strength_exercise["target_area"] = exercise_metadata.get("target_area")
                                     strength_exercise["main_muscles"] = main_muscles_array
                                     strength_exercise["force"] = exercise_metadata.get("force")
+                                    enriched_count += 1
                                 else:
                                     strength_exercise["exercises"] = None
+            
+            self.logger.info(f"✅ [ENRICHMENT] Enriched {enriched_count} exercises with metadata")
 
+            # FINAL CLEANUP: Remove _remove_from_plan flag and any exercises still marked for removal
+            # This ensures no internal flags or invalid exercises leak to the frontend
+            # CRITICAL: This must run AFTER all enrichment to catch any exercises that slipped through
+            self.logger.info("🛡️ [SAVE_PLAN] Starting FINAL CLEANUP filter before returning plan to frontend")
+            total_filtered_before = 0
+            total_filtered_after = 0
+            total_removed = 0
+            removed_exercises_details = []
+            
+            for week_idx, weekly_schedule in enumerate(plan_dict.get("weekly_schedules", [])):
+                for day_idx, daily_training in enumerate(weekly_schedule.get("daily_trainings", [])):
+                    if not daily_training.get("is_rest_day", False):
+                        strength_exercises = daily_training.get("strength_exercises", [])
+                        total_filtered_before += len(strength_exercises)
+                        
+                        # TRACE: Log what we're about to filter
+                        if strength_exercises:
+                            self.logger.debug(
+                                f"🔍 [FINAL_CLEANUP] Week {week_idx} Day {day_idx} ({daily_training.get('day_of_week', 'Unknown')}): "
+                                f"Checking {len(strength_exercises)} exercises"
+                            )
+                        
+                        # Filter out any exercises marked for removal OR missing exercise_id
+                        filtered_exercises = []
+                        for ex in strength_exercises:
+                            exercise_name = ex.get("exercise_name", "Unknown")
+                            exercise_id = ex.get("exercise_id")
+                            is_marked_remove = ex.get("_remove_from_plan", False)
+                            
+                            if is_marked_remove:
+                                total_removed += 1
+                                removed_exercises_details.append(
+                                    f"{exercise_name} (Week {week_idx}, Day {day_idx}, _remove_from_plan=True)"
+                                )
+                                self.logger.error(
+                                    f"❌ [FINAL_CLEANUP] CRITICAL: Found exercise '{exercise_name}' "
+                                    f"with _remove_from_plan=True in final plan! This should never happen."
+                                )
+                            elif exercise_id is None:
+                                total_removed += 1
+                                removed_exercises_details.append(
+                                    f"{exercise_name} (Week {week_idx}, Day {day_idx}, null exercise_id)"
+                                )
+                                self.logger.error(
+                                    f"❌ [FINAL_CLEANUP] CRITICAL: Found exercise '{exercise_name}' "
+                                    f"with null exercise_id in final plan! This should never happen."
+                                )
+                            else:
+                                # Clean up internal flags before sending to frontend
+                                ex.pop("_remove_from_plan", None)
+                                filtered_exercises.append(ex)
+                                # Verify ID is set
+                                if not ex.get("id"):
+                                    self.logger.warning(
+                                        f"⚠️ [FINAL_CLEANUP] Exercise '{exercise_name}' has exercise_id={exercise_id} "
+                                        f"but missing DB 'id' field (strength_exercise table ID)"
+                                    )
+                        
+                        daily_training["strength_exercises"] = filtered_exercises
+                        total_filtered_after += len(filtered_exercises)
+            
+            if total_removed > 0:
+                self.logger.error(
+                    f"❌ [FINAL_CLEANUP] CRITICAL: Removed {total_removed} invalid exercise(s) "
+                    f"({total_filtered_before} before, {total_filtered_after} after). "
+                    f"Details: {', '.join(removed_exercises_details[:5])}"
+                    f"{'...' if len(removed_exercises_details) > 5 else ''}"
+                )
+            else:
+                self.logger.info(
+                    f"✅ [FINAL_CLEANUP] All exercises valid: {total_filtered_after} exercises "
+                    f"ready for frontend (no removals needed)"
+                )
+            
+            # TRACE: Final validation before returning
+            final_exercise_count = 0
+            final_exercises_with_ids = 0
+            final_exercises_with_remove_flag = 0
+            for week in plan_dict.get("weekly_schedules", []):
+                for day in week.get("daily_trainings", []):
+                    if not day.get("is_rest_day", False):
+                        for ex in day.get("strength_exercises", []):
+                            final_exercise_count += 1
+                            if ex.get("id"):
+                                final_exercises_with_ids += 1
+                            if ex.get("_remove_from_plan", False):
+                                final_exercises_with_remove_flag += 1
+            
+            self.logger.info(
+                f"📤 [SAVE_PLAN] Returning plan to frontend: {final_exercise_count} exercises, "
+                f"{final_exercises_with_ids} with DB IDs, {final_exercises_with_remove_flag} with _remove_from_plan flag"
+            )
+            
+            if final_exercises_with_remove_flag > 0:
+                self.logger.error(
+                    f"❌ [SAVE_PLAN] CRITICAL: Returning plan with {final_exercises_with_remove_flag} exercises "
+                    f"still marked with _remove_from_plan=True! This will cause frontend errors!"
+                )
+            
             # Return complete plan structure with all database IDs and enriched fields
             # This allows caller to use the plan without refetching from DB
             return {
@@ -1159,12 +1445,13 @@ class DatabaseService:
                     
                     # Save exercises and endurance sessions if not a rest day
                     if not is_rest_day:
-                        # Save strength exercises
+                        # Save strength exercises (BULK INSERT for performance)
                         strength_exercises = daily_data.get("strength_exercises", [])
                         
-                        for exercise_index, exercise_data in enumerate(
-                            strength_exercises
-                        ):
+                        # Filter out exercises without exercise_id and prepare for bulk insert
+                        valid_strength_exercises = []
+                        strength_exercise_records = []
+                        for exercise_index, exercise_data in enumerate(strength_exercises):
                             exercise_id = exercise_data.get("exercise_id")
                             
                             # CRITICAL: Validate exercise_id exists before saving
@@ -1180,8 +1467,7 @@ class DatabaseService:
                             reps = exercise_data.get("reps", [10, 10, 10])
                             weight = exercise_data.get("weight", [0.0] * sets)
                             
-                            # Create strength exercise record
-                            strength_exercise_record = {
+                            strength_exercise_records.append({
                                 "daily_training_id": daily_training_id,
                                 "exercise_id": exercise_id,
                                 "sets": sets,
@@ -1191,83 +1477,187 @@ class DatabaseService:
                                 "completed": False,
                                 "created_at": datetime.utcnow().isoformat(),
                                 "updated_at": datetime.utcnow().isoformat(),
-                            }
-                            
+                            })
+                            valid_strength_exercises.append(exercise_data)
+                        
+                        # Bulk insert all strength exercises at once
+                        if strength_exercise_records:
                             se_result = (
                                 supabase_client.table("strength_exercise")
-                                .insert(strength_exercise_record)
+                                .insert(strength_exercise_records)
                                 .execute()
                             )
-                            if se_result.data:
-                                # Enrich plan dict with generated strength exercise ID and parent linkage
-                                exercise_data["id"] = se_result.data[0]["id"]
-                                exercise_data["daily_training_id"] = daily_training_id
-                                
-                                # CRITICAL: Enrich with exercise metadata from database (same as save_training_plan)
-                                # This ensures exercise_name, main_muscle, equipment are present for frontend round-trip
-                                if exercise_id:
-                                    exercise_metadata_result = (
-                                        supabase_client.table("exercises")
-                                        .select("*")
-                                        .eq("id", exercise_id)
-                                        .single()
-                                        .execute()
-                                    )
-                                    if exercise_metadata_result.data:
-                                        exercise_metadata = exercise_metadata_result.data
-                                        # Store as "exercises" (plural) to match Supabase format (for frontend compatibility)
-                                        exercise_data["exercises"] = exercise_metadata
-                                        # CRITICAL: Add exercise_name, main_muscle, equipment at top-level for Pydantic validation and frontend round-trip
-                                        exercise_data["exercise_name"] = exercise_metadata.get("name")
-                                        # Extract main_muscle from main_muscles array (first item) - database has main_muscles, not main_muscle
-                                        main_muscles_array = exercise_metadata.get("primary_muscles") or exercise_metadata.get("main_muscles", [])
-                                        exercise_data["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
-                                        exercise_data["equipment"] = exercise_metadata.get("equipment")
-                                        # Also flatten enriched fields to top-level for schema validation and prompt formatting
-                                        exercise_data["target_area"] = exercise_metadata.get("target_area")
-                                        exercise_data["main_muscles"] = main_muscles_array
-                                        exercise_data["force"] = exercise_metadata.get("force")
-                                    else:
-                                        exercise_data["exercises"] = None
+                            
+                            # Map returned IDs back to exercise_data objects (order is preserved by Supabase)
+                            if se_result.data and len(se_result.data) == len(valid_strength_exercises):
+                                for i, exercise_data in enumerate(valid_strength_exercises):
+                                    exercise_data["id"] = se_result.data[i]["id"]
+                                    exercise_data["daily_training_id"] = daily_training_id
+                            else:
+                                # Fallback: if order doesn't match, log warning but continue
+                                self.logger.warning(
+                                    f"Bulk insert returned {len(se_result.data) if se_result.data else 0} records, "
+                                    f"expected {len(valid_strength_exercises)}. IDs may not be enriched correctly."
+                                )
+                                # Still try to enrich if we have data
+                                if se_result.data:
+                                    for i, exercise_data in enumerate(valid_strength_exercises):
+                                        if i < len(se_result.data):
+                                            exercise_data["id"] = se_result.data[i]["id"]
+                                            exercise_data["daily_training_id"] = daily_training_id
+                            
+                            # CRITICAL: Update daily_data with filtered and enriched exercises
+                            # This ensures plan_dict only contains exercises that were actually saved to DB
+                            daily_data["strength_exercises"] = valid_strength_exercises
+                        else:
+                            # No valid exercises - set to empty list to prevent invalid exercises from reaching frontend
+                            daily_data["strength_exercises"] = []
                         
-                        # Save endurance sessions
+                        # Save endurance sessions (BULK INSERT for performance)
                         endurance_sessions = daily_data.get("endurance_sessions", [])
                         self.logger.info(
                             f"Week {week_index} Day {daily_index} endurance_sessions: count={len(endurance_sessions)}"
                         )
                         
-                        for session_index, session_data in enumerate(endurance_sessions):
-                            name = session_data.get("name", "Endurance Session")
-                            description = session_data.get("description", "")
-                            sport_type = session_data.get("sport_type", "running")
-                            training_volume = session_data.get("training_volume", 30.0)
-                            unit = session_data.get("unit", "minutes")
-                            heart_rate_zone = session_data.get("heart_rate_zone", 3)  # Default to Zone 3 if not provided
+                        if endurance_sessions:
+                            # Prepare all endurance session records for bulk insert
+                            endurance_session_records = []
+                            for session_data in endurance_sessions:
+                                name = session_data.get("name", "Endurance Session")
+                                description = session_data.get("description", "")
+                                sport_type = session_data.get("sport_type", "running")
+                                training_volume = session_data.get("training_volume", 30.0)
+                                unit = session_data.get("unit", "minutes")
+                                heart_rate_zone = session_data.get("heart_rate_zone", 3)  # Default to Zone 3 if not provided
+                                
+                                endurance_session_records.append({
+                                    "daily_training_id": daily_training_id,
+                                    "name": name,
+                                    "description": description,
+                                    "sport_type": sport_type,
+                                    "training_volume": training_volume,
+                                    "unit": unit,
+                                    "heart_rate_zone": heart_rate_zone,
+                                    "execution_order": session_data.get("execution_order", 0),
+                                    "completed": False,
+                                    "created_at": datetime.utcnow().isoformat(),
+                                    "updated_at": datetime.utcnow().isoformat(),
+                                })
                             
-                            # Create endurance session record
-                            endurance_session_record = {
-                                "daily_training_id": daily_training_id,
-                                "name": name,
-                                "description": description,
-                                "sport_type": sport_type,
-                                "training_volume": training_volume,
-                                "unit": unit,
-                                "heart_rate_zone": heart_rate_zone,
-                                "execution_order": session_data.get("execution_order", 0),
-                                "completed": False,
-                                "created_at": datetime.utcnow().isoformat(),
-                                "updated_at": datetime.utcnow().isoformat(),
-                            }
-                            
+                            # Bulk insert all endurance sessions at once
                             es_result = (
                                 supabase_client.table("endurance_session")
-                                .insert(endurance_session_record)
+                                .insert(endurance_session_records)
                                 .execute()
                             )
-                            if es_result.data:
-                                # Enrich plan dict with generated endurance session ID and parent linkage
-                                session_data["id"] = es_result.data[0]["id"]
-                                session_data["daily_training_id"] = daily_training_id
+                            
+                            # Map returned IDs back to session_data objects (order is preserved by Supabase)
+                            if es_result.data and len(es_result.data) == len(endurance_sessions):
+                                for i, session_data in enumerate(endurance_sessions):
+                                    session_data["id"] = es_result.data[i]["id"]
+                                    session_data["daily_training_id"] = daily_training_id
+                            else:
+                                # Fallback: if order doesn't match, log warning but continue
+                                self.logger.warning(
+                                    f"Bulk insert returned {len(es_result.data) if es_result.data else 0} records, "
+                                    f"expected {len(endurance_sessions)}. IDs may not be enriched correctly."
+                                )
+                                # Still try to enrich if we have data
+                                if es_result.data:
+                                    for i, session_data in enumerate(endurance_sessions):
+                                        if i < len(es_result.data):
+                                            session_data["id"] = es_result.data[i]["id"]
+                                            session_data["daily_training_id"] = daily_training_id
+
+            # Enrich plan_dict with exercise metadata (BULK QUERY for performance)
+            # This ensures enriched fields (target_area, main_muscles, force) are available
+            # Collect all unique exercise_ids first, then bulk-fetch metadata
+            all_exercise_ids = set()
+            
+            # First pass: collect all exercise_ids
+            for weekly_schedule in weekly_schedules:
+                daily_trainings = weekly_schedule.get("daily_trainings", [])
+                for daily_training in daily_trainings:
+                    if not daily_training.get("is_rest_day", False):
+                        strength_exercises = daily_training.get("strength_exercises", [])
+                        for strength_exercise in strength_exercises:
+                            exercise_id = strength_exercise.get("exercise_id")
+                            if exercise_id:
+                                all_exercise_ids.add(exercise_id)
+            
+            # Bulk fetch all exercise metadata at once
+            exercise_metadata_map = {}
+            if all_exercise_ids:
+                try:
+                    exercise_ids_list = list(all_exercise_ids)
+                    if len(exercise_ids_list) == 1:
+                        # Single exercise - use .eq() for efficiency
+                        metadata_result = (
+                            supabase_client.table("exercises")
+                            .select("*")
+                            .eq("id", exercise_ids_list[0])
+                            .execute()
+                        )
+                        if metadata_result.data:
+                            exercise_metadata_map[exercise_ids_list[0]] = metadata_result.data[0]
+                    else:
+                        # Multiple exercises - use .in_() for bulk query
+                        metadata_result = (
+                            supabase_client.table("exercises")
+                            .select("*")
+                            .in_("id", exercise_ids_list)
+                            .execute()
+                        )
+                        if metadata_result.data:
+                            # Build lookup map: exercise_id -> metadata
+                            for exercise_metadata in metadata_result.data:
+                                exercise_metadata_map[exercise_metadata.get("id")] = exercise_metadata
+                except Exception as e:
+                    self.logger.warning(f"Error bulk-fetching exercise metadata: {e}. Falling back to sequential queries.")
+                    exercise_metadata_map = {}  # Will fall back to sequential if bulk fails
+            
+            # Second pass: enrich all exercises using the metadata map
+            for weekly_schedule in weekly_schedules:
+                daily_trainings = weekly_schedule.get("daily_trainings", [])
+                for daily_training in daily_trainings:
+                    if not daily_training.get("is_rest_day", False):
+                        strength_exercises = daily_training.get("strength_exercises", [])
+                        for strength_exercise in strength_exercises:
+                            exercise_id = strength_exercise.get("exercise_id")
+                            if exercise_id:
+                                exercise_metadata = exercise_metadata_map.get(exercise_id)
+                                
+                                # Fallback to sequential query if bulk fetch failed or missed this exercise
+                                if not exercise_metadata:
+                                    try:
+                                        exercise_metadata_result = (
+                                            supabase_client.table("exercises")
+                                            .select("*")
+                                            .eq("id", exercise_id)
+                                            .single()
+                                            .execute()
+                                        )
+                                        if exercise_metadata_result.data:
+                                            exercise_metadata = exercise_metadata_result.data
+                                            exercise_metadata_map[exercise_id] = exercise_metadata  # Cache for future use
+                                    except Exception as e:
+                                        self.logger.warning(f"Error fetching metadata for exercise {exercise_id}: {e}")
+                                
+                                if exercise_metadata:
+                                    # Store as "exercises" (plural) to match Supabase format (for frontend compatibility)
+                                    strength_exercise["exercises"] = exercise_metadata
+                                    # CRITICAL: Add exercise_name, main_muscle, equipment at top-level for Pydantic validation and frontend round-trip
+                                    strength_exercise["exercise_name"] = exercise_metadata.get("name")
+                                    # Extract main_muscle from main_muscles array (first item) - database has main_muscles, not main_muscle
+                                    main_muscles_array = exercise_metadata.get("primary_muscles") or exercise_metadata.get("main_muscles", [])
+                                    strength_exercise["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
+                                    strength_exercise["equipment"] = exercise_metadata.get("equipment")
+                                    # Also flatten enriched fields to top-level for schema validation and prompt formatting
+                                    strength_exercise["target_area"] = exercise_metadata.get("target_area")
+                                    strength_exercise["main_muscles"] = main_muscles_array
+                                    strength_exercise["force"] = exercise_metadata.get("force")
+                                else:
+                                    strength_exercise["exercises"] = None
 
             self.logger.info(f"Successfully updated training plan {plan_id}")
             # Summarize enriched IDs before returning
