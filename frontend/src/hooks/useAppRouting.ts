@@ -159,6 +159,8 @@ export const useAppRouting = (): AppRoutingState => {
     };
   }, [
     state.isLoading,
+    // Include profileLoading so routing re-evaluates when profile load completes
+    (state as any).profileLoading,
     state.trainingPlanLoading,
     state.user,
     state.userProfile,

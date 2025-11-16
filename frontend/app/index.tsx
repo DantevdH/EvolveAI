@@ -17,22 +17,9 @@ export default function Index() {
   const navigationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastNavigationRef = useRef<string | null>(null);
   const isNavigatingRef = useRef<boolean>(false);
-  const lastStateRef = useRef<string>('');
 
   // Use useEffect to handle navigation based on routing state
   useEffect(() => {
-    // Create a state signature to detect actual changes
-    // Include responses to detect when they're added to context
-    const hasInitialResponses = !!state.userProfile?.initial_responses && Object.keys(state.userProfile.initial_responses).length > 0;
-    const currentState = `${state.isLoading}-${state.trainingPlanLoading}-${!!state.user}-${!!state.userProfile}-${!!state.trainingPlan}-${!!state.error}-${hasInitialResponses}`;
-    
-    // Skip if state hasn't actually changed
-    if (currentState === lastStateRef.current) {
-      return;
-    }
-    
-    lastStateRef.current = currentState;
-
     // Clear any existing timeout and reset navigation state
     if (navigationTimeoutRef.current) {
       clearTimeout(navigationTimeoutRef.current);

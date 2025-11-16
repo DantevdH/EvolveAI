@@ -15,6 +15,32 @@ jest.mock('react-native', () => ({
   Dimensions: {
     get: jest.fn(() => ({ width: 375, height: 812 })),
   },
+  StyleSheet: {
+    create: (styles: any) => styles,
+  },
+  View: 'View',
+  Text: 'Text',
+  Animated: {
+    View: 'AnimatedView',
+    Value: class {
+      private _value: number;
+      constructor(value: number) {
+        this._value = value;
+      }
+      setValue(value: number) {
+        this._value = value;
+      }
+      interpolate() {
+        return '0deg';
+      }
+    },
+    timing: jest.fn(() => ({
+      start: jest.fn(),
+    })),
+    loop: jest.fn(() => ({
+      start: jest.fn(),
+    })),
+  },
 }));
 
 // Mock Expo modules

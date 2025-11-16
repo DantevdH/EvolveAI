@@ -51,7 +51,7 @@ export const ConditionalBooleanQuestion: React.FC<ConditionalBooleanQuestionProp
   };
 
   const isTextRequired = booleanValue === true;
-  const minLength = 20;
+  const minLength = question.min_length ?? 10;
   const isTextValid = !isTextRequired || textValue.trim().length >= minLength;
 
   const renderBooleanButton = (label: string, targetValue: boolean) => {

@@ -2,6 +2,8 @@
  * Validation utilities for onboarding data and authentication forms
  */
 
+import { AIQuestion, QuestionType, PersonalInfo } from '../types/onboarding';
+
 /**
  * Validation result interface
  */
@@ -181,4 +183,195 @@ export const cleanUserProfileForResume = (profile: any) => {
     initial_ai_message: profile.initial_ai_message || null,
     
   };
+};
+
+/**
+ * Onboarding step validators
+ */
+
+export const validateUsername = (username: string): ValidationResult => {
+  const trimmed = (username || '').trim();
+  if (trimmed.length < 3) {
+    return {
+      isValid: false,
+      errorMessage: 'Username must be at least 3 characters long',
+    };
+  }
+  if (trimmed.length > 20) {
+    return {
+      isValid: false,
+      errorMessage: 'Username must be at most 20 characters long',
+    };
+  }
+  return { isValid: true };
+};
+
+export const validatePersonalInfo = (personalInfo: PersonalInfo | null): ValidationResult => {
+  if (!personalInfo) {
+    return { isValid: false, errorMessage: 'Personal information is required' };
+  }
+
+  if (!personalInfo.gender || personalInfo.gender.trim().length === 0) {
+    return { isValid: false, errorMessage: 'Gender is required' };
+  }
+
+  if (!personalInfo.age || personalInfo.age <= 0) {
+    return { isValid: false, errorMessage: 'Age must be greater than 0' };
+  }
+
+  if (!personalInfo.weight || personalInfo.weight <= 0) {
+    return { isValid: false, errorMessage: 'Weight must be greater than 0' };
+  }
+
+  if (!personalInfo.height || personalInfo.height <= 0) {
+    return { isValid: false, errorMessage: 'Height must be greater than 0' };
+  }
+
+  return { isValid: true };
+};
+
+export const validateGoalDescription = (goalDescription: string): ValidationResult => {
+  const trimmed = (goalDescription || '').trim();
+  const minLength = 10;
+  if (trimmed.length < minLength) {
+    return {
+      isValid: false,
+      errorMessage: `Please describe your training goal in at least ${minLength} characters`,
+    };
+  }
+  return { isValid: true };
+};
+
+export const validateExperienceLevel = (experienceLevel: string): ValidationResult => {
+  if (!experienceLevel || experienceLevel.trim().length === 0) {
+    return { isValid: false, errorMessage: 'Please select your experience level' };
+  }
+  return { isValid: true };
+};
+
+/**
+ * Validation result for an individual AI onboarding question response
+ */
+export interface QuestionValidationResult {
+  isValid: boolean;
+  errorMessage?: string;
+}
+
+/**
+ * Validates a single AI onboarding question response based on its type and config.
+ *
+ * This is used to decide whether a user can advance to the next onboarding question.
+ */
+export const validateQuestionResponse = (
+  question: AIQuestion,
+  value: any
+): QuestionValidationResult => {
+  // All AI questions are required in the onboarding flow (UX best practice)
+  // Even if marked as optional in the backend, we require users to answer all questions
+  const isRequired = true;
+
+  const makeResult = (isValid: boolean, errorMessage?: string): QuestionValidationResult => ({
+    isValid,
+    errorMessage,
+  });
+
+  const isEmpty =
+    value === null ||
+    value === undefined ||
+    (typeof value === 'string' && value.trim().length === 0) ||
+    (Array.isArray(value) && value.length === 0);
+
+  // All questions must have some value
+  if (isEmpty) {
+    return makeResult(false, 'This question is required.');
+  }
+
+  switch (question.response_type) {
+    case QuestionType.FREE_TEXT: {
+      const text = typeof value === 'string' ? value.trim() : '';
+      const minLength = question.min_length ?? 10;
+      if (!text || text.length < minLength) {
+        return makeResult(false, `Please provide at least ${minLength} characters.`);
+      }
+      if (question.max_length && text.length > question.max_length) {
+        return makeResult(false, `Please keep your answer under ${question.max_length} characters.`);
+      }
+      return makeResult(true);
+    }
+
+    case QuestionType.MULTIPLE_CHOICE:
+    case QuestionType.DROPDOWN: {
+      const options = question.options || [];
+      const allowedValues = new Set(options.map(o => o.value));
+
+      if (question.multiselect) {
+        if (!Array.isArray(value) || value.length === 0) {
+          return makeResult(false, 'Please select at least one option.');
+        }
+        const invalid = value.some((v: any) => !allowedValues.has(String(v)));
+        if (invalid) {
+          return makeResult(false, 'One or more selected options are invalid.');
+        }
+        return makeResult(true);
+      }
+
+      // Single-select: check for empty value first
+      const singleValue = Array.isArray(value) ? value[0] : value;
+      const stringValue = String(singleValue);
+      
+      // Empty string or invalid value means no selection
+      if (!singleValue || stringValue.trim().length === 0 || !allowedValues.has(stringValue)) {
+        return makeResult(false, 'Please select a valid option.');
+      }
+      return makeResult(true);
+    }
+
+    case QuestionType.SLIDER:
+    case QuestionType.RATING: {
+      const num = typeof value === 'number' ? value : Number(value);
+      if (Number.isNaN(num)) {
+        return makeResult(false, 'Please select a value.');
+      }
+
+      if (typeof question.min_value === 'number' && num < question.min_value) {
+        return makeResult(false, `Value must be at least ${question.min_value}.`);
+      }
+      if (typeof question.max_value === 'number' && num > question.max_value) {
+        return makeResult(false, `Value must be at most ${question.max_value}.`);
+      }
+
+      if (typeof question.step === 'number' && question.step > 0) {
+        const base = typeof question.min_value === 'number' ? question.min_value : 0;
+        const delta = Math.abs(num - base);
+        const remainder = delta % question.step;
+        const tolerance = 1e-6;
+        if (remainder > tolerance && Math.abs(remainder - question.step) > tolerance) {
+          return makeResult(false, 'Value must align with the allowed step increments.');
+        }
+      }
+
+      return makeResult(true);
+    }
+
+    case QuestionType.CONDITIONAL_BOOLEAN: {
+      // Expected shape: { boolean: boolean, text?: string }
+      const response = value || {};
+      if (response.boolean === null || response.boolean === undefined) {
+        return makeResult(false, 'Please answer yes or no.');
+      }
+      if (response.boolean === false) {
+        return makeResult(true);
+      }
+      const text = typeof response.text === 'string' ? response.text.trim() : '';
+      const minLength = question.min_length ?? 10;
+      if (text.length < minLength) {
+        return makeResult(false, `Please add a short explanation (at least ${minLength} characters).`);
+      }
+      return makeResult(true);
+    }
+
+    default:
+      // If we don't recognize the type, fall back to basic non-empty check
+      return makeResult(!isEmpty);
+  }
 };
