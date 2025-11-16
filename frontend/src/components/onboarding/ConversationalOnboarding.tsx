@@ -360,6 +360,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           },
         });
       }
+      // Navigate to the dedicated initial-questions route after successful generation
+      router.replace('/onboarding/initial-questions');
       setRetryStep(null);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to load questions';
