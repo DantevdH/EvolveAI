@@ -642,6 +642,26 @@ export class AuthService {
         // Don't fail - Supabase signOut should have cleared it
       }
 
+      // Clear all scheduled notifications when signing out
+      try {
+        const { NotificationService } = await import('./NotificationService');
+        await NotificationService.cancelTrainingReminder();
+        console.log('✅ [AuthService] Training reminders cancelled');
+        
+        // Also clear all scheduled notifications to prevent old notifications from firing
+        const Notifications = require('expo-notifications');
+        const allNotifications = await Notifications.getAllScheduledNotificationsAsync();
+        for (const notification of allNotifications) {
+          await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+        }
+        if (allNotifications.length > 0) {
+          console.log(`✅ [AuthService] Cancelled ${allNotifications.length} scheduled notifications`);
+        }
+      } catch (notificationError) {
+        console.warn('⚠️ [AuthService] Could not clear notifications:', notificationError);
+        // Don't fail - this is not critical
+      }
+
       logger.debug('Sign out complete, all storage cleared');
       return {
         success: true,

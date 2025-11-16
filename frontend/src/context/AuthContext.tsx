@@ -17,6 +17,7 @@ interface SimpleAuthState {
   isLoading: boolean;
   trainingPlanLoading: boolean;
   isPollingPlan: boolean;  // True when polling for background plan generation
+  profileLoading: boolean; // True while fetching user profile
   error: string | null;
   isInitialized: boolean;
 }
@@ -26,6 +27,7 @@ type SimpleAuthAction =
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_WORKOUT_PLAN_LOADING'; payload: boolean }
   | { type: 'SET_POLLING_PLAN'; payload: boolean }
+  | { type: 'SET_PROFILE_LOADING'; payload: boolean }
   | { type: 'SET_USER'; payload: any | null }
   | { type: 'SET_SESSION'; payload: any | null }
   | { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
@@ -45,6 +47,7 @@ const initialState: SimpleAuthState = {
   isLoading: false,
   trainingPlanLoading: false,
   isPollingPlan: false,
+  profileLoading: false,
   error: null,
   isInitialized: false,
 };
@@ -66,6 +69,11 @@ const authReducer = (state: SimpleAuthState, action: SimpleAuthAction): SimpleAu
       return {
         ...state,
         isPollingPlan: action.payload,
+      };
+    case 'SET_PROFILE_LOADING':
+      return {
+        ...state,
+        profileLoading: action.payload,
       };
     case 'SET_USER':
       return {
@@ -174,6 +182,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     isLoadingProfileRef.current = true;
+    dispatch({ type: 'SET_PROFILE_LOADING', payload: true });
 
     try {
       console.log('👤 Loading user profile...');
@@ -195,6 +204,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         dispatch({ type: 'SET_USER_PROFILE', payload: null });
         dispatch({ type: 'SET_ERROR', payload: null });
         isLoadingProfileRef.current = false;
+        dispatch({ type: 'SET_PROFILE_LOADING', payload: false });
         return;
       }
       
@@ -260,6 +270,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } finally {
       // DON'T set isLoading to false - we never set it to true for profile loading
       isLoadingProfileRef.current = false;
+      dispatch({ type: 'SET_PROFILE_LOADING', payload: false });
     }
   }, []); // No dependencies - stable function
 
@@ -368,43 +379,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           return; // Don't load profile until email is verified
         }
         
-        // BEST PRACTICE: Optimistically clear profile to allow immediate navigation
-        // Profile will load in background and update state when ready
-        // This prevents navigation from being blocked by profile loading
+        // Mark profile as loading in UI while we fetch, but don't trip the internal guard here
+        dispatch({ type: 'SET_PROFILE_LOADING', payload: true });
+        // Clear stale profile so routing will recompute after profile is fetched
         if (!state.userProfile || state.userProfile.userId !== session.user.id) {
-          console.log('🔄 User signed in - clearing profile state for immediate navigation...');
+          console.log('🔄 User signed in - clearing profile state and starting profile load…');
           dispatch({ type: 'SET_USER_PROFILE', payload: null });
           dispatch({ type: 'SET_ERROR', payload: null }); // Clear any errors
         }
         
         // Only load profile if we don't already have one for this user and not currently loading
-        if ((!state.userProfile || state.userProfile.userId !== session.user.id) && !isLoadingProfileRef.current) {
-          console.log('🔄 Loading profile in background (non-blocking)...');
-          
-          // CRITICAL: Set session on Supabase client BEFORE loading profile
-          // This ensures RLS policies work and prevents getSession() from hanging
-          if (session.access_token) {
-            try {
-              await supabase.auth.setSession({
-                access_token: session.access_token,
-                refresh_token: session.refresh_token || '',
-              });
-              console.log('✅ Session set on Supabase client before profile load');
-              // Small delay to ensure session is propagated
-              await new Promise(resolve => setTimeout(resolve, 50));
-            } catch (setError) {
-              console.warn('⚠️ Error setting session before profile load:', setError);
-              // Continue anyway - session might already be set
-            }
-          }
-          
-          // Load profile in background - don't await, navigation happens immediately
-          loadUserProfile(session.user.id).catch((error) => {
-            console.error('❌ Background profile loading failed:', error);
-            // Already handled in loadUserProfile - just log here
-          });
-        } else {
-          console.log('🚫 Skipping profile load - already have profile or loading in progress');
+        if ((!state.userProfile || state.userProfile.userId !== session.user.id)) {
+          // Defer profile loading to next event loop tick to ensure PostgREST client
+          // has updated its headers after setSession() completes (prevents "Unauthorized request" error)
+          setTimeout(async () => {
+            await loadUserProfile(session.user.id);
+          }, 0);
         }
       } else if (event === 'SIGNED_OUT') {
         console.log('👋 User signed out');

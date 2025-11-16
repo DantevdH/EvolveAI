@@ -197,23 +197,22 @@ export class UserService {
 
   static async getUserProfile(userId: string): Promise<UserServiceResponse<UserProfile>> {
     try {
-      console.log('🔍 userService: Fetching user profile for user_id:', userId);
-      
-      // Use the existing Supabase client with proper query
-      const { data: user_profiles, error, status } = await supabase
+      if (!supabase || !supabase.auth) {
+        return {
+          success: false,
+          error: 'Supabase client not initialized',
+        };
+      }
+
+      const { data: user_profiles, error } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('user_id', userId);
 
-
-
       if (error) {
-        console.error('❌ userService: Error fetching profile:', error);
-        
         // If it's an "Invalid API key" error, it might be due to RLS policies
         // In this case, treat it as "no profile found" since the user is authenticated
-        if (error.message.includes('Invalid API key') || error.message.includes('permission denied')) {
-          console.warn('⚠️ userService: Permission error - returning undefined (may indicate RLS issue)');
+        if (error.message?.includes('Invalid API key') || error.message?.includes('permission denied')) {
           return {
             success: true,
             data: undefined,
@@ -228,7 +227,6 @@ export class UserService {
 
       // Check if we got any profiles
       if (user_profiles && user_profiles.length > 0) {
-        console.log('✅ userService: Found profile, ID:', user_profiles[0].id);
         const rawProfile = user_profiles[0];
         
         // Parse playbook if it exists
@@ -245,7 +243,7 @@ export class UserService {
               last_updated: playbookData.last_updated || playbookData.lastUpdated || new Date().toISOString(),
             };
           } catch (error) {
-            console.warn('⚠️ userService: Failed to parse playbook:', error);
+            // Playbook parsing failed, continue without it
           }
         }
         
@@ -269,10 +267,7 @@ export class UserService {
           initial_responses: rawProfile.initial_responses || null,
           
           // AI messages from database
-          initial_ai_message: (() => {
-            console.log('📍 userService: rawProfile.initial_questions:', typeof rawProfile.initial_questions, JSON.stringify(rawProfile.initial_questions)?.substring(0, 200));
-            return extractAIMessage(rawProfile.initial_questions);
-          })(),
+          initial_ai_message: extractAIMessage(rawProfile.initial_questions),
           outline_ai_message: rawProfile.plan_outline?.ai_message || null,
           // Plan outline and feedback (separated)
           plan_outline: rawProfile.plan_outline || null,
@@ -289,8 +284,6 @@ export class UserService {
           data: mappedProfile,
         };
       } else {
-        console.warn('⚠️ userService: No profiles found for user_id:', userId);
-        console.warn('⚠️ userService: This means the profile was never created or user_id mismatch');
         return {
           success: true,
           data: undefined,
