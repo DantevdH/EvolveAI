@@ -1,4 +1,5 @@
 // Training Types - Based on Swift TrainingViewModel and TrainingModels
+import React from 'react';
 
 export interface TrainingState {
   currentWeekSelected: number;
@@ -73,6 +74,8 @@ export interface DailyTraining {
   exercises: TrainingExercise[];
   completed?: boolean; // Optional since it's calculated from exercises
   completedAt?: Date;
+  scheduledDate?: Date; // Scheduled date for this training (from backend scheduled_date)
+  isEditable?: boolean; // Whether this day can be edited (computed based on scheduledDate)
   duration?: number; // in minutes
   calories?: number;
   sessionRPE?: number; // Session Rate of Perceived Exertion (1-5 scale)
@@ -130,13 +133,6 @@ export interface ExerciseDetailTabs {
   history: boolean;
 }
 
-export interface OneRMCalculator {
-  weight: number;
-  reps: number;
-  oneRM: number;
-  isVisible: boolean;
-}
-
 export interface RestTimer {
   isActive: boolean;
   duration: number; // in seconds
@@ -190,7 +186,6 @@ export interface UseTrainingReturn {
   weekNavigation: WeekNavigationData;
   dayIndicators: DayIndicator[];
   exerciseDetailTabs: ExerciseDetailTabs;
-  oneRMCalculator: OneRMCalculator;
   restTimer: RestTimer;
   trainingProgress: TrainingProgress;
   
@@ -202,8 +197,6 @@ export interface UseTrainingReturn {
   showExerciseDetail: (exercise: Exercise) => void;
   hideExerciseDetail: () => void;
   switchExerciseDetailTab: (tab: keyof ExerciseDetailTabs) => void;
-  toggleOneRMCalculator: () => void;
-  calculateOneRM: (weight: number, reps: number) => number;
   startRestTimer: (duration: number, exerciseName: string) => void;
   stopRestTimer: () => void;
   completeTraining: () => Promise<void>;
@@ -234,6 +227,10 @@ export interface UseTrainingReturn {
   // Exercise swap state
   isExerciseSwapModalVisible: boolean;
   exerciseToSwap: Exercise | null;
+  
+  // Error banners
+  SwapExerciseErrorBanner: React.ComponentType;
+  CompleteTrainingErrorBanner: React.ComponentType;
   
   // Computed
   isPlanComplete: boolean;
@@ -270,11 +267,9 @@ export interface WeekNavigationAndOverviewProps {
 
 export interface DailyTrainingDetailProps {
   dailyTraining: DailyTraining | null;
-  isPastWeek: boolean;
   onExerciseToggle: (exerciseId: string) => void;
   onSetUpdate: (exerciseId: string, setIndex: number, reps: number, weight: number) => Promise<void>;
   onExerciseDetail: (exercise: Exercise) => void;
-  onOneRMCalculator: (exerciseName: string) => void;
   onSwapExercise?: (exercise: Exercise) => void;
   onReopenTraining?: () => void;
   onAddExercise?: () => void;
@@ -295,7 +290,6 @@ export interface ExerciseRowProps {
   onToggle: () => void;
   onSetUpdate: (setIndex: number, reps: number, weight: number) => Promise<void>;
   onShowDetail: () => void;
-  onOneRMCalculator: (exerciseName: string) => void;
   onSwapExercise?: () => void;
   onRemoveExercise?: () => void;
   isLocked?: boolean;
@@ -334,8 +328,3 @@ export interface RestTimerProps {
   onStop: () => void;
 }
 
-export interface OneRMCalculatorProps {
-  calculator: OneRMCalculator;
-  onToggle: () => void;
-  onCalculate: (weight: number, reps: number) => void;
-}

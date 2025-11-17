@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../../constants/colors';
+import { colors, createColorWithOpacity } from '../../../constants/colors';
 
 interface TabNavigationProps {
   activeTab: 'ai' | 'search';
@@ -18,7 +18,7 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabCh
         <Ionicons
           name="sparkles"
           size={20}
-          color={activeTab === 'ai' ? colors.primary : colors.muted}
+          color={activeTab === 'ai' ? colors.secondary : colors.muted}
         />
         <Text
           style={[
@@ -37,7 +37,7 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabCh
         <Ionicons
           name="search"
           size={20}
-          color={activeTab === 'search' ? colors.primary : colors.muted}
+          color={activeTab === 'search' ? colors.secondary : colors.muted}
         />
         <Text
           style={[
@@ -55,18 +55,18 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({ activeTab, onTabCh
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    marginHorizontal: 16,
+    marginHorizontal: 24,
     marginTop: 16,
-    backgroundColor: colors.card,
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.05),
     borderRadius: 12,
     padding: 4,
     borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.overlay,
-    shadowOffset: { width: 0, height: 1 },
+    borderColor: createColorWithOpacity(colors.secondary, 0.15),
+    shadowColor: createColorWithOpacity(colors.secondary, 0.1),
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   tabButton: {
     flex: 1,
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   tabButtonActive: {
-    backgroundColor: colors.primary + '20',
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.12),
   },
   tabButtonText: {
     fontSize: 14,
@@ -87,7 +87,8 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   tabButtonTextActive: {
-    color: colors.primary,
+    color: colors.secondary,
+    fontWeight: '600',
   },
 });
 

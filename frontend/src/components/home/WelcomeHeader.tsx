@@ -8,6 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { colors, createColorWithOpacity } from '../../constants/colors';
+import { GradientColors, createGradientColors } from '../../types/common';
 
 interface WelcomeHeaderProps {
   username?: string;
@@ -62,13 +63,13 @@ export const WelcomeHeader: React.FC<WelcomeHeaderProps> = ({ username }) => {
   );
 };
 
-const getTimeOfDay = () => {
+const getTimeOfDay = (): { timeOfDay: string; timeOfDayIcon: keyof typeof Ionicons.glyphMap; gradientColors: GradientColors } => {
   const hour = new Date().getHours();
   
-  const gradient = [
+  const gradient = createGradientColors(
     createColorWithOpacity(colors.secondary, 0.4),
-    createColorWithOpacity(colors.secondary, 0.2),
-  ];
+    createColorWithOpacity(colors.secondary, 0.2)
+  );
 
   if (hour >= 5 && hour < 12) {
     return {

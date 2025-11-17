@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useAuth } from '@/src/context/AuthContext';
 import { UserService } from '@/src/services/userService';
 import { UserProfile } from '@/src/types';
+import { logger } from '@/src/utils/logger';
 
 export const useUser = () => {
   const { state, updateUserProfile, refreshUserProfile } = useAuth();
@@ -89,15 +90,6 @@ export const useUser = () => {
   }, [updateUserProfile]);
 
   /**
-   * Update user's final chat notes
-   */
-  const updateFinalChatNotes = useCallback(async (notes: string): Promise<boolean> => {
-    return await updateUserProfile({
-      finalChatNotes: notes,
-    });
-  }, [updateUserProfile]);
-
-  /**
    * Get user's experience level
    */
   const getExperienceLevel = useCallback((): string => {
@@ -137,9 +129,6 @@ export const useUser = () => {
       profile.username &&
       profile.goalDescription &&
       profile.experienceLevel &&
-      profile.daysPerWeek &&
-      profile.minutesPerSession &&
-      profile.equipment &&
       profile.age &&
       profile.weight &&
       profile.height &&
@@ -188,7 +177,6 @@ export const useUser = () => {
     updateProfileField,
     updateExperienceLevel,
     updatePhysicalInfo,
-    updateFinalChatNotes,
     
     // Getter methods
     getExperienceLevel,

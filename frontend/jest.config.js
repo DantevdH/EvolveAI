@@ -28,7 +28,9 @@ module.exports = {
     '^.+\\.(js|jsx)$': 'babel-jest',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|@react-navigation|expo|@expo|@unimodules|unimodules|@react-native-community|@react-native-async-storage|@expo/vector-icons|expo-web-browser|expo-secure-store))',
+    // Transform all Expo and React Native modules to handle ES modules
+    // Include @expo/vector-icons submodules (like MaterialIcons) to handle ES module imports
+    'node_modules/(?!(react-native|@react-native|@react-navigation|expo|@expo|@unimodules|unimodules|@react-native-community|@react-native-async-storage|@expo/vector-icons|expo-web-browser|expo-secure-store|expo-notifications|expo-constants|expo-router|expo-symbols|react-native-svg|react-native-circular-progress))',
   ],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json'],
   setupFiles: ['<rootDir>/src/__tests__/setupFiles.ts'],

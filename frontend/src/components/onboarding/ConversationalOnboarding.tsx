@@ -27,6 +27,7 @@ import {
   validateExperienceLevel,
 } from '../../utils/validation';
 import { logStep, logData, logError, logNavigation } from '../../utils/logger';
+import { useApiCallWithBanner } from '../../hooks/useApiCallWithBanner';
 
 const introTracker = {
   initial: false,
@@ -300,85 +301,110 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     setCurrentStep('initial');
   }, []);
 
+  // API call with error handling for initial questions
+  const { execute: executeGetInitialQuestions, loading: initialQuestionsApiLoading, ErrorBannerComponent: InitialQuestionsErrorBanner } = useApiCallWithBanner(
+    async (fullPersonalInfo: PersonalInfo, userProfileId: number | undefined, jwtToken: string | undefined) => {
+      return await trainingService.getInitialQuestions(fullPersonalInfo, userProfileId, jwtToken);
+    },
+    {
+      retryCount: 3,
+      onSuccess: async (response) => {
+        if (response.user_profile_id && response.user_profile_id !== authState.userProfile?.id) {
+          if (authState.userProfile) {
+            dispatch({
+              type: 'SET_USER_PROFILE',
+              payload: { ...authState.userProfile, id: response.user_profile_id },
+            });
+          } else {
+            // Wait for profile refresh before proceeding
+            await refreshUserProfile();
+          }
+        }
+
+        const sortedQuestions = [...(response.questions || [])].sort((a, b) => {
+          const orderA = a.order ?? 999;
+          const orderB = b.order ?? 999;
+          return orderA - orderB;
+        });
+
+        setState(prev => ({
+          ...prev,
+          initialQuestions: sortedQuestions,
+          initialQuestionsLoading: false,
+          currentInitialQuestionIndex: 0,
+          initialAiMessage: response.ai_message,
+        }));
+        
+        // CRITICAL FIX: Update profile in context with BOTH questions AND ai_message
+        // This ensures the new component instance has complete data
+        if (authState.userProfile) {
+          dispatch({
+            type: 'SET_USER_PROFILE',
+            payload: {
+              ...authState.userProfile,
+              initial_questions: sortedQuestions,
+              initial_ai_message: response.ai_message, // CRITICAL: Include AI message
+            },
+          });
+        } else if (response.user_profile_id) {
+          // If profile doesn't exist yet, refresh it first
+          await refreshUserProfile();
+          // After refresh, update the profile with questions and AI message
+          // Note: refreshUserProfile updates context via dispatch, but we need to ensure
+          // the profile has questions and AI message. The backend stores them in the database,
+          // so the refreshed profile should have them, but we update context to be sure.
+          // The new component instance will read from context which now has complete data.
+        }
+        
+        // Navigate to the dedicated initial-questions route after profile is updated
+        router.replace('/onboarding/initial-questions');
+        setRetryStep(null);
+        setOverlayTitle('Loading…');
+      },
+      onError: (error) => {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load questions';
+        setState(prev => ({
+          ...prev,
+          initialQuestionsLoading: false,
+          error: errorMessage,
+        }));
+        setRetryStep('initial');
+        onError(errorMessage);
+        setOverlayTitle('Loading…');
+      },
+    }
+  );
+
   // Simple function to load initial questions
   const loadInitialQuestions = useCallback(async () => {
     if (!state.personalInfo) {
       return;
     }
-    console.log('[Onboarding] loadInitialQuestions called');
+    logStep('loadInitialQuestions', 'started');
     setOverlayTitle('Analyzing your profile…');
     setState(prev => ({
       ...prev,
       initialQuestionsLoading: true,
     }));
 
-    try {
-      const fullPersonalInfo = {
-        ...state.personalInfo,
-        username: state.username,
-        goal_description: state.goalDescription,
-        experience_level: state.experienceLevel,
-      };
+    const fullPersonalInfo = {
+      ...state.personalInfo,
+      username: state.username,
+      goal_description: state.goalDescription,
+      experience_level: state.experienceLevel,
+    };
 
-      const jwtToken = authState.session?.access_token;
+    const jwtToken = authState.session?.access_token;
 
-      const response = await runWithProgress('initial', () =>
-        trainingService.getInitialQuestions(
-          fullPersonalInfo,
-          authState.userProfile?.id,
-          jwtToken
-        )
+    // Use the new error handling system
+    await runWithProgress('initial', async () => {
+      await executeGetInitialQuestions(
+        fullPersonalInfo,
+        authState.userProfile?.id,
+        jwtToken
       );
-
-      if (response.user_profile_id && response.user_profile_id !== authState.userProfile?.id) {
-        if (authState.userProfile) {
-          dispatch({
-            type: 'SET_USER_PROFILE',
-            payload: { ...authState.userProfile, id: response.user_profile_id },
-          });
-        } else {
-          await refreshUserProfile();
-        }
-      }
-
-      const sortedQuestions = [...(response.questions || [])].sort((a, b) => {
-        const orderA = a.order ?? 999;
-        const orderB = b.order ?? 999;
-        return orderA - orderB;
-      });
-
-      setState(prev => ({
-        ...prev,
-        initialQuestions: sortedQuestions,
-        initialQuestionsLoading: false,
-        currentInitialQuestionIndex: 0,
-        initialAiMessage: response.ai_message,
-      }));
-      if (authState.userProfile) {
-        dispatch({
-          type: 'SET_USER_PROFILE',
-          payload: {
-            ...authState.userProfile,
-            initial_questions: sortedQuestions,
-          },
-        });
-      }
-      // Navigate to the dedicated initial-questions route after successful generation
-      router.replace('/onboarding/initial-questions');
-      setRetryStep(null);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to load questions';
-      setState(prev => ({
-        ...prev,
-        initialQuestionsLoading: false,
-        error: errorMessage,
-      }));
-      setRetryStep('initial');
-      onError(errorMessage);
-    } finally {
-      setOverlayTitle('Loading…');
-    }
-  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, authState.session?.access_token, authState.userProfile, runWithProgress, dispatch, refreshUserProfile, onError]);
+    });
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, authState.session?.access_token, authState.userProfile, executeGetInitialQuestions, runWithProgress, dispatch, refreshUserProfile, onError]);
 
   // follow-up flow removed: feature deprecated and handled outside this flow
 
@@ -633,6 +659,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         progress={progressState.progress}
         title={overlayTitle}
       />
+      <InitialQuestionsErrorBanner />
       {renderCurrentStep()}
     </View>
   );

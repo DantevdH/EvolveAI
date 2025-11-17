@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors } from '../../../constants/colors';
+import { colors, createColorWithOpacity } from '../../../constants/colors';
 import { Exercise } from '../../../types/training';
 
 interface CurrentExerciseDisplayProps {
@@ -23,27 +23,31 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
     backgroundColor: colors.card,
-    marginHorizontal: 16,
+    marginHorizontal: 24,
     marginTop: 16,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: colors.overlay,
-    shadowOffset: { width: 0, height: 1 },
+    borderWidth: 1.5,
+    borderColor: createColorWithOpacity(colors.secondary, 0.2),
+    shadowColor: createColorWithOpacity(colors.secondary, 0.1),
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
-    shadowRadius: 3,
+    shadowRadius: 4,
     elevation: 2,
   },
   label: {
-    fontSize: 14,
+    fontSize: 12,
     color: colors.muted,
     marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    fontWeight: '600',
   },
   name: {
     fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '700',
+    color: colors.primary,
     marginBottom: 4,
+    letterSpacing: 0.3,
   },
   details: {
     fontSize: 14,

@@ -12,14 +12,13 @@ import { DailyTrainingDetailProps } from '../../../types/training';
 import DayHeader from './DayHeader';
 import TrainingCompletionBadge from './TrainingCompletionBadge';
 import AddExerciseButton from './AddExerciseButton';
+import { getTrainingDayStatus } from '../../../utils/trainingDateUtils';
 
 const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
   dailyTraining,
-  isPastWeek,
   onExerciseToggle,
   onSetUpdate,
   onExerciseDetail,
-  onOneRMCalculator,
   onSwapExercise,
   onReopenTraining,
   onAddExercise,
@@ -33,15 +32,10 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
   hideExerciseInfoButton = false,
   exerciseCompactMode = false,
 }) => {
-  const isLocked = dailyTraining?.completed || false;
-  
-  // Check if this is today's workout
-  const today = new Date();
-  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-  const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, etc.
-  const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
-  const todayName = dayNames[mondayFirstIndex];
-  const isTodaysWorkout = dailyTraining?.dayOfWeek === todayName;
+  // Use isEditable from dailyTraining (computed based on scheduledDate)
+  const isEditable = dailyTraining?.isEditable ?? true; // Default to true for legacy plans without scheduledDate
+  const isLocked = !isEditable || dailyTraining?.completed || false;
+  const dayStatus = getTrainingDayStatus(dailyTraining);
   
   if (!dailyTraining) {
     return (
@@ -55,12 +49,12 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
     return (
       <View style={styles.container}>
         <View style={styles.trainingCard}>
-          <DayHeader
-            dayOfWeek={dailyTraining.dayOfWeek}
-            isTodaysWorkout={isTodaysWorkout}
-            isPastWeek={isPastWeek}
-            isRestDay={true}
-          />
+        <DayHeader
+          dayOfWeek={dailyTraining.dayOfWeek}
+          isEditable={isEditable}
+          dayStatus={dayStatus}
+          isRestDay={true}
+        />
 
           {/* Rest Day Content */}
           <View style={styles.restDayContent}>
@@ -81,20 +75,21 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
         {/* Day Header */}
         <DayHeader
           dayOfWeek={dailyTraining.dayOfWeek}
-          isTodaysWorkout={isTodaysWorkout}
-          isPastWeek={isPastWeek}
+          isEditable={isEditable}
+          dayStatus={dayStatus}
           isRestDay={false}
           hideDayName={hideDayName}
         />
 
         {/* Training completion status - At top for immediate visibility */}
         <TrainingCompletionBadge
-          completed={dailyTraining.completed}
-          onReopenTraining={onReopenTraining}
+          completed={dailyTraining.completed ?? false}
+          onReopenTraining={dayStatus === 'past' ? undefined : onReopenTraining}
         />
 
         {/* Exercises */}
         <View style={styles.exercisesContainer}>
+
           {dailyTraining.exercises
             .sort((a, b) => (a.executionOrder || a.order || 0) - (b.executionOrder || b.order || 0))
             .map((exercise, index) => {
@@ -114,9 +109,8 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
                       onExerciseDetail(exercise.exercise);
                     }
                   }}
-                  onOneRMCalculator={onOneRMCalculator}
                   onSwapExercise={onSwapExercise && exercise.exercise ? () => onSwapExercise(exercise.exercise!) : undefined}
-                  onRemoveExercise={!isLocked && isTodaysWorkout && onRemoveExercise ? () => {
+                  onRemoveExercise={!isLocked && onRemoveExercise ? () => {
                     onRemoveExercise(exercise.id, isEndurance);
                   } : undefined}
                   isLocked={isLocked}
@@ -128,8 +122,8 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
               );
             })}
           
-          {/* Add Exercise Button - Only show for today's workout */}
-          {!isLocked && isTodaysWorkout && onAddExercise && (
+          {/* Add Exercise Button - Only show if editable */}
+          {!isLocked && onAddExercise && (
             <AddExerciseButton onPress={onAddExercise} />
           )}
         </View>
@@ -186,6 +180,20 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
     marginBottom: 8,
+  },
+  lockMessageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+    backgroundColor: createColorWithOpacity(colors.muted, 0.1),
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  lockMessage: {
+    fontSize: 13,
+    color: colors.muted,
+    flex: 1,
   },
 });
 

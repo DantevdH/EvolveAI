@@ -38,7 +38,6 @@ export const AIRecommendationsList: React.FC<AIRecommendationsListProps> = ({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerText}>AI-Powered Suggestions</Text>
         <Text style={styles.subtext}>
           Based on your current exercise and training goals
         </Text>
@@ -69,10 +68,6 @@ export const AIRecommendationsList: React.FC<AIRecommendationsListProps> = ({
                 <Ionicons name="swap-horizontal" size={20} color={colors.primary} />
               </TouchableOpacity>
             </View>
-
-            {recommendation.reason && (
-              <Text style={styles.reason}>{recommendation.reason}</Text>
-            )}
 
             <View style={styles.muscleInfo}>
               <Text style={styles.muscleLabel}>Primary Muscles:</Text>
@@ -159,13 +154,6 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: colors.primary + '20',
     borderRadius: 8,
-  },
-  reason: {
-    fontSize: 14,
-    color: colors.text,
-    fontStyle: 'italic',
-    marginBottom: 12,
-    lineHeight: 20,
   },
   muscleInfo: {
     flexDirection: 'row',

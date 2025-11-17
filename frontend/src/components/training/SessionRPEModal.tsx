@@ -1,7 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
+import { validateRPE } from '../../utils/validation';
+import { logger } from '../../utils/logger';
 
 interface SessionRPEModalProps {
   visible: boolean;
@@ -29,8 +31,24 @@ const SessionRPEModal: React.FC<SessionRPEModalProps> = ({
   };
 
   const handleSelect = (rpe: number) => {
+    // Validate RPE before selection (strict mode - block invalid user input)
+    const validationResult = validateRPE(rpe, { allowReplacement: false });
+    
+    // If validation fails, show error and block the operation
+    if (!validationResult.isValid) {
+      Alert.alert('Invalid RPE', validationResult.errorMessage || 'RPE must be between 1 and 5');
+      logger.error('Invalid RPE value from user input', {
+        invalidValue: rpe,
+        error: validationResult.errorMessage
+      });
+      return;
+    }
+    
+    // Use validated value
+    const finalRPE = validationResult.rpe || rpe;
+    
     // Immediately save on selection - no confirm button needed
-    onSelect(rpe);
+    onSelect(finalRPE);
   };
 
   return (

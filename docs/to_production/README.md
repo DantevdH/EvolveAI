@@ -54,9 +54,8 @@ This directory contains comprehensive production readiness documentation for all
   - Exercise detail views
   - Daily feedback collection
   - Session RPE tracking
-  - OneRM calculator
   - Journey map visualization
-  - Performance monitoring
+  - Performance monitoring / kpi calculation with unit testing
 
 ### 7. Frontend - Insights
 - **[06_FRONTEND_INSIGHTS.md](./06_FRONTEND_INSIGHTS.md)** - Insights frontend production checklist including:
@@ -84,16 +83,7 @@ This directory contains comprehensive production readiness documentation for all
   - Conversation history management
   - Real-time updates
 
-### 10. Frontend - Home
-- **[09_FRONTEND_HOME.md](./09_FRONTEND_HOME.md)** - Home screen production checklist including:
-  - Welcome header
-  - Progress summary
-  - Quick actions
-  - Recent activity
-  - AI insights cards
-  - Today's training overview
-
-### 11. Infrastructure & DevOps
+### 10. Infrastructure & DevOps
 - **[10_INFRASTRUCTURE.md](./10_INFRASTRUCTURE.md)** - Infrastructure and DevOps production checklist including:
   - Deployment strategy
   - CI/CD pipelines
@@ -103,7 +93,7 @@ This directory contains comprehensive production readiness documentation for all
   - Scaling considerations
   - Security hardening
 
-### 12. Testing
+### 11. Testing
 - **[11_TESTING.md](./11_TESTING.md)** - Testing production checklist including:
   - Unit tests
   - Integration tests
@@ -112,7 +102,7 @@ This directory contains comprehensive production readiness documentation for all
   - Security testing
   - Test coverage requirements
 
-### 13. Security
+### 12. Security
 - **[12_SECURITY.md](./12_SECURITY.md)** - Security production checklist including:
   - Authentication and authorization
   - Data encryption

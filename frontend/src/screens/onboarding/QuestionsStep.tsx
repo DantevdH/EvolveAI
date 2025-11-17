@@ -191,12 +191,14 @@ export const QuestionsStep: React.FC<QuestionsStepProps> = ({
     setShowAnswerInterface(answeredQuestions.has(currentIndex));
   }, [answeredQuestions, currentIndex, introAlreadyCompleted, onIntroComplete]);
 
-  if (!hasQuestions) {
-    return null;
-  }
-
-  if (!currentQuestion) {
-    return null;
+  // FIX: Return minimal structure instead of null when questions are empty
+  // Loading spinner is already shown at the top level
+  if (!hasQuestions || !currentQuestion) {
+    return (
+      <OnboardingCard title="" subtitle="" scrollable>
+        <View style={styles.container} />
+      </OnboardingCard>
+    );
   }
 
   if (showIntroMessage) {

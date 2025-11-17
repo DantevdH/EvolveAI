@@ -14,6 +14,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../constants/colors';
 import { useAuth } from '../../context/AuthContext';
+import { validateEnduranceSession } from '../../utils/validation';
+import { logger } from '../../utils/logger';
 import { SportTypePicker } from '../addExerciseModal/SportTypePicker';
 import { HeartRateZoneSelector } from '../addExerciseModal/HeartRateZoneSelector';
 import { DurationInput } from './DurationInput';
@@ -39,30 +41,29 @@ const AddEnduranceSessionModal: React.FC<AddEnduranceSessionModalProps> = ({
   const [showUnitPicker, setShowUnitPicker] = useState(false);
 
   const handleAdd = () => {
-    if (!sportType) {
-      Alert.alert('Validation Error', 'Please select a sport type');
-      return;
-    }
-
-    const volume = parseFloat(duration);
-    if (isNaN(volume) || volume <= 0) {
-      Alert.alert('Validation Error', 'Please enter a valid duration');
-      return;
-    }
-
-    if (heartRateZone < 1 || heartRateZone > 5) {
-      Alert.alert('Validation Error', 'Heart rate zone must be between 1 and 5');
-      return;
-    }
-
-    onAddSession({
+    // Validate endurance session data (strict mode - block invalid user input)
+    const validationResult = validateEnduranceSession({
       sportType,
-      trainingVolume: volume,
+      trainingVolume: duration,
       unit,
       heartRateZone,
-      name: name.trim() || undefined,
-      description: description.trim() || undefined,
-    });
+      name,
+      description
+    }, { allowReplacement: false });
+
+    // If validation fails, show error and block the operation
+    if (!validationResult.isValid) {
+      Alert.alert('Validation Error', validationResult.errorMessage || 'Please check your session data');
+      logger.error('Invalid endurance session data from user input', {
+        originalValues: { sportType, trainingVolume: duration, unit, heartRateZone, name, description },
+        error: validationResult.errorMessage
+      });
+      return;
+    }
+
+    // Use validated values
+    const sessionData = validationResult.session!;
+    onAddSession(sessionData);
 
     // Reset form
     resetForm();

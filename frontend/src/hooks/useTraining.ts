@@ -7,20 +7,25 @@ import { ExerciseSwapService } from '../services/exerciseSwapService';
 import { supabase } from '../config/supabase';
 import SessionRPEModal from '../components/training/SessionRPEModal';
 import { colors } from '../constants/colors';
+import { logger } from '../utils/logger';
+import { useApiCallWithBanner } from './useApiCallWithBanner';
+import { validateTrainingPlan, validateExerciseSwap, validateRPE } from '../utils/validation';
 import {
   TrainingState,
   TrainingPlan,
   DailyTraining,
+  TrainingExercise,
+  WeeklySchedule,
   Exercise,
   ProgressRingData,
   WeekNavigationData,
   DayIndicator,
   ExerciseDetailTabs,
-  OneRMCalculator,
   RestTimer,
   TrainingProgress,
   UseTrainingReturn
 } from '../types/training';
+import { isTrainingDayEditable, getTrainingDayStatus } from '../utils/trainingDateUtils';
 
 const initialState: TrainingState = {
   currentWeekSelected: 1,
@@ -63,9 +68,23 @@ export const useTraining = (): UseTrainingReturn => {
   // Initialize training data
   useEffect(() => {
     if (authState.userProfile && authState.trainingPlan) {
+      // Validate training plan structure before using
+      const validationResult = validateTrainingPlan(authState.trainingPlan);
+      if (!validationResult.isValid) {
+        logger.error('Invalid training plan structure', {
+          error: validationResult.errorMessage,
+          plan: authState.trainingPlan
+        });
+        setTrainingState(prev => ({
+          ...prev,
+          error: validationResult.errorMessage || 'Invalid training plan structure'
+        }));
+        return;
+      }
+
       // Use the training plan directly (new TrainingService format)
-      console.log('✅ useTraining: Using TrainingService format directly');
-      setTrainingPlan(authState.trainingPlan);
+      logger.info('Training plan initialized from auth state');
+      setTrainingPlan(validationResult.plan || authState.trainingPlan);
       
       // Only auto-select today's training on first initialization, not on updates
       if (!hasInitialized.current) {
@@ -116,9 +135,13 @@ export const useTraining = (): UseTrainingReturn => {
     const isCompleted = dailyTraining.exercises.length > 0 && 
                        dailyTraining.exercises.every(exercise => exercise.completed);
     
+    // Determine if this day is editable based on scheduledDate
+    const isEditable = isTrainingDayEditable(dailyTraining);
+    
     return {
       ...dailyTraining,
-      completed: isCompleted
+      completed: isCompleted,
+      isEditable // Add editability status
     };
   }, [trainingPlan, trainingState.currentWeekSelected, trainingState.selectedDayIndex]);
 
@@ -219,12 +242,6 @@ export const useTraining = (): UseTrainingReturn => {
     history: false
   };
 
-  const oneRMCalculator: OneRMCalculator = {
-    weight: 0,
-    reps: 0,
-    oneRM: 0,
-    isVisible: false
-  };
 
   const trainingProgress = useMemo((): TrainingProgress => {
     if (!selectedDayTraining) {
@@ -289,11 +306,28 @@ export const useTraining = (): UseTrainingReturn => {
       const currentWeek = trainingPlan?.weeklySchedules.find(
         week => week.weekNumber === trainingState.currentWeekSelected
       );
-      const currentDailyTraining = currentWeek?.dailyTrainings[trainingState.selectedDayIndex];
+      const dayIndex = trainingState.selectedDayIndex === -1 ? 0 : trainingState.selectedDayIndex;
+      const currentDailyTraining = currentWeek?.dailyTrainings[dayIndex];
+      
+      // Check if day is editable based on scheduledDate
+      if (currentDailyTraining && !isTrainingDayEditable(currentDailyTraining || null)) {
+        logger.warn('Cannot edit locked training day', {
+          action: 'toggleExerciseCompletion',
+          scheduledDate: currentDailyTraining.scheduledDate
+        });
+        setTrainingState(prev => ({
+          ...prev,
+          error: 'This workout is locked. You can only edit today\'s workout.'
+        }));
+        return;
+      }
       
       if (currentDailyTraining?.completed) {
         // Training is completed and locked - don't allow changes
-        console.log('🔒 Training is completed and locked. Use reopenTraining to make changes.');
+        logger.info('Training is completed and locked', {
+          dailyTrainingId: currentDailyTraining.id,
+          action: 'toggleExerciseCompletion'
+        });
         return;
       }
 
@@ -341,7 +375,9 @@ export const useTraining = (): UseTrainingReturn => {
           
           if (allExercisesCompleted && !updatedCurrentDailyTraining.isRestDay) {
             // All exercises completed - show RPE modal first
-            console.log('🎉 All exercises completed! Showing RPE modal...');
+            logger.info('All exercises completed, showing RPE modal', {
+              dailyTrainingId: updatedCurrentDailyTraining.id
+            });
             
             // Only save temporary exercises to DB (existing exercises will be handled by saveDailyTrainingExercises)
             // This ensures temporary exercises have real IDs before the final save
@@ -368,12 +404,16 @@ export const useTraining = (): UseTrainingReturn => {
                     const exerciseToUpdate = temporaryExercises[index];
                     
                     // Preserve the endurance_ prefix for endurance sessions
-                    const wasEnduranceSession = exerciseToUpdate.id.startsWith('endurance_temp_') || exerciseToUpdate.isEndurance;
+                    const wasEnduranceSession = exerciseToUpdate.id.startsWith('endurance_temp_') || !!exerciseToUpdate.enduranceSession;
                     const newIdString = wasEnduranceSession 
                       ? `endurance_${result.newId}` 
                       : result.newId.toString();
                     
-                    console.log(`✅ Temporary exercise ${exerciseToUpdate.id} saved with new DB ID: ${newIdString}`);
+                    logger.info('Temporary exercise saved with new DB ID', {
+                      oldId: exerciseToUpdate.id,
+                      newId: newIdString,
+                      isEndurance: wasEnduranceSession
+                    });
                     
                     // Update the plan with the new ID
                     finalPlan = {
@@ -407,7 +447,7 @@ export const useTraining = (): UseTrainingReturn => {
                   pendingCompletionDailyTrainingId: updatedCurrentDailyTraining.id
                 }));
               }).catch(error => {
-                console.error('❌ Error saving temporary exercises:', error);
+                logger.error('Error saving temporary exercises', error);
                 setTrainingState(prev => ({
                   ...prev,
                   error: 'Failed to save temporary exercises'
@@ -468,6 +508,23 @@ export const useTraining = (): UseTrainingReturn => {
         return;
       }
 
+      // Check if the selected day is editable
+      const currentDay = trainingPlan.weeklySchedules
+        .find(week => week.weekNumber === trainingState.currentWeekSelected)
+        ?.dailyTrainings[trainingState.selectedDayIndex === -1 ? 0 : trainingState.selectedDayIndex];
+      
+      if (currentDay && !isTrainingDayEditable(currentDay)) {
+        logger.warn('Cannot edit locked training day', {
+          action: 'updateSetDetails',
+          scheduledDate: currentDay.scheduledDate
+        });
+        setTrainingState(prev => ({
+          ...prev,
+          error: 'This workout is locked. You can only edit today\'s workout.'
+        }));
+        return;
+      }
+
       // Find the exercise to get current sets and default values
       const exercise = trainingPlan.weeklySchedules
         .flatMap(week => week.dailyTrainings)
@@ -475,7 +532,11 @@ export const useTraining = (): UseTrainingReturn => {
         .find(ex => ex.id === exerciseId);
 
       if (!exercise || !exercise.sets) {
-        console.error('Exercise not found:', exerciseId, 'or sets missing:', !exercise?.sets);
+        logger.error('Exercise not found or sets missing', {
+          exerciseId,
+          hasExercise: !!exercise,
+          hasSets: !!exercise?.sets
+        });
         setTrainingState(prev => ({
           ...prev,
           error: 'Exercise not found'
@@ -483,7 +544,11 @@ export const useTraining = (): UseTrainingReturn => {
         return;
       }
 
-      console.log(`Updating set: exerciseId=${exerciseId}, setIndex=${setIndex}, currentSets=${exercise.sets.length}`);
+      logger.debug('Updating set', {
+        exerciseId,
+        setIndex,
+        currentSetsCount: exercise.sets.length
+      });
 
       let updatedSets: typeof exercise.sets;
       
@@ -549,17 +614,23 @@ export const useTraining = (): UseTrainingReturn => {
           }))
         };
         
-        console.log(`Set update successful: newSets=${updatedSets.length}`);
+        logger.debug('Set update successful', {
+          exerciseId,
+          newSetsCount: updatedSets.length
+        });
         updateTrainingPlan(updatedPlan);
       } else {
-        console.error('Set update failed:', result.error);
+        logger.error('Set update failed', {
+          exerciseId,
+          error: result.error
+        });
         setTrainingState(prev => ({
           ...prev,
           error: result.error || 'Failed to update set details'
         }));
       }
     } catch (error) {
-      console.error('Error in updateSetDetails:', error);
+      logger.error('Error in updateSetDetails', error);
       setTrainingState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Failed to update set details'
@@ -586,17 +657,11 @@ export const useTraining = (): UseTrainingReturn => {
 
   const switchExerciseDetailTab = useCallback((tab: keyof ExerciseDetailTabs) => {
     // This would be implemented with local state for tab switching
-    console.log('Switching to tab:', tab);
+    logger.debug('Switching exercise detail tab', { tab });
   }, []);
 
-  const toggleOneRMCalculator = useCallback(() => {
-    // This would be implemented with local state for calculator visibility
-    console.log('Toggling 1RM calculator');
-  }, []);
-
-  const calculateOneRM = useCallback((weight: number, reps: number): number => {
-    return TrainingService.calculateOneRM(weight, reps);
-  }, []);
+  // Note: TrainingService.calculateOneRM exists but is not currently used.
+  // Analytics services use their own inline calculations or exerciseAnalyticsEngine.calculateEstimated1RM
 
   const startRestTimer = useCallback((duration: number, exerciseName: string) => {
     setRestTimer({
@@ -662,6 +727,20 @@ export const useTraining = (): UseTrainingReturn => {
   const reopenTraining = useCallback(() => {
     if (!selectedDayTraining) return;
 
+    // Check if the workout is in the past - don't allow reopening past workouts
+    const dayStatus = getTrainingDayStatus(selectedDayTraining);
+    if (dayStatus === 'past') {
+      logger.warn('Cannot reopen past workout', {
+        scheduledDate: selectedDayTraining.scheduledDate,
+        dayStatus
+      });
+      setTrainingState(prev => ({
+        ...prev,
+        error: 'You cannot reopen past workouts. Focus on today\'s training! 💪'
+      }));
+      return;
+    }
+
     // Show confirmation dialog
     setTrainingState(prev => ({
       ...prev,
@@ -710,7 +789,10 @@ export const useTraining = (): UseTrainingReturn => {
         const tempExercisesCount = selectedDayTraining.exercises.length - exercisesToUpdate.length;
         
         if (tempExercisesCount > 0) {
-          console.log(`🗑️ Removing ${tempExercisesCount} temporary exercises that were never saved`);
+          logger.info('Removing temporary exercises that were never saved', {
+            count: tempExercisesCount,
+            dailyTrainingId: selectedDayTraining.id
+          });
           const planWithoutTempExercises = {
             ...updatedPlan,
             weeklySchedules: updatedPlan.weeklySchedules.map(week => ({
@@ -734,7 +816,10 @@ export const useTraining = (): UseTrainingReturn => {
         if (exercisesToUpdate.length > 0) {
           const result = await TrainingService.bulkResetExerciseCompletion(exercisesToUpdate);
           if (!result.success) {
-            console.warn(`⚠️ Failed to bulk reset exercises: ${result.error}`);
+            logger.warn('Failed to bulk reset exercises', {
+              error: result.error,
+              exerciseCount: exercisesToUpdate.length
+            });
             // Don't throw - reopening should still succeed even if DB update fails
           }
         }
@@ -746,9 +831,12 @@ export const useTraining = (): UseTrainingReturn => {
         showReopenDialog: false
       }));
 
-      console.log(`🔓 Training reopened - exercises are now unlocked for editing${resetExercises ? ' (all exercises reset)' : ' (exercise completion preserved)'}`);
+      logger.info('Training reopened', {
+        dailyTrainingId: selectedDayTraining?.id,
+        resetExercises
+      });
     } catch (error) {
-      console.error('Error reopening training:', error);
+      logger.error('Error reopening training', error);
       setTrainingState(prev => ({
         ...prev,
         error: 'Failed to reopen training',
@@ -775,12 +863,24 @@ export const useTraining = (): UseTrainingReturn => {
     setExerciseToSwap(null);
   }, []);
 
-  const swapExercise = useCallback(async (exerciseId: string, newExercise: Exercise) => {
-    if (!trainingPlan) return;
+  // API call with error handling for swap exercise
+  const { execute: executeSwapExercise, ErrorBannerComponent: SwapExerciseErrorBanner } = useApiCallWithBanner(
+    async (exerciseId: string, newExercise: Exercise, trainingPlan: TrainingPlan) => {
+      // Update database
+      const { error } = await supabase
+        .from('strength_exercise')
+        .update({
+          exercise_id: parseInt(newExercise.id),
+          completed: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', isNaN(Number(exerciseId)) ? exerciseId : Number(exerciseId));
 
-    try {
-      
-      // Update both local and auth context state immediately
+      if (error) {
+        throw new Error(error.message || 'Failed to update exercise in database');
+      }
+
+      // Update both local and auth context state
       const updatedPlan = {
         ...trainingPlan,
         weeklySchedules: trainingPlan.weeklySchedules.map(week => ({
@@ -808,76 +908,79 @@ export const useTraining = (): UseTrainingReturn => {
         }))
       };
 
-      // Update database
-      const { error } = await supabase
-        .from('strength_exercise')
-        .update({
-          exercise_id: parseInt(newExercise.id),
-          completed: false,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', isNaN(Number(exerciseId)) ? exerciseId : Number(exerciseId));
-
-      if (error) {
-        console.error('❌ Error updating exercise in database:', error);
-        setTrainingState(prev => ({
-          ...prev,
-          error: 'Failed to swap exercise'
-        }));
-        return;
-      }
-
-      // Update both local and auth context training plans
       updateTrainingPlan(updatedPlan);
-      
-      
-      // Hide the modal
-      hideExerciseSwapModal();
-      
-    } catch (error) {
-      console.error('💥 Error swapping exercise:', error);
-      setTrainingState(prev => ({
-        ...prev,
-        error: 'Failed to swap exercise'
-      }));
+      return updatedPlan;
+    },
+    {
+      retryCount: 3,
+      onSuccess: () => {
+        hideExerciseSwapModal();
+      },
     }
-  }, [trainingPlan, updateTrainingPlan, hideExerciseSwapModal]);
+  );
 
-  const handleRPESelection = useCallback(async (rpe: number) => {
-    if (!trainingState.pendingCompletionDailyTrainingId) return;
+  const swapExercise = useCallback(async (exerciseId: string, newExercise: Exercise) => {
+    if (!trainingPlan) return;
 
-    try {
+    // Check if the selected day is editable
+    const currentDay = trainingPlan.weeklySchedules
+      .find(week => week.weekNumber === trainingState.currentWeekSelected)
+      ?.dailyTrainings[trainingState.selectedDayIndex === -1 ? 0 : trainingState.selectedDayIndex];
+    
+    if (currentDay && !isTrainingDayEditable(currentDay)) {
+      logger.warn('Cannot edit locked training day', {
+        action: 'swapExercise',
+        scheduledDate: currentDay.scheduledDate
+      });
       setTrainingState(prev => ({
         ...prev,
-        isLoading: true,
-        error: null,
-        showRPEModal: false
+        error: 'This workout is locked. You can only edit today\'s workout.'
       }));
+      return;
+    }
 
-      const dailyTrainingId = trainingState.pendingCompletionDailyTrainingId;
-      
-      // Get current exercises from selectedDayTraining (includes all added/removed exercises)
-      const currentDailyTraining = trainingPlan?.weeklySchedules
-        .find(week => week.weekNumber === trainingState.currentWeekSelected)
-        ?.dailyTrainings.find(daily => daily.id === dailyTrainingId);
-      
-      const exercises = currentDailyTraining?.exercises || [];
-      
-      // Complete the daily training with session RPE and exercises
+    // Validate exercise swap data
+    const validationResult = validateExerciseSwap(newExercise);
+    if (!validationResult.isValid) {
+      logger.error('Invalid exercise swap data', {
+        error: validationResult.errorMessage,
+        exercise: newExercise
+      });
+      setTrainingState(prev => ({
+        ...prev,
+        error: validationResult.errorMessage || 'Invalid exercise data'
+      }));
+      return;
+    }
+
+    await executeSwapExercise(exerciseId, validationResult.exercise || newExercise, trainingPlan);
+  }, [trainingPlan, executeSwapExercise, hideExerciseSwapModal]);
+
+  // API call with error handling for complete daily training (persists add/remove operations)
+  const { execute: executeCompleteTraining, ErrorBannerComponent: CompleteTrainingErrorBanner } = useApiCallWithBanner(
+    async (dailyTrainingId: string, rpe: number, exercises: TrainingExercise[], currentTrainingPlan: TrainingPlan) => {
       const result = await TrainingService.completeDailyTraining(
         dailyTrainingId,
         rpe,
-        exercises // Pass exercises array to save all changes
+        exercises
       );
 
-      if (result.success) {
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to complete training');
+      }
+
+      return { result, rpe, dailyTrainingId, currentTrainingPlan }; // Return all needed data for onSuccess
+    },
+    {
+      retryCount: 3,
+      onSuccess: async ({ result, rpe, dailyTrainingId, currentTrainingPlan }) => {
         // Update local state with completedAt timestamp and sessionRPE
         const now = new Date();
         let updatedPlan = {
-          ...trainingPlan!,
-          weeklySchedules: trainingPlan!.weeklySchedules.map(week => ({
+          ...currentTrainingPlan,
+          weeklySchedules: currentTrainingPlan.weeklySchedules.map((week: WeeklySchedule) => ({
             ...week,
-            dailyTrainings: week.dailyTrainings.map(daily =>
+            dailyTrainings: week.dailyTrainings.map((daily: DailyTraining) =>
               daily.id === dailyTrainingId
                 ? { ...daily, completed: true, completedAt: now, sessionRPE: rpe }
                 : daily
@@ -891,13 +994,13 @@ export const useTraining = (): UseTrainingReturn => {
           // Update exercises with new IDs from the database
           updatedPlan = {
             ...updatedPlan,
-            weeklySchedules: updatedPlan.weeklySchedules.map(week => ({
+            weeklySchedules: updatedPlan.weeklySchedules.map((week: WeeklySchedule) => ({
               ...week,
-              dailyTrainings: week.dailyTrainings.map(daily =>
+              dailyTrainings: week.dailyTrainings.map((daily: DailyTraining) =>
                 daily.id === dailyTrainingId
                   ? {
                       ...daily,
-                      exercises: daily.exercises.map(exercise => {
+                      exercises: daily.exercises.map((exercise: TrainingExercise) => {
                         const newId = exerciseIdMap.get(exercise.id);
                         return newId ? { ...exercise, id: newId } : exercise;
                       })
@@ -906,7 +1009,10 @@ export const useTraining = (): UseTrainingReturn => {
               )
             }))
           };
-          console.log(`✅ Updated ${exerciseIdMap.size} exercise IDs after completion`);
+          logger.info('Updated exercise IDs after completion', {
+            count: exerciseIdMap.size,
+            dailyTrainingId
+          });
         }
         
         // Update both local and auth context training plans
@@ -921,23 +1027,72 @@ export const useTraining = (): UseTrainingReturn => {
 
         // Cancel today's training reminder since training is completed
         await NotificationService.cancelTrainingReminder();
-      } else {
+      },
+      onError: (error) => {
         setTrainingState(prev => ({
           ...prev,
-          error: result.error || 'Failed to complete training',
+          error: error instanceof Error ? error.message : 'Failed to complete training',
           isLoading: false,
           pendingCompletionDailyTrainingId: null
         }));
-      }
-    } catch (error) {
+      },
+    }
+  );
+
+  const handleRPESelection = useCallback(async (rpe: number) => {
+    if (!trainingState.pendingCompletionDailyTrainingId) return;
+
+    // Validate RPE before proceeding (strict mode - block invalid user input)
+    const rpeValidation = validateRPE(rpe, { allowReplacement: false });
+    
+    // If validation fails, show error and block the operation
+    if (!rpeValidation.isValid) {
+      logger.error('Invalid RPE value from user input', {
+        rpe,
+        error: rpeValidation.errorMessage
+      });
       setTrainingState(prev => ({
         ...prev,
-        error: 'Failed to complete training',
+        error: rpeValidation.errorMessage || 'Invalid RPE value',
+        showRPEModal: false,
+        pendingCompletionDailyTrainingId: null
+      }));
+      return;
+    }
+
+    setTrainingState(prev => ({
+      ...prev,
+      isLoading: true,
+      error: null,
+      showRPEModal: false
+    }));
+
+    const dailyTrainingId = trainingState.pendingCompletionDailyTrainingId;
+    
+    // Get current exercises from selectedDayTraining (includes all added/removed exercises)
+    const currentDailyTraining = trainingPlan?.weeklySchedules
+      .find(week => week.weekNumber === trainingState.currentWeekSelected)
+      ?.dailyTrainings.find(daily => daily.id === dailyTrainingId);
+    
+    const exercises = currentDailyTraining?.exercises || [];
+    
+    if (!trainingPlan) {
+      setTrainingState(prev => ({
+        ...prev,
+        error: 'Training plan not available',
         isLoading: false,
         pendingCompletionDailyTrainingId: null
       }));
+      return;
     }
-  }, [trainingState.pendingCompletionDailyTrainingId, trainingPlan, updateTrainingPlan]);
+    
+    // Use validated RPE value
+    const validatedRPE = rpeValidation.rpe || rpe;
+    
+    // Use the new error handling system
+    // Success and error handling is now in onSuccess/onError callbacks of useApiCallWithBanner
+    await executeCompleteTraining(dailyTrainingId, validatedRPE, exercises, trainingPlan);
+  }, [trainingState.pendingCompletionDailyTrainingId, trainingPlan, trainingState.currentWeekSelected, executeCompleteTraining]);
 
   const handleRPEModalClose = useCallback(() => {
     setTrainingState(prev => ({
@@ -952,6 +1107,23 @@ export const useTraining = (): UseTrainingReturn => {
     dailyTrainingId: string
   ) => {
     try {
+      // Check if the selected day is editable
+      const currentDay = trainingPlan?.weeklySchedules
+        .find(week => week.weekNumber === trainingState.currentWeekSelected)
+        ?.dailyTrainings.find(daily => daily.id === dailyTrainingId);
+      
+      if (currentDay && !isTrainingDayEditable(currentDay)) {
+        logger.warn('Cannot edit locked training day', {
+          action: 'addExercise',
+          scheduledDate: currentDay.scheduledDate
+        });
+        setTrainingState(prev => ({
+          ...prev,
+          error: 'This workout is locked. You can only edit today\'s workout.'
+        }));
+        return;
+      }
+
       // Check if training is completed/locked - if so, don't allow add
       const currentWeek = trainingPlan?.weeklySchedules.find(
         week => week.weekNumber === trainingState.currentWeekSelected
@@ -961,7 +1133,10 @@ export const useTraining = (): UseTrainingReturn => {
       );
       
       if (!currentDailyTraining) {
-        console.error('Daily training not found');
+        logger.error('Daily training not found', {
+          dailyTrainingId,
+          weekNumber: trainingState.currentWeekSelected
+        });
         return;
       }
 
@@ -973,12 +1148,17 @@ export const useTraining = (): UseTrainingReturn => {
       const todayName = dayNames[mondayFirstIndex];
       
       if (currentDailyTraining.dayOfWeek !== todayName) {
-        console.log('❌ Can only add exercises to today\'s workout');
+        logger.info('Cannot add exercises - not today\'s workout', {
+          requestedDay: currentDailyTraining.dayOfWeek,
+          today: todayName
+        });
         return;
       }
 
       if (currentDailyTraining.completed) {
-        console.log('🔒 Training is completed and locked. Cannot add exercises.');
+        logger.info('Cannot add exercises - training is completed and locked', {
+          dailyTrainingId: currentDailyTraining.id
+        });
         return;
       }
 
@@ -1024,7 +1204,7 @@ export const useTraining = (): UseTrainingReturn => {
       // Update auth context training plan
       updateTrainingPlan(updatedPlan);
     } catch (error) {
-      console.error('Error adding exercise:', error);
+      logger.error('Error adding exercise', error);
       setTrainingState(prev => ({
         ...prev,
         error: 'Failed to add exercise'
@@ -1044,6 +1224,23 @@ export const useTraining = (): UseTrainingReturn => {
     dailyTrainingId: string
   ) => {
     try {
+      // Check if the selected day is editable
+      const currentDay = trainingPlan?.weeklySchedules
+        .find(week => week.weekNumber === trainingState.currentWeekSelected)
+        ?.dailyTrainings.find(daily => daily.id === dailyTrainingId);
+      
+      if (currentDay && !isTrainingDayEditable(currentDay)) {
+        logger.warn('Cannot edit locked training day', {
+          action: 'addEnduranceSession',
+          scheduledDate: currentDay.scheduledDate
+        });
+        setTrainingState(prev => ({
+          ...prev,
+          error: 'This workout is locked. You can only edit today\'s workout.'
+        }));
+        return;
+      }
+
       // Check if training is completed/locked - if so, don't allow add
       const currentWeek = trainingPlan?.weeklySchedules.find(
         week => week.weekNumber === trainingState.currentWeekSelected
@@ -1053,24 +1250,17 @@ export const useTraining = (): UseTrainingReturn => {
       );
       
       if (!currentDailyTraining) {
-        console.error('Daily training not found');
-        return;
-      }
-
-      // Check if this is today's workout
-      const today = new Date();
-      const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-      const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, etc.
-      const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
-      const todayName = dayNames[mondayFirstIndex];
-      
-      if (currentDailyTraining.dayOfWeek !== todayName) {
-        console.log('❌ Can only add sessions to today\'s workout');
+        logger.error('Daily training not found', {
+          dailyTrainingId,
+          weekNumber: trainingState.currentWeekSelected
+        });
         return;
       }
 
       if (currentDailyTraining.completed) {
-        console.log('🔒 Training is completed and locked. Cannot add sessions.');
+        logger.info('Cannot add sessions - training is completed and locked', {
+          dailyTrainingId: currentDailyTraining.id
+        });
         return;
       }
 
@@ -1120,7 +1310,7 @@ export const useTraining = (): UseTrainingReturn => {
       // Update auth context training plan
       updateTrainingPlan(updatedPlan);
     } catch (error) {
-      console.error('Error adding endurance session:', error);
+      logger.error('Error adding endurance session', error);
       setTrainingState(prev => ({
         ...prev,
         error: 'Failed to add endurance session'
@@ -1134,6 +1324,22 @@ export const useTraining = (): UseTrainingReturn => {
     dailyTrainingId: string
   ) => {
     try {
+      // Check if the selected day is editable
+      const currentDay = trainingPlan?.weeklySchedules
+        .find(week => week.weekNumber === trainingState.currentWeekSelected)
+        ?.dailyTrainings.find(daily => daily.id === dailyTrainingId);
+      
+      if (currentDay && !isTrainingDayEditable(currentDay)) {
+        logger.warn('Cannot edit locked training day', {
+          action: 'removeExercise',
+          scheduledDate: currentDay.scheduledDate
+        });
+        setTrainingState(prev => ({
+          ...prev,
+          error: 'This workout is locked. You can only edit today\'s workout.'
+        }));
+        return;
+      }
       // Check if training is completed/locked - if so, don't allow remove
       const currentWeek = trainingPlan?.weeklySchedules.find(
         week => week.weekNumber === trainingState.currentWeekSelected
@@ -1143,7 +1349,10 @@ export const useTraining = (): UseTrainingReturn => {
       );
       
       if (!currentDailyTraining) {
-        console.error('Daily training not found');
+        logger.error('Daily training not found', {
+          dailyTrainingId,
+          weekNumber: trainingState.currentWeekSelected
+        });
         return;
       }
 
@@ -1155,12 +1364,17 @@ export const useTraining = (): UseTrainingReturn => {
       const todayName = dayNames[mondayFirstIndex];
       
       if (currentDailyTraining.dayOfWeek !== todayName) {
-        console.log('❌ Can only remove exercises from today\'s workout');
+        logger.info('Cannot remove exercises - not today\'s workout', {
+          requestedDay: currentDailyTraining.dayOfWeek,
+          today: todayName
+        });
         return;
       }
 
       if (currentDailyTraining.completed) {
-        console.log('🔒 Training is completed and locked. Cannot remove exercises.');
+        logger.info('Cannot remove exercises - training is completed and locked', {
+          dailyTrainingId: currentDailyTraining.id
+        });
         return;
       }
 
@@ -1200,7 +1414,7 @@ export const useTraining = (): UseTrainingReturn => {
       // Update auth context training plan
       updateTrainingPlan(updatedPlan);
     } catch (error) {
-      console.error('Error removing exercise:', error);
+      logger.error('Error removing exercise', error);
       setTrainingState(prev => ({
         ...prev,
         error: 'Failed to remove exercise'
@@ -1282,7 +1496,6 @@ export const useTraining = (): UseTrainingReturn => {
     weekNavigation,
     dayIndicators,
     exerciseDetailTabs,
-    oneRMCalculator,
     restTimer,
     trainingProgress,
     
@@ -1294,8 +1507,6 @@ export const useTraining = (): UseTrainingReturn => {
     showExerciseDetail,
     hideExerciseDetail,
     switchExerciseDetailTab,
-    toggleOneRMCalculator,
-    calculateOneRM,
     startRestTimer,
     stopRestTimer,
     completeTraining,
@@ -1315,6 +1526,10 @@ export const useTraining = (): UseTrainingReturn => {
     // Exercise swap state
     isExerciseSwapModalVisible: showExerciseSwapModalState,
     exerciseToSwap,
+    
+    // Error banners
+    SwapExerciseErrorBanner,
+    CompleteTrainingErrorBanner,
     
     // Computed
     isPlanComplete,

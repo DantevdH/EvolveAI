@@ -15,6 +15,7 @@ import SetsHeader from './SetsHeader';
 import SetRow from './SetRow';
 import EnduranceDetails from './EnduranceDetails';
 import RemoveButton from './RemoveButton';
+import { logger } from '../../../utils/logger';
 
 const ExerciseRow: React.FC<ExerciseRowProps> = ({
   exercise,
@@ -22,7 +23,6 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
   onToggle,
   onSetUpdate,
   onShowDetail,
-  onOneRMCalculator,
   onSwapExercise,
   onRemoveExercise,
   isLocked = false,
@@ -37,7 +37,13 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
     try {
       await onSetUpdate(setIndex, reps, weight);
     } catch (error) {
-      console.error('Error updating set:', error);
+      logger.error('Error updating set', {
+        error,
+        exerciseId: exercise.id,
+        setIndex,
+        reps,
+        weight
+      });
     }
   };
 
@@ -45,7 +51,10 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
     try {
       await onSetUpdate(-1, 0, 0); // -1 indicates add set
     } catch (error) {
-      console.error('Error adding set:', error);
+      logger.error('Error adding set', {
+        error,
+        exerciseId: exercise.id
+      });
     }
   };
 
@@ -53,7 +62,10 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
     try {
       await onSetUpdate(-2, 0, 0); // -2 indicates remove set
     } catch (error) {
-      console.error('Error removing set:', error);
+      logger.error('Error removing set', {
+        error,
+        exerciseId: exercise.id
+      });
     }
   };
 
@@ -122,6 +134,7 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
                   onAddSet={handleAddSet}
                   onRemoveSet={handleRemoveSet}
                   canRemoveSet={(exercise.sets?.length || 0) > 1}
+                  isLocked={isLocked}
                 />
                 
                 {(exercise.sets || []).map((set, index) => (
@@ -130,6 +143,7 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
                     set={set}
                     setIndex={index}
                     onUpdate={(reps, weight) => handleSetUpdate(index, reps, weight)}
+                    isLocked={isLocked}
                   />
                 ))}
               </>
@@ -194,6 +208,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 10,
     gap: 6
+  },
+  infoButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    paddingTop: 8,
+    paddingHorizontal: 14,
+    paddingBottom: 4,
   },
   setsContainer: {
     paddingHorizontal: 16,

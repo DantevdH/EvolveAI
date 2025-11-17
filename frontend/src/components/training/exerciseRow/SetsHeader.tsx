@@ -12,31 +12,34 @@ interface SetsHeaderProps {
   onAddSet: () => void;
   onRemoveSet: () => void;
   canRemoveSet: boolean;
+  isLocked?: boolean;
 }
 
-const SetsHeader: React.FC<SetsHeaderProps> = ({ onAddSet, onRemoveSet, canRemoveSet }) => {
+const SetsHeader: React.FC<SetsHeaderProps> = ({ onAddSet, onRemoveSet, canRemoveSet, isLocked = false }) => {
   return (
     <View style={styles.setsHeader}>
-      <Text style={styles.setsTitle}>Sets</Text>
+      <Text style={[styles.setsTitle, isLocked && styles.lockedText]}>Sets</Text>
       
       {/* Add/Remove set buttons */}
-      <View style={styles.setControls}>
-        <TouchableOpacity style={styles.setButton} onPress={onAddSet}>
-          <Ionicons name="add-circle" size={20} color={colors.secondary} />
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={styles.setButton}
-          onPress={onRemoveSet}
-          disabled={!canRemoveSet}
-        >
-          <Ionicons 
-            name="remove-circle" 
-            size={20} 
-            color={canRemoveSet ? colors.secondary : colors.border} 
-          />
-        </TouchableOpacity>
-      </View>
+      {!isLocked && (
+        <View style={styles.setControls}>
+          <TouchableOpacity style={styles.setButton} onPress={onAddSet}>
+            <Ionicons name="add-circle" size={20} color={colors.secondary} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.setButton}
+            onPress={onRemoveSet}
+            disabled={!canRemoveSet}
+          >
+            <Ionicons 
+              name="remove-circle" 
+              size={20} 
+              color={canRemoveSet ? colors.secondary : colors.border} 
+            />
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -59,6 +62,9 @@ const styles = StyleSheet.create({
   },
   setButton: {
     // No additional styling needed
+  },
+  lockedText: {
+    opacity: 0.5,
   },
 });
 

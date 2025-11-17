@@ -1,6 +1,6 @@
 # Backend - Production Readiness
 
-**Status**: 100% Critical Code Items Complete (8/8), 100% Critical Testing Complete (6/6) | Last Updated: 2025-01-27
+**Status**: 90% Critical Code Items Complete (8/9), 100% Critical Testing Complete (6/6) | Last Updated: 2025-01-27
 
 ---
 
@@ -19,6 +19,21 @@
 - [x] **Test JWT authentication** - `backend/tests/test_jwt_auth.py` - Created tests for JWT token validation (valid, invalid, expired tokens, missing sub)
 - [x] **Test error handling** - `backend/tests/test_error_handling.py` - Created tests to verify error responses don't expose sensitive data
 - [x] **Unit test critical processing functions** - `backend/tests/unit/` - Created unit tests for: exercise matching (`test_exercise_matcher.py`), exercise validation (`test_exercise_validator.py`), exercise selection (`test_exercise_selector.py`)
+- [ ] **Date-based training tracking** - **CRITICAL**: Add `scheduled_date` column to `daily_training` table to enable accurate KPI calculations (streak, current week, weeks completed). Currently, calculations use day-of-week names which causes inaccuracies. 
+  - **Database**: Create migration to add `scheduled_date` (DATE type, nullable initially for existing data) column to `daily_training` table
+  - **Schema**: Update `DailyTraining` schema in `backend/core/training/schemas/training_schemas.py` to include `scheduled_date: Optional[date]` field
+  - **Database Service**: Update `save_training_plan` in `backend/core/training/helpers/database_service.py` to:
+    - Calculate `scheduled_date` for each daily training based on plan start date (or plan creation date), week number, and day of week
+    - Set `scheduled_date` when inserting daily training records
+  - **Plan Generation**: Update plan generation logic to include plan start date and calculate `scheduled_date` for all daily trainings
+  - **Data Migration**: Create script to backfill `scheduled_date` for existing daily trainings (calculate based on plan creation date + week number + day offset)
+  - **Impact**: Enables accurate streak calculation (consecutive completed days using actual dates), proper current week determination, and correct weeks completed tracking
+  - **Related Files**: 
+    - `backend/core/training/helpers/database_service.py` (save_training_plan method)
+    - `backend/core/training/schemas/training_schemas.py` (DailyTraining schema)
+    - Database migration files
+    - Plan generation logic (training_coach.py or similar)
+  - **Frontend Impact**: See `05_FRONTEND_TRAINING.md` for frontend changes required
 
 ---
 
