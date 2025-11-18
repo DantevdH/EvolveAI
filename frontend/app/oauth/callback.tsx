@@ -4,6 +4,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/src/config/supabase';
 import { colors } from '@/src/constants/colors';
 import { useAuth } from '@/src/context/AuthContext';
+import { logger } from '@/src/utils/logger';
 
 export default function OAuthCallback() {
   const router = useRouter();
@@ -41,7 +42,7 @@ export default function OAuthCallback() {
         // Method 1: Check if URL is in params (expo-router might pass full URL)
         const urlInParams = params.url as string || params.redirect_uri as string || params._url as string;
         if (urlInParams && urlInParams.includes('#')) {
-          console.log('🔑 [OAuth Callback] Found hash in URL params:', urlInParams);
+          logger.info('[OAuth Callback] Found hash in URL params', { url: urlInParams });
           const hashPart = urlInParams.split('#')[1];
           const hashParams = new URLSearchParams(hashPart);
           const tokenFromHash = {
@@ -56,7 +57,7 @@ export default function OAuthCallback() {
         // Method 2: Try getInitialURL (only works on app launch)
         const initialUrl = await Linking.getInitialURL();
         if (initialUrl && initialUrl.includes('#') && initialUrl.includes('oauth/callback')) {
-          console.log('🔑 [OAuth Callback] Found hash in initial URL:', initialUrl);
+          logger.info('[OAuth Callback] Found hash in initial URL', { url: initialUrl });
           const hashPart = initialUrl.split('#')[1];
           const hashParams = new URLSearchParams(hashPart);
           const tokenFromHash = {
@@ -75,13 +76,13 @@ export default function OAuthCallback() {
           // In expo-router, the URL should be accessible via params
           if (params && Object.keys(params).length > 0) {
             // Log all params to help debug
-            console.log('🔑 [OAuth Callback] All params:', JSON.stringify(params));
+            logger.info('[OAuth Callback] All params', params);
           }
         } catch (e) {
-          console.log('⚠️ [OAuth Callback] Could not get current URL:', e);
+          logger.warn('[OAuth Callback] Could not get current URL', e);
         }
       } catch (e) {
-        console.log('⚠️ [OAuth Callback] Could not parse URL for tokens:', e);
+        logger.warn('[OAuth Callback] Could not parse URL for tokens', e);
       }
     }
     
@@ -90,14 +91,13 @@ export default function OAuthCallback() {
 
   const handleOAuthCallback = async () => {
     try {
-      console.log('🔄 [OAuth Callback] User flow: Processing OAuth callback, checking for tokens');
-      console.log('🔄 [OAuth Callback] Platform:', Platform.OS);
+      logger.info('[OAuth Callback] User flow: Processing OAuth callback, checking for tokens', { platform: Platform.OS });
       
       // Log all params for debugging (but limit token values)
       const paramsForLog = { ...params };
       if (paramsForLog.access_token) paramsForLog.access_token = '[REDACTED]';
       if (paramsForLog.refresh_token) paramsForLog.refresh_token = '[REDACTED]';
-      console.log('🔄 [OAuth Callback] URL params:', JSON.stringify(paramsForLog));
+      logger.info('[OAuth Callback] URL params', paramsForLog);
       
       // Check for error parameters first (OAuth errors)
       const error = params.error as string;
@@ -105,16 +105,16 @@ export default function OAuthCallback() {
       const errorDescription = params.error_description as string;
       
       if (error) {
-        console.warn('⚠️ [OAuth Callback] OAuth error detected:', { error, errorCode, errorDescription });
+        logger.warn('[OAuth Callback] OAuth error detected', { error, errorCode, errorDescription });
         // Some OAuth errors might still have tokens in hash - continue checking
       }
       
       // Priority 1: Extract tokens from URL (handles both web hash and native deep links)
-      console.log('🔑 [OAuth Callback] User flow: Extracting authentication tokens from callback URL');
+      logger.info('[OAuth Callback] User flow: Extracting authentication tokens from callback URL');
       const { accessToken, refreshToken } = await extractTokensFromUrl();
       
       if (accessToken && refreshToken) {
-        console.log('🔑 [OAuth Callback] User flow: Tokens found, setting user session');
+        logger.info('[OAuth Callback] User flow: Tokens found, setting user session');
         
         const { data, error: sessionError } = await supabase.auth.setSession({
           access_token: accessToken,
@@ -122,13 +122,13 @@ export default function OAuthCallback() {
         });
 
         if (sessionError) {
-          console.error('❌ [OAuth Callback] Error setting session:', sessionError);
+          logger.error('[OAuth Callback] Error setting session', sessionError);
           router.replace('/login');
           return;
         }
 
         if (data.session && data.user) {
-          console.log('✅ [OAuth Callback] User flow: Session set successfully, user authenticated');
+          logger.info('[OAuth Callback] User flow: Session set successfully, user authenticated');
           
           // CRITICAL: Update auth context immediately so routing logic sees the user
           dispatch({ type: 'SET_USER', payload: data.user });
@@ -138,13 +138,13 @@ export default function OAuthCallback() {
           await new Promise(resolve => setTimeout(resolve, 100));
           
           if (!data.user.email_confirmed_at) {
-            console.log('📧 [OAuth Callback] User flow: Email verification required, redirecting to verification screen');
+            logger.info('[OAuth Callback] User flow: Email verification required, redirecting to verification screen');
             router.replace({
               pathname: '/email-verification',
               params: { email: data.user.email || '' }
             });
           } else {
-            console.log('✅ [OAuth Callback] User flow: Authentication complete, redirecting to home screen');
+            logger.info('[OAuth Callback] User flow: Authentication complete, redirecting to home screen');
             router.replace('/');
           }
           return;
@@ -153,25 +153,23 @@ export default function OAuthCallback() {
       
       // If we got here and there was an error, redirect to login
       if (error) {
-        console.error('❌ [OAuth Callback] OAuth error without tokens:', { error, errorCode, errorDescription });
+        logger.error('[OAuth Callback] OAuth error without tokens', { error, errorCode, errorDescription });
         router.replace('/login');
         return;
       }
       
       // Fallback: Check if session is already available (for OAuth flows)
-      console.log('🔄 [OAuth Callback] User flow: No tokens found in URL, checking if session already exists');
+      logger.info('[OAuth Callback] User flow: No tokens found in URL, checking if session already exists');
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
       if (sessionError) {
-        console.error('❌ [OAuth Callback] Error getting session:', sessionError);
-        console.error('❌ [OAuth Callback] Error details:', JSON.stringify(sessionError, null, 2));
-        console.error('❌ [OAuth Callback] Error code:', sessionError.code);
-        console.error('❌ [OAuth Callback] Error message:', sessionError.message);
+        logger.error('[OAuth Callback] Error getting session', sessionError);
+        logger.error('[OAuth Callback] Error details', { code: sessionError.code, message: sessionError.message, error: sessionError });
         router.replace('/login');
         return;
       }
 
-      console.log('🔄 [OAuth Callback] Session check:', { 
+      logger.info('[OAuth Callback] Session check', { 
         hasSession: !!session, 
         hasUser: !!session?.user,
         userId: session?.user?.id,
@@ -179,7 +177,7 @@ export default function OAuthCallback() {
       });
 
       if (session && session.user) {
-        console.log('✅ [OAuth Callback] User flow: Session found, user already authenticated');
+        logger.info('[OAuth Callback] User flow: Session found, user already authenticated');
         
         // CRITICAL: Update auth context immediately so routing logic sees the user
         dispatch({ type: 'SET_USER', payload: session.user });
@@ -190,42 +188,42 @@ export default function OAuthCallback() {
         
         // Check if user needs email verification
         if (!session.user.email_confirmed_at) {
-          console.log('📧 [OAuth Callback] User flow: Email verification required, redirecting to verification screen');
+          logger.info('[OAuth Callback] User flow: Email verification required, redirecting to verification screen');
           router.replace({
             pathname: '/email-verification',
             params: { email: session.user.email || '' }
           });
         } else {
-          console.log('✅ [OAuth Callback] User flow: Authentication complete, redirecting to home screen');
+          logger.info('[OAuth Callback] User flow: Authentication complete, redirecting to home screen');
           router.replace('/');
         }
       } else {
-        console.warn('⚠️ [OAuth Callback] No session found - waiting 2 seconds then redirecting to login');
+        logger.warn('[OAuth Callback] No session found - waiting 2 seconds then redirecting to login');
         // No session found - might need to wait a bit or redirect to login
         // Wait a moment in case the session is still being established
         setTimeout(() => {
-          console.log('🔄 [OAuth Callback] Retrying session check after timeout...');
+          logger.info('[OAuth Callback] Retrying session check after timeout...');
           supabase.auth.getSession().then(({ data, error: retryError }) => {
             if (retryError) {
-              console.error('❌ [OAuth Callback] Retry error:', retryError);
+              logger.error('[OAuth Callback] Retry error', retryError);
             }
             if (data?.session) {
-              console.log('✅ [OAuth Callback] Session found on retry - waiting for auth state update');
+              logger.info('[OAuth Callback] Session found on retry - waiting for auth state update');
               // Wait for auth state to update
               setTimeout(async () => {
-                console.log('✅ [OAuth Callback] Redirecting to app');
+                logger.info('[OAuth Callback] Redirecting to app');
                 router.replace('/');
               }, 500);
             } else {
-              console.error('❌ [OAuth Callback] No session after retry - redirecting to login');
+              logger.error('[OAuth Callback] No session after retry - redirecting to login');
               router.replace('/login');
             }
           });
         }, 2000);
       }
     } catch (error) {
-      console.error('❌ [OAuth Callback] Unexpected error:', error);
-      console.error('❌ [OAuth Callback] Error details:', JSON.stringify(error, null, 2));
+      logger.error('[OAuth Callback] Unexpected error', error);
+      logger.error('[OAuth Callback] Error details', error);
       router.replace('/login');
     }
   };

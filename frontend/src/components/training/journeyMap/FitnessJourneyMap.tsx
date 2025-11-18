@@ -17,6 +17,7 @@ import { WeekNodeData, WeekModalData } from './types';
 import { calculateWeekStats } from './utils';
 import { generateCurvedPath, PathSegment } from './pathGenerator';
 import { useWeekNodeAnimations } from './WeekNodeAnimations';
+import { getWeekStatus, isWeekPast, isWeekUnlocked } from '../../../utils/trainingDateUtils';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -31,6 +32,7 @@ interface FitnessJourneyMapProps {
   trainingPlan: TrainingPlan;
   currentWeek: number;
   onWeekSelect: (weekNumber: number) => void;
+  onGenerateWeek?: (weekNumber: number) => Promise<void>;
   headerTitle?: string;
   headerAccessory?: React.ReactNode;
 }
@@ -39,6 +41,7 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
   trainingPlan,
   currentWeek,
   onWeekSelect,
+  onGenerateWeek,
   headerTitle,
   headerAccessory,
 }) => {
@@ -82,30 +85,32 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
       const weekNumber = index + 1;
       const weekSchedule = trainingPlan.weeklySchedules.find(w => w.weekNumber === weekNumber);
       
-      // Determine week status
+      // Use date-based status to determine if week should be clickable
+      const weekStatus = getWeekStatus(weekNumber, trainingPlan);
+      
+      // Determine visual status for display (simplified for UI)
       let status: 'completed' | 'current' | 'locked';
-      if (weekNumber < currentWeek) {
+      if (weekStatus === 'completed') {
         status = 'completed';
-      } else if (weekNumber === currentWeek) {
+      } else if (weekStatus === 'current') {
         status = 'current';
       } else {
+        // All other statuses (unlocked-not-generated, past-not-generated, future-locked, generated) show as locked visually
         status = 'locked';
       }
 
-      if (!weekSchedule) {
-        nodes.push({
-          weekNumber,
-          x: position.x,
-          y: position.y,
-          status: 'locked' as const,
-          stars: 0,
-          completionPercentage: 0,
-          focusTheme: undefined,
-        });
-        return;
-      }
+      // Determine if week should be clickable
+      // Clickable: completed, current, unlocked-not-generated, generated (future weeks that exist)
+      // Not clickable: past-not-generated, future-locked
+      const isClickable = weekStatus !== 'past-not-generated' && weekStatus !== 'future-locked';
 
-      const stats = calculateWeekStats(weekSchedule);
+      // For non-generated weeks, we still want to show them but they may be clickable if unlocked
+      const stats = weekSchedule ? calculateWeekStats(weekSchedule) : {
+        completionPercentage: 0,
+        completedWorkouts: 0,
+        totalWorkouts: 0,
+        stars: 0,
+      };
       
       nodes.push({
         weekNumber,
@@ -114,7 +119,10 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
         status,
         stars: status === 'completed' ? stats.stars : 0,
         completionPercentage: stats.completionPercentage,
-        focusTheme: weekSchedule.focusTheme,
+        focusTheme: weekSchedule?.focusTheme,
+        primaryGoal: weekSchedule?.primaryGoal,
+        progressionLever: weekSchedule?.progressionLever,
+        isClickable,
       });
     });
 
@@ -159,25 +167,34 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
 
   // Handle week node press
   const handleWeekPress = (node: WeekNodeData) => {
-    // If it's the current week, navigate directly
-    if (node.status === 'current') {
-        onWeekSelect(node.weekNumber);
-      return;
-    }
-
-    // For other weeks, show the modal as before
+    // Always show the modal - no direct navigation
     const weekSchedule = trainingPlan.weeklySchedules.find(w => w.weekNumber === node.weekNumber);
-    if (!weekSchedule) return;
+    const weekStatus = getWeekStatus(node.weekNumber, trainingPlan);
+    const isPast = isWeekPast(node.weekNumber, trainingPlan);
+    const isUnlocked = isWeekUnlocked(node.weekNumber, trainingPlan);
+    const isGenerated = !!weekSchedule;
     
-    const stats = calculateWeekStats(weekSchedule);
+    // Calculate stats if week exists
+    const stats = weekSchedule ? calculateWeekStats(weekSchedule) : {
+      completionPercentage: 0,
+      completedWorkouts: 0,
+      totalWorkouts: 0,
+      stars: 0,
+    };
     
     setSelectedWeekModal({
       weekNumber: node.weekNumber,
-      status: node.status,
-      stars: node.stars,
+      status: weekStatus,
+      stars: stats.stars,
       completionPercentage: stats.completionPercentage,
       completedWorkouts: stats.completedWorkouts,
       totalWorkouts: stats.totalWorkouts,
+      focusTheme: weekSchedule?.focusTheme,
+      primaryGoal: weekSchedule?.primaryGoal,
+      progressionLever: weekSchedule?.progressionLever,
+      isUnlocked,
+      isGenerated,
+      isPastWeek: isPast,
     });
   };
 
@@ -325,6 +342,12 @@ const FitnessJourneyMap: React.FC<FitnessJourneyMapProps> = ({
         visible={selectedWeekModal !== null}
         onClose={() => setSelectedWeekModal(null)}
         onViewWeek={handleViewWeek}
+        onGenerateWeek={selectedWeekModal && onGenerateWeek ? async () => {
+          if (selectedWeekModal) {
+            await onGenerateWeek(selectedWeekModal.weekNumber);
+            // Refresh the training plan - this will be handled by the parent component
+          }
+        } : undefined}
       />
     </View>
   );

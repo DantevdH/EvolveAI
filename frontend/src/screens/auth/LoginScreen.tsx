@@ -7,6 +7,7 @@ import { useAuth } from '@/src/context/AuthContext';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { supabase } from '@/src/config/supabase';
 import { validateLoginForm } from '@/src/utils/validation';
+import { logger } from '@/src/utils/logger';
 import { colors, secondary, createColorWithOpacity } from '../../constants/colors';
 
 // Complete auth session if needed (recommended by Expo)
@@ -132,7 +133,7 @@ export const LoginScreen: React.FC = () => {
       });
 
       if (error) {
-        console.error('Error setting session from email verification:', error);
+        logger.error('Error setting session from email verification', error);
         Alert.alert('Error', 'Invalid or expired verification link. Please try again.');
         return;
       }
@@ -146,7 +147,7 @@ export const LoginScreen: React.FC = () => {
         );
       }
     } catch (error) {
-      console.error('Error handling email verification:', error);
+      logger.error('Error handling email verification', error);
       Alert.alert('Error', 'Something went wrong. Please try again.');
     }
   };
@@ -172,22 +173,21 @@ export const LoginScreen: React.FC = () => {
   };
 
   const handleGoogleLogin = async () => {
-    console.log('🔵 Google login button clicked');
+    logger.info('Google login button clicked');
     try {
       clearError();
-      console.log('🔵 Calling signInWithGoogle...');
+      logger.info('Calling signInWithGoogle...');
       const success = await signInWithGoogle();
-      console.log('🔵 signInWithGoogle returned:', success);
-      console.log('🔵 Current error state:', state.error);
+      logger.info('signInWithGoogle returned', { success, error: state.error });
       if (!success) {
         const errorMessage = state.error || 'Google sign in failed. Please try again.';
-        console.error('❌ Google sign in failed:', errorMessage);
+        logger.error('Google sign in failed', errorMessage);
         Alert.alert('Google Sign In Failed', errorMessage);
       } else {
-        console.log('✅ Google sign in initiated successfully');
+        logger.info('Google sign in initiated successfully');
       }
     } catch (error) {
-      console.error('❌ Error in handleGoogleLogin:', error);
+      logger.error('Error in handleGoogleLogin', error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
   };
@@ -199,7 +199,7 @@ export const LoginScreen: React.FC = () => {
     // if (!success && state.error) {
     //   Alert.alert('Apple Sign In Failed', state.error);
     // }
-    console.log('🍎 Apple login clicked - disabled for now');
+    logger.info('Apple login clicked - disabled for now');
   };
 
   // Facebook login commented out for now

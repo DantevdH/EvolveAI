@@ -9,7 +9,8 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../../constants/colors';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, createColorWithOpacity } from '../../../constants/colors';
 import { ExerciseSwapService } from '../../../services/exerciseSwapService';
 import ConfirmationDialog from '../../shared/ConfirmationDialog';
 import { ExerciseSwapModalProps } from './types';
@@ -18,6 +19,10 @@ import { CurrentExerciseDisplay } from './CurrentExerciseDisplay';
 import { TabNavigation } from './TabNavigation';
 import { AIRecommendationsList } from './AIRecommendationsList';
 import { SearchTab } from './SearchTab';
+import { logger } from '../../../utils/logger';
+import { ExerciseRecommendation, ExerciseSearchResult } from '../../../services/exerciseSwapService';
+import { ExerciseFilterOptions } from '../../../types/common';
+import { Exercise } from '../../../types/training';
 
 const ExerciseSwapModal: React.FC<ExerciseSwapModalProps> = ({
   visible,
@@ -33,22 +38,22 @@ const ExerciseSwapModal: React.FC<ExerciseSwapModalProps> = ({
   const [showFilters, setShowFilters] = useState(false);
   
   // AI Recommendations
-  const [aiRecommendations, setAiRecommendations] = useState([]);
+  const [aiRecommendations, setAiRecommendations] = useState<ExerciseRecommendation[]>([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   
   // Search Results
-  const [searchResults, setSearchResults] = useState([]);
+  const [searchResults, setSearchResults] = useState<ExerciseSearchResult[]>([]);
   const [loadingSearch, setLoadingSearch] = useState(false);
   
   // Filter Options
-  const [filterOptions, setFilterOptions] = useState({
+  const [filterOptions, setFilterOptions] = useState<ExerciseFilterOptions>({
     targetAreas: [],
     equipment: [],
     difficulties: [],
   });
 
   // Confirm swap dialog
-  const [pendingSwapExercise, setPendingSwapExercise] = useState(null);
+  const [pendingSwapExercise, setPendingSwapExercise] = useState<Exercise | null>(null);
   const [showConfirmSwap, setShowConfirmSwap] = useState(false);
 
   // Load AI recommendations when modal opens
@@ -96,7 +101,10 @@ const ExerciseSwapModal: React.FC<ExerciseSwapModalProps> = ({
 
   const loadAIRecommendations = async () => {
     if (!currentExercise) {
-      console.error('Cannot load recommendations: currentExercise is null');
+      logger.error('Cannot load recommendations: currentExercise is null', {
+        component: 'ExerciseSwapModal',
+        action: 'loadAIRecommendations'
+      });
       return;
     }
 
@@ -112,11 +120,15 @@ const ExerciseSwapModal: React.FC<ExerciseSwapModalProps> = ({
       if (result.success && result.data) {
         setAiRecommendations(result.data);
       } else {
-        console.error('Failed to load AI recommendations:', result.error);
+        logger.error('Failed to load AI recommendations', {
+          error: result.error,
+          exerciseId: currentExercise.id,
+          exerciseName: currentExercise.name
+        });
         setAiRecommendations([]);
       }
     } catch (error) {
-      console.error('Error loading AI recommendations:', error);
+      logger.error('Error loading AI recommendations', error);
       setAiRecommendations([]);
     } finally {
       setLoadingRecommendations(false);
@@ -130,11 +142,14 @@ const ExerciseSwapModal: React.FC<ExerciseSwapModalProps> = ({
       if (result.success && result.data) {
         setSearchResults(result.data);
       } else {
-        console.error('Failed to load all exercises:', result.error);
+        logger.error('Failed to load all exercises', {
+          error: result.error,
+          filters
+        });
         setSearchResults([]);
       }
     } catch (error) {
-      console.error('Failed to load all exercises:', error);
+      logger.error('Failed to load all exercises', error);
       setSearchResults([]);
     } finally {
       setLoadingSearch(false);
@@ -145,10 +160,14 @@ const ExerciseSwapModal: React.FC<ExerciseSwapModalProps> = ({
     try {
       const result = await ExerciseSwapService.getFilterOptions();
       if (result.success && result.data) {
-        setFilterOptions(result.data);
+        setFilterOptions(result.data as ExerciseFilterOptions);
+      } else {
+        logger.warn('Failed to load filter options', {
+          error: result.error
+        });
       }
     } catch (error) {
-      console.error('Error loading filter options:', error);
+      logger.error('Error loading filter options', error);
     }
   };
 
@@ -159,16 +178,22 @@ const ExerciseSwapModal: React.FC<ExerciseSwapModalProps> = ({
       if (result.success && result.data) {
         setSearchResults(result.data);
       } else {
-        console.error('Failed to search exercises:', result.error);
+        logger.error('Failed to search exercises', {
+          error: result.error,
+          query: searchQuery,
+          filters
+        });
+        setSearchResults([]);
       }
     } catch (error) {
-      console.error('Error searching exercises:', error);
+      logger.error('Error searching exercises', error);
+      setSearchResults([]);
     } finally {
       setLoadingSearch(false);
     }
   };
 
-  const handleSwapExercise = (exercise) => {
+  const handleSwapExercise = (exercise: Exercise) => {
     setPendingSwapExercise(exercise);
     setShowConfirmSwap(true);
   };
@@ -182,17 +207,24 @@ const ExerciseSwapModal: React.FC<ExerciseSwapModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="close" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.headerTitle}>Swap Exercise</Text>
-            <Text style={styles.headerSubtitle}>Pick a better match or search the library</Text>
+        {/* Header with Golden Gradient */}
+        <LinearGradient
+          colors={[createColorWithOpacity(colors.secondary, 0.08), createColorWithOpacity(colors.secondary, 0.03)]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.header}>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close-circle" size={24} color={colors.secondary} />
+            </TouchableOpacity>
+            <View style={styles.headerTextBlock}>
+              <Text style={styles.headerTitle}>Swap Exercise</Text>
+              <Text style={styles.headerSubtitle}>Pick a better match or search the library</Text>
+            </View>
+            <View style={styles.placeholder} />
           </View>
-          <View style={styles.placeholder} />
-        </View>
+        </LinearGradient>
 
         {/* Current Exercise Info */}
         <CurrentExerciseDisplay exercise={currentExercise} />
@@ -260,15 +292,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  headerGradient: {
+    borderBottomWidth: 1,
+    borderBottomColor: createColorWithOpacity(colors.secondary, 0.1),
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.card,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 16,
   },
   headerTextBlock: {
     flex: 1,
@@ -277,21 +311,25 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: 4,
+    flexShrink: 0,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.primary,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   headerSubtitle: {
     fontSize: 12,
     color: colors.muted,
+    marginTop: 2,
   },
   placeholder: {
     width: 32,
   },
   sectionHeaderRow: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 6,
   },

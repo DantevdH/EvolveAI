@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../../constants/colors';
+import { colors, createColorWithOpacity } from '../../../constants/colors';
 import { ExerciseTab } from './types';
 
 interface TabNavigationProps {
@@ -33,7 +33,7 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({ selectedTab, onTab
           <Ionicons
             name={tabIcon(tab) as any}
             size={16}
-            color={selectedTab === tab ? colors.primary : colors.muted}
+            color={selectedTab === tab ? colors.secondary : colors.muted}
           />
           <Text style={[
             styles.tabText,
@@ -50,11 +50,14 @@ export const TabNavigation: React.FC<TabNavigationProps> = ({ selectedTab, onTab
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: colors.card,
-    margin: 20,
-    marginTop: 16,
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.05),
+    marginHorizontal: 24,
+    marginTop: 8,
+    marginBottom: 8,
     borderRadius: 12,
     padding: 4,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.15),
   },
   tabButton: {
     flex: 1,
@@ -65,7 +68,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   tabButtonActive: {
-    backgroundColor: colors.background,
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.12),
     borderRadius: 8,
   },
   tabText: {
@@ -74,7 +77,8 @@ const styles = StyleSheet.create({
     color: colors.muted,
   },
   tabTextActive: {
-    color: colors.primary,
+    color: colors.secondary,
+    fontWeight: '600',
   },
 });
 

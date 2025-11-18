@@ -2,6 +2,8 @@
  * Transform training plan from backend format (snake_case) to frontend format (camelCase)
  */
 
+import { parseLocalDate } from './trainingDateUtils';
+
 export interface BackendTrainingPlan {
   id: number;
   user_profile_id: number;
@@ -18,6 +20,8 @@ export interface BackendWeeklySchedule {
   week_number: number;
   justification: string;
   focus_theme?: string;
+  primary_goal?: string;
+  progression_lever?: string;
   daily_trainings: BackendDailyTraining[];
 }
 
@@ -28,6 +32,7 @@ export interface BackendDailyTraining {
   is_rest_day: boolean;
   training_type: string;
   justification: string;
+  scheduled_date?: string; // ISO date string from backend
   strength_exercises: BackendStrengthExercise[];
   endurance_sessions: BackendEnduranceSession[];
 }
@@ -89,6 +94,8 @@ function transformWeeklySchedule(backendWeek: BackendWeeklySchedule): any {
     weekNumber: backendWeek.week_number,
     justification: backendWeek.justification,
     focusTheme: backendWeek.focus_theme || undefined,
+    primaryGoal: backendWeek.primary_goal || undefined,
+    progressionLever: backendWeek.progression_lever || undefined,
     dailyTrainings: backendWeek.daily_trainings?.map(transformDailyTraining) || [],
   };
 }
@@ -111,6 +118,7 @@ function transformDailyTraining(backendDaily: BackendDailyTraining): any {
     isRestDay: backendDaily.is_rest_day,
     trainingType: backendDaily.training_type,
     justification: backendDaily.justification,
+    scheduledDate: backendDaily.scheduled_date ? parseLocalDate(backendDaily.scheduled_date) : undefined,
     completed: false,
     // Keep separate arrays for compatibility with other components (sorted by execution_order)
     strengthExercises: strengthExercises.sort((a, b) => (a.executionOrder || 0) - (b.executionOrder || 0)),

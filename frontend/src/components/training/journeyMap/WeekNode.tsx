@@ -8,6 +8,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, createColorWithOpacity } from '../../../constants/colors';
+import { GradientColors, createGradientColors } from '../../../types/common';
 import { WeekNodeData } from './types';
 import { WeekNodeAnimations } from './WeekNodeAnimations';
 
@@ -36,7 +37,10 @@ const WeekCard: React.FC<WeekNodeProps> = ({ node, onPress, animations, totalWee
     switch (node.status) {
       case 'completed':
         return {
-          backgroundColors: [createColorWithOpacity(colors.secondary, 0.15), createColorWithOpacity(colors.secondary, 0.08)],
+          backgroundColors: createGradientColors(
+            createColorWithOpacity(colors.secondary, 0.15),
+            createColorWithOpacity(colors.secondary, 0.08)
+          ),
           borderColor: createColorWithOpacity(colors.secondary, 0.4),
           weekNumberBg: colors.secondary,
           weekNumberText: colors.card,
@@ -45,7 +49,10 @@ const WeekCard: React.FC<WeekNodeProps> = ({ node, onPress, animations, totalWee
         };
       case 'current':
         return {
-          backgroundColors: [createColorWithOpacity(colors.secondary, 0.2), createColorWithOpacity(colors.secondary, 0.12)],
+          backgroundColors: createGradientColors(
+            createColorWithOpacity(colors.secondary, 0.2),
+            createColorWithOpacity(colors.secondary, 0.12)
+          ),
           borderColor: createColorWithOpacity(colors.secondary, 0.6),
           weekNumberBg: colors.secondary,
           weekNumberText: colors.card,
@@ -55,7 +62,10 @@ const WeekCard: React.FC<WeekNodeProps> = ({ node, onPress, animations, totalWee
       case 'locked':
       default:
         return {
-          backgroundColors: [createColorWithOpacity(colors.muted, 0.08), createColorWithOpacity(colors.muted, 0.04)],
+          backgroundColors: createGradientColors(
+            createColorWithOpacity(colors.muted, 0.08),
+            createColorWithOpacity(colors.muted, 0.04)
+          ),
           borderColor: createColorWithOpacity(colors.muted, 0.2),
           weekNumberBg: colors.muted,
           weekNumberText: colors.card,
@@ -85,7 +95,7 @@ const WeekCard: React.FC<WeekNodeProps> = ({ node, onPress, animations, totalWee
       ]}
       onPress={() => onPress(node)}
       activeOpacity={0.85}
-      disabled={node.status === 'locked'}
+      disabled={node.isClickable === false}
     >
 
       {/* Gradient background */}

@@ -38,8 +38,8 @@ const WeekdayButton: React.FC<WeekdayButtonProps> = ({ day, index, onPress }) =>
   ];
 
   let ringGradient: [string, string] = baseGradient;
-  let innerBackground = colors.card;
-  let iconColor = colors.secondary;
+  let innerBackground: string = colors.card;
+  let iconColor: string = colors.secondary;
 
   if (isSelected) {
     ringGradient = selectedGradient;

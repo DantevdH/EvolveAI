@@ -261,7 +261,6 @@ export class UserService {
           height: rawProfile.height || 170,
           heightUnit: rawProfile.height_unit || 'cm',
           gender: rawProfile.gender || '',
-          finalChatNotes: rawProfile.final_chat_notes || '',
           // Raw questions and responses (for consistency)
           initial_questions: convertToAIQuestions(rawProfile.initial_questions),
           initial_responses: rawProfile.initial_responses || null,
@@ -316,9 +315,6 @@ export class UserService {
       if (updates.height !== undefined) updateData.height = updates.height;
       if (updates.heightUnit !== undefined) updateData.height_unit = updates.heightUnit;
       if (updates.gender !== undefined) updateData.gender = updates.gender;
-      if (updates.hasLimitations !== undefined) updateData.has_limitations = updates.hasLimitations;
-      if (updates.limitationsDescription !== undefined) updateData.limitations_description = updates.limitationsDescription;
-      if (updates.finalChatNotes !== undefined) updateData.final_chat_notes = updates.finalChatNotes;
       if (updates.planAccepted !== undefined) updateData.plan_accepted = updates.planAccepted;
 
       const { data, error } = await supabase
@@ -343,18 +339,12 @@ export class UserService {
         goalDescription: data.goal_description || '',
         coachId: data.coach_id,
         experienceLevel: data.experience_level || '',
-        daysPerWeek: data.days_per_week || 3,
-        minutesPerSession: data.minutes_per_session || 45,
-        equipment: data.equipment || '',
         age: data.age || 25,
         weight: data.weight || 70,
         weightUnit: data.weight_unit || 'kg',
         height: data.height || 170,
         heightUnit: data.height_unit || 'cm',
         gender: data.gender || '',
-        hasLimitations: data.has_limitations || false,
-        limitationsDescription: data.limitations_description || '',
-        finalChatNotes: data.final_chat_notes || '',
         planAccepted: data.plan_accepted || false,
         createdAt: data.created_at ? new Date(data.created_at) : undefined,
         updatedAt: data.updated_at ? new Date(data.updated_at) : undefined,

@@ -14,6 +14,7 @@ import { ProgressOverlay } from '../components/onboarding/ui';
 import { useProgressOverlay } from '../hooks/useProgressOverlay';
 import { trainingService } from '../services/onboardingService';
 import { logError, logData, logWarn, logNavigation } from '../utils/logger';
+import { useApiCallWithBanner } from '../hooks/useApiCallWithBanner';
 
 export const GeneratePlanScreen: React.FC = () => {
   const router = useRouter();
@@ -21,6 +22,63 @@ export const GeneratePlanScreen: React.FC = () => {
   const { progressState, runWithProgress } = useProgressOverlay();
   const [error, setError] = useState<string | null>(null);
   const generationTriggeredRef = useRef(false);
+
+  // API call with error handling for plan generation
+  const { execute: executeGeneratePlan, loading: planGenerationLoading, ErrorBannerComponent: PlanGenerationErrorBanner } = useApiCallWithBanner(
+    async (personalInfo: any, initialResponses: Record<string, any>, initialQuestions: any[], userProfileId: number, jwtToken: string) => {
+      return await trainingService.generateTrainingPlan(
+        personalInfo,
+        initialResponses,
+        initialQuestions,
+        userProfileId,
+        jwtToken
+      );
+    },
+    {
+      retryCount: 3,
+      onSuccess: async (response) => {
+        if (response.success && response.data) {
+          const { transformTrainingPlan } = await import('../utils/trainingPlanTransformer');
+          const transformedPlan = transformTrainingPlan(response.data);
+
+          // Update playbook if provided
+          if (response.playbook && authState.userProfile) {
+            dispatch({
+              type: 'SET_USER_PROFILE',
+              payload: {
+                ...authState.userProfile,
+                playbook: response.playbook,
+              },
+            });
+          }
+
+          // Set training plan and exercises
+          setTrainingPlan(transformedPlan);
+
+          if (response.metadata?.exercises) {
+            setExercises(response.metadata.exercises);
+          }
+
+          logData('Plan generation', 'success');
+          
+          // Poll for playbook + plan outline to be ready (background jobs)
+          await pollForBackgroundData();
+          
+          // Navigate to tabs after successful generation
+          logNavigation('generate-plan', '/(tabs)', 'plan_generated');
+          router.replace('/(tabs)');
+        } else {
+          throw new Error(response.message || 'Failed to generate training plan');
+        }
+      },
+      onError: (error) => {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to generate training plan';
+        setError(errorMessage);
+        logError('Plan generation failed', error);
+        generationTriggeredRef.current = false; // Allow retry
+      },
+    }
+  );
 
   const pollForBackgroundData = useCallback(async () => {
     const userId = authState.user?.id;
@@ -137,7 +195,7 @@ export const GeneratePlanScreen: React.FC = () => {
         throw new Error(`Missing required profile information: ${missingFields.join(', ')}. Please complete onboarding first.`);
       }
 
-      logData('Plan generation', 'start');
+      logData('Plan generation', 'loading');
       generationTriggeredRef.current = true;
       setError(null);
 
@@ -158,84 +216,25 @@ export const GeneratePlanScreen: React.FC = () => {
         experience_level: authState.userProfile.experienceLevel,
       };
 
-      const response = await runWithProgress('plan', () =>
-        trainingService.generateTrainingPlan(
+      // Use the new error handling system
+      // Success and error handling is now in onSuccess/onError callbacks of useApiCallWithBanner
+      await runWithProgress('plan', async () => {
+        await executeGeneratePlan(
           personalInfo,
           authState.userProfile!.initial_responses || {},
           authState.userProfile!.initial_questions || [],
           authState.userProfile!.id,
           jwtToken
-        )
-      );
-
-      logData('Generate Plan', response.success ? 'success' : 'error');
-
-      if (response.success && response.data) {
-        const { transformTrainingPlan } = await import('../utils/trainingPlanTransformer');
-        const transformedPlan = transformTrainingPlan(response.data);
-
-        // Update playbook if provided
-        if (response.playbook && authState.userProfile) {
-          dispatch({
-            type: 'SET_USER_PROFILE',
-            payload: {
-              ...authState.userProfile,
-              playbook: response.playbook,
-            },
-          });
-        }
-
-        // Set training plan and exercises
-        setTrainingPlan(transformedPlan);
-
-        if (response.metadata?.exercises) {
-          setExercises(response.metadata.exercises);
-        }
-
-        logData('Plan generation', 'success');
-        
-        // Poll for playbook + plan outline to be ready (background jobs)
-        await pollForBackgroundData();
-        
-        // Navigate to plan review after successful generation
-        logNavigation('generate-plan', '/(tabs)', 'plan_generated');
-        router.replace('/(tabs)');
-      } else {
-        const errorMsg = response.message || 'Failed to generate training plan';
-        throw new Error(errorMsg);
-      }
+        );
+      });
     } catch (err) {
-      logError('Plan generation error', err);
+      // This catch is for validation errors before API call
+      logError('Plan generation validation error', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate training plan';
       setError(errorMessage);
-      generationTriggeredRef.current = false; // Allow retry
-
-      Alert.alert(
-        'Plan Generation Error',
-        `Failed to generate training plan: ${errorMessage}\n\nThis step creates your final personalized training plan.`,
-        [
-          { 
-            text: 'Try Again',
-            onPress: () => {
-              setError(null);
-              generationTriggeredRef.current = false; // Reset to allow retry
-              setTimeout(() => {
-                startGeneration();
-              }, 100);
-            }
-          },
-          {
-            text: 'Start Over',
-            onPress: () => {
-              logNavigation('generate-plan', '/onboarding', 'start_over');
-              router.replace('/onboarding');
-            },
-          },
-          { text: 'Cancel', style: 'cancel' },
-        ]
-      );
+      generationTriggeredRef.current = false;
     }
-  }, [authState.userProfile, authState.session, dispatch, pollForBackgroundData, router, runWithProgress, setExercises, setTrainingPlan]);
+  }, [authState.userProfile, authState.session, dispatch, pollForBackgroundData, router, runWithProgress, setExercises, setTrainingPlan, executeGeneratePlan]);
 
   useEffect(() => {
     // Avoid triggering generation while a plan is being fetched or already exists
@@ -269,6 +268,7 @@ export const GeneratePlanScreen: React.FC = () => {
         progress={progressState.progress}
         title="Creating your training plan…"
       />
+      <PlanGenerationErrorBanner />
       {error && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Plan generation failed. Please try again.</Text>

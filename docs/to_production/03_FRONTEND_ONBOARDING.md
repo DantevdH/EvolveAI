@@ -1,6 +1,6 @@
 # Frontend - Onboarding - Production Readiness
 
-**Status**: 0% Complete | Last Updated: 2025-11-16
+**Status**: 100% Critical Code Items Complete (8/8), 100% Critical Testing Complete (5/5) ✅ All Tests Passing | Last Updated: 2025-10-27
 
 ---
 
@@ -15,6 +15,8 @@
 - [x] **Console logging policy compliance** - All onboarding routes/components - Ensure logs only cover user flow status (where, why, next step) and remove noisy debug prints [[memory:8636680]].
 - [x] **Happy-path and error-path tests for routing** - `frontend/src/__tests__/routing/useAppRouting.test.ts:48-141` - Expand tests to cover: unverified OAuth, missing profile, questions-no-responses, no plan, plan not accepted, and error state stay-put.
 - [x] **Per-step validation gates before advancing** - `frontend/src/components/onboarding/ConversationalOnboarding.tsx:209-299,241-262,275-281,294-299,575-596` - Enforce that each step requires valid input before moving forward (username length, personal info completeness, goal description min length, experience selected, and at least one answer for initial questions). Add unit tests covering valid/invalid transitions and preventing advance when invalid.
+- [x] **API error handling with retry logic** - `frontend/src/components/onboarding/ConversationalOnboarding.tsx:304-393` - Applied `useApiCallWithBanner` to `getInitialQuestions` API call with automatic retry (3 attempts) and non-blocking error banners
+- [x] **API error handling for plan generation** - `frontend/src/screens/GeneratePlanScreen.tsx:26-81` - Applied `useApiCallWithBanner` to `generateTrainingPlan` API call with automatic retry (3 attempts) and non-blocking error banners
 
 ---
 
@@ -52,11 +54,14 @@
 - `frontend/app/onboarding.tsx` - Conversational onboarding entry
 - `frontend/app/onboarding/initial-questions.tsx` - Resume at initial questions
 - `frontend/app/generate-plan.tsx` - Plan generation entry
-- `frontend/src/components/onboarding/ConversationalOnboarding.tsx` - Onboarding UI logic
-- `frontend/src/screens/GeneratePlanScreen.tsx` - Plan generation flow
+- `frontend/src/components/onboarding/ConversationalOnboarding.tsx` - Onboarding UI logic (uses `useApiCallWithBanner` for error handling)
+- `frontend/src/screens/GeneratePlanScreen.tsx` - Plan generation flow (uses `useApiCallWithBanner` for error handling)
 - `frontend/src/__tests__/routing/useAppRouting.test.ts` - Routing unit tests
 - `frontend/src/__tests__/utils/validation.test.ts` - Onboarding validation unit tests (steps + question-level)
 - `frontend/src/utils/logger.ts` - Logging utilities (flow/status logs)
+- `frontend/src/hooks/useApiCallWithBanner.tsx` - API error handling with retry and error banners
+- `frontend/src/components/ui/ErrorBanner.tsx` - Non-blocking error display component
+- `frontend/src/utils/apiErrorHandler.ts` - Error normalization and user-friendly messages
 
 **Related Docs:**
 - `docs/to_production/02_FRONTEND_AUTHENTICATION.md` - Auth flows and prerequisites

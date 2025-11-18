@@ -31,6 +31,7 @@ from core.training.schemas.question_schemas import (
 from core.training.training_coach import TrainingCoach
 from core.training.schemas.training_schemas import TrainingPlan
 from core.training.helpers.database_service import db_service
+from core.training.helpers.date_mapper import map_daily_training_dates
 # Format responses
 from core.training.helpers.response_formatter import ResponseFormatter
 from core.base.schemas.playbook_schemas import UserPlaybook
@@ -632,6 +633,12 @@ async def generate_training_plan(
                 detail="Training plan generation succeeded but returned no data"
             )
         
+        # Map scheduled dates to daily trainings (post-processing step)
+        # This must happen before saving to DB and returning to frontend
+        
+        training_plan_data = map_daily_training_dates(training_plan_data)
+        logger.info("✅ Mapped scheduled dates to daily trainings")
+        
         try:
             save_result = await db_service.save_training_plan(
                 user_profile_id=user_profile_id,
@@ -908,7 +915,7 @@ async def _handle_playbook_extraction_for_satisfied(
     try:
         logger.info(f"📘 Extracting lessons from conversation history ({len(conversation_history)} messages)")
         
-        # OPTIMIZATION: user_profile_id is already validated in parent /update-week endpoint
+        # OPTIMIZATION: user_profile_id is already validated in parent /chat endpoint
         # No need for fallback DB call
         try:
             user_profile_id = int(request.user_profile_id) if request.user_profile_id is not None else None
@@ -990,19 +997,26 @@ async def _handle_playbook_extraction_for_satisfied(
     return updated_playbook
 
 
-@router.post("/update-week", response_model=PlanFeedbackResponse)
-async def update_week(
+@router.post("/chat", response_model=PlanFeedbackResponse)
+async def chat(
     request: PlanFeedbackRequest,
     coach: TrainingCoach = Depends(get_training_coach)
 ):
     """
-    Update an existing week in the training plan based on user feedback.
+    Multi-purpose training chat endpoint that handles various user intents.
     
-    Updates ONLY the latest week (highest week_number), but returns the full TrainingPlan structure
-    with the updated week inserted into the existing plan.
+    This endpoint intelligently classifies user intent and responds accordingly:
+    - **Questions/Clarity**: Returns AI response without plan updates
+    - **Plan Updates**: Updates the latest week based on feedback and returns updated plan
+    - **Satisfaction**: Marks plan as accepted and navigates to main app
+    - **Unclear**: Asks for clarification
+    
+    The endpoint automatically determines the appropriate action based on the user's message
+    and conversation history. It can update ONLY the latest week (highest week_number) when needed,
+    but always returns the full TrainingPlan structure.
     
     Request includes:
-    - feedback_message: User feedback message (required)
+    - feedback_message: User message/feedback (required)
     - training_plan: Full training plan data (required)
     - plan_id: Training plan ID (required)
     - conversation_history: Previous conversation messages for context (optional, default: [])
@@ -1230,6 +1244,12 @@ async def update_week(
         # Get the updated full training plan
         updated_plan_data = result.get("training_plan")
 
+        # Map scheduled dates to daily trainings (post-processing step)
+        # This must happen before saving to DB and returning to frontend
+        if updated_plan_data:
+            updated_plan_data = map_daily_training_dates(updated_plan_data)
+            logger.info("✅ Mapped scheduled dates to daily trainings for updated week")
+
         # Update only the specified week in the database
         if plan_id and updated_plan_data:
             # Prepare plan to save WITHOUT ai_message (never persist)
@@ -1363,6 +1383,12 @@ async def create_week(
                 next_week_number = max(week_numbers) if week_numbers else 1
 
         logger.info(f"✅ Week {next_week_number} created successfully")
+
+        # Map scheduled dates to daily trainings (post-processing step)
+        # This must happen before saving to DB and returning to frontend
+        if updated_plan_data:
+            updated_plan_data = map_daily_training_dates(updated_plan_data)
+            logger.info("✅ Mapped scheduled dates to daily trainings for new week")
 
         # Update the plan in the database with the new week
         if plan_id and updated_plan_data:

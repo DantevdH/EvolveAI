@@ -7,27 +7,56 @@ import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../../constants/colors';
+import { logger } from '../../../utils/logger';
+import { validateReps, validateWeight, TRAINING_VALIDATION_CONSTANTS } from '../../../utils/validation';
 
 interface SetRowProps {
   set: any;
   setIndex: number;
   onUpdate: (reps: number, weight: number) => Promise<void>;
+  isLocked?: boolean;
 }
 
-const SetRow: React.FC<SetRowProps> = ({ set, setIndex, onUpdate }) => {
+const { MIN_REPS, MAX_REPS } = TRAINING_VALIDATION_CONSTANTS;
+
+const SetRow: React.FC<SetRowProps> = ({ set, setIndex, onUpdate, isLocked = false }) => {
   const [reps, setReps] = useState(set.reps);
   const [weight, setWeight] = useState(set.weight);
 
   const placeholderText = '0';
 
   const handleRepsChange = (newReps: number) => {
-    setReps(newReps);
-    onUpdate(newReps, weight);
+    const validationResult = validateReps(newReps, reps);
+    
+    // Log warning if validation failed and replacement was used
+    if (!validationResult.isValid && validationResult.replacement !== undefined) {
+      logger.warn(validationResult.errorMessage || 'Invalid reps value', {
+        setIndex,
+        invalidValue: newReps,
+        replacement: validationResult.replacement,
+        previousValue: reps
+      });
+    }
+    
+    setReps(validationResult.value);
+    onUpdate(validationResult.value, weight);
   };
 
   const handleWeightChange = (newWeight: number) => {
-    setWeight(newWeight);
-    onUpdate(reps, newWeight);
+    const validationResult = validateWeight(newWeight, weight);
+    
+    // Log warning if validation failed and replacement was used
+    if (!validationResult.isValid && validationResult.replacement !== undefined) {
+      logger.warn(validationResult.errorMessage || 'Invalid weight value', {
+        setIndex,
+        invalidValue: newWeight,
+        replacement: validationResult.replacement,
+        previousValue: weight
+      });
+    }
+    
+    setWeight(validationResult.value);
+    onUpdate(reps, validationResult.value);
   };
 
   return (
@@ -38,35 +67,67 @@ const SetRow: React.FC<SetRowProps> = ({ set, setIndex, onUpdate }) => {
       <View style={styles.repsControls}>
         <TouchableOpacity
           style={styles.controlButton}
-          onPress={() => reps > 1 && handleRepsChange(reps - 1)}
+          onPress={() => {
+            if (!isLocked) {
+              const newReps = reps - 1;
+              if (newReps >= MIN_REPS) {
+                handleRepsChange(newReps);
+              }
+            }
+          }}
+          disabled={isLocked}
         >
-          <Ionicons name="remove-circle" size={20} color={colors.secondary} />
+          <Ionicons 
+            name="remove-circle" 
+            size={20} 
+            color={isLocked ? colors.muted : colors.secondary} 
+          />
         </TouchableOpacity>
         
-        <Text style={styles.repsText}>{reps}</Text>
+        <Text style={[styles.repsText, isLocked && styles.lockedText]}>{reps}</Text>
         
         <TouchableOpacity
           style={styles.controlButton}
-          onPress={() => handleRepsChange(reps + 1)}
+          onPress={() => {
+            if (!isLocked) {
+              const newReps = reps + 1;
+              if (newReps <= MAX_REPS) {
+                handleRepsChange(newReps);
+              }
+            }
+          }}
+          disabled={isLocked}
         >
-          <Ionicons name="add-circle" size={20} color={colors.secondary} />
+          <Ionicons 
+            name="add-circle" 
+            size={20} 
+            color={isLocked ? colors.muted : colors.secondary} 
+          />
         </TouchableOpacity>
       </View>
       
       {/* Weight input */}
       <View style={styles.weightInput}>
         <TextInput
-          style={styles.weightField}
+          style={[styles.weightField, isLocked && styles.lockedInput]}
           value={weight?.toString() || ''}
           onChangeText={(text) => {
-            const num = parseFloat(text) || 0;
-            handleWeightChange(num);
+            if (!isLocked) {
+              const num = parseFloat(text);
+              if (!isNaN(num)) {
+                handleWeightChange(num);
+              } else if (text === '' || text === '.') {
+                // Allow empty input for better UX
+                setWeight(0);
+              }
+            }
           }}
           keyboardType="decimal-pad"
           placeholder={placeholderText}
           placeholderTextColor={colors.inputPlaceholder}
+          editable={!isLocked}
         />
-        <Text style={styles.kgText}>kg</Text>
+        <Text style={[styles.kgText, isLocked && styles.lockedText]}>kg</Text>
       </View>
     </View>
   );
@@ -134,6 +195,13 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     paddingLeft: 0,
     marginLeft: 0,
+  },
+  lockedText: {
+    opacity: 0.5,
+  },
+  lockedInput: {
+    backgroundColor: colors.background,
+    opacity: 0.6,
   },
 });
 

@@ -4,8 +4,8 @@
 
 export interface DayHeaderProps {
   dayOfWeek: string;
-  isTodaysWorkout: boolean;
-  isPastWeek: boolean;
+  isEditable: boolean;
+  dayStatus: 'past' | 'today' | 'future' | 'unknown';
   isRestDay: boolean;
   hideDayName?: boolean;
 }

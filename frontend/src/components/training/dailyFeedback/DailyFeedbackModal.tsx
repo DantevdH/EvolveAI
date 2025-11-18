@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { colors } from '../../../constants/designSystem';
 import { DailyFeedbackModalProps, DailyFeedbackData } from './types';
+import { validateDailyFeedback } from '../../../utils/validation';
+import { logger } from '../../../utils/logger';
 import { ModificationNotice } from './ModificationNotice';
 import { StarRating } from './StarRating';
 import { FeedbackInput } from './FeedbackInput';
@@ -52,13 +54,33 @@ export const DailyFeedbackModal: React.FC<DailyFeedbackModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      const feedbackData: DailyFeedbackData = {
-        feedback_provided: true,
-        user_feedback: feedback.trim() || undefined,
+      // Validate feedback data (strict mode - block invalid user input)
+      const validationResult = validateDailyFeedback({
         energy_level: energy,
         difficulty: difficulty,
         enjoyment: enjoyment,
         soreness_level: soreness,
+        user_feedback: feedback
+      }, { allowReplacement: false });
+
+      // If validation fails, show error and block the operation
+      if (!validationResult.isValid) {
+        Alert.alert('Validation Error', validationResult.errorMessage || 'Please check your feedback data');
+        logger.error('Invalid feedback data from user input', {
+          originalValues: { energy, difficulty, enjoyment, soreness },
+          error: validationResult.errorMessage
+        });
+        setIsSubmitting(false);
+        return;
+      }
+
+      const feedbackData: DailyFeedbackData = {
+        feedback_provided: true,
+        user_feedback: validationResult.feedback?.user_feedback,
+        energy_level: validationResult.feedback!.energy_level,
+        difficulty: validationResult.feedback!.difficulty,
+        enjoyment: validationResult.feedback!.enjoyment,
+        soreness_level: validationResult.feedback!.soreness_level,
         injury_reported: false,
       };
 

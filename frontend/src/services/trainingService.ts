@@ -20,6 +20,7 @@ import {
   UpdateSetResponse,
   CompleteTrainingResponse
 } from '../types/training';
+import { parseLocalDate } from '../utils/trainingDateUtils';
 
 export interface TrainingServiceResponse<T> {
   success: boolean;
@@ -148,7 +149,9 @@ export class TrainingService {
           return {
             id: schedule.id.toString(),
             weekNumber: schedule.week_number,
-            focusTheme: schedule.focus_theme || undefined,
+            focusTheme: schedule.focus_theme && schedule.focus_theme.trim() !== '' ? schedule.focus_theme : undefined,
+            primaryGoal: schedule.primary_goal && schedule.primary_goal.trim() !== '' ? schedule.primary_goal : undefined,
+            progressionLever: schedule.progression_lever && schedule.progression_lever.trim() !== '' ? schedule.progression_lever : undefined,
             dailyTrainings: sortedDailyTrainings.map((daily: any) => {
                 // Combine strength exercises and endurance sessions from relational data
                 const strengthExercises = daily.strength_exercise?.map((se: any) => ({
@@ -177,7 +180,6 @@ export class TrainingService {
                     mainMuscle: se.main_muscle || se.exercises?.main_muscles?.[0] || null,
                     exerciseName: se.exercise_name || se.exercises?.name || 'Unknown Exercise',
                     sets: this.parseSets(se.sets, se.reps, se.weight),
-                    weight1RM: se.weight_1rm,
                     // Enriched fields at top-level (for round-trip preservation) - extract from exercises table
                     targetArea: se.exercises?.target_area || null,
                     mainMuscles: se.exercises?.main_muscles || null,
@@ -217,6 +219,7 @@ export class TrainingService {
                   isRestDay: daily.is_rest_day,
                   exercises: allExercises,
                   completed: allExercises.every((ex: any) => ex.completed) || daily.is_rest_day,
+                  scheduledDate: parseLocalDate(daily.scheduled_date),
                   // Use updated_at as completedAt since daily_training table doesn't have completed_at column
                   // This represents when the training was last updated/completed
                   completedAt: daily.updated_at ? new Date(daily.updated_at) : undefined,
@@ -1267,7 +1270,6 @@ export class TrainingService {
         sets: se.sets || 1,
         reps: se.reps || [10],
         weight: se.weight || [null],
-        weight1rm: se.weight_1rm || [70],
       })) || [];
 
       const enduranceSessions = todaysTraining.endurance_session?.map((es: any) => ({
@@ -1277,7 +1279,6 @@ export class TrainingService {
         sets: 1,
         reps: [],
         weight: [],
-        weight1rm: [],
       })) || [];
 
       const transformedTraining = {
