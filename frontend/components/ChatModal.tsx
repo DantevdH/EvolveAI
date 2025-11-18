@@ -25,12 +25,14 @@ import { AIChatMessage } from '@/src/components/shared/chat/AIChatMessage';
 import { useAuth } from '@/src/context/AuthContext';
 import { supabase } from '@/src/config/supabase';
 import { trainingService } from '@/src/services/onboardingService';
+import { getChatWelcomeMessage } from '@/src/utils/chatWelcomeMessages';
 import {
   transformTrainingPlan,
   reverseTransformTrainingPlan,
   transformUserProfileToPersonalInfo,
 } from '@/src/utils/trainingPlanTransformer';
 import { TrainingPlan } from '@/src/types/training';
+import { useApiCallWithBanner } from '@/src/hooks/useApiCallWithBanner';
 
 interface ChatMessageType {
   id: string;
@@ -81,7 +83,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
       return planMessage;
     }
 
-    return `Hi ${state.userProfile?.username || 'there'}! 👋\n\nI'm your AI Coach. How can I help you today? 💪`;
+    return getChatWelcomeMessage(state.userProfile?.username);
   }, [initialMessage, isPlanReview, state.trainingPlan, state.userProfile?.username]);
 
   // Reset / initialize when modal visibility changes
@@ -153,132 +155,113 @@ const ChatModal: React.FC<ChatModalProps> = ({
     [messages]
   );
 
-  const handlePlanFeedback = useCallback(
+  // API call with error handling for chat/plan feedback
+  const { execute: executePlanFeedback, ErrorBannerComponent: ChatErrorBanner } = useApiCallWithBanner(
     async (userMessage: ChatMessageType) => {
       if (!currentPlan) {
-        Alert.alert(
-          'Plan unavailable',
-          'Your training plan is still loading. Please try again in a moment.',
-          [{ text: 'OK' }]
-        );
+        throw new Error('Your training plan is still loading. Please try again in a moment.');
+      }
+
+      const planId =
+        typeof currentPlan.id === 'string' ? parseInt(currentPlan.id, 10) : currentPlan.id;
+
+      let jwtToken = state.session?.access_token;
+      if (!jwtToken) {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        jwtToken = session?.access_token;
+      }
+
+      if (!jwtToken) {
+        throw new Error('JWT token not available. Please sign in again.');
+      }
+
+      if (!state.userProfile || !state.userProfile.id) {
+        throw new Error('User profile not found. Please reload the app.');
+      }
+
+      if (!state.userProfile.playbook) {
+        throw new Error('Training profile not fully loaded. Please reload the app.');
+      }
+
+      const backendFormatPlan = reverseTransformTrainingPlan(currentPlan);
+      const initialResponsesRecord = convertToRecord(state.userProfile.initial_responses);
+      const personalInfo = transformUserProfileToPersonalInfo(state.userProfile);
+
+      if (!personalInfo) {
+        throw new Error('Failed to prepare user profile data. Please reload the app.');
+      }
+
+      const conversationHistory = buildConversationHistory(userMessage);
+
+      const data = await trainingService.sendPlanFeedback(
+        state.userProfile.id,
+        planId,
+        userMessage.message,
+        backendFormatPlan,
+        state.userProfile.playbook,
+        personalInfo,
+        conversationHistory,
+        jwtToken
+      );
+
+      // Remove typing indicator
+      setMessages(prev => prev.filter(msg => msg.id !== 'typing'));
+
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to process feedback');
+      }
+
+      if (data.navigate_to_main_app) {
+        const aiResponse =
+          data.ai_response ||
+          "Great! You're all set. I'll take you to your dashboard and stay available if you need tweaks. 🚀";
+        addAiMessage(aiResponse);
+        await refreshUserProfile();
+        onPlanAccepted?.();
+        onClose();
         return;
       }
 
+      if (data.updated_plan) {
+        const updatedPlan = transformTrainingPlan(data.updated_plan);
+        setCurrentPlan(updatedPlan);
+        setTrainingPlan(updatedPlan);
+
+        if (data.updated_playbook && state.userProfile) {
+          dispatch({
+            type: 'SET_USER_PROFILE',
+            payload: {
+              ...state.userProfile,
+              playbook: data.updated_playbook,
+            },
+          });
+        }
+      }
+
+      const messageToShow =
+        (data.updated_plan && transformTrainingPlan(data.updated_plan)?.aiMessage) ||
+        data.ai_response ||
+        "Here's an updated version of your plan. Let me know what you think!";
+
+      addAiMessage(messageToShow);
+    },
+    {
+      retryAttempts: 3,
+    }
+  );
+
+  const handlePlanFeedback = useCallback(
+    async (userMessage: ChatMessageType) => {
       try {
-        const planId =
-          typeof currentPlan.id === 'string' ? parseInt(currentPlan.id, 10) : currentPlan.id;
-
-        let jwtToken = state.session?.access_token;
-        if (!jwtToken) {
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
-          jwtToken = session?.access_token;
-        }
-
-        if (!jwtToken) {
-          throw new Error('JWT token not available. Please sign in again.');
-        }
-
-        if (!state.userProfile || !state.userProfile.id) {
-          Alert.alert('Error', 'User profile not found. Please reload the app.', [{ text: 'OK' }]);
-          return;
-        }
-
-        if (!state.userProfile.playbook) {
-          Alert.alert(
-            'Error',
-            'Training profile not fully loaded. Please reload the app.',
-            [{ text: 'OK' }]
-          );
-          return;
-        }
-
-        const backendFormatPlan = reverseTransformTrainingPlan(currentPlan);
-        const initialResponsesRecord = convertToRecord(state.userProfile.initial_responses);
-        const personalInfo = transformUserProfileToPersonalInfo(state.userProfile);
-
-        if (!personalInfo) {
-          Alert.alert(
-            'Error',
-            'Failed to prepare user profile data. Please reload the app.',
-            [{ text: 'OK' }]
-          );
-          return;
-        }
-
-        const conversationHistory = buildConversationHistory(userMessage);
-
-        const data = await trainingService.sendPlanFeedback(
-          state.userProfile.id,
-          planId,
-          userMessage.message,
-          backendFormatPlan,
-          state.userProfile.playbook,
-          personalInfo,
-          conversationHistory,
-          jwtToken
-        );
-
-        // Remove typing indicator
-        setMessages(prev => prev.filter(msg => msg.id !== 'typing'));
-
-        if (!data.success) {
-          throw new Error(data.error || 'Failed to process feedback');
-        }
-
-        if (data.navigate_to_main_app) {
-          const aiResponse =
-            data.ai_response ||
-            "Great! You're all set. I'll take you to your dashboard and stay available if you need tweaks. 🚀";
-          addAiMessage(aiResponse);
-          await refreshUserProfile();
-          onPlanAccepted?.();
-          onClose();
-          return;
-        }
-
-        if (data.updated_plan) {
-          const updatedPlan = transformTrainingPlan(data.updated_plan);
-          setCurrentPlan(updatedPlan);
-          setTrainingPlan(updatedPlan);
-
-          if (data.updated_playbook && state.userProfile) {
-            dispatch({
-              type: 'SET_USER_PROFILE',
-              payload: {
-                ...state.userProfile,
-                playbook: data.updated_playbook,
-              },
-            });
-          }
-        }
-
-        const messageToShow =
-          (data.updated_plan && transformTrainingPlan(data.updated_plan)?.aiMessage) ||
-          data.ai_response ||
-          "Here's an updated version of your plan. Let me know what you think!";
-
-        addAiMessage(messageToShow);
+        await executePlanFeedback(userMessage);
       } catch (error) {
-        console.error('Error sending plan feedback:', error);
+        // Error is already handled by useApiCallWithBanner
         setMessages(prev => prev.filter(msg => msg.id !== 'typing'));
-        addAiMessage(
-          'Sorry, I hit a snag updating your plan. Please try again or reach out if the issue persists.'
-        );
       }
     },
-    [
-      addAiMessage,
-      buildConversationHistory,
-      currentPlan,
-      dispatch,
-      refreshUserProfile,
-      setTrainingPlan,
-      state.session?.access_token,
-      state.trainingPlan,
-      state.userProfile,
-    ]
+    [executePlanFeedback]
   );
 
   const handleSendMessage = async () => {
@@ -305,26 +288,10 @@ const ChatModal: React.FC<ChatModalProps> = ({
     };
     setMessages(prev => [...prev, typingMessage]);
 
-    if (isPlanReview) {
-      await handlePlanFeedback(userMessage);
-      setIsLoading(false);
-      return;
-      }
-
-    // General chat placeholder
-    try {
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setMessages(prev => prev.filter(msg => msg.id !== 'typing'));
-      addAiMessage(
-        `Thanks for your message! I'm here to help with your training questions. This is a placeholder response - you can integrate your chat API here.`
-      );
-    } catch (error) {
-      console.error('Error sending message:', error);
-      setMessages(prev => prev.filter(msg => msg.id !== 'typing'));
-      addAiMessage('Sorry, I encountered an error. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
+    // Both plan-review and general modes use the same chat endpoint
+    // The backend intelligently classifies intent and responds accordingly
+    await handlePlanFeedback(userMessage);
+    setIsLoading(false);
   };
 
   const exampleQuestions = [
@@ -360,6 +327,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         <View style={styles.overlay}>
+          <ChatErrorBanner />
           <View style={styles.modalBox}>
             {/* Header */}
             <View style={[styles.header, { paddingTop:  18}]}>

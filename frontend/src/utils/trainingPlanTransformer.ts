@@ -20,6 +20,8 @@ export interface BackendWeeklySchedule {
   week_number: number;
   justification: string;
   focus_theme?: string;
+  primary_goal?: string;
+  progression_lever?: string;
   daily_trainings: BackendDailyTraining[];
 }
 
@@ -92,6 +94,8 @@ function transformWeeklySchedule(backendWeek: BackendWeeklySchedule): any {
     weekNumber: backendWeek.week_number,
     justification: backendWeek.justification,
     focusTheme: backendWeek.focus_theme || undefined,
+    primaryGoal: backendWeek.primary_goal || undefined,
+    progressionLever: backendWeek.progression_lever || undefined,
     dailyTrainings: backendWeek.daily_trainings?.map(transformDailyTraining) || [],
   };
 }

@@ -915,7 +915,7 @@ async def _handle_playbook_extraction_for_satisfied(
     try:
         logger.info(f"📘 Extracting lessons from conversation history ({len(conversation_history)} messages)")
         
-        # OPTIMIZATION: user_profile_id is already validated in parent /update-week endpoint
+        # OPTIMIZATION: user_profile_id is already validated in parent /chat endpoint
         # No need for fallback DB call
         try:
             user_profile_id = int(request.user_profile_id) if request.user_profile_id is not None else None
@@ -997,19 +997,26 @@ async def _handle_playbook_extraction_for_satisfied(
     return updated_playbook
 
 
-@router.post("/update-week", response_model=PlanFeedbackResponse)
-async def update_week(
+@router.post("/chat", response_model=PlanFeedbackResponse)
+async def chat(
     request: PlanFeedbackRequest,
     coach: TrainingCoach = Depends(get_training_coach)
 ):
     """
-    Update an existing week in the training plan based on user feedback.
+    Multi-purpose training chat endpoint that handles various user intents.
     
-    Updates ONLY the latest week (highest week_number), but returns the full TrainingPlan structure
-    with the updated week inserted into the existing plan.
+    This endpoint intelligently classifies user intent and responds accordingly:
+    - **Questions/Clarity**: Returns AI response without plan updates
+    - **Plan Updates**: Updates the latest week based on feedback and returns updated plan
+    - **Satisfaction**: Marks plan as accepted and navigates to main app
+    - **Unclear**: Asks for clarification
+    
+    The endpoint automatically determines the appropriate action based on the user's message
+    and conversation history. It can update ONLY the latest week (highest week_number) when needed,
+    but always returns the full TrainingPlan structure.
     
     Request includes:
-    - feedback_message: User feedback message (required)
+    - feedback_message: User message/feedback (required)
     - training_plan: Full training plan data (required)
     - plan_id: Training plan ID (required)
     - conversation_history: Previous conversation messages for context (optional, default: [])

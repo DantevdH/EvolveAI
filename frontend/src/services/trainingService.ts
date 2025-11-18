@@ -149,7 +149,9 @@ export class TrainingService {
           return {
             id: schedule.id.toString(),
             weekNumber: schedule.week_number,
-            focusTheme: schedule.focus_theme || undefined,
+            focusTheme: schedule.focus_theme && schedule.focus_theme.trim() !== '' ? schedule.focus_theme : undefined,
+            primaryGoal: schedule.primary_goal && schedule.primary_goal.trim() !== '' ? schedule.primary_goal : undefined,
+            progressionLever: schedule.progression_lever && schedule.progression_lever.trim() !== '' ? schedule.progression_lever : undefined,
             dailyTrainings: sortedDailyTrainings.map((daily: any) => {
                 // Combine strength exercises and endurance sessions from relational data
                 const strengthExercises = daily.strength_exercise?.map((se: any) => ({

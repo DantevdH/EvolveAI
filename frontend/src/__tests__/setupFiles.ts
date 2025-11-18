@@ -10,42 +10,59 @@
 jest.mock('react-native-url-polyfill/auto', () => ({}));
 
 // Mock React Native modules that might be needed globally
-jest.mock('react-native', () => ({
-  Platform: {
-    OS: 'ios',
-    select: jest.fn((obj) => obj.ios),
-  },
+jest.mock('react-native', () => {
+  const React = require('react');
+  return {
+    Platform: {
+      OS: 'ios',
+      select: jest.fn((obj) => obj.ios),
+    },
     Dimensions: {
       get: jest.fn(() => ({ width: 375, height: 812 })),
     },
     useWindowDimensions: jest.fn(() => ({ width: 375, height: 812 })),
-  StyleSheet: {
-    create: (styles: any) => styles,
-  },
-  View: 'View',
-  Text: 'Text',
-  Animated: {
-    View: 'AnimatedView',
-    Value: class {
-      private _value: number;
-      constructor(value: number) {
-        this._value = value;
-      }
-      setValue(value: number) {
-        this._value = value;
-      }
-      interpolate() {
-        return '0deg';
-      }
+    StyleSheet: {
+      create: (styles: any) => styles,
     },
-    timing: jest.fn(() => ({
-      start: jest.fn(),
-    })),
-    loop: jest.fn(() => ({
-      start: jest.fn(),
-    })),
-  },
-}));
+    View: 'View',
+    Text: 'Text',
+    Modal: ({ children, visible, ...props }: any) => {
+      return visible ? React.createElement('View', { testID: 'modal', ...props }, children) : null;
+    },
+    ScrollView: ({ children, ...props }: any) => {
+      return React.createElement('View', { ...props }, children);
+    },
+    TouchableOpacity: ({ children, onPress, disabled, ...props }: any) => {
+      return React.createElement(
+        'Pressable',
+        { onPress, disabled, ...props },
+        children
+      );
+    },
+    Pressable: 'Pressable',
+    Animated: {
+      View: 'AnimatedView',
+      Value: class {
+        private _value: number;
+        constructor(value: number) {
+          this._value = value;
+        }
+        setValue(value: number) {
+          this._value = value;
+        }
+        interpolate() {
+          return '0deg';
+        }
+      },
+      timing: jest.fn(() => ({
+        start: jest.fn(),
+      })),
+      loop: jest.fn(() => ({
+        start: jest.fn(),
+      })),
+    },
+  };
+});
 
 // Mock Expo modules
 jest.mock('expo-web-browser', () => ({

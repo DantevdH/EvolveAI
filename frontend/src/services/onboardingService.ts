@@ -184,7 +184,7 @@ export class trainingService {
       };
 
       const response = await apiClient.post<PlanFeedbackResponse>(
-        `${this.BASE_URL}/update-week`,
+        `${this.BASE_URL}/chat`,
         request
       );
 
@@ -192,6 +192,38 @@ export class trainingService {
     } catch (error) {
       console.error(`Failed to send plan feedback: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw new Error(error instanceof Error ? error.message : 'Failed to send plan feedback');
+    }
+  }
+
+  /**
+   * Generate a new week in the training plan
+   * Calls the create-week endpoint to generate the next week
+   */
+  static async generateWeek(
+    planId: number,
+    trainingPlan: any,  // Full training plan data from frontend
+    userProfileId: number,
+    personalInfo: any,  // Personal info from userProfile
+    jwtToken?: string
+  ): Promise<any> {
+    try {
+      const request = {
+        plan_id: planId,
+        training_plan: trainingPlan,  // Send training plan to backend
+        user_profile_id: userProfileId,
+        personal_info: personalInfo,  // Send personal info from userProfile
+        jwt_token: jwtToken,
+      };
+
+      const response = await apiClient.post<any>(
+        `${this.BASE_URL}/create-week`,
+        request
+      );
+
+      return response;
+    } catch (error) {
+      console.error(`Failed to generate week: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(error instanceof Error ? error.message : 'Failed to generate week');
     }
   }
 }

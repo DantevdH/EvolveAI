@@ -88,6 +88,8 @@ export interface WeeklySchedule {
   completed: boolean;
   completedAt?: Date;
   focusTheme?: string; // Week's focus theme (e.g., 'Hypertrophy Volume Build')
+  primaryGoal?: string; // Week's primary goal
+  progressionLever?: string; // Week's progression lever
 }
 
 export interface TrainingPlan {

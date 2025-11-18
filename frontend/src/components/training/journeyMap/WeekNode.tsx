@@ -95,7 +95,7 @@ const WeekCard: React.FC<WeekNodeProps> = ({ node, onPress, animations, totalWee
       ]}
       onPress={() => onPress(node)}
       activeOpacity={0.85}
-      disabled={node.status === 'locked'}
+      disabled={node.isClickable === false}
     >
 
       {/* Gradient background */}

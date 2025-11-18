@@ -24,9 +24,13 @@ import { FitnessJourneyMap } from '../components/training/journeyMap';
 import { WelcomeHeader } from '../components/home/WelcomeHeader';
 import { ProgressSummary } from '../components/home/ProgressSummary';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { trainingService } from '../services/onboardingService';
+import { reverseTransformTrainingPlan, transformUserProfileToPersonalInfo } from '../utils/trainingPlanTransformer';
+import { supabase } from '../config/supabase';
+import { useApiCallWithBanner } from '../hooks/useApiCallWithBanner';
 
 const TrainingScreenContent: React.FC = () => {
-  const { state: authState } = useAuth();
+  const { state: authState, refreshTrainingPlan, setTrainingPlan } = useAuth();
   const [addExerciseModalVisible, setAddExerciseModalVisible] = useState(false);
   const [removeExerciseId, setRemoveExerciseId] = useState<{ id: string; isEndurance: boolean; name: string } | null>(null);
   const [selectedWeekFromMap, setSelectedWeekFromMap] = useState<number | null>(null);
@@ -206,6 +210,83 @@ const TrainingScreenContent: React.FC = () => {
     selectWeek(weekNumber);
   };
 
+  // Handle week generation
+  // API call with error handling for week generation
+  const { execute: executeGenerateWeek, ErrorBannerComponent: GenerateWeekErrorBanner } = useApiCallWithBanner(
+    async (weekNumber: number) => {
+      if (!trainingPlan || !authState.userProfile) {
+        throw new Error('Unable to generate week: missing training plan or user profile');
+      }
+
+      const planId = typeof trainingPlan.id === 'string' ? parseInt(trainingPlan.id, 10) : trainingPlan.id;
+      if (!planId) {
+        throw new Error('Invalid plan ID');
+      }
+
+      // Get JWT token
+      let jwtToken = authState.session?.access_token;
+      if (!jwtToken) {
+        const { data: { session } } = await supabase.auth.getSession();
+        jwtToken = session?.access_token;
+      }
+
+      if (!jwtToken) {
+        throw new Error('JWT token not available. Please sign in again.');
+      }
+
+      // Prepare data
+      const backendFormatPlan = reverseTransformTrainingPlan(trainingPlan);
+      const personalInfo = transformUserProfileToPersonalInfo(authState.userProfile);
+
+      if (!personalInfo) {
+        throw new Error('Failed to prepare user profile data.');
+      }
+
+      // Call API
+      const userProfileId = authState.userProfile.id;
+      if (!userProfileId) {
+        throw new Error('User profile ID not available.');
+      }
+
+      const response = await trainingService.generateWeek(
+        planId,
+        backendFormatPlan,
+        userProfileId,
+        personalInfo,
+        jwtToken
+      );
+
+      // Update training plan with new week
+      if (response?.data) {
+        // Transform the response back to frontend format
+        const { transformTrainingPlan } = await import('../utils/trainingPlanTransformer');
+        const updatedPlan = transformTrainingPlan(response.data);
+        
+        // Update the training plan in auth context
+        setTrainingPlan(updatedPlan);
+        
+        // Refresh to get the latest data
+        await refreshTrainingPlan();
+        
+        logger.info(`Week ${weekNumber} generated successfully`);
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    },
+    {
+      retryAttempts: 3,
+    }
+  );
+
+  const handleGenerateWeek = useCallback(async (weekNumber: number) => {
+    try {
+      await executeGenerateWeek(weekNumber);
+    } catch (error) {
+      // Error is already handled by useApiCallWithBanner, but we re-throw for modal to handle
+      throw error;
+    }
+  }, [executeGenerateWeek]);
+
   // Handle back to map
   const handleBackToMap = () => {
     setSelectedWeekFromMap(null);
@@ -217,6 +298,7 @@ const TrainingScreenContent: React.FC = () => {
       <SafeAreaView style={styles.container}>
         <SwapExerciseErrorBanner />
         <CompleteTrainingErrorBanner />
+        <GenerateWeekErrorBanner />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading training plan...</Text>
@@ -243,6 +325,7 @@ const TrainingScreenContent: React.FC = () => {
       <SafeAreaView style={styles.container}>
         <SwapExerciseErrorBanner />
         <CompleteTrainingErrorBanner />
+        <GenerateWeekErrorBanner />
         <View style={styles.noPlanContainer}>
           <Text style={styles.noPlanTitle}>No Training Plan</Text>
           <Text style={styles.noPlanText}>
@@ -323,6 +406,7 @@ const TrainingScreenContent: React.FC = () => {
               trainingPlan={trainingPlan}
               currentWeek={trainingPlan.currentWeek}
               onWeekSelect={handleWeekSelectFromMap}
+              onGenerateWeek={handleGenerateWeek}
               headerTitle={trainingPlan.title}
               headerAccessory={renderJourneyAccessory}
             />
