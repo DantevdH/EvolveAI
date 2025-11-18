@@ -9,11 +9,17 @@ import os
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
-from dotenv import load_dotenv
 from supabase import create_client, Client
 from logging_config import get_logger
 
-load_dotenv()
+# Use centralized environment loader (respects test environment)
+try:
+    from core.utils.env_loader import load_environment
+    load_environment()  # Will automatically skip in test environment
+except ImportError:
+    # Fallback if core.utils not available
+    from dotenv import load_dotenv
+    load_dotenv()
 
 logger = get_logger(__name__)
 # Reduce log verbosity - only show warnings and errors

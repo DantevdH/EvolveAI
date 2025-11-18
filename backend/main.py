@@ -2,14 +2,27 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from dotenv import load_dotenv
 import os
 from logging_config import get_logger
 from core.training.training_api import router as training_router
 from settings import settings
 
-# Load environment variables
-load_dotenv()
+# Load environment variables using centralized utility
+# This ensures test environment is respected and prevents duplicate loading
+try:
+    from core.utils.env_loader import load_environment
+    load_environment()  # Will automatically skip in test environment
+except ImportError:
+    # Fallback if core.utils not available (shouldn't happen in normal operation)
+    from dotenv import load_dotenv
+    _is_test_env = (
+        os.getenv("ENVIRONMENT", "").lower() == "test" or
+        os.getenv("PYTEST_CURRENT_TEST") is not None or
+        "pytest" in os.getenv("_", "").lower() or
+        "PYTEST" in os.environ
+    )
+    if not _is_test_env:
+        load_dotenv(override=False)
 
 # Initialize logging
 logger = get_logger(__name__)

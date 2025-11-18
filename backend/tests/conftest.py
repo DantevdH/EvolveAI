@@ -1,31 +1,60 @@
 """
-Pytest configuration and shared fixtures
+Pytest configuration and shared fixtures.
+
+BEST PRACTICES:
+1. pytest_configure hook sets ENVIRONMENT=test BEFORE any imports
+2. This prevents .env files from loading during test execution
+3. Test environment variables are set with dummy values
+4. Actual tests should mock external services (OpenAI, Supabase, etc.)
 """
 import pytest
 import os
 import sys
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from fastapi.testclient import TestClient
 
 # Add backend directory to Python path so we can import main
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-# CRITICAL: Set test environment variables BEFORE importing main
-# This prevents validation errors during module import
-os.environ.setdefault("ENVIRONMENT", "test")
-os.environ.setdefault("DEBUG", "true")
 
-# Set minimal test environment variables to satisfy validation
-# These are dummy values - actual tests should mock services that use them
-os.environ.setdefault("OPENAI_API_KEY", "test-openai-key")
-os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
-os.environ.setdefault("SUPABASE_ANON_KEY", "test-anon-key")
-# Optional but useful for tests that need service role
-os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
+# Pytest configuration hook - runs BEFORE conftest.py imports
+# This is the EARLIEST point in pytest execution
+def pytest_configure(config):
+    """
+    Pytest configuration hook.
+    
+    Sets test environment variables BEFORE any module imports.
+    This ensures test environment is detected and .env files are NOT loaded.
+    
+    CRITICAL: This runs before conftest.py is even imported, providing
+    the earliest possible safety net to prevent .env file loading.
+    """
+    # CRITICAL: Set ENVIRONMENT=test FIRST with direct assignment
+    # This ensures test mode is detected before any load_dotenv() calls
+    os.environ["ENVIRONMENT"] = "test"
+    os.environ["PYTEST"] = "true"
+    os.environ["DEBUG"] = "true"
+    
+    # Set minimal test env vars with direct assignment (not setdefault)
+    # This ensures test values are used even if .env file exists
+    # CI/CD can override these with real values if needed for integration tests
+    test_env_vars = {
+        "OPENAI_API_KEY": "test-openai-key",
+        "SUPABASE_URL": "https://test.supabase.co",
+        "SUPABASE_ANON_KEY": "test-anon-key",
+        "SUPABASE_SERVICE_ROLE_KEY": "test-service-role-key",
+        "LLM_API_KEY": "test-llm-api-key",
+    }
+    
+    # Only set if not already set (allows CI/CD to override)
+    for key, value in test_env_vars.items():
+        if key not in os.environ or not os.environ[key]:
+            os.environ[key] = value
 
-# Now import main - validation will pass with test values
+
+# Now import main - test environment is already set, so .env won't load
 from main import app
 
 @pytest.fixture
@@ -52,19 +81,31 @@ def mock_supabase_client():
 
 
 # Pytest configuration hook - runs before test collection
+# This is the EARLIEST point in pytest execution, before conftest.py is even imported
 def pytest_configure(config):
     """
     Pytest configuration hook.
     Ensures test environment is set up before any tests run.
-    This runs before conftest imports, providing an early safety net.
-    """
-    # Ensure test environment is set (in case conftest import order varies)
-    os.environ.setdefault("ENVIRONMENT", "test")
-    os.environ.setdefault("DEBUG", "true")
+    This runs BEFORE conftest.py imports, providing the earliest possible safety net.
     
-    # Set minimal test env vars if not already set (allows CI to override with real values)
-    os.environ.setdefault("OPENAI_API_KEY", "test-openai-key")
-    os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
-    os.environ.setdefault("SUPABASE_ANON_KEY", "test-anon-key")
-    os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
+    CRITICAL: This must set ENVIRONMENT=test FIRST to prevent .env file loading
+    in any modules that get imported during test collection.
+    """
+    # CRITICAL: Set ENVIRONMENT=test FIRST with direct assignment
+    # This ensures test mode is detected before any load_dotenv() calls
+    os.environ["ENVIRONMENT"] = "test"
+    os.environ["PYTEST"] = "true"
+    os.environ["DEBUG"] = "true"
+    
+    # Set minimal test env vars with direct assignment (not setdefault)
+    # This ensures test values are used even if .env file exists with empty values
+    # CI can still override these with real values if needed
+    if "OPENAI_API_KEY" not in os.environ or not os.environ["OPENAI_API_KEY"]:
+        os.environ["OPENAI_API_KEY"] = "test-openai-key"
+    if "SUPABASE_URL" not in os.environ or not os.environ["SUPABASE_URL"]:
+        os.environ["SUPABASE_URL"] = "https://test.supabase.co"
+    if "SUPABASE_ANON_KEY" not in os.environ or not os.environ["SUPABASE_ANON_KEY"]:
+        os.environ["SUPABASE_ANON_KEY"] = "test-anon-key"
+    if "SUPABASE_SERVICE_ROLE_KEY" not in os.environ or not os.environ["SUPABASE_SERVICE_ROLE_KEY"]:
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key"
 
