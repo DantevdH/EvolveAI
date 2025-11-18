@@ -6,6 +6,8 @@ import { TrainingPlan } from '@/src/types/training';
 import { supabase } from '@/src/config/supabase';
 import { NotificationService } from '@/src/services/NotificationService';
 import { logger } from '@/src/utils/logger';
+import { apiCallWithRetry, getProfileLoadingErrorMessage } from '@/src/utils/apiCallWithRetry';
+import { PROFILE_LOADING_CONFIG } from '@/src/constants/api';
 
 // Simplified auth state interface
 interface SimpleAuthState {
@@ -189,20 +191,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // DON'T set isLoading - profile loading should not block navigation
       // Navigation should be reactive to auth state, not profile loading state
       
-      // Add timeout to prevent hanging - if profile query takes too long, give up
-      const profilePromise = UserService.getUserProfile(userId);
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Profile loading timeout after 3 seconds')), 3000);
-      });
-      
+      // Use centralized API call utility with timeout and retry logic
       let response;
       try {
-        response = await Promise.race([profilePromise, timeoutPromise]);
-      } catch (timeoutError) {
-        logger.warn('Profile loading timed out - treating as new user, allowing onboarding');
+        response = await apiCallWithRetry(
+          () => UserService.getUserProfile(userId),
+          {
+            timeoutMs: PROFILE_LOADING_CONFIG.TIMEOUT_MS,
+            maxRetries: PROFILE_LOADING_CONFIG.MAX_RETRIES,
+            retryDelayMs: PROFILE_LOADING_CONFIG.RETRY_DELAY_MS,
+            context: 'Profile loading',
+          }
+        );
+      } catch (error) {
+        logger.warn('Profile loading timed out or failed - treating as new user, allowing onboarding', error);
+        
+        // Store user-friendly error message for display
+        const userFriendlyMessage = getProfileLoadingErrorMessage(error);
+        
+        // Set error in state for potential display (non-blocking)
+        dispatch({ type: 'SET_ERROR', payload: userFriendlyMessage });
+        
         // Treat timeout as "no profile found" - allow navigation to onboarding
         dispatch({ type: 'SET_USER_PROFILE', payload: null });
-        dispatch({ type: 'SET_ERROR', payload: null });
         isLoadingProfileRef.current = false;
         dispatch({ type: 'SET_PROFILE_LOADING', payload: false });
         return;
@@ -262,11 +273,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       logger.error('Error loading user profile', error instanceof Error ? error : 'Failed to load user profile');
       
+      // Use centralized error message utility
+      const userFriendlyMessage = getProfileLoadingErrorMessage(error);
+      
+      // Store error message for potential display (non-blocking)
+      dispatch({ type: 'SET_ERROR', payload: userFriendlyMessage });
+      
       // If query fails, treat as "no profile found" to allow onboarding to proceed
       // This handles network errors, RLS issues, etc. gracefully
       logger.warn('Profile loading failed - treating as new user, allowing onboarding');
       dispatch({ type: 'SET_USER_PROFILE', payload: null });
-      dispatch({ type: 'SET_ERROR', payload: null }); // Clear error to allow navigation
     } finally {
       // DON'T set isLoading to false - we never set it to true for profile loading
       isLoadingProfileRef.current = false;

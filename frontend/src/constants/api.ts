@@ -13,6 +13,13 @@ export const API_CONFIG = {
   TIMEOUT: 600000, // 5 minutes
 } as const;
 
+// Profile Loading Configuration
+export const PROFILE_LOADING_CONFIG = {
+  TIMEOUT_MS: 10000, // 10 seconds
+  MAX_RETRIES: 2,
+  RETRY_DELAY_MS: 1000, // 1 second between retries
+} as const;
+
 // Validation Constants
 export const VALIDATION_LIMITS = {
   USERNAME: {

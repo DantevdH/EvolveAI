@@ -32,6 +32,12 @@ jest.mock('react-native', () => {
     ScrollView: ({ children, ...props }: any) => {
       return React.createElement('View', { ...props }, children);
     },
+    SafeAreaView: ({ children, ...props }: any) => {
+      return React.createElement('View', { testID: 'safe-area-view', ...props }, children);
+    },
+    ActivityIndicator: ({ ...props }: any) => {
+      return React.createElement('View', { testID: 'activity-indicator', ...props });
+    },
     TouchableOpacity: ({ children, onPress, disabled, ...props }: any) => {
       return React.createElement(
         'Pressable',

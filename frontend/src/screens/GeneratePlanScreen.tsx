@@ -8,16 +8,14 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { StyleSheet, View, Alert, Text } from 'react-native';
-import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { ProgressOverlay } from '../components/onboarding/ui';
 import { useProgressOverlay } from '../hooks/useProgressOverlay';
 import { trainingService } from '../services/onboardingService';
-import { logError, logData, logWarn, logNavigation } from '../utils/logger';
+import { logError, logData, logWarn } from '../utils/logger';
 import { useApiCallWithBanner } from '../hooks/useApiCallWithBanner';
 
 export const GeneratePlanScreen: React.FC = () => {
-  const router = useRouter();
   const { state: authState, refreshUserProfile, refreshTrainingPlan, setTrainingPlan, setExercises, setPollingPlan, dispatch } = useAuth();
   const { progressState, runWithProgress } = useProgressOverlay();
   const [error, setError] = useState<string | null>(null);
@@ -64,9 +62,8 @@ export const GeneratePlanScreen: React.FC = () => {
           // Poll for playbook + plan outline to be ready (background jobs)
           await pollForBackgroundData();
           
-          // Navigate to tabs after successful generation
-          logNavigation('generate-plan', '/(tabs)', 'plan_generated');
-          router.replace('/(tabs)');
+          // Navigation to tabs is handled automatically by the routing system in index.tsx
+          // when state.trainingPlan is set above via setTrainingPlan()
         } else {
           throw new Error(response.message || 'Failed to generate training plan');
         }
@@ -234,7 +231,7 @@ export const GeneratePlanScreen: React.FC = () => {
       setError(errorMessage);
       generationTriggeredRef.current = false;
     }
-  }, [authState.userProfile, authState.session, dispatch, pollForBackgroundData, router, runWithProgress, setExercises, setTrainingPlan, executeGeneratePlan]);
+  }, [authState.userProfile, authState.session, dispatch, pollForBackgroundData, runWithProgress, setExercises, setTrainingPlan, executeGeneratePlan]);
 
   useEffect(() => {
     // Avoid triggering generation while a plan is being fetched or already exists
@@ -245,8 +242,8 @@ export const GeneratePlanScreen: React.FC = () => {
     
     if (authState.trainingPlan) {
       logData('Plan generation', 'skipped - plan exists');
-      logNavigation('generate-plan', '/(tabs)', 'plan_exists');
-      router.replace('/(tabs)');
+      // Navigation to tabs is handled automatically by the routing system in index.tsx
+      // when state.trainingPlan exists
       return;
     }
     
@@ -259,7 +256,7 @@ export const GeneratePlanScreen: React.FC = () => {
       startGeneration();
     }, 500);
     return () => clearTimeout(timer);
-  }, [authState.trainingPlanLoading, authState.trainingPlan, startGeneration, router]);
+  }, [authState.trainingPlanLoading, authState.trainingPlan, startGeneration]);
 
   return (
     <View style={styles.container}>

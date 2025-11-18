@@ -64,11 +64,21 @@ export default function FloatingTabBar() {
     return normalizedPathname === normalizedRoute;
   };
 
-  const handlePress = (tab: TabConfig) => {
-    if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const handlePress = async (tab: TabConfig) => {
+    try {
+      if (Platform.OS === 'ios') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      
+      // Attempt navigation with error handling
+      await router.push(tab.route as any);
+    } catch (error) {
+      // Handle navigation errors gracefully
+      console.error(`Failed to navigate to ${tab.route}:`, error);
+      // Optionally show user-friendly error message
+      // For now, we just log the error to avoid disrupting user experience
+      // In production, you might want to show a toast or alert
     }
-    router.push(tab.route as any);
   };
 
   return (
@@ -90,7 +100,9 @@ export default function FloatingTabBar() {
             key={tab.name}
             accessibilityRole="button"
             accessibilityState={focused ? { selected: true } : {}}
-            accessibilityLabel={tab.label}
+            accessibilityLabel={`${tab.label} tab`}
+            accessibilityHint={focused ? `Currently on ${tab.label} screen` : `Navigate to ${tab.label} screen`}
+            accessibilityValue={{ text: focused ? 'Selected' : 'Not selected' }}
             onPress={() => handlePress(tab)}
             style={styles.tabButton}
             activeOpacity={0.7}
