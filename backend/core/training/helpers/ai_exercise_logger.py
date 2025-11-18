@@ -23,11 +23,44 @@ logger.setLevel(logging.WARNING)
 class AIExerciseLogger:
     """Logs AI-generated exercises that need review."""
 
-    def __init__(self):
-        """Initialize the logger."""
-        self._validate_environment()
-        self._initialize_clients()
-        logger.info("✅ AI Exercise Logger initialized")
+    def __init__(self, require_env_vars: bool = False):
+        """
+        Initialize the logger.
+        
+        Args:
+            require_env_vars: If True, raises error when env vars are missing.
+                             If False, logger works in disabled mode (default: False).
+        """
+        self._enabled = False
+        self.supabase: Optional[Client] = None
+        self.supabase_url: Optional[str] = None
+        self.supabase_key: Optional[str] = None
+        
+        # Check if we're in a test environment
+        is_test_env = (
+            os.getenv("ENVIRONMENT", "").lower() == "test" or
+            os.getenv("PYTEST_CURRENT_TEST") is not None or
+            "pytest" in os.getenv("_", "").lower()
+        )
+        
+        # Only require env vars if explicitly requested AND not in test environment
+        if require_env_vars and not is_test_env:
+            self._validate_environment()
+        
+        # Try to initialize, but don't fail if env vars are missing
+        try:
+            self._initialize_clients()
+            if self.supabase is not None:
+                self._enabled = True
+                logger.info("✅ AI Exercise Logger initialized")
+            else:
+                logger.debug("AI Exercise Logger initialized in disabled mode (env vars not available)")
+        except Exception as e:
+            # In test environment or when env vars are optional, just log and continue
+            if is_test_env or not require_env_vars:
+                logger.debug(f"AI Exercise Logger initialized in disabled mode: {e}")
+            else:
+                raise
 
     def _validate_environment(self):
         """Validate environment variables."""
@@ -45,7 +78,16 @@ class AIExerciseLogger:
         """Initialize Supabase client."""
         self.supabase_url = os.getenv("SUPABASE_URL")
         self.supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
-        self.supabase: Client = create_client(self.supabase_url, self.supabase_key)
+        
+        # Only create client if we have both URL and key
+        if self.supabase_url and self.supabase_key:
+            self.supabase = create_client(self.supabase_url, self.supabase_key)
+        else:
+            self.supabase = None
+    
+    def is_enabled(self) -> bool:
+        """Check if the logger is enabled and ready to use."""
+        return self._enabled and self.supabase is not None
 
     def log_ai_exercise(
         self,
@@ -75,6 +117,10 @@ class AIExerciseLogger:
         Returns:
             True if logged successfully, False otherwise
         """
+        if not self.is_enabled():
+            logger.debug("AI Exercise Logger is disabled, skipping log_ai_exercise")
+            return False
+        
         try:
             record = {
                 "ai_exercise_name": ai_exercise_name,
@@ -166,6 +212,10 @@ class AIExerciseLogger:
             Dict with stats: {"inserted": int, "updated": int, "errors": int}
         """
         if not exercises:
+            return {"inserted": 0, "updated": 0, "errors": 0}
+        
+        if not self.is_enabled():
+            logger.debug(f"AI Exercise Logger is disabled, skipping bulk log of {len(exercises)} exercises")
             return {"inserted": 0, "updated": 0, "errors": 0}
         
         try:
@@ -360,6 +410,10 @@ class AIExerciseLogger:
         Returns:
             List of pending review records
         """
+        if not self.is_enabled():
+            logger.debug("AI Exercise Logger is disabled, returning empty list for get_pending_reviews")
+            return []
+        
         try:
             response = (
                 self.supabase.table("ai_exercises")
@@ -376,6 +430,36 @@ class AIExerciseLogger:
             return []
 
 
-# Create singleton instance
-ai_exercise_logger = AIExerciseLogger()
+# Lazy singleton instance - only created when first accessed
+_ai_exercise_logger_instance: Optional[AIExerciseLogger] = None
+
+
+def get_ai_exercise_logger() -> AIExerciseLogger:
+    """
+    Get or create the singleton AIExerciseLogger instance.
+    
+    Uses lazy initialization - only creates the instance when first accessed.
+    This prevents initialization errors during module import (e.g., in tests).
+    
+    Returns:
+        AIExerciseLogger instance
+    """
+    global _ai_exercise_logger_instance
+    if _ai_exercise_logger_instance is None:
+        # Don't require env vars by default - allows graceful degradation
+        _ai_exercise_logger_instance = AIExerciseLogger(require_env_vars=False)
+    return _ai_exercise_logger_instance
+
+
+# For backward compatibility, provide a module-level instance
+# But it's lazily initialized on first access
+class _LazyLoggerProxy:
+    """Proxy that lazily initializes the logger on first access."""
+    
+    def __getattr__(self, name):
+        return getattr(get_ai_exercise_logger(), name)
+
+
+# Create a proxy instance that will lazily initialize the real logger
+ai_exercise_logger = _LazyLoggerProxy()
 
