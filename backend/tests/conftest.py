@@ -79,33 +79,3 @@ def mock_supabase_client():
     mock_client.table.return_value = Mock()
     return mock_client
 
-
-# Pytest configuration hook - runs before test collection
-# This is the EARLIEST point in pytest execution, before conftest.py is even imported
-def pytest_configure(config):
-    """
-    Pytest configuration hook.
-    Ensures test environment is set up before any tests run.
-    This runs BEFORE conftest.py imports, providing the earliest possible safety net.
-    
-    CRITICAL: This must set ENVIRONMENT=test FIRST to prevent .env file loading
-    in any modules that get imported during test collection.
-    """
-    # CRITICAL: Set ENVIRONMENT=test FIRST with direct assignment
-    # This ensures test mode is detected before any load_dotenv() calls
-    os.environ["ENVIRONMENT"] = "test"
-    os.environ["PYTEST"] = "true"
-    os.environ["DEBUG"] = "true"
-    
-    # Set minimal test env vars with direct assignment (not setdefault)
-    # This ensures test values are used even if .env file exists with empty values
-    # CI can still override these with real values if needed
-    if "OPENAI_API_KEY" not in os.environ or not os.environ["OPENAI_API_KEY"]:
-        os.environ["OPENAI_API_KEY"] = "test-openai-key"
-    if "SUPABASE_URL" not in os.environ or not os.environ["SUPABASE_URL"]:
-        os.environ["SUPABASE_URL"] = "https://test.supabase.co"
-    if "SUPABASE_ANON_KEY" not in os.environ or not os.environ["SUPABASE_ANON_KEY"]:
-        os.environ["SUPABASE_ANON_KEY"] = "test-anon-key"
-    if "SUPABASE_SERVICE_ROLE_KEY" not in os.environ or not os.environ["SUPABASE_SERVICE_ROLE_KEY"]:
-        os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "test-service-role-key"
-

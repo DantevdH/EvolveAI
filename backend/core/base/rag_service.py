@@ -12,12 +12,26 @@ This tool provides sophisticated RAG capabilities including:
 import os
 import re
 from typing import List, Dict, Any, Optional, Tuple
-from dotenv import load_dotenv
 import openai
 from .base_agent import BaseAgent
 from logging_config import get_logger
 
-load_dotenv()
+# Use centralized environment loader (respects test environment)
+try:
+    from core.utils.env_loader import load_environment, is_test_environment
+    load_environment()  # Will automatically skip in test environment
+except ImportError:
+    # Fallback if core.utils not available
+    from dotenv import load_dotenv
+    load_dotenv()
+    # Fallback test detection
+    def is_test_environment():
+        return (
+            os.getenv("ENVIRONMENT", "").lower() == "test"
+            or os.getenv("PYTEST_CURRENT_TEST") is not None
+            or "pytest" in os.getenv("_", "").lower()
+            or "PYTEST" in os.environ
+        )
 
 
 class RAGTool:
@@ -54,7 +68,18 @@ class RAGTool:
         # Initialize embedding clients based on provider
         api_key = os.getenv("LLM_API_KEY")
         if not api_key:
-            raise ValueError("LLM_API_KEY not found in environment variables")
+            # In test environment, allow missing API key (tests should mock this)
+            if is_test_environment():
+                self.logger.warning(
+                    "LLM_API_KEY not found in test environment. "
+                    "Tests should mock RAGTool or set test API key."
+                )
+                # Set dummy clients to None - tests should mock these
+                self.openai_client = None
+                self.gemini_client = None
+                return
+            else:
+                raise ValueError("LLM_API_KEY not found in environment variables")
         
         if self.use_gemini:
             from google import genai  # type: ignore
