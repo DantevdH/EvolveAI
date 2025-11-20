@@ -13,13 +13,11 @@ from core.training.schemas.training_schemas import (
     StrengthExercise,
     EnduranceSession,
     WeeklySchedule,
-    DayOfWeek,
 )
 from core.training.schemas.question_schemas import (
     AIQuestionResponse,
     AIQuestion,
     QuestionOption,
-    QuestionType,
 )
 
 # Mock user profile data
@@ -118,7 +116,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
     daily_trainings.append(
         TrainingDailyTraining(
             weekly_schedule_id=0,
-            day_of_week=DayOfWeek.MONDAY,
+            day_of_week="Monday",
             is_rest_day=False,
             training_type="strength",
             strength_exercises=monday_exercises,
@@ -131,7 +129,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
     daily_trainings.append(
         TrainingDailyTraining(
             weekly_schedule_id=0,
-            day_of_week=DayOfWeek.TUESDAY,
+            day_of_week="Tuesday",
             is_rest_day=True,
             training_type="rest",
             strength_exercises=[],
@@ -163,7 +161,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
     daily_trainings.append(
         TrainingDailyTraining(
             weekly_schedule_id=0,
-            day_of_week=DayOfWeek.WEDNESDAY,
+            day_of_week="Wednesday",
             is_rest_day=False,
             training_type="strength",
             strength_exercises=wednesday_exercises,
@@ -176,7 +174,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
     daily_trainings.append(
         TrainingDailyTraining(
             weekly_schedule_id=0,
-            day_of_week=DayOfWeek.THURSDAY,
+            day_of_week="Thursday",
             is_rest_day=True,
             training_type="rest",
             strength_exercises=[],
@@ -220,7 +218,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
     daily_trainings.append(
         TrainingDailyTraining(
             weekly_schedule_id=0,
-            day_of_week=DayOfWeek.FRIDAY,
+            day_of_week="Friday",
             is_rest_day=False,
             training_type="mixed",
             strength_exercises=friday_exercises,
@@ -233,7 +231,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
     daily_trainings.append(
         TrainingDailyTraining(
             weekly_schedule_id=0,
-            day_of_week=DayOfWeek.SATURDAY,
+            day_of_week="Saturday",
             is_rest_day=True,
             training_type="rest",
             strength_exercises=[],
@@ -246,7 +244,7 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
     daily_trainings.append(
         TrainingDailyTraining(
             weekly_schedule_id=0,
-            day_of_week=DayOfWeek.SUNDAY,
+            day_of_week="Sunday",
             is_rest_day=True,
             training_type="rest",
             strength_exercises=[],
@@ -282,7 +280,7 @@ def create_mock_initial_questions() -> AIQuestionResponse:
         AIQuestion(
             id="training_frequency",
             text="How many days per week do you currently train?",
-            response_type=QuestionType.MULTIPLE_CHOICE,
+            response_type="multiple_choice",
             options=[
                 QuestionOption(id="1", text="1-2 days", value="1-2"),
                 QuestionOption(id="2", text="3-4 days", value="3-4"),
@@ -296,7 +294,7 @@ def create_mock_initial_questions() -> AIQuestionResponse:
         AIQuestion(
             id="equipment_access",
             text="What equipment do you have access to?",
-            response_type=QuestionType.DROPDOWN,
+            response_type="dropdown",
             options=[
                 QuestionOption(id="1", text="Full commercial gym", value="full_gym"),
                 QuestionOption(
@@ -314,7 +312,7 @@ def create_mock_initial_questions() -> AIQuestionResponse:
         AIQuestion(
             id="experience_rating",
             text="How would you rate your current training experience?",
-            response_type=QuestionType.RATING,
+            response_type="rating",
             min_value=1,
             max_value=5,
             required=True,
@@ -324,7 +322,7 @@ def create_mock_initial_questions() -> AIQuestionResponse:
         AIQuestion(
             id="session_duration",
             text="How many minutes per session can you commit?",
-            response_type=QuestionType.SLIDER,
+            response_type="slider",
             min_value=15,
             max_value=120,
             step=15,
@@ -336,7 +334,7 @@ def create_mock_initial_questions() -> AIQuestionResponse:
         AIQuestion(
             id="specific_goals",
             text="What are your specific training goals?",
-            response_type=QuestionType.FREE_TEXT,
+            response_type="free_text",
             placeholder="E.g., lose 10kg, run a marathon, build muscle...",
             max_length=500,
             required=True,
@@ -346,7 +344,7 @@ def create_mock_initial_questions() -> AIQuestionResponse:
         AIQuestion(
             id="has_injuries",
             text="Do you have any injuries or physical limitations?",
-            response_type=QuestionType.CONDITIONAL_BOOLEAN,
+            response_type="conditional_boolean",
             placeholder="Please describe your injuries or limitations in detail...",
             max_length=300,
             required=True,

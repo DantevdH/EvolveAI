@@ -8,15 +8,11 @@ This class provides the foundation for all specialist agents with:
 - Response generation using OpenAI
 """
 
-import os
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any
-from dotenv import load_dotenv
 from supabase import create_client, Client
 from core.training.helpers.llm_client import LLMClient
-
-# Load environment variables
-load_dotenv()
+from settings import settings
 
 
 class BaseAgent(ABC):
@@ -43,9 +39,9 @@ class BaseAgent(ABC):
         # Unified LLM client
         self.llm = LLMClient()
 
-        # Supabase client
-        supabase_url = os.getenv("SUPABASE_URL")
-        supabase_key = os.getenv("SUPABASE_ANON_KEY")
+        # Supabase client - use settings (which reads from environment dynamically)
+        supabase_url = settings.SUPABASE_URL
+        supabase_key = settings.SUPABASE_ANON_KEY
         if not supabase_url or not supabase_key:
             raise ValueError("Supabase credentials not found in environment variables")
         self.supabase: Client = create_client(supabase_url, supabase_key)

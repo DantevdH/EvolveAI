@@ -4,6 +4,7 @@ import { UserProfile, TrainingPlan } from '../types';
 import { API_CONFIG } from '../constants/api';
 import { mapProfileToBackendRequest } from '../utils/profileDataMapping';
 import { ENV } from '../config/env';
+import { apiClient } from './apiClient';
 import { 
   GenerateTrainingPlanRequest, 
   GenerateTrainingPlanResponse,
@@ -1671,39 +1672,22 @@ export class TrainingService {
       const { data: { session } } = await supabase.auth.getSession();
       const authToken = session?.access_token;
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
-      }
-
-      const apiUrl = `${API_CONFIG.BASE_URL}/api/training/daily-training-feedback`;
-
       const requestBody = {
         ...feedbackData,
         jwt_token: authToken,
       };
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody),
-      });
+      // Use apiClient which handles token refresh automatically
+      const result = await apiClient.post<{
+        lessons_generated: number;
+        lessons_added: number;
+        lessons_updated: number;
+        modifications_detected: number;
+        total_lessons: number;
+        training_status_updated: boolean;
+      }>('/api/training/daily-training-feedback', requestBody);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ Daily feedback API error:', response.status, response.statusText, errorText);
-        return {
-          success: false,
-          error: `API Error: ${response.status} ${response.statusText}`,
-        };
-      }
-
-      const result = await response.json();
-
-      if (result.success) {
+      if (result.success && result.data) {
         console.log('✅ Daily feedback submitted successfully');
         console.log(`   • Lessons generated: ${result.data.lessons_generated}`);
         console.log(`   • Lessons added: ${result.data.lessons_added}`);

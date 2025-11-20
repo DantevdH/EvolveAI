@@ -11,6 +11,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime
 from supabase import create_client, Client
 from logging_config import get_logger
+from settings import settings
 
 # Use centralized environment loader (respects test environment)
 try:
@@ -70,11 +71,16 @@ class AIExerciseLogger:
 
     def _validate_environment(self):
         """Validate environment variables."""
-        required_vars = {
-            "SUPABASE_URL": os.getenv("SUPABASE_URL"),
-            "SUPABASE_SERVICE_ROLE_KEY": os.getenv("SUPABASE_SERVICE_ROLE_KEY"),
-        }
-        missing_vars = [var for var, value in required_vars.items() if not value]
+        # Use settings (which reads from environment dynamically)
+        supabase_url = settings.SUPABASE_URL
+        service_role_key = settings.SUPABASE_SERVICE_ROLE_KEY
+
+        missing_vars = []
+        if not supabase_url:
+            missing_vars.append("SUPABASE_URL")
+        if not service_role_key:
+            missing_vars.append("SUPABASE_SERVICE_ROLE_KEY")
+
         if missing_vars:
             raise ValueError(
                 f"Missing required environment variables: {', '.join(missing_vars)}"
@@ -82,8 +88,9 @@ class AIExerciseLogger:
 
     def _initialize_clients(self):
         """Initialize Supabase client."""
-        self.supabase_url = os.getenv("SUPABASE_URL")
-        self.supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+        # Use settings (which reads from environment dynamically)
+        self.supabase_url = settings.SUPABASE_URL
+        self.supabase_key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY
         
         # Only create client if we have both URL and key
         if self.supabase_url and self.supabase_key:

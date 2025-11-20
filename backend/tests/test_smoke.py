@@ -37,7 +37,7 @@ class TestSmokeTests:
         # Note: In test environment, these might be mocked
         # This test verifies the settings module can access env vars
         assert hasattr(settings, 'SUPABASE_URL')
-        assert hasattr(settings, 'OPENAI_API_KEY')
+        assert hasattr(settings, 'LLM_API_KEY')
     
     def test_database_connection_config(self):
         """Test that database connection configuration exists."""

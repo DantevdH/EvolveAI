@@ -22,3 +22,7 @@ These rules apply specifically to the frontend codebase:
 - Project-wide rules: `.cursor/rules/`
 - Main rules file: `.cursorrules`
 
+
+
+
+

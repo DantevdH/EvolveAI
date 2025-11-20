@@ -41,11 +41,10 @@ def pytest_configure(config):
     # This ensures test values are used even if .env file exists
     # CI/CD can override these with real values if needed for integration tests
     test_env_vars = {
-        "OPENAI_API_KEY": "test-openai-key",
+        "LLM_API_KEY": "test-llm-api-key",
         "SUPABASE_URL": "https://test.supabase.co",
         "SUPABASE_ANON_KEY": "test-anon-key",
         "SUPABASE_SERVICE_ROLE_KEY": "test-service-role-key",
-        "LLM_API_KEY": "test-llm-api-key",
     }
     
     # Only set if not already set (allows CI/CD to override)

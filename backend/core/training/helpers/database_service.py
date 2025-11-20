@@ -7,8 +7,135 @@ from typing import Optional, Dict, Any, List
 from supabase import create_client, Client
 from settings import settings
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from logging_config import get_logger
+import jwt
+from fastapi import HTTPException
+
+
+def extract_user_id_from_jwt(jwt_token: str) -> str:
+    """
+    Extract and verify user_id from JWT token.
+    
+    Supports multiple algorithms:
+    - ES256 (asymmetric ECC P-256): Uses SUPABASE_JWT_PUBLIC_KEY
+    - RS256 (asymmetric RSA): Uses SUPABASE_JWT_PUBLIC_KEY
+    - HS256 (symmetric): Uses SUPABASE_JWT_SECRET (legacy)
+    
+    Raises HTTPException(401) if token is invalid.
+    """
+    logger = get_logger(__name__)
+    # Use settings (which now reads from environment dynamically)
+    jwt_public_key = settings.SUPABASE_JWT_PUBLIC_KEY
+    jwt_secret = settings.SUPABASE_JWT_SECRET
+    
+    # Standard verification options (no audience verification for single-service architecture)
+    verify_options = {
+        "verify_signature": True,
+        "verify_exp": True,
+        "verify_iat": True,
+        "verify_aud": False  # Not needed for single backend/application
+    }
+    
+    # Try asymmetric algorithms first (ES256 for ECC P-256, RS256 for RSA)
+    if jwt_public_key:
+        # Try ES256 first (ECC P-256 - most common for Supabase)
+        try:
+            decoded_token = jwt.decode(
+                jwt_token,
+                jwt_public_key,
+                algorithms=["ES256"],
+                options=verify_options
+            )
+            user_id = decoded_token.get("sub")
+            if not user_id:
+                raise HTTPException(status_code=401, detail="No user_id found in JWT token")
+            return user_id
+        except jwt.ExpiredSignatureError as e:
+            # Log expiration details for debugging
+            try:
+                # Decode without verification to get expiration time
+                unverified = jwt.decode(jwt_token, options={"verify_signature": False})
+                exp_time = unverified.get("exp")
+                if exp_time:
+                    exp_datetime = datetime.fromtimestamp(exp_time, tz=timezone.utc)
+                    now = datetime.now(timezone.utc)
+                    logger.warning(
+                        f"JWT token expired. Expired at: {exp_datetime.isoformat()}, "
+                        f"Current time: {now.isoformat()}, "
+                        f"Time difference: {(now - exp_datetime).total_seconds():.0f} seconds"
+                    )
+            except Exception:
+                pass  # Don't fail if we can't decode for logging
+            raise HTTPException(status_code=401, detail="JWT token has expired")
+        except (jwt.InvalidTokenError, jwt.DecodeError) as e:
+            # ES256 failed, try RS256 (RSA keys)
+            logger.debug(f"ES256 decode failed: {str(e)}, trying RS256")
+            try:
+                decoded_token = jwt.decode(
+                    jwt_token,
+                    jwt_public_key,
+                    algorithms=["RS256"],
+                    options=verify_options
+                )
+                user_id = decoded_token.get("sub")
+                if not user_id:
+                    raise HTTPException(status_code=401, detail="No user_id found in JWT token")
+                return user_id
+            except jwt.ExpiredSignatureError:
+                raise HTTPException(status_code=401, detail="JWT token has expired")
+            except (jwt.InvalidTokenError, jwt.DecodeError) as e:
+                # Both asymmetric algorithms failed, try HS256 fallback
+                logger.debug(f"RS256 decode failed: {str(e)}, trying HS256 fallback")
+                if not jwt_secret:
+                    raise HTTPException(status_code=401, detail="Invalid JWT token")
+    
+    # Fallback to HS256 (symmetric - legacy)
+    if jwt_secret:
+        jwt_secret_clean = jwt_secret.strip()
+        try:
+            decoded_token = jwt.decode(
+                jwt_token,
+                jwt_secret_clean,
+                algorithms=["HS256"],
+                options=verify_options
+            )
+            user_id = decoded_token.get("sub")
+            if not user_id:
+                raise HTTPException(status_code=401, detail="No user_id found in JWT token")
+            return user_id
+        except jwt.ExpiredSignatureError as e:
+            # Log expiration details for debugging
+            try:
+                # Decode without verification to get expiration time
+                unverified = jwt.decode(jwt_token, options={"verify_signature": False})
+                exp_time = unverified.get("exp")
+                if exp_time:
+                    exp_datetime = datetime.fromtimestamp(exp_time, tz=timezone.utc)
+                    now = datetime.now(timezone.utc)
+                    logger.warning(
+                        f"JWT token expired. Expired at: {exp_datetime.isoformat()}, "
+                        f"Current time: {now.isoformat()}, "
+                        f"Time difference: {(now - exp_datetime).total_seconds():.0f} seconds"
+                    )
+            except Exception:
+                pass  # Don't fail if we can't decode for logging
+            raise HTTPException(status_code=401, detail="JWT token has expired")
+        except (jwt.InvalidTokenError, jwt.DecodeError) as e:
+            logger.error(f"Invalid JWT token: {str(e)}")
+            raise HTTPException(status_code=401, detail="Invalid JWT token")
+    
+    # No verification keys available - fallback to unverified decode (development only)
+    logger.warning("No JWT verification keys set - JWT verification disabled (not recommended for production)")
+    try:
+        decoded_token = jwt.decode(jwt_token, options={"verify_signature": False})
+        user_id = decoded_token.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="No user_id found in JWT token")
+        return user_id
+    except (jwt.InvalidTokenError, jwt.DecodeError) as e:
+        logger.error(f"Invalid JWT token (unverified decode): {str(e)}")
+        raise HTTPException(status_code=401, detail="Invalid JWT token")
 
 
 class DatabaseService:
@@ -17,6 +144,7 @@ class DatabaseService:
     def __init__(self):
         """Initialize Supabase client."""
         self.logger = get_logger(__name__)
+        # Use settings (which now reads from environment dynamically)
         self.supabase: Client = create_client(
             settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY
         )
@@ -25,6 +153,7 @@ class DatabaseService:
         """Create an authenticated Supabase client with service role key for server-side operations."""
         self.logger.debug("Creating authenticated client with service role key")
 
+        # Use settings (which now reads from environment dynamically)
         # Use service role key for server-side operations (bypasses RLS)
         if settings.SUPABASE_SERVICE_ROLE_KEY:
             client = create_client(
@@ -1688,6 +1817,634 @@ class DatabaseService:
 
         except Exception as e:
             self.logger.error(f"Error updating training plan {plan_id}: {e}")
+            return None
+
+    async def update_single_week(
+        self,
+        plan_id: int,
+        week_number: int,
+        updated_week_data: Dict[str, Any],
+        jwt_token: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Update only a specific week in the training plan.
+        
+        Deletes and recreates only the specified week, leaving all other weeks unchanged.
+        Much more efficient than update_training_plan which deletes/recreates everything.
+        
+        Args:
+            plan_id: The training plan ID
+            week_number: The week number to update
+            updated_week_data: The updated week data (WeeklySchedule dict)
+            jwt_token: Optional JWT token for authentication
+            
+        Returns:
+            The updated week data with database IDs populated, None if update failed
+        """
+        try:
+            self.logger.info(f"Updating week {week_number} in training plan {plan_id}...")
+            
+            # Use authenticated client if JWT token is provided
+            if jwt_token:
+                supabase_client = self._get_authenticated_client(jwt_token)
+            else:
+                # Use service role key for server-side operations
+                supabase_client = create_client(
+                    settings.SUPABASE_URL,
+                    settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY,
+                )
+            
+            # Clean the week data to ensure JSON serialization
+            week_data = self._clean_for_json_serialization(updated_week_data) if isinstance(updated_week_data, dict) else updated_week_data
+            
+            # Delete only the specific week (cascading deletes will handle daily_trainings, exercises, etc.)
+            delete_result = (
+                supabase_client.table("weekly_schedules")
+                .delete()
+                .eq("training_plan_id", plan_id)
+                .eq("week_number", week_number)
+                .execute()
+            )
+            
+            self.logger.info(f"✅ Deleted week {week_number} (cascading deletes handled daily trainings, exercises, etc.)")
+            
+            # Create weekly schedule record
+            weekly_schedule_record = {
+                "training_plan_id": plan_id,
+                "week_number": week_number,
+                "focus_theme": week_data.get("focus_theme", ""),
+                "primary_goal": week_data.get("primary_goal", ""),
+                "progression_lever": week_data.get("progression_lever", ""),
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+            
+            weekly_result = (
+                supabase_client.table("weekly_schedules")
+                .insert(weekly_schedule_record)
+                .execute()
+            )
+            
+            if not weekly_result.data:
+                self.logger.error(f"Failed to create weekly schedule for week {week_number}")
+                return None
+            
+            weekly_schedule_id = weekly_result.data[0]["id"]
+            week_data["id"] = weekly_schedule_id
+            
+            # Save daily trainings
+            daily_trainings = week_data.get("daily_trainings", [])
+            
+            for daily_index, daily_data in enumerate(daily_trainings):
+                day_of_week = daily_data.get("day_of_week", "Monday")
+                is_rest_day = daily_data.get("is_rest_day", False)
+                
+                # Create daily training record
+                daily_training_record = {
+                    "weekly_schedule_id": weekly_schedule_id,
+                    "day_of_week": day_of_week,
+                    "is_rest_day": is_rest_day,
+                    "training_type": daily_data.get(
+                        "training_type", "rest" if is_rest_day else "strength"
+                    ),
+                    "justification": daily_data.get("justification", ""),
+                    "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat(),
+                }
+                
+                daily_result = (
+                    supabase_client.table("daily_training")
+                    .insert(daily_training_record)
+                    .execute()
+                )
+                
+                if not daily_result.data:
+                    continue
+                
+                daily_training_id = daily_result.data[0]["id"]
+                daily_data["id"] = daily_training_id
+                
+                # Save exercises and endurance sessions if not a rest day
+                if not is_rest_day:
+                    # Save strength exercises (BULK INSERT for performance)
+                    strength_exercises = daily_data.get("strength_exercises", [])
+                    
+                    # Filter out exercises without exercise_id and prepare for bulk insert
+                    valid_strength_exercises = []
+                    strength_exercise_records = []
+                    for exercise_index, exercise_data in enumerate(strength_exercises):
+                        exercise_id = exercise_data.get("exercise_id")
+                        
+                        # CRITICAL: Validate exercise_id exists before saving
+                        if exercise_id is None:
+                            self.logger.warning(
+                                f"Skipping strength exercise with missing exercise_id "
+                                f"(daily_training_id: {daily_training_id}, exercise_index: {exercise_index}). "
+                                f"This usually indicates a failed exercise matching. Exercise data: {exercise_data}"
+                            )
+                            continue
+                        
+                        sets = exercise_data.get("sets", 3)
+                        reps = exercise_data.get("reps", [10, 10, 10])
+                        weight = exercise_data.get("weight", [0.0] * sets)
+                        
+                        strength_exercise_records.append({
+                            "daily_training_id": daily_training_id,
+                            "exercise_id": exercise_id,
+                            "sets": sets,
+                            "reps": reps,
+                            "weight": weight,
+                            "execution_order": exercise_data.get("execution_order", 0),
+                            "completed": False,
+                            "created_at": datetime.utcnow().isoformat(),
+                            "updated_at": datetime.utcnow().isoformat(),
+                        })
+                        valid_strength_exercises.append(exercise_data)
+                    
+                    # Bulk insert all strength exercises at once
+                    if strength_exercise_records:
+                        se_result = (
+                            supabase_client.table("strength_exercise")
+                            .insert(strength_exercise_records)
+                            .execute()
+                        )
+                        
+                        # Map returned IDs back to exercise_data objects (order is preserved by Supabase)
+                        if se_result.data and len(se_result.data) == len(valid_strength_exercises):
+                            for i, exercise_data in enumerate(valid_strength_exercises):
+                                exercise_data["id"] = se_result.data[i]["id"]
+                                exercise_data["daily_training_id"] = daily_training_id
+                        else:
+                            # Fallback: if order doesn't match, log warning but continue
+                            self.logger.warning(
+                                f"Bulk insert returned {len(se_result.data) if se_result.data else 0} records, "
+                                f"expected {len(valid_strength_exercises)}. IDs may not be enriched correctly."
+                            )
+                            # Still try to enrich if we have data
+                            if se_result.data:
+                                for i, exercise_data in enumerate(valid_strength_exercises):
+                                    if i < len(se_result.data):
+                                        exercise_data["id"] = se_result.data[i]["id"]
+                                        exercise_data["daily_training_id"] = daily_training_id
+                        
+                        # CRITICAL: Update daily_data with filtered and enriched exercises
+                        daily_data["strength_exercises"] = valid_strength_exercises
+                    else:
+                        # No valid exercises - set to empty list
+                        daily_data["strength_exercises"] = []
+                    
+                    # Save endurance sessions (BULK INSERT for performance)
+                    endurance_sessions = daily_data.get("endurance_sessions", [])
+                    
+                    if endurance_sessions:
+                        # Prepare all endurance session records for bulk insert
+                        endurance_session_records = []
+                        for session_data in endurance_sessions:
+                            name = session_data.get("name", "Endurance Session")
+                            description = session_data.get("description", "")
+                            sport_type = session_data.get("sport_type", "running")
+                            training_volume = session_data.get("training_volume", 30.0)
+                            unit = session_data.get("unit", "minutes")
+                            heart_rate_zone = session_data.get("heart_rate_zone", 3)
+                            
+                            endurance_session_records.append({
+                                "daily_training_id": daily_training_id,
+                                "name": name,
+                                "description": description,
+                                "sport_type": sport_type,
+                                "training_volume": training_volume,
+                                "unit": unit,
+                                "heart_rate_zone": heart_rate_zone,
+                                "execution_order": session_data.get("execution_order", 0),
+                                "completed": False,
+                                "created_at": datetime.utcnow().isoformat(),
+                                "updated_at": datetime.utcnow().isoformat(),
+                            })
+                        
+                        # Bulk insert all endurance sessions at once
+                        es_result = (
+                            supabase_client.table("endurance_session")
+                            .insert(endurance_session_records)
+                            .execute()
+                        )
+                        
+                        # Map returned IDs back to session_data objects (order is preserved by Supabase)
+                        if es_result.data and len(es_result.data) == len(endurance_sessions):
+                            for i, session_data in enumerate(endurance_sessions):
+                                session_data["id"] = es_result.data[i]["id"]
+                                session_data["daily_training_id"] = daily_training_id
+                        else:
+                            # Fallback: if order doesn't match, log warning but continue
+                            self.logger.warning(
+                                f"Bulk insert returned {len(es_result.data) if es_result.data else 0} records, "
+                                f"expected {len(endurance_sessions)}. IDs may not be enriched correctly."
+                            )
+                            # Still try to enrich if we have data
+                            if es_result.data:
+                                for i, session_data in enumerate(endurance_sessions):
+                                    if i < len(es_result.data):
+                                        session_data["id"] = es_result.data[i]["id"]
+                                        session_data["daily_training_id"] = daily_training_id
+            
+            # Enrich week_data with exercise metadata (BULK QUERY for performance)
+            # Collect all unique exercise_ids first, then bulk-fetch metadata
+            all_exercise_ids = set()
+            
+            # First pass: collect all exercise_ids
+            daily_trainings = week_data.get("daily_trainings", [])
+            for daily_training in daily_trainings:
+                if not daily_training.get("is_rest_day", False):
+                    strength_exercises = daily_training.get("strength_exercises", [])
+                    for strength_exercise in strength_exercises:
+                        exercise_id = strength_exercise.get("exercise_id")
+                        if exercise_id:
+                            all_exercise_ids.add(exercise_id)
+            
+            # Bulk fetch all exercise metadata at once
+            exercise_metadata_map = {}
+            if all_exercise_ids:
+                try:
+                    exercise_ids_list = list(all_exercise_ids)
+                    if len(exercise_ids_list) == 1:
+                        # Single exercise - use .eq() for efficiency
+                        metadata_result = (
+                            supabase_client.table("exercises")
+                            .select("*")
+                            .eq("id", exercise_ids_list[0])
+                            .execute()
+                        )
+                        if metadata_result.data:
+                            exercise_metadata_map[exercise_ids_list[0]] = metadata_result.data[0]
+                    else:
+                        # Multiple exercises - use .in_() for bulk query
+                        metadata_result = (
+                            supabase_client.table("exercises")
+                            .select("*")
+                            .in_("id", exercise_ids_list)
+                            .execute()
+                        )
+                        if metadata_result.data:
+                            for exercise_metadata in metadata_result.data:
+                                exercise_metadata_map[exercise_metadata["id"]] = exercise_metadata
+                except Exception as e:
+                    self.logger.warning(f"Error bulk fetching exercise metadata: {e}")
+            
+            # Second pass: enrich strength exercises with metadata
+            for daily_training in daily_trainings:
+                if not daily_training.get("is_rest_day", False):
+                    strength_exercises = daily_training.get("strength_exercises", [])
+                    for strength_exercise in strength_exercises:
+                        exercise_id = strength_exercise.get("exercise_id")
+                        if exercise_id:
+                            exercise_metadata = exercise_metadata_map.get(exercise_id)
+                            
+                            # Fallback to sequential query if bulk fetch failed or missed this exercise
+                            if not exercise_metadata:
+                                try:
+                                    exercise_metadata_result = (
+                                        supabase_client.table("exercises")
+                                        .select("*")
+                                        .eq("id", exercise_id)
+                                        .single()
+                                        .execute()
+                                    )
+                                    if exercise_metadata_result.data:
+                                        exercise_metadata = exercise_metadata_result.data
+                                        exercise_metadata_map[exercise_id] = exercise_metadata
+                                except Exception as e:
+                                    self.logger.warning(f"Error fetching metadata for exercise {exercise_id}: {e}")
+                            
+                            if exercise_metadata:
+                                # Store as "exercises" (plural) to match Supabase format
+                                strength_exercise["exercises"] = exercise_metadata
+                                # Add exercise_name, main_muscle, equipment at top-level
+                                strength_exercise["exercise_name"] = exercise_metadata.get("name")
+                                # Extract main_muscle from main_muscles array
+                                main_muscles_array = exercise_metadata.get("primary_muscles") or exercise_metadata.get("main_muscles", [])
+                                strength_exercise["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
+                                strength_exercise["equipment"] = exercise_metadata.get("equipment")
+                                # Also flatten enriched fields to top-level
+                                strength_exercise["target_area"] = exercise_metadata.get("target_area")
+                                strength_exercise["main_muscles"] = main_muscles_array
+                                strength_exercise["force"] = exercise_metadata.get("force")
+                            else:
+                                strength_exercise["exercises"] = None
+            
+            self.logger.info(f"✅ Successfully updated week {week_number} in training plan {plan_id}")
+            
+            # Return enriched week data that now contains all generated IDs
+            return week_data
+
+        except Exception as e:
+            self.logger.error(f"Error updating week {week_number} in training plan {plan_id}: {e}")
+            return None
+
+    async def create_single_week(
+        self,
+        plan_id: int,
+        new_week_data: Dict[str, Any],
+        jwt_token: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Create a new week in the training plan.
+        
+        Inserts only the new week without touching existing weeks.
+        Much more efficient than update_training_plan which deletes/recreates everything.
+        
+        Args:
+            plan_id: The training plan ID
+            new_week_data: The new week data (WeeklySchedule dict)
+            jwt_token: Optional JWT token for authentication
+            
+        Returns:
+            The new week data with database IDs populated, None if creation failed
+        """
+        try:
+            week_number = new_week_data.get("week_number")
+            self.logger.info(f"Creating week {week_number} in training plan {plan_id}...")
+            
+            # Use authenticated client if JWT token is provided
+            if jwt_token:
+                supabase_client = self._get_authenticated_client(jwt_token)
+            else:
+                # Use service role key for server-side operations
+                supabase_client = create_client(
+                    settings.SUPABASE_URL,
+                    settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY,
+                )
+            
+            # Clean the week data to ensure JSON serialization
+            week_data = self._clean_for_json_serialization(new_week_data) if isinstance(new_week_data, dict) else new_week_data
+            
+            # Create weekly schedule record (no deletion needed for new week)
+            weekly_schedule_record = {
+                "training_plan_id": plan_id,
+                "week_number": week_number,
+                "focus_theme": week_data.get("focus_theme", ""),
+                "primary_goal": week_data.get("primary_goal", ""),
+                "progression_lever": week_data.get("progression_lever", ""),
+                "created_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+            
+            weekly_result = (
+                supabase_client.table("weekly_schedules")
+                .insert(weekly_schedule_record)
+                .execute()
+            )
+            
+            if not weekly_result.data:
+                self.logger.error(f"Failed to create weekly schedule for week {week_number}")
+                return None
+            
+            weekly_schedule_id = weekly_result.data[0]["id"]
+            week_data["id"] = weekly_schedule_id
+            
+            # Save daily trainings
+            daily_trainings = week_data.get("daily_trainings", [])
+            
+            for daily_index, daily_data in enumerate(daily_trainings):
+                day_of_week = daily_data.get("day_of_week", "Monday")
+                is_rest_day = daily_data.get("is_rest_day", False)
+                
+                # Create daily training record
+                daily_training_record = {
+                    "weekly_schedule_id": weekly_schedule_id,
+                    "day_of_week": day_of_week,
+                    "is_rest_day": is_rest_day,
+                    "training_type": daily_data.get(
+                        "training_type", "rest" if is_rest_day else "strength"
+                    ),
+                    "justification": daily_data.get("justification", ""),
+                    "created_at": datetime.utcnow().isoformat(),
+                    "updated_at": datetime.utcnow().isoformat(),
+                }
+                
+                daily_result = (
+                    supabase_client.table("daily_training")
+                    .insert(daily_training_record)
+                    .execute()
+                )
+                
+                if not daily_result.data:
+                    continue
+                
+                daily_training_id = daily_result.data[0]["id"]
+                daily_data["id"] = daily_training_id
+                
+                # Save exercises and endurance sessions if not a rest day
+                if not is_rest_day:
+                    # Save strength exercises (BULK INSERT for performance)
+                    strength_exercises = daily_data.get("strength_exercises", [])
+                    
+                    # Filter out exercises without exercise_id and prepare for bulk insert
+                    valid_strength_exercises = []
+                    strength_exercise_records = []
+                    for exercise_index, exercise_data in enumerate(strength_exercises):
+                        exercise_id = exercise_data.get("exercise_id")
+                        
+                        # CRITICAL: Validate exercise_id exists before saving
+                        if exercise_id is None:
+                            self.logger.warning(
+                                f"Skipping strength exercise with missing exercise_id "
+                                f"(daily_training_id: {daily_training_id}, exercise_index: {exercise_index}). "
+                                f"This usually indicates a failed exercise matching. Exercise data: {exercise_data}"
+                            )
+                            continue
+                        
+                        sets = exercise_data.get("sets", 3)
+                        reps = exercise_data.get("reps", [10, 10, 10])
+                        weight = exercise_data.get("weight", [0.0] * sets)
+                        
+                        strength_exercise_records.append({
+                            "daily_training_id": daily_training_id,
+                            "exercise_id": exercise_id,
+                            "sets": sets,
+                            "reps": reps,
+                            "weight": weight,
+                            "execution_order": exercise_data.get("execution_order", 0),
+                            "completed": False,
+                            "created_at": datetime.utcnow().isoformat(),
+                            "updated_at": datetime.utcnow().isoformat(),
+                        })
+                        valid_strength_exercises.append(exercise_data)
+                    
+                    # Bulk insert all strength exercises at once
+                    if strength_exercise_records:
+                        se_result = (
+                            supabase_client.table("strength_exercise")
+                            .insert(strength_exercise_records)
+                            .execute()
+                        )
+                        
+                        # Map returned IDs back to exercise_data objects (order is preserved by Supabase)
+                        if se_result.data and len(se_result.data) == len(valid_strength_exercises):
+                            for i, exercise_data in enumerate(valid_strength_exercises):
+                                exercise_data["id"] = se_result.data[i]["id"]
+                                exercise_data["daily_training_id"] = daily_training_id
+                        else:
+                            # Fallback: if order doesn't match, log warning but continue
+                            self.logger.warning(
+                                f"Bulk insert returned {len(se_result.data) if se_result.data else 0} records, "
+                                f"expected {len(valid_strength_exercises)}. IDs may not be enriched correctly."
+                            )
+                            # Still try to enrich if we have data
+                            if se_result.data:
+                                for i, exercise_data in enumerate(valid_strength_exercises):
+                                    if i < len(se_result.data):
+                                        exercise_data["id"] = se_result.data[i]["id"]
+                                        exercise_data["daily_training_id"] = daily_training_id
+                        
+                        # CRITICAL: Update daily_data with filtered and enriched exercises
+                        daily_data["strength_exercises"] = valid_strength_exercises
+                    else:
+                        # No valid exercises - set to empty list
+                        daily_data["strength_exercises"] = []
+                    
+                    # Save endurance sessions (BULK INSERT for performance)
+                    endurance_sessions = daily_data.get("endurance_sessions", [])
+                    
+                    if endurance_sessions:
+                        # Prepare all endurance session records for bulk insert
+                        endurance_session_records = []
+                        for session_data in endurance_sessions:
+                            name = session_data.get("name", "Endurance Session")
+                            description = session_data.get("description", "")
+                            sport_type = session_data.get("sport_type", "running")
+                            training_volume = session_data.get("training_volume", 30.0)
+                            unit = session_data.get("unit", "minutes")
+                            heart_rate_zone = session_data.get("heart_rate_zone", 3)
+                            
+                            endurance_session_records.append({
+                                "daily_training_id": daily_training_id,
+                                "name": name,
+                                "description": description,
+                                "sport_type": sport_type,
+                                "training_volume": training_volume,
+                                "unit": unit,
+                                "heart_rate_zone": heart_rate_zone,
+                                "execution_order": session_data.get("execution_order", 0),
+                                "completed": False,
+                                "created_at": datetime.utcnow().isoformat(),
+                                "updated_at": datetime.utcnow().isoformat(),
+                            })
+                        
+                        # Bulk insert all endurance sessions at once
+                        es_result = (
+                            supabase_client.table("endurance_session")
+                            .insert(endurance_session_records)
+                            .execute()
+                        )
+                        
+                        # Map returned IDs back to session_data objects (order is preserved by Supabase)
+                        if es_result.data and len(es_result.data) == len(endurance_sessions):
+                            for i, session_data in enumerate(endurance_sessions):
+                                session_data["id"] = es_result.data[i]["id"]
+                                session_data["daily_training_id"] = daily_training_id
+                        else:
+                            # Fallback: if order doesn't match, log warning but continue
+                            self.logger.warning(
+                                f"Bulk insert returned {len(es_result.data) if es_result.data else 0} records, "
+                                f"expected {len(endurance_sessions)}. IDs may not be enriched correctly."
+                            )
+                            # Still try to enrich if we have data
+                            if es_result.data:
+                                for i, session_data in enumerate(endurance_sessions):
+                                    if i < len(es_result.data):
+                                        session_data["id"] = es_result.data[i]["id"]
+                                        session_data["daily_training_id"] = daily_training_id
+            
+            # Enrich week_data with exercise metadata (BULK QUERY for performance)
+            # Collect all unique exercise_ids first, then bulk-fetch metadata
+            all_exercise_ids = set()
+            
+            # First pass: collect all exercise_ids
+            daily_trainings = week_data.get("daily_trainings", [])
+            for daily_training in daily_trainings:
+                if not daily_training.get("is_rest_day", False):
+                    strength_exercises = daily_training.get("strength_exercises", [])
+                    for strength_exercise in strength_exercises:
+                        exercise_id = strength_exercise.get("exercise_id")
+                        if exercise_id:
+                            all_exercise_ids.add(exercise_id)
+            
+            # Bulk fetch all exercise metadata at once
+            exercise_metadata_map = {}
+            if all_exercise_ids:
+                try:
+                    exercise_ids_list = list(all_exercise_ids)
+                    if len(exercise_ids_list) == 1:
+                        # Single exercise - use .eq() for efficiency
+                        metadata_result = (
+                            supabase_client.table("exercises")
+                            .select("*")
+                            .eq("id", exercise_ids_list[0])
+                            .execute()
+                        )
+                        if metadata_result.data:
+                            exercise_metadata_map[exercise_ids_list[0]] = metadata_result.data[0]
+                    else:
+                        # Multiple exercises - use .in_() for bulk query
+                        metadata_result = (
+                            supabase_client.table("exercises")
+                            .select("*")
+                            .in_("id", exercise_ids_list)
+                            .execute()
+                        )
+                        if metadata_result.data:
+                            for exercise_metadata in metadata_result.data:
+                                exercise_metadata_map[exercise_metadata["id"]] = exercise_metadata
+                except Exception as e:
+                    self.logger.warning(f"Error bulk fetching exercise metadata: {e}")
+            
+            # Second pass: enrich strength exercises with metadata
+            for daily_training in daily_trainings:
+                if not daily_training.get("is_rest_day", False):
+                    strength_exercises = daily_training.get("strength_exercises", [])
+                    for strength_exercise in strength_exercises:
+                        exercise_id = strength_exercise.get("exercise_id")
+                        if exercise_id:
+                            exercise_metadata = exercise_metadata_map.get(exercise_id)
+                            
+                            # Fallback to sequential query if bulk fetch failed or missed this exercise
+                            if not exercise_metadata:
+                                try:
+                                    exercise_metadata_result = (
+                                        supabase_client.table("exercises")
+                                        .select("*")
+                                        .eq("id", exercise_id)
+                                        .single()
+                                        .execute()
+                                    )
+                                    if exercise_metadata_result.data:
+                                        exercise_metadata = exercise_metadata_result.data
+                                        exercise_metadata_map[exercise_id] = exercise_metadata
+                                except Exception as e:
+                                    self.logger.warning(f"Error fetching metadata for exercise {exercise_id}: {e}")
+                            
+                            if exercise_metadata:
+                                # Store as "exercises" (plural) to match Supabase format
+                                strength_exercise["exercises"] = exercise_metadata
+                                # Add exercise_name, main_muscle, equipment at top-level
+                                strength_exercise["exercise_name"] = exercise_metadata.get("name")
+                                # Extract main_muscle from main_muscles array
+                                main_muscles_array = exercise_metadata.get("primary_muscles") or exercise_metadata.get("main_muscles", [])
+                                strength_exercise["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
+                                strength_exercise["equipment"] = exercise_metadata.get("equipment")
+                                # Also flatten enriched fields to top-level
+                                strength_exercise["target_area"] = exercise_metadata.get("target_area")
+                                strength_exercise["main_muscles"] = main_muscles_array
+                                strength_exercise["force"] = exercise_metadata.get("force")
+                            else:
+                                strength_exercise["exercises"] = None
+            
+            self.logger.info(f"✅ Successfully created week {week_number} in training plan {plan_id}")
+            
+            # Return enriched week data that now contains all generated IDs
+            return week_data
+
+        except Exception as e:
+            self.logger.error(f"Error creating week {week_number} in training plan {plan_id}: {e}")
             return None
 
     # ============================================================================

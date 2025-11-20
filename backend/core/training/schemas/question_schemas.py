@@ -1,38 +1,14 @@
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any, Union, Literal
-from enum import Enum
 
-
-class QuestionType(str, Enum):
-    """Types of questions that can be asked."""
-
-    MULTIPLE_CHOICE = "multiple_choice"
-    DROPDOWN = "dropdown"
-    FREE_TEXT = "free_text"
-    SLIDER = "slider"
-    CONDITIONAL_BOOLEAN = "conditional_boolean"
-    RATING = "rating"
-
-
-class EquipmentType(str, Enum):
-    """Available equipment types in the exercise database (must match exact database values)."""
-
-    BARBELL = "Barbell"
-    DUMBBELL = "Dumbbell"
-    CABLE = "Cable"
-    CABLE_PULL_SIDE = "Cable (pull side)"
-    MACHINE = "Machine"
-    ASSISTED_MACHINE = "Assisted (machine)"
-    SMITH = "Smith"
-    BODY_WEIGHT = "Body weight"
-    BAND_RESISTIVE = "Band Resistive"
-    SUSPENSION = "Suspension"
-    SUSPENDED = "Suspended"
-    SLED = "Sled"
-    WEIGHTED = "Weighted"
-    PLYOMETRIC = "Plyometric"
-    ISOMETRIC = "Isometric"
-    SELF_ASSISTED = "Self-assisted"
+# Create Literal types for unified schemas
+# These generate JSON Schema with inline enum constraints, forcing ALL providers to use only valid values
+QuestionTypeLiteral = Literal["multiple_choice", "dropdown", "free_text", "slider", "conditional_boolean", "rating"]
+FeedbackIntentLiteral = Literal["question", "unclear", "update_request", "satisfied", "other"]
+FeedbackActionLiteral = Literal["respond_only", "update_plan", "navigate_to_main_app"]
+OperationTypeLiteral = Literal["swap_exercise", "adjust_intensity", "move_day", "add_rest_day", "adjust_volume", "add_exercise", "remove_exercise"]
+AthleteTypeLiteral = Literal["strength", "endurance", "sport_specific", "functional_fitness"]
+IntentPlanPriorityLiteral = Literal["primary", "optional"]
 
 
 class QuestionOption(BaseModel):
@@ -45,10 +21,9 @@ class QuestionOption(BaseModel):
 
 class AIQuestion(BaseModel):
     """
-    Unified question model for OpenAI structured output compatibility.
+    Unified question model for multi-provider structured output compatibility.
 
-    OpenAI's API does NOT support Union types, so we use a single flexible schema
-    with strict runtime validation to ensure type safety.
+    Uses Literal types to force valid values at generation time for all providers.
     """
 
     model_config = ConfigDict(extra="ignore")  # Ignore unknown fields for flexibility
@@ -57,7 +32,7 @@ class AIQuestion(BaseModel):
     id: str = Field(..., description="Unique identifier for the question")
     text: str = Field(..., description="Question text")
     help_text: str = Field(default="", description="Additional help text")
-    response_type: QuestionType = Field(..., description="Type of question")
+    response_type: QuestionTypeLiteral = Field(..., description="Type of question")
     order: Optional[int] = Field(default=None, description="Display order for this question (1-based, lower numbers appear first). Frontend can use this to maintain question order.")
 
     # Conditional fields (required based on response_type)
@@ -113,43 +88,6 @@ class AIQuestionResponse(BaseModel):
     ai_message: Optional[str] = Field(
         default=None, description="Personalized AI coach message for this phase"
     )
-
-
-# ===== Gemini-friendly DTOs (Enums flattened to str) =====
-class GeminiAIQuestion(BaseModel):
-    """
-    Gemini-friendly question model: replaces Enum fields with plain strings.
-    This avoids $ref/allOf in JSON Schema that the Gemini SDK rejects.
-    """
-
-    model_config = ConfigDict(extra="ignore")
-
-    id: str
-    text: str
-    help_text: str = ""
-    # Enum flattened to string
-    response_type: str
-
-    options: Optional[List[QuestionOption]] = None
-    multiselect: Optional[bool] = Field(
-        default=None,
-        description="REQUIRED for multiple_choice and dropdown: Whether user can select multiple options (true) or only one option (false)."
-    )
-    min_value: Optional[float] = None
-    max_value: Optional[float] = None
-    step: Optional[float] = None
-    unit: Optional[str] = None
-    min_description: Optional[str] = None
-    max_description: Optional[str] = None
-    max_length: Optional[int] = Field(default=None, ge=1, le=5000)
-    placeholder: Optional[str] = None
-
-
-class GeminiAIQuestionResponse(BaseModel):
-    questions: List[GeminiAIQuestion]
-    total_questions: int
-    estimated_time_minutes: int
-    ai_message: Optional[str] = None
 
 
 class AIQuestionResponseWithFormatted(BaseModel):
@@ -234,9 +172,9 @@ class ExerciseRetrievalDecision(BaseModel):
         default=None,
         description="If retrieving exercises, what difficulty level? (beginner/intermediate/advanced)",
     )
-    equipment: Optional[List[EquipmentType]] = Field(
+    equipment: Optional[List[str]] = Field(
         default=None,
-        description="If retrieving exercises, which equipment types? Select from the EquipmentType enum based on what user has access to",
+        description="If retrieving exercises, which equipment types? Select from available equipment values based on what user has access to",
     )
     reasoning: str = Field(..., description="Your reasoning for this decision")
     alternative_approach: Optional[str] = Field(
@@ -263,6 +201,10 @@ class PlanFeedbackRequest(BaseModel):
     plan_id: Union[int, str] = Field(..., description="Training plan ID")
     feedback_message: str = Field(..., description="User feedback message")
     training_plan: Dict[str, Any] = Field(..., description="Full training plan data (sent from frontend)")
+    week_number: int = Field(
+        ...,
+        description="Week number to update (required - should be the current week from frontend)"
+    )
     playbook: Optional[Dict[str, Any]] = Field(
         default=None,
         description="User playbook from frontend (userProfile.playbook)"
@@ -301,24 +243,12 @@ class PlanFeedbackResponse(BaseModel):
 
 # ===== Operation schemas for plan updates =====
 
-class OperationType(str, Enum):
-    """Types of operations that can be performed on a training plan."""
-    
-    SWAP_EXERCISE = "swap_exercise"
-    ADJUST_INTENSITY = "adjust_intensity"
-    MOVE_DAY = "move_day"
-    ADD_REST_DAY = "add_rest_day"
-    ADJUST_VOLUME = "adjust_volume"
-    ADD_EXERCISE = "add_exercise"
-    REMOVE_EXERCISE = "remove_exercise"
-
-
 class PlanOperation(BaseModel):
     """
-    Unified operation model for plan updates (OpenAI structured output compatible).
+    Unified operation model for plan updates (multi-provider structured output compatible).
     
-    OpenAI's API does NOT support Union types, so we use a single flexible schema
-    with conditional fields. The 'type' field determines which other fields are required.
+    Uses Literal types to force valid values at generation time for all providers.
+    The 'type' field determines which other fields are required.
     
     Field requirements by operation type:
     - swap_exercise: type, day_of_week, old_exercise_name, new_exercise_name, new_main_muscle, new_equipment
@@ -333,7 +263,7 @@ class PlanOperation(BaseModel):
     model_config = ConfigDict(extra="ignore")  # Ignore unknown fields for flexibility
     
     # Common field (required for ALL operation types)
-    type: OperationType = Field(..., description="Type of operation to perform")
+    type: OperationTypeLiteral = Field(..., description="Type of operation to perform")
     
     # Fields for swap_exercise
     old_exercise_name: Optional[str] = Field(
@@ -416,29 +346,11 @@ class PlanOperation(BaseModel):
 
 # ===== Feedback classification schema =====
 
-class FeedbackIntent(str, Enum):
-    """Intent classification for user feedback."""
-
-    QUESTION = "question"  # User asks a specific question AI can answer
-    UNCLEAR = "unclear"  # User's feedback is vague, AI needs more information
-    UPDATE_REQUEST = "update_request"  # User wants specific changes with complete info
-    SATISFIED = "satisfied"  # User is happy and ready to start
-    OTHER = "other"  # Off-topic or out of scope
-
-
-class FeedbackAction(str, Enum):
-    """Allowed actions based on feedback intent."""
-
-    RESPOND_ONLY = "respond_only"
-    UPDATE_PLAN = "update_plan"
-    NAVIGATE_TO_MAIN_APP = "navigate_to_main_app"
-
-
 class FeedbackIntentClassification(BaseModel):
     """Lightweight intent classification (Stage 1) - no operations parsing."""
 
-    intent: FeedbackIntent = Field(..., description="User intent classification")
-    action: FeedbackAction = Field(..., description="Action the system should take")
+    intent: FeedbackIntentLiteral = Field(..., description="User intent classification")
+    action: FeedbackActionLiteral = Field(..., description="Action the system should take")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Classifier confidence 0-1")
     needs_plan_update: bool = Field(..., description="Whether a plan update is required")
     navigate_to_main_app: bool = Field(..., description="Whether to navigate to main app")
@@ -459,44 +371,6 @@ class FeedbackOperations(BaseModel):
     )
 
 
-# ===== Gemini-friendly DTOs for feedback (Enums flattened to str) =====
-class GeminiFeedbackIntentClassification(BaseModel):
-    intent: str
-    action: str
-    confidence: float
-    needs_plan_update: bool
-    navigate_to_main_app: bool
-    reasoning: str
-    ai_message: str
-
-
-class GeminiPlanOperation(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    type: str
-    old_exercise_name: Optional[str] = None
-    new_exercise_name: Optional[str] = None
-    new_main_muscle: Optional[str] = None
-    new_equipment: Optional[str] = None
-    scope: Optional[str] = None
-    direction: Optional[str] = None
-    change_type: Optional[str] = None
-    adjustment: Optional[int] = None
-    source_day: Optional[str] = None
-    target_day: Optional[str] = None
-    swap: Optional[bool] = None
-    sets: Optional[int] = None
-    reps: Optional[List[int]] = None
-    weight_1rm: Optional[List[float]] = None
-    day_of_week: Optional[str] = None
-    exercise_name: Optional[str] = None
-
-
-class GeminiFeedbackOperations(BaseModel):
-    operations: List[GeminiPlanOperation]
-    ai_message: Optional[str] = None
-
-
 class FeedbackClassification(BaseModel):
     """
     LEGACY: Combined classification and operations (single-stage approach).
@@ -505,8 +379,8 @@ class FeedbackClassification(BaseModel):
     Keeping this for backward compatibility during migration.
     """
 
-    intent: FeedbackIntent = Field(..., description="User intent classification")
-    action: FeedbackAction = Field(..., description="Action the system should take")
+    intent: FeedbackIntentLiteral = Field(..., description="User intent classification")
+    action: FeedbackActionLiteral = Field(..., description="Action the system should take")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Classifier confidence 0-1")
     needs_plan_update: bool = Field(..., description="Whether a plan update is required")
     navigate_to_main_app: bool = Field(..., description="Whether to navigate to main app")
@@ -537,20 +411,11 @@ class CreateWeekRequest(BaseModel):
 
 # ===== Athlete Type Classification Schemas =====
 
-class AthleteType(str, Enum):
-    """Athlete type classification."""
-    
-    STRENGTH = "strength"
-    ENDURANCE = "endurance"
-    SPORT_SPECIFIC = "sport_specific"
-    FUNCTIONAL_FITNESS = "functional_fitness"
-
-
 class AthleteTypeClassification(BaseModel):
     """Classification of user's training focus based on goal description."""
     
-    primary_type: AthleteType = Field(..., description="Primary athlete type classification")
-    secondary_types: List[AthleteType] = Field(
+    primary_type: AthleteTypeLiteral = Field(..., description="Primary athlete type classification")
+    secondary_types: List[AthleteTypeLiteral] = Field(
         default_factory=list,
         description="Secondary athlete types for mixed goals (e.g., strength + endurance)"
     )
@@ -562,28 +427,7 @@ class AthleteTypeClassification(BaseModel):
     )
 
 
-class GeminiAthleteTypeClassification(BaseModel):
-    """Gemini-friendly athlete type classification (flattened enums)."""
-    
-    primary_type: str = Field(
-        ..., description="Primary athlete type: 'strength', 'endurance', 'functional_fitness', or 'sport_specific'"
-    )
-    secondary_types: List[str] = Field(
-        default_factory=list,
-        description="Secondary athlete types as strings"
-    )
-    confidence: float = Field(..., ge=0.0, le=1.0)
-    reasoning: str = Field(
-        ..., description="Brief explanation justifying the classification"
-    )
-
-
 # ===== Question Content Generation Schemas =====
-
-class IntentPlanPriority(str, Enum):
-    PRIMARY = "primary"
-    OPTIONAL = "optional"
-
 
 class IntentPlanItem(BaseModel):
     """Plan describing which intents will cover each information gap."""
@@ -594,25 +438,8 @@ class IntentPlanItem(BaseModel):
     selected_intent_ids: List[str] = Field(
         ..., description="Intent identifiers that address this information gap"
     )
-    priority: IntentPlanPriority = Field(
+    priority: IntentPlanPriorityLiteral = Field(
         ..., description="Whether this gap is primary or optional for this user"
-    )
-    reasoning: str = Field(
-        ..., description="Brief explanation of why this gap and intents were selected"
-    )
-
-
-class GeminiIntentPlanItem(BaseModel):
-    """Gemini-friendly version of IntentPlanItem (no enums)."""
-    
-    information_gap: str = Field(
-        ..., description="Critical information to gather for this user"
-    )
-    selected_intent_ids: List[str] = Field(
-        ..., description="Intent identifiers that address this information gap"
-    )
-    priority: str = Field(
-        ..., description="Priority level for this gap (\"primary\" or \"optional\")"
     )
     reasoning: str = Field(
         ..., description="Brief explanation of why this gap and intents were selected"
@@ -640,13 +467,3 @@ class QuestionContent(BaseModel):
     )
 
 
-class GeminiQuestionContent(BaseModel):
-    """Gemini-friendly question content (same structure, no enum differences needed)."""
-    
-    intent_plan: List[GeminiIntentPlanItem] = Field(
-        default_factory=list,
-        description="Documentation of information gaps and selected intents",
-    )
-    questions_content: List[QuestionContentItem] = Field(
-        ..., description="List of question content items"
-    )

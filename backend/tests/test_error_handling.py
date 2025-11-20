@@ -4,6 +4,7 @@ Error handling tests - Verify sensitive data is not exposed
 import pytest
 from fastapi.testclient import TestClient
 from fastapi.exceptions import RequestValidationError
+from unittest.mock import patch, Mock
 
 @pytest.mark.unit
 class TestErrorHandling:
@@ -11,12 +12,17 @@ class TestErrorHandling:
     
     def test_validation_error_no_sensitive_data(self, client: TestClient):
         """Test that validation errors don't expose request body."""
-        # Send invalid request that will trigger validation error
-        response = client.post("/api/training/initial-questions", json={
-            "invalid": "data",
-            "password": "secret123",  # Simulated sensitive data
-            "api_key": "should-not-appear"  # Simulated sensitive data
-        })
+        # Mock the training coach to avoid initialization issues
+        with patch('core.training.training_api.get_training_coach') as mock_coach:
+            mock_coach_instance = Mock()
+            mock_coach.return_value = mock_coach_instance
+            
+            # Send invalid request that will trigger validation error
+            response = client.post("/api/training/initial-questions", json={
+                "invalid": "data",
+                "password": "secret123",  # Simulated sensitive data
+                "api_key": "should-not-appear"  # Simulated sensitive data
+            })
         
         assert response.status_code == 422
         data = response.json()
@@ -31,7 +37,12 @@ class TestErrorHandling:
     
     def test_error_response_structure(self, client: TestClient):
         """Test that error responses have proper structure."""
-        response = client.post("/api/training/initial-questions", json={})
+        # Mock the training coach to avoid initialization issues
+        with patch('core.training.training_api.get_training_coach') as mock_coach:
+            mock_coach_instance = Mock()
+            mock_coach.return_value = mock_coach_instance
+            
+            response = client.post("/api/training/initial-questions", json={})
         
         assert response.status_code in [400, 422]
         data = response.json()

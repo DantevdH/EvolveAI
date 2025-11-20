@@ -102,8 +102,34 @@ export class TokenManager {
    */
   static async refreshAccessToken(): Promise<string | null> {
     try {
-      const refreshToken = await this.getRefreshToken();
+      // First, try to get refresh token from SecureStore
+      let refreshToken = await this.getRefreshToken();
+      
+      // If not in SecureStore, try to get it from Supabase's session (fallback)
       if (!refreshToken) {
+        logger.info('Refresh token not in SecureStore, checking Supabase session');
+        const session = await this.getCurrentSession();
+        if (session?.refresh_token) {
+          refreshToken = session.refresh_token;
+          // Sync it to SecureStore for future use
+          if (session.access_token && session.user) {
+            try {
+              await this.storeTokens(
+                session.access_token,
+                session.refresh_token,
+                session.user.id
+              );
+              logger.info('Synced tokens from Supabase session to SecureStore');
+            } catch (syncError) {
+              logger.warn('Failed to sync tokens to SecureStore', syncError);
+              // Continue anyway - we have the refresh token
+            }
+          }
+        }
+      }
+      
+      if (!refreshToken) {
+        logger.error('No refresh token available in SecureStore or Supabase session');
         throw new Error('No refresh token available');
       }
 

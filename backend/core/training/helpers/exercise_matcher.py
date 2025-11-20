@@ -70,7 +70,7 @@ class ExerciseMatcher:
             
             if not candidates:
                 logger.warning(
-                    f"No candidates found for: {main_muscle}, {equipment}"
+                    f"No candidates found for: {ai_exercise_name} {main_muscle}, {equipment}"
                 )
                 # FALLBACK 1: Try matching only on main_muscle + fuzzy name with high threshold
                 logger.debug(f"Attempting fallback match on main_muscle + name only...")

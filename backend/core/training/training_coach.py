@@ -14,6 +14,7 @@ from core.base.base_agent import BaseAgent
 from logging_config import get_logger
 from core.base.rag_service import RAGTool
 from core.base.ace_telemetry import ACETelemetry
+from settings import settings
 
 # Import schemas and services
 from core.training.schemas.training_schemas import (
@@ -22,18 +23,12 @@ from core.training.schemas.training_schemas import (
     DailyTraining,
     StrengthExercise,
     EnduranceSession,
-    GeminiTrainingPlan,
-    GeminiAIStrengthExercise,
     WeeklyScheduleResponse,
-    GeminiWeeklyScheduleResponse,
-    GeminiWeeklySchedule,
     WeeklyOutlinePlan,
-    GeminiWeeklyOutlinePlan,
     AIStrengthExercise,
     MainMuscleEnum,
     EquipmentEnum,
     ModalityDecision,
-    GeminiModalityDecision,
 )
 from core.training.helpers.exercise_selector import ExerciseSelector
 from core.training.helpers.exercise_validator import ExerciseValidator
@@ -46,16 +41,11 @@ from core.training.schemas.question_schemas import (
     AIQuestionResponse,
     AIQuestionResponseWithFormatted,
     PersonalInfo,
-    QuestionType,
     AIQuestion,
     QuestionOption,
     AthleteTypeClassification,
-    GeminiAthleteTypeClassification,
     QuestionContent,
-    GeminiQuestionContent,
-    GeminiAIQuestionResponse,
     FeedbackIntentClassification,
-    GeminiFeedbackIntentClassification,
 )
 from core.training.helpers.response_formatter import ResponseFormatter
 from core.training.helpers.prompt_generator import PromptGenerator
@@ -109,7 +99,7 @@ class TrainingCoach(BaseAgent):
         # Reflector and Curator create their own LLMClient instances internally
         self.reflector = Reflector(None)
         self.curator = Curator(None)
-        # Unified LLM client (OpenAI or Gemini based on env)
+        # Unified LLM client (supports OpenAI, Gemini, Claude, etc. via Instructor)
         self.llm = LLMClient()
 
     def _get_capabilities(self) -> List[str]:
@@ -159,7 +149,7 @@ class TrainingCoach(BaseAgent):
                 # Check basic requirements based on type
                 is_valid = True
                 
-                if question.response_type == QuestionType.SLIDER:
+                if question.response_type == "slider":
                     # SLIDER must have min, max, step, unit
                     if not all([
                         question.min_value is not None,
@@ -173,7 +163,7 @@ class TrainingCoach(BaseAgent):
                         )
                         is_valid = False
                 
-                elif question.response_type in [QuestionType.MULTIPLE_CHOICE, QuestionType.DROPDOWN]:
+                elif question.response_type in ["multiple_choice", "dropdown"]:
                     # Must have options with at least 2 items
                     if not question.options or len(question.options) < 2:
                         self.logger.warning(
@@ -189,7 +179,7 @@ class TrainingCoach(BaseAgent):
                         )
                         is_valid = False
                 
-                elif question.response_type == QuestionType.RATING:
+                elif question.response_type == "rating":
                     # RATING must have min/max values and descriptions
                     if not all([
                         question.min_value is not None,
@@ -203,7 +193,7 @@ class TrainingCoach(BaseAgent):
                         )
                         is_valid = False
                 
-                elif question.response_type in [QuestionType.FREE_TEXT, QuestionType.CONDITIONAL_BOOLEAN]:
+                elif question.response_type in ["free_text", "conditional_boolean"]:
                     # Must have max_length and placeholder
                     if not all([
                         question.max_length is not None,
@@ -248,12 +238,12 @@ class TrainingCoach(BaseAgent):
         
         for question in questions:
             # Check if it's a multiple_choice question with more than 4 options
-            if (question.response_type == QuestionType.MULTIPLE_CHOICE and 
+            if (question.response_type == "multiple_choice" and 
                 question.options and 
                 len(question.options) > 4):
                 
                 # Convert to dropdown
-                question.response_type = QuestionType.DROPDOWN
+                question.response_type = "dropdown"
                 converted_count += 1
                 self.logger.info(
                     f"Converted question '{question.id}' from multiple_choice to dropdown "
@@ -286,21 +276,12 @@ class TrainingCoach(BaseAgent):
 
         try:
             ai_start = time.time()
-            decision_obj, completion = self.llm.parse_structured(
+            decision, completion = self.llm.parse_structured(
                 prompt,
                 ModalityDecision,
-                GeminiModalityDecision,
+                model_type="lightweight",
             )
             duration = time.time() - ai_start
-            if isinstance(decision_obj, ModalityDecision):
-                decision = decision_obj
-            else:
-                decision_payload = (
-                    decision_obj.model_dump()
-                    if hasattr(decision_obj, "model_dump")
-                    else decision_obj
-                )
-                decision = ModalityDecision.model_validate(decision_payload)
             await db_service.log_latency_event("modality_selection", duration, completion)
 
             rationale = (decision.rationale or "").strip()
@@ -325,7 +306,7 @@ class TrainingCoach(BaseAgent):
             )
         except Exception as exc:
             # Log detailed error info for debugging
-            error_context = f"Provider: {self.llm.provider}, Model: {self.llm.chat_model}"
+            error_context = f"Model: {self.llm.lightweight_model_name}"
             self.logger.error(
                 "Modality selection failed: %s | Context: %s | "
                 "Falling back to include both modalities.",
@@ -374,12 +355,9 @@ class TrainingCoach(BaseAgent):
             )
 
             ai_start = time.time()
-            if self.llm.provider == "gemini":
-                outline_plan, completion = self.llm.parse_structured(
-                    prompt, WeeklyOutlinePlan, GeminiWeeklyOutlinePlan
-                )
-            else:
-                outline_plan, completion = self.llm.chat_parse(prompt, WeeklyOutlinePlan)
+            outline_plan, completion = self.llm.parse_structured(
+                prompt, WeeklyOutlinePlan, model_type="lightweight"
+            )
             latency = time.time() - ai_start
             await db_service.log_latency_event("week_outline_generation", latency, completion)
 
@@ -440,7 +418,7 @@ class TrainingCoach(BaseAgent):
         """
         try:
             # Check if debug mode is enabled
-            if os.getenv("DEBUG", "false").lower() == "true":
+            if settings.DEBUG:
                 initial_questions = create_mock_initial_questions()
                 return initial_questions
 
@@ -451,12 +429,11 @@ class TrainingCoach(BaseAgent):
             )
             
             ai_start = time.time()
-            parsed_obj, completion = self.llm.parse_structured(
+            classification, completion = self.llm.parse_structured(
                 classification_prompt,
                 AthleteTypeClassification,
-                GeminiAthleteTypeClassification,
+                model_type="lightweight",
             )
-            classification = AthleteTypeClassification.model_validate(parsed_obj.model_dump())
             classification_duration = time.time() - ai_start
             
             await db_service.log_latency_event(
@@ -464,8 +441,8 @@ class TrainingCoach(BaseAgent):
             )
             
             athlete_type_dict = {
-                "primary_type": classification.primary_type.value,
-                "secondary_types": [st.value for st in classification.secondary_types],
+                "primary_type": classification.primary_type,
+                "secondary_types": list(classification.secondary_types),
                 "confidence": classification.confidence,
                 "reasoning": classification.reasoning,
             }
@@ -495,26 +472,16 @@ class TrainingCoach(BaseAgent):
             )
             
             ai_start = time.time()
-            parsed_obj, completion = self.llm.parse_structured(
-                content_prompt, QuestionContent, GeminiQuestionContent
+            question_content, completion = self.llm.parse_structured(
+                content_prompt, QuestionContent, model_type="lightweight"
             )
-            question_content = QuestionContent.model_validate(parsed_obj.model_dump())
             content_duration = time.time() - ai_start
             
             await db_service.log_latency_event(
                 "initial_question_generation", content_duration, completion
             )
             
-            if question_content.intent_plan:
-                self.logger.info(
-                    "Intent plan summary: %s",
-                    "; ".join(
-                        f"{item.priority.value}: {item.information_gap} via {', '.join(item.selected_intent_ids)}"
-                        for item in question_content.intent_plan
-                    ),
-                )
-            else:
-                self.logger.info("Intent plan summary: no explicit intent coverage provided.")
+
             
             self.logger.info(f"Generated {len(question_content.questions_content)} question content items")
 
@@ -537,10 +504,9 @@ class TrainingCoach(BaseAgent):
             )
             
             ai_start = time.time()
-            parsed_obj, completion = self.llm.parse_structured(
-                formatting_prompt, AIQuestionResponse, GeminiAIQuestionResponse
+            questions_response, completion = self.llm.parse_structured(
+                formatting_prompt, AIQuestionResponse, model_type="lightweight"
             )
-            questions_response = AIQuestionResponse.model_validate(parsed_obj.model_dump())
             formatting_duration = time.time() - ai_start
             
             await db_service.log_latency_event(
@@ -588,7 +554,7 @@ class TrainingCoach(BaseAgent):
                     AIQuestion(
                         id="fallback_1",
                         text="What is your primary training goal?",
-                        response_type=QuestionType.MULTIPLE_CHOICE,
+                        response_type="multiple_choice",
                         options=[
                             QuestionOption(
                                 id="goal_1", text="Build Muscle", value="build_muscle"
@@ -644,7 +610,7 @@ class TrainingCoach(BaseAgent):
         """
         try:
             # Check if debug mode is enabled
-            if os.getenv("DEBUG", "false").lower() == "true":
+            if settings.DEBUG:
                 self.logger.debug("DEBUG MODE: Using mock training plan")
                 training_plan = create_mock_training_plan()
                 training_dict = training_plan.model_dump()
@@ -686,40 +652,20 @@ class TrainingCoach(BaseAgent):
             )
             
             # Step 4: Generate full TrainingPlan with AI (but only Week 1 in weekly_schedules)
-            model_name = os.getenv("LLM_MODEL_CHAT", os.getenv("LLM_MODEL", "gpt-4o"))
+            model_name = settings.LLM_MODEL_COMPLEX
             self.logger.info(f"🤖 Generating training plan with AI ({model_name})...")
             
             ai_start = time.time()
+            training_plan, completion = self.llm.parse_structured(
+                prompt, TrainingPlan, model_type="complex"
+            )
+            ai_duration = time.time() - ai_start
+            training_dict = training_plan.model_dump()
             
-            if self.llm.provider == "gemini":
-                parsed_obj, completion = self.llm.parse_structured(
-                    prompt, TrainingPlan, GeminiTrainingPlan
-                )
-                tp_input = parsed_obj.model_dump()
-                
-                # Convert GeminiAIStrengthExercise to AIStrengthExercise (with Enum validation)
-                # This happens in _normalize_gemini_training_plan_input now
-                
-                tp_input["user_profile_id"] = user_profile_id
-                # Skip TrainingPlan.model_validate() - IDs don't exist yet, will be added after database save
-                # GeminiTrainingPlan already validated the structure
-                tp_input = self._normalize_gemini_training_plan_input(tp_input)
-                
-                # Post-process LLM response: Fix reps/weight arrays to match sets count and sort (high->low)
-                tp_input = self.exercise_validator.normalize_reps_weight_arrays(tp_input)
-                
-                ai_duration = time.time() - ai_start
-                training_dict = tp_input
-            else:
-                # OpenAI path: validate with TrainingPlan (will fail if IDs missing, but OpenAI may include them differently)
-                training_plan, completion = self.llm.chat_parse(prompt, TrainingPlan)
-                ai_duration = time.time() - ai_start
-                training_dict = training_plan.model_dump()
-                
-                # Post-process LLM response: Fix reps/weight arrays to match sets count and sort (high->low)
-                training_dict = self.exercise_validator.normalize_reps_weight_arrays(training_dict)
-                
-                training_dict["user_profile_id"] = user_profile_id
+            # Post-process LLM response: Fix reps/weight arrays to match sets count and sort (high->low)
+            training_dict = self.exercise_validator.normalize_reps_weight_arrays(training_dict)
+            
+            training_dict["user_profile_id"] = user_profile_id
             
             # Verify only Week 1 is generated
             num_weeks = len(training_dict.get("weekly_schedules", []))
@@ -851,60 +797,22 @@ class TrainingCoach(BaseAgent):
             )
             
             # Step 4: Generate updated WeeklySchedule with AI (using response schema that includes ai_message)
-            model_name = os.getenv("LLM_MODEL_CHAT", os.getenv("LLM_MODEL", "gpt-4o"))
+            model_name = settings.LLM_MODEL_COMPLEX
             self.logger.info(f"🤖 Updating Week {week_number} with AI ({model_name})...")
             
             ai_start = time.time()
             
             # Extract ai_message from response, then convert to WeeklySchedule (without ai_message)
-            ai_message = None
-            if self.llm.provider == "gemini":
-                parsed_obj, completion = self.llm.parse_structured(
-                    prompt, WeeklyScheduleResponse, GeminiWeeklyScheduleResponse
-                )
-                ws_dict = parsed_obj.model_dump()
-                
-                # Validate that required fields are present
-                if not ws_dict or ws_dict == {}:
-                    self.logger.error(
-                        "AI returned empty response for Week update. "
-                        "Possible causes: model timeout, invalid prompt format, or API error."
-                    )
-                    raise ValueError("AI returned empty response - missing required fields (daily_trainings, justification, ai_message)")
-                
-                # Check for missing required fields
-                missing_fields = []
-                if not ws_dict.get("daily_trainings"):
-                    missing_fields.append("daily_trainings")
-                if not ws_dict.get("justification"):
-                    missing_fields.append("justification")
-                if not ws_dict.get("ai_message"):
-                    missing_fields.append("ai_message")
-                
-                if missing_fields:
-                    self.logger.error(
-                        f"AI response missing required fields: {missing_fields}. "
-                        f"Received keys: {list(ws_dict.keys())}. "
-                        f"Check prompt structure and model response format."
-                    )
-                    raise ValueError(f"AI response missing required fields: {missing_fields}")
-                
-                # Extract ai_message (GeminiWeeklyScheduleResponse already validated structure)
-                ai_message = ws_dict.get("ai_message")
-                # Skip WeeklyScheduleResponse.model_validate() - IDs don't exist yet, will be added after database save
-                # Skip WeeklySchedule.model_validate() - IDs don't exist yet
-                # Convert to WeeklySchedule dict (without ai_message)
-                week_dict = {k: v for k, v in ws_dict.items() if k != "ai_message"}
-                week_dict["week_number"] = week_number
-                ai_duration = time.time() - ai_start
-            else:
-                ws_response, completion = self.llm.chat_parse(prompt, WeeklyScheduleResponse)
-                ai_duration = time.time() - ai_start
-                # Extract ai_message before converting to WeeklySchedule
-                ai_message = ws_response.ai_message
-                # Convert to WeeklySchedule (without ai_message)
-                week_dict = ws_response.model_dump(exclude={'ai_message'})
-                week_dict["week_number"] = week_number
+            ws_response, completion = self.llm.parse_structured(
+                prompt, WeeklyScheduleResponse, model_type="complex"
+            )
+            ai_duration = time.time() - ai_start
+            
+            # Extract ai_message before converting to WeeklySchedule
+            ai_message = ws_response.ai_message
+            # Convert to WeeklySchedule (without ai_message)
+            week_dict = ws_response.model_dump(exclude={'ai_message'})
+            week_dict["week_number"] = week_number
             
             # Post-process LLM response: Fix reps/weight arrays to match sets count and sort (high->low)
             temp_plan_for_normalization = {"weekly_schedules": [week_dict]}
@@ -973,6 +881,7 @@ class TrainingCoach(BaseAgent):
         self,
         personal_info: PersonalInfo,
         user_profile_id: int,
+        existing_training_plan: Dict[str, Any],
         jwt_token: str = None,
     ) -> Dict[str, Any]:
         """
@@ -991,6 +900,7 @@ class TrainingCoach(BaseAgent):
         Args:
             personal_info: User's personal information and goals
             user_profile_id: Database ID of the user profile
+            existing_training_plan: Full training plan from request (already fetched from frontend)
             jwt_token: JWT token for database authentication
         """
         try:
@@ -1009,28 +919,23 @@ class TrainingCoach(BaseAgent):
                     total_lessons=0,
                 )
             
-            # Fetch existing full training plan
-            self.logger.info("📋 Loading existing training plan...")
-            existing_plan_result = await db_service.get_training_plan(user_profile_id)
-            if not existing_plan_result.get("success"):
+            # Use existing training plan from request (no need to fetch from database)
+            existing_plan = existing_training_plan
+            existing_weekly_schedules = existing_plan.get("weekly_schedules", [])
+            
+            if not existing_weekly_schedules:
                 self.logger.error(
-                    "No existing training plan found. "
+                    "No existing weekly schedules found in training plan. "
                     "Cannot create new week without Week 1. User must complete initial plan generation first."
                 )
                 return {
                     "success": False,
-                    "error": "No existing training plan found. Create Week 1 first.",
+                    "error": "No existing weekly schedules found. Create Week 1 first.",
                 }
             
-            existing_plan = existing_plan_result.get("data", {})
-            existing_weekly_schedules = existing_plan.get("weekly_schedules", [])
-            
             # Calculate next_week_number from existing weeks (max week number + 1)
-            if existing_weekly_schedules:
-                week_numbers = [w.get("week_number", 0) for w in existing_weekly_schedules if w.get("week_number")]
-                next_week_number = max(week_numbers) + 1 if week_numbers else 1
-            else:
-                next_week_number = 1
+            week_numbers = [w.get("week_number", 0) for w in existing_weekly_schedules if w.get("week_number")]
+            next_week_number = max(week_numbers) + 1 if week_numbers else 1
             
             self.logger.info(f"Calculated next_week_number: {next_week_number} from {len(existing_weekly_schedules)} existing weeks")
             
@@ -1089,26 +994,16 @@ class TrainingCoach(BaseAgent):
             )
 
             # Step 4: Generate new WeeklySchedule with AI
-            model_name = os.getenv("LLM_MODEL_CHAT", os.getenv("LLM_MODEL", "gpt-4o"))
+            model_name = settings.LLM_MODEL_COMPLEX
             self.logger.info(f"🤖 Creating Week {next_week_number} with AI ({model_name})...")
             
             ai_start = time.time()
-            
-            if self.llm.provider == "gemini":
-                parsed_obj, completion = self.llm.parse_structured(
-                    prompt, WeeklySchedule, GeminiWeeklySchedule
-                )
-                ws_input = parsed_obj.model_dump()
-                ws_input["week_number"] = next_week_number
-                # Skip WeeklySchedule.model_validate() - IDs don't exist yet, will be added after database save
-                # GeminiWeeklySchedule already validated the structure
-                ai_duration = time.time() - ai_start
-                week_dict = ws_input
-            else:
-                weekly_schedule, completion = self.llm.chat_parse(prompt, WeeklySchedule)
-                ai_duration = time.time() - ai_start
-                week_dict = weekly_schedule.model_dump()
-                week_dict["week_number"] = next_week_number
+            weekly_schedule, completion = self.llm.parse_structured(
+                prompt, WeeklySchedule, model_type="complex"
+            )
+            ai_duration = time.time() - ai_start
+            week_dict = weekly_schedule.model_dump()
+            week_dict["week_number"] = next_week_number
             
             # Post-process LLM response: Fix reps/weight arrays to match sets count and sort (high->low)
             temp_plan_for_normalization = {"weekly_schedules": [week_dict]}
@@ -1368,10 +1263,9 @@ class TrainingCoach(BaseAgent):
             
             # Use structured parsing with Pydantic model - TRACK AI CALL
             ai_start = time.time()
-            parsed_any, completion = self.llm.parse_structured(
-                prompt, FeedbackIntentClassification, GeminiFeedbackIntentClassification
+            parsed_obj, completion = self.llm.parse_structured(
+                prompt, FeedbackIntentClassification, model_type="lightweight"
             )
-            parsed_obj = FeedbackIntentClassification.model_validate(parsed_any.model_dump())
             duration = time.time() - ai_start
             result = parsed_obj.model_dump() if hasattr(parsed_obj, 'model_dump') else parsed_obj
             result['_classify_duration'] = duration
@@ -1414,117 +1308,3 @@ class TrainingCoach(BaseAgent):
             context_lines.append(f"{role.upper()}: {content}")
         
         return "\n".join(context_lines)
-
-    def _clean_for_json_serialization(self, data: Any) -> Any:
-        """
-        Clean data to ensure it's JSON serializable by converting datetime objects
-        and other non-serializable types to strings or basic types.
-        """
-        if isinstance(data, dict):
-            return {key: self._clean_for_json_serialization(value) for key, value in data.items()}
-        elif isinstance(data, list):
-            return [self._clean_for_json_serialization(item) for item in data]
-        elif isinstance(data, datetime):
-            return data.isoformat()
-        elif hasattr(data, 'model_dump'):
-            # Handle Pydantic models
-            return self._clean_for_json_serialization(data.model_dump())
-        elif hasattr(data, 'dict'):
-            # Handle older Pydantic models
-            return self._clean_for_json_serialization(data.dict())
-        elif isinstance(data, (str, int, float, bool, type(None))):
-            return data
-        else:
-            # Convert other types to string as fallback
-            return str(data)
-
-    @staticmethod
-    def _extract_json_text(text: str) -> str:
-        """
-        Extract a JSON string from possible markdown-fenced output.
-        - Removes ```json ... ``` fences
-        - If extra prose surrounds JSON, slice from first '{' to last '}'
-        """
-        if not text:
-            return text
-        cleaned = text.strip()
-        # Remove triple backtick fences
-        if cleaned.startswith("```"):
-            cleaned = cleaned.lstrip("`")
-            # Drop optional language label like json\n
-            newline_idx = cleaned.find("\n")
-            if newline_idx != -1:
-                cleaned = cleaned[newline_idx + 1 :]
-            # Remove trailing closing fence if present
-            if cleaned.endswith("```"):
-                cleaned = cleaned[:-3]
-        cleaned = cleaned.strip()
-        # If there is still surrounding prose, extract outermost JSON object
-        start = cleaned.find("{")
-        end = cleaned.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            return cleaned[start : end + 1]
-        return cleaned
-
-    @staticmethod
-    def _normalize_gemini_training_plan_input(tp: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Normalize a GeminiTrainingPlan dict to satisfy domain TrainingPlan requirements:
-        - Convert GeminiAIStrengthExercise to AIStrengthExercise (with Enum validation)
-        - Inject training_plan_id=0 for each weekly_schedule (placeholder before DB save)
-        - Inject weekly_schedule_id=0 for each daily_training
-        - Normalize training_type to expected enum lowercase; map synonyms
-        """
-        schedules = tp.get("weekly_schedules") or []
-        weekday_map = {
-            "monday": "Monday",
-            "tuesday": "Tuesday",
-            "wednesday": "Wednesday",
-            "thursday": "Thursday",
-            "friday": "Friday",
-            "saturday": "Saturday",
-            "sunday": "Sunday",
-        }
-        for ws in schedules:
-            # Ensure required FK placeholder
-            ws.setdefault("training_plan_id", 0)
-            dailies = ws.get("daily_trainings") or []
-            for dt in dailies:
-                dt.setdefault("weekly_schedule_id", 0)
-                tt = dt.get("training_type")
-                if isinstance(tt, str):
-                    tt_norm = tt.strip().lower()
-                    # Map common synonyms to enum values
-                    if tt_norm in {"active recovery", "active_recovery", "recovery", "rest day", "rest_day"}:
-                        tt_norm = "rest"
-                    dt["training_type"] = tt_norm
-                # Normalize day_of_week capitalization
-                dow = dt.get("day_of_week")
-                if isinstance(dow, str):
-                    dt["day_of_week"] = weekday_map.get(dow.strip().lower(), dow)
-                
-                # Convert GeminiAIStrengthExercise to AIStrengthExercise (with Enum validation)
-                strength_exercises = dt.get("strength_exercises") or []
-                converted_exercises = []
-                for se in strength_exercises:
-                    # se is a dict from GeminiAIStrengthExercise.model_dump()
-                    try:
-                        # Create GeminiAIStrengthExercise from dict
-                        gemini_ex = GeminiAIStrengthExercise(**se)
-                        # Convert to AIStrengthExercise (validates enums)
-                        ai_ex = gemini_ex.to_ai_strength_exercise()
-                        # Convert back to dict for downstream processing
-                        converted_exercises.append(ai_ex.model_dump())
-                    except (ValueError, KeyError) as e:
-                        # Enum validation failed - log and skip
-                        logger = logging.getLogger(__name__)
-                        logger.error(
-                            f"Failed to convert Gemini exercise to internal format: {str(e)}. "
-                            f"Exercise data: {se}. "
-                            f"Possible causes: invalid enum value (main_muscle/equipment) or missing required fields. "
-                            f"Skipping exercise."
-                        )
-                        # Skip invalid exercise
-                        continue
-                dt["strength_exercises"] = converted_exercises
-        return tp

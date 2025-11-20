@@ -25,6 +25,7 @@ import { AIChatMessage } from '@/src/components/shared/chat/AIChatMessage';
 import { useAuth } from '@/src/context/AuthContext';
 import { supabase } from '@/src/config/supabase';
 import { trainingService } from '@/src/services/onboardingService';
+import { ChatService } from '@/src/services/chatService';
 import { getChatWelcomeMessage } from '@/src/utils/chatWelcomeMessages';
 import {
   transformTrainingPlan,
@@ -63,6 +64,8 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentPlan, setCurrentPlan] = useState<TrainingPlan | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
   const isPlanReview = useMemo(
@@ -86,25 +89,81 @@ const ChatModal: React.FC<ChatModalProps> = ({
     return getChatWelcomeMessage(state.userProfile?.username);
   }, [initialMessage, isPlanReview, state.trainingPlan, state.userProfile?.username]);
 
-  // Reset / initialize when modal visibility changes
+  // Load conversation history and initialize when modal opens
   useEffect(() => {
-    if (visible) {
+    if (visible && !hasLoadedHistory) {
       setCurrentPlan((state.trainingPlan as TrainingPlan) || null);
-      if (messages.length === 0 && welcomeMessage) {
-        const welcome: ChatMessageType = {
-        id: 'welcome',
-          message: welcomeMessage,
-        isUser: false,
-        timestamp: new Date(),
+      
+      // Load conversation history from database (only once per modal session)
+      const loadConversationHistory = async () => {
+        if (!state.userProfile?.id) {
+          // If no user profile, just show welcome message
+          if (welcomeMessage) {
+            const welcome: ChatMessageType = {
+              id: 'welcome',
+              message: welcomeMessage,
+              isUser: false,
+              timestamp: new Date(),
+            };
+            setMessages([welcome]);
+          }
+          setHasLoadedHistory(true);
+          return;
+        }
+
+        setIsLoadingHistory(true);
+        try {
+          // Determine plan_id based on mode (use state.trainingPlan since currentPlan is set in same effect)
+          const trainingPlan = state.trainingPlan as TrainingPlan | null;
+          const planId = isPlanReview && trainingPlan?.id 
+            ? (typeof trainingPlan.id === 'string' ? parseInt(trainingPlan.id, 10) : trainingPlan.id)
+            : null;
+
+          // Load saved conversation history
+          const savedMessages = await ChatService.loadConversationHistory(
+            state.userProfile.id,
+            planId
+          );
+
+          if (savedMessages.length > 0) {
+            // Use saved messages, but filter out any welcome message that might be in there
+            setMessages(savedMessages.filter(msg => msg.id !== 'welcome'));
+          } else if (welcomeMessage) {
+            // Only show welcome if no saved messages
+            const welcome: ChatMessageType = {
+              id: 'welcome',
+              message: welcomeMessage,
+              isUser: false,
+              timestamp: new Date(),
+            };
+            setMessages([welcome]);
+          }
+        } catch (error) {
+          console.error('Error loading conversation history:', error);
+          // On error, still show welcome message
+          if (welcomeMessage) {
+            const welcome: ChatMessageType = {
+              id: 'welcome',
+              message: welcomeMessage,
+              isUser: false,
+              timestamp: new Date(),
+            };
+            setMessages([welcome]);
+          }
+        } finally {
+          setIsLoadingHistory(false);
+          setHasLoadedHistory(true);
+        }
       };
-        setMessages([welcome]);
-      }
-    } else {
-      setMessages([]);
+
+      loadConversationHistory();
+    } else if (!visible) {
+      // Reset hasLoadedHistory when modal closes so it loads again next time
+      setHasLoadedHistory(false);
       setInputMessage('');
       setIsLoading(false);
     }
-  }, [visible, welcomeMessage, state.trainingPlan]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [visible, welcomeMessage, state.userProfile?.id, isPlanReview, hasLoadedHistory, state.trainingPlan]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -127,15 +186,28 @@ const ChatModal: React.FC<ChatModalProps> = ({
     return { ...data };
   };
 
-  const addAiMessage = useCallback((content: string) => {
+  const addAiMessage = useCallback(async (content: string) => {
     const aiMessage: ChatMessageType = {
       id: Date.now().toString(),
       message: content,
       isUser: false,
       timestamp: new Date(),
     };
-    setMessages(prev => [...prev.filter(msg => msg.id !== 'typing'), aiMessage]);
-  }, []);
+    const updatedMessages = [...messages.filter(msg => msg.id !== 'typing'), aiMessage];
+    setMessages(updatedMessages);
+
+    // Save entire conversation to AsyncStorage
+    if (state.userProfile?.id) {
+      const planId = isPlanReview && currentPlan?.id 
+        ? (typeof currentPlan.id === 'string' ? parseInt(currentPlan.id, 10) : currentPlan.id)
+        : null;
+      
+      // Save asynchronously - don't block UI
+      ChatService.saveConversation(state.userProfile.id, updatedMessages, planId).catch(
+        error => console.error('Error saving conversation:', error)
+      );
+    }
+  }, [messages, state.userProfile?.id, isPlanReview, currentPlan?.id]);
 
   const buildConversationHistory = useCallback(
     (userMessage: ChatMessageType) => {
@@ -195,6 +267,12 @@ const ChatModal: React.FC<ChatModalProps> = ({
 
       const conversationHistory = buildConversationHistory(userMessage);
 
+      // Pass currentWeek from the training plan
+      const currentWeek = currentPlan?.currentWeek;
+      if (!currentWeek) {
+        throw new Error('Training plan currentWeek is not available. Please reload the app.');
+      }
+
       const data = await trainingService.sendPlanFeedback(
         state.userProfile.id,
         planId,
@@ -203,6 +281,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
         state.userProfile.playbook,
         personalInfo,
         conversationHistory,
+        currentWeek,  // Pass current week number
         jwtToken
       );
 
@@ -248,7 +327,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
       addAiMessage(messageToShow);
     },
     {
-      retryAttempts: 3,
+      retryCount: 3,
     }
   );
 
@@ -274,8 +353,21 @@ const ChatModal: React.FC<ChatModalProps> = ({
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const updatedMessages = [...messages, userMessage];
+    setMessages(updatedMessages);
     setInputMessage('');
+    
+    // Save entire conversation to AsyncStorage (asynchronously, don't block UI)
+    if (state.userProfile?.id) {
+      const planId = isPlanReview && currentPlan?.id 
+        ? (typeof currentPlan.id === 'string' ? parseInt(currentPlan.id, 10) : currentPlan.id)
+        : null;
+      
+      ChatService.saveConversation(state.userProfile.id, updatedMessages, planId).catch(
+        error => console.error('Error saving conversation:', error)
+      );
+    }
+
     setIsLoading(true);
 
     // Add typing indicator

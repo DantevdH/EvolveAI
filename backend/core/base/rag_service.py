@@ -15,6 +15,7 @@ from typing import List, Dict, Any, Optional, Tuple
 import openai
 from .base_agent import BaseAgent
 from logging_config import get_logger
+from settings import settings
 
 # Use centralized environment loader (respects test environment)
 try:
@@ -50,8 +51,8 @@ class RAGTool:
     
     def _init_embedding_clients(self):
         """Initialize embedding clients based on provider."""
-        # Determine provider from model name
-        model_name = os.getenv("LLM_MODEL_CHAT", os.getenv("LLM_MODEL", "gpt-4o"))
+        # Determine provider from model name (use Settings for unified configuration)
+        model_name = settings.LLM_MODEL_COMPLEX
         self.use_gemini = model_name.lower().startswith("gemini")
         
         # Get embedding model from env var (default based on provider)
@@ -66,7 +67,8 @@ class RAGTool:
             self.embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
         
         # Initialize embedding clients based on provider
-        api_key = os.getenv("LLM_API_KEY")
+        # Use settings (which reads from environment dynamically)
+        api_key = settings.LLM_API_KEY
         if not api_key:
             # In test environment, allow missing API key (tests should mock this)
             if is_test_environment():
