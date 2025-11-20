@@ -8,6 +8,7 @@ import { NotificationService } from '@/src/services/NotificationService';
 import { logger } from '@/src/utils/logger';
 import { apiCallWithRetry, getProfileLoadingErrorMessage } from '@/src/utils/apiCallWithRetry';
 import { PROFILE_LOADING_CONFIG } from '@/src/constants/api';
+import { TokenManager } from '@/src/services/tokenManager';
 
 // Simplified auth state interface
 interface SimpleAuthState {
@@ -361,6 +362,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             }
           }
           
+          // CRITICAL: Sync tokens to SecureStore so TokenManager can refresh them later
+          if (session.access_token && session.refresh_token && session.user) {
+            try {
+              await TokenManager.storeTokens(
+                session.access_token,
+                session.refresh_token,
+                session.user.id
+              );
+              logger.info('Tokens synced to SecureStore during initialization');
+            } catch (tokenError) {
+              logger.warn('Failed to sync tokens to SecureStore during init', tokenError);
+              // Don't block auth flow if token sync fails
+            }
+          }
+          
           // Load user profile if we have a session
           if (session.user) {
             await loadUserProfile(session.user.id);
@@ -386,6 +402,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         logger.info('User signed in');
         dispatch({ type: 'SET_USER', payload: session.user });
         dispatch({ type: 'SET_SESSION', payload: session });
+        
+        // CRITICAL: Sync tokens to SecureStore so TokenManager can refresh them later
+        if (session.access_token && session.refresh_token && session.user) {
+          try {
+            await TokenManager.storeTokens(
+              session.access_token,
+              session.refresh_token,
+              session.user.id
+            );
+            logger.info('Tokens synced to SecureStore on sign in');
+          } catch (tokenError) {
+            logger.warn('Failed to sync tokens to SecureStore on sign in', tokenError);
+            // Don't block auth flow if token sync fails
+          }
+        }
         
         // Check if OAuth user needs email verification (not for email signup)
         if (session.user && !session.user.email_confirmed_at && session.user.app_metadata?.provider !== 'email') {

@@ -1,160 +1,265 @@
+"""
+Unified LLM client using Instructor for multi-provider structured output support.
+
+Supports OpenAI, Gemini, Claude, and other providers through Instructor.
+Provides complex and lightweight model instances for different use cases.
+"""
+
 import os
 from typing import Any, Dict, List, Optional, Type
-import openai
+import instructor
+from openai import OpenAI
 from google import genai  # type: ignore
-from google.genai import types  # type: ignore
-import enum
+from anthropic import Anthropic  # type: ignore
+from settings import settings
+
 
 class LLMClient:
     """
-    Unified LLM client that routes to OpenAI GPT or Google Gemini based on env.
-
-    Env vars used:
-      - LLM_API_KEY
-      - LLM_MODEL (for non-chat/one-shot usage)
-      - LLM_MODEL_CHAT (for chat-style prompts)
-      - TEMPERATURE
+    Unified LLM client using Instructor for structured output across all providers.
+    
+    Uses Settings for configuration:
+      - LLM_API_KEY (works for all providers)
+      - LLM_MODEL_COMPLEX (e.g., gemini-2.5-flash)
+      - LLM_MODEL_LIGHTWEIGHT (e.g., gemini-2.5-flash-lite)
+      - TEMPERATURE (applies to both models)
     """
 
     def __init__(self):
-        self.api_key = os.getenv("LLM_API_KEY", "")
-        self.model = os.getenv("LLM_MODEL", "gpt-4o")
-        self.chat_model = os.getenv("LLM_MODEL_CHAT", self.model)
-        self.temperature = float(os.getenv("TEMPERATURE", "0.7"))
+        self.api_key = settings.LLM_API_KEY
+        if not self.api_key:
+            raise ValueError("LLM_API_KEY not found in environment variables")
+        
+        self.complex_model_name = settings.LLM_MODEL_COMPLEX
+        self.lightweight_model_name = settings.LLM_MODEL_LIGHTWEIGHT
+        self.temperature = settings.TEMPERATURE
+        
+        # Initialize only the clients needed based on model names
+        self._init_clients_for_models()
+        
+        # Create model instances
+        self.complex_model = self._get_instructor_model(self.complex_model_name)
+        self.lightweight_model = self._get_instructor_model(self.lightweight_model_name)
 
-        # Determine provider by model name
-        model_lower = (self.chat_model or self.model).lower()
-        if model_lower.startswith("gemini"):
-            self.provider = "gemini"
-        else:
-            self.provider = "openai"
-
-        # Initialize provider SDKs
+    def _init_clients_for_models(self):
+        """Initialize only the clients needed based on the model names in use."""
+        # Check which providers are needed based on model names
+        models_to_check = [self.complex_model_name, self.lightweight_model_name]
+        needs_openai = any("gpt" in m.lower() or "openai" in m.lower() for m in models_to_check)
+        needs_gemini = any("gemini" in m.lower() for m in models_to_check)
+        needs_anthropic = any("claude" in m.lower() or "anthropic" in m.lower() for m in models_to_check)
+        
+        # Initialize only needed clients
         self._openai_client = None
-        self._gemini_model_cache: Dict[str, Any] = {}
-        self._gemini_client: Optional[Any] = None
+        self._gemini_client = None
+        self._anthropic_client = None
+        
+        if needs_openai:
+            self._openai_client = OpenAI(api_key=self.api_key)
+        
+        if needs_gemini:
+            try:
+                self._gemini_client = genai.Client(api_key=self.api_key)
+            except Exception:
+                self._gemini_client = None
+        
+        if needs_anthropic:
+            try:
+                anthropic_key = os.getenv("ANTHROPIC_API_KEY", self.api_key)
+                self._anthropic_client = Anthropic(api_key=anthropic_key)
+            except Exception:
+                self._anthropic_client = None
 
-        if self.provider == "openai":
-            self._openai_client = openai.OpenAI(api_key=self.api_key)
+    def _get_provider(self, model_name: str) -> str:
+        """Detect provider from model name."""
+        model_lower = model_name.lower()
+        if model_lower.startswith("gemini"):
+            return "gemini"
+        elif model_lower.startswith("claude"):
+            return "anthropic"
         else:
-            # Client-based auth; no global configure in new SDK
-            if not self.api_key:
-                raise ValueError(
-                    "Missing API key for Google AI. Set LLM_API_KEY (preferred) or GEMINI_API_KEY/GOOGLE_API_KEY."
-                )
-            self._gemini_client = genai.Client(api_key=self.api_key)
+            return "openai"
 
-    def _get_gemini_model(self, schema: Optional[Type[Any]] = None) -> Any:
-        key = f"{self.chat_model}:{schema.__name__ if schema else 'text'}"
-        if key in self._gemini_model_cache:
-            return self._gemini_model_cache[key]
+    def _get_instructor_model(self, model_name: str):
+        """Get Instructor-wrapped model for the given model name."""
+        provider = self._get_provider(model_name)
+        
+        if provider == "openai":
+            # Use instructor.from_openai for OpenAI
+            return instructor.from_openai(self._openai_client, mode=instructor.Mode.JSON)
+        elif provider == "gemini":
+            if not self._gemini_client:
+                raise ValueError("Gemini client not initialized. Check LLM_API_KEY.")
+            # Instructor doesn't support Gemini directly, use client with structured output
+            return self._gemini_client
+        elif provider == "anthropic":
+            if not self._anthropic_client:
+                raise ValueError("Anthropic client not initialized. Check LLM_API_KEY or model name.")
+            # Use instructor.from_anthropic for Anthropic
+            return instructor.from_anthropic(self._anthropic_client, mode=instructor.Mode.JSON)
+        else:
+            raise ValueError(f"Unsupported provider for model: {model_name}")
 
-        generation_config: Dict[str, Any] = {
-            "temperature": self.temperature,
-        }
-        if schema is not None:
-            # Prefer Pydantic class directly per Google SDK examples
-            mime = (
-                "text/x.enum" if isinstance(schema, type) and issubclass(schema, enum.Enum) else "application/json"
-            )
-            generation_config.update({
-                "response_mime_type": mime,
-                "response_schema": schema,
-            })
-
-        model = genai.GenerativeModel(self.chat_model, generation_config=generation_config)
-        self._gemini_model_cache[key] = model
-        return model
-
-    def chat_text(self, messages: List[Dict[str, str]]) -> str:
-        """Generate plain text completion for a chat-style prompt."""
-        if self.provider == "openai":
+    def chat_text(self, messages: List[Dict[str, str]], model_type: str = "lightweight") -> str:
+        """
+        Generate plain text completion for a chat-style prompt.
+        
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            model_type: "complex" or "lightweight"
+        
+        Returns:
+            Generated text response
+        """
+        model = self.complex_model if model_type == "complex" else self.lightweight_model
+        model_name = self.complex_model_name if model_type == "complex" else self.lightweight_model_name
+        provider = self._get_provider(model_name)
+        
+        if provider == "openai":
             response = self._openai_client.chat.completions.create(
-                model=self.chat_model,
+                model=model_name,
                 messages=messages,
                 temperature=self.temperature,
             )
             return response.choices[0].message.content or ""
-
-        # Gemini Client API - join messages into single prompt
-        prompt = "\n".join([m.get("content", "") for m in messages])
-        resp = self._gemini_client.models.generate_content(
-            model=self.chat_model,
-            contents=prompt,
-            # No structured schema; free text
-        )
-        return getattr(resp, "text", "") or ""
+        elif provider == "gemini":
+            # Join messages into single prompt for Gemini
+            prompt = "\n".join([f"{m.get('role', 'user').upper()}: {m.get('content', '')}" for m in messages])
+            resp = self._gemini_client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+            )
+            return getattr(resp, "text", "") or ""
+        elif provider == "anthropic":
+            # Convert messages format for Anthropic
+            if not self._anthropic_client:
+                raise ValueError("Anthropic client not initialized. Check LLM_API_KEY or model name.")
+            system_msg = None
+            user_msgs = []
+            for msg in messages:
+                if msg.get("role") == "system":
+                    system_msg = msg.get("content", "")
+                else:
+                    user_msgs.append(msg.get("content", ""))
+            
+            response = self._anthropic_client.messages.create(
+                model=model_name,
+                max_tokens=4096,
+                temperature=self.temperature,
+                system=system_msg or "",
+                messages=[{"role": "user", "content": "\n".join(user_msgs)}],
+            )
+            return response.content[0].text if response.content else ""
+        else:
+            raise ValueError(f"Unsupported provider: {provider}")
 
     class _Usage:
+        """Usage information wrapper."""
         def __init__(self, prompt_tokens: Optional[int], completion_tokens: Optional[int], total_tokens: Optional[int]):
             self.prompt_tokens = prompt_tokens
             self.completion_tokens = completion_tokens
             self.total_tokens = total_tokens
 
     class _CompletionLike:
+        """Completion-like object for compatibility."""
         def __init__(self, model: str, prompt_tokens: Optional[int], completion_tokens: Optional[int], total_tokens: Optional[int]):
             self.model = model
             self.usage = LLMClient._Usage(prompt_tokens, completion_tokens, total_tokens)
 
-    def chat_parse(self, prompt: str, schema: Type[Any]) -> Any:
+    def chat_parse(self, prompt: str, schema: Type[Any], model_type: str = "lightweight"):
         """
         Generate structured output parsed into the provided Pydantic schema.
-        - For OpenAI: uses responses API with schema parsing.
-        - For Gemini: uses response_schema for auto-parsing.
-        Returns the parsed Pydantic instance (or compatible object).
+        
+        Args:
+            prompt: The prompt text
+            schema: Pydantic model class
+            model_type: "complex" or "lightweight"
+        
+        Returns:
+            Tuple of (parsed_obj, completion_like)
         """
-        if self.provider == "openai":
-            completion = self._openai_client.chat.completions.parse(
-                model=self.chat_model,
+        model = self.complex_model if model_type == "complex" else self.lightweight_model
+        model_name = self.complex_model_name if model_type == "complex" else self.lightweight_model_name
+        provider = self._get_provider(model_name)
+        
+        # Use Instructor's structured output
+        if provider == "openai":
+            # Instructor patched OpenAI client
+            response = model.chat.completions.create(
+                model=model_name,
                 messages=[{"role": "user", "content": prompt}],
-                response_format=schema,
+                response_model=schema,
                 temperature=self.temperature,
             )
-            return completion.choices[0].message.parsed, completion
+            parsed_obj = response.parsed
+            usage = response.usage
+            completion_like = LLMClient._CompletionLike(
+                model_name,
+                usage.prompt_tokens,
+                usage.completion_tokens,
+                usage.total_tokens
+            )
+            return parsed_obj, completion_like
+            
+        elif provider == "gemini":
+            # Gemini with structured output
+            from google.genai import types
+            resp = self._gemini_client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=schema,
+                ),
+            )
+            # Parse response
+            if hasattr(resp, "parsed") and resp.parsed is not None:
+                parsed_obj = schema.model_validate(resp.parsed)
+            else:
+                text = getattr(resp, "text", None) or "{}"
+                parsed_obj = schema.model_validate_json(text)
+            
+            # Extract usage
+            usage_md = getattr(resp, "usage_metadata", None)
+            prompt_tokens = getattr(usage_md, "prompt_token_count", None) if usage_md else None
+            completion_tokens = getattr(usage_md, "candidates_token_count", None) if usage_md else None
+            total_tokens = getattr(usage_md, "total_token_count", None) if usage_md else None
+            
+            completion_like = LLMClient._CompletionLike(model_name, prompt_tokens, completion_tokens, total_tokens)
+            return parsed_obj, completion_like
+            
+        elif provider == "anthropic":
+            # Instructor patched Anthropic client (lazy initialization already handled in _get_instructor_model)
+            response = model.messages.create(
+                model=model_name,
+                messages=[{"role": "user", "content": prompt}],
+                response_model=schema,
+                temperature=self.temperature,
+                max_tokens=4096,
+            )
+            parsed_obj = response.parsed
+            # Anthropic usage
+            usage = getattr(response, "usage", None)
+            prompt_tokens = getattr(usage, "input_tokens", None) if usage else None
+            completion_tokens = getattr(usage, "output_tokens", None) if usage else None
+            total_tokens = (prompt_tokens or 0) + (completion_tokens or 0) if prompt_tokens or completion_tokens else None
+            
+            completion_like = LLMClient._CompletionLike(model_name, prompt_tokens, completion_tokens, total_tokens)
+            return parsed_obj, completion_like
+            
+        else:
+            raise ValueError(f"Unsupported provider: {provider}")
 
-        # Gemini Client API with application/json only
-        resp = self._gemini_client.models.generate_content(
-            model=self.chat_model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=schema,
-            ),
-        )
-        # google.generativeai returns parsed when response_schema is set
-        prompt_tokens = None
-        completion_tokens = None
-        total_tokens = None
-        usage_md = getattr(resp, "usage_metadata", None)
-        if usage_md is not None:
-            prompt_tokens = getattr(usage_md, "prompt_token_count", None)
-            completion_tokens = getattr(usage_md, "candidates_token_count", None)
-            total_tokens = getattr(usage_md, "total_token_count", None)
-        completion_like = LLMClient._CompletionLike(self.chat_model, prompt_tokens, completion_tokens, total_tokens)
-        if hasattr(resp, "parsed") and resp.parsed is not None:
-            try:
-                # When using JSON schema dict, parsed may be a dict → validate to Pydantic
-                return schema.model_validate(resp.parsed), completion_like
-            except Exception:
-                return resp.parsed, completion_like
-        # Fallback: try to parse text via Pydantic
-        text = getattr(resp, "text", None)
-        if text:
-            try:
-                return schema.model_validate_json(text), completion_like  # pydantic v2
-            except Exception:
-                return schema.model_validate_json("{}"), completion_like
-        return schema.model_validate({}), completion_like
-
-    def parse_structured(self, prompt: str, openai_schema: Type[Any], gemini_schema: Optional[Type[Any]] = None):
+    def parse_structured(self, prompt: str, schema: Type[Any], model_type: str = "lightweight"):
         """
-        Unified structured parsing:
-        - OpenAI: parse with openai_schema
-        - Gemini: if gemini_schema is provided, parse with it; otherwise fall back to openai_schema
-        Returns (parsed_obj, completion_like_or_completion)
+        Unified structured parsing (alias for chat_parse for backward compatibility).
+        
+        Args:
+            prompt: The prompt text
+            schema: Pydantic model class
+            model_type: "complex" or "lightweight"
+        
+        Returns:
+            Tuple of (parsed_obj, completion_like)
         """
-        if self.provider == "openai" or gemini_schema is None:
-            return self.chat_parse(prompt, openai_schema)
-        return self.chat_parse(prompt, gemini_schema)
-
-
+        return self.chat_parse(prompt, schema, model_type)

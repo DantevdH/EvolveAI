@@ -5,6 +5,7 @@ import { supabase } from '@/src/config/supabase';
 import { colors } from '@/src/constants/colors';
 import { useAuth } from '@/src/context/AuthContext';
 import { logger } from '@/src/utils/logger';
+import { TokenManager } from '@/src/services/tokenManager';
 
 export default function OAuthCallback() {
   const router = useRouter();
@@ -130,6 +131,21 @@ export default function OAuthCallback() {
         if (data.session && data.user) {
           logger.info('[OAuth Callback] User flow: Session set successfully, user authenticated');
           
+          // CRITICAL: Sync tokens to SecureStore so TokenManager can refresh them later
+          if (data.session.access_token && data.session.refresh_token) {
+            try {
+              await TokenManager.storeTokens(
+                data.session.access_token,
+                data.session.refresh_token,
+                data.user.id
+              );
+              logger.info('[OAuth Callback] Tokens synced to SecureStore');
+            } catch (tokenError) {
+              logger.warn('[OAuth Callback] Failed to sync tokens to SecureStore', tokenError);
+              // Don't block auth flow if token sync fails
+            }
+          }
+          
           // CRITICAL: Update auth context immediately so routing logic sees the user
           dispatch({ type: 'SET_USER', payload: data.user });
           dispatch({ type: 'SET_SESSION', payload: data.session });
@@ -178,6 +194,21 @@ export default function OAuthCallback() {
 
       if (session && session.user) {
         logger.info('[OAuth Callback] User flow: Session found, user already authenticated');
+        
+        // CRITICAL: Sync tokens to SecureStore so TokenManager can refresh them later
+        if (session.access_token && session.refresh_token) {
+          try {
+            await TokenManager.storeTokens(
+              session.access_token,
+              session.refresh_token,
+              session.user.id
+            );
+            logger.info('[OAuth Callback] Tokens synced to SecureStore from existing session');
+          } catch (tokenError) {
+            logger.warn('[OAuth Callback] Failed to sync tokens to SecureStore', tokenError);
+            // Don't block auth flow if token sync fails
+          }
+        }
         
         // CRITICAL: Update auth context immediately so routing logic sees the user
         dispatch({ type: 'SET_USER', payload: session.user });

@@ -72,8 +72,11 @@ def load_environment(env_file: Optional[Path] = None, override: bool = False) ->
     # Determine .env file path
     if env_file is None:
         # Default: look for .env in project root (parent of backend directory)
-        backend_dir = Path(__file__).parent.parent.parent
-        env_file = backend_dir / ".env"
+        # Path(__file__) = backend/core/utils/env_loader.py
+        # parent.parent.parent = backend/
+        # parent.parent.parent.parent = project root
+        project_root = Path(__file__).parent.parent.parent.parent
+        env_file = project_root / ".env"
     elif isinstance(env_file, str):
         env_file = Path(env_file)
     

@@ -26,11 +26,10 @@ from core.training.schemas.question_schemas import (
     CreateWeekRequest,
     PersonalInfo,
     AIQuestion,
-    QuestionType,
 )
 from core.training.training_coach import TrainingCoach
 from core.training.schemas.training_schemas import TrainingPlan
-from core.training.helpers.database_service import db_service
+from core.training.helpers.database_service import db_service, extract_user_id_from_jwt
 from core.training.helpers.date_mapper import map_daily_training_dates
 # Format responses
 from core.training.helpers.response_formatter import ResponseFormatter
@@ -238,47 +237,6 @@ def get_training_coach() -> TrainingCoach:
     return TrainingCoach()
 
 
-def extract_user_id_from_jwt(jwt_token: str) -> str:
-    """
-    Extract and verify user_id from JWT token.
-    
-    Raises HTTPException(401) if token is invalid.
-    """
-    try:
-        # Verify JWT token signature if JWT secret is available
-        jwt_secret = settings.SUPABASE_JWT_SECRET
-        
-        if jwt_secret:
-            # Verify signature and decode token
-            try:
-                decoded_token = jwt.decode(
-                    jwt_token,
-                    jwt_secret,
-                    algorithms=["HS256"],
-                    options={"verify_signature": True, "verify_exp": True, "verify_iat": True}
-                )
-            except jwt.ExpiredSignatureError:
-                logger.error("❌ JWT token has expired")
-                raise HTTPException(status_code=401, detail="JWT token has expired")
-            except jwt.InvalidTokenError as e:
-                logger.error(f"❌ Invalid JWT token: {str(e)}")
-                raise HTTPException(status_code=401, detail="Invalid JWT token")
-        else:
-            # Fallback: decode without verification (less secure, but allows development)
-            logger.warning("⚠️  SUPABASE_JWT_SECRET not set - JWT verification disabled (not recommended for production)")
-        decoded_token = jwt.decode(jwt_token, options={"verify_signature": False})
-        
-        user_id = decoded_token.get("sub")
-        
-        if not user_id:
-            raise HTTPException(status_code=401, detail="No user_id found in JWT token")
-        
-        return user_id
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ JWT token error: {str(e)}")
-        raise HTTPException(status_code=401, detail="Invalid JWT token")
 
 
 async def safe_db_update(
@@ -361,7 +319,7 @@ async def get_initial_questions(
         for q in questions_response.questions:
             sq = q.model_dump(exclude_none=False, mode='json')
             # Safety check: ensure multiselect is included for multiple_choice/dropdown
-            if q.response_type in [QuestionType.MULTIPLE_CHOICE, QuestionType.DROPDOWN]:
+            if q.response_type in ["multiple_choice", "dropdown"]:
                 if 'multiselect' not in sq or sq.get('multiselect') is None:
                     sq['multiselect'] = q.multiselect
             serialized_questions_for_storage.append(sq)
@@ -387,7 +345,7 @@ async def get_initial_questions(
         for q in questions_response.questions:
             sq = q.model_dump(exclude_none=False, mode='json')
             # Safety check: ensure multiselect is included for multiple_choice/dropdown
-            if q.response_type in [QuestionType.MULTIPLE_CHOICE, QuestionType.DROPDOWN]:
+            if q.response_type in ["multiple_choice", "dropdown"]:
                 if 'multiselect' not in sq or sq.get('multiselect') is None:
                     sq['multiselect'] = q.multiselect
             serialized_questions.append(sq)
@@ -1046,28 +1004,27 @@ async def chat(
         if plan_id is None:
             raise HTTPException(status_code=400, detail="Missing or invalid plan_id in request")
         
-        # Derive week_number from training_plan (latest week = max week_number)
-        week_number = None
-        if isinstance(training_plan, dict):
-            weekly_schedules = training_plan.get("weekly_schedules", [])
-            if weekly_schedules:
-                week_numbers = [w.get("week_number", 0) for w in weekly_schedules if w.get("week_number")]
-                week_number = max(week_numbers) if week_numbers else None
-        
+        # Get week_number from request (required - should be the current week from frontend)
+        week_number = request.week_number
         if week_number is None:
-            raise HTTPException(status_code=400, detail="Could not determine week_number from training_plan (no weekly_schedules found)")
+            raise HTTPException(status_code=400, detail="week_number is required in request (should be the current week)")
         
-        # Get current_week (latest week) from training_plan
+        # Get the specific week from training_plan based on week_number
         current_week = None
         if isinstance(training_plan, dict):
             weekly_schedules = training_plan.get("weekly_schedules", [])
             if weekly_schedules:
-                # Find the week with the highest week_number
-                latest_week = max(weekly_schedules, key=lambda w: w.get("week_number", 0))
-                current_week = latest_week
+                # Find the week with the matching week_number
+                current_week = next(
+                    (w for w in weekly_schedules if w.get("week_number") == week_number),
+                    None
+                )
         
         if not current_week:
-            raise HTTPException(status_code=400, detail="Could not determine current_week from training_plan")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Could not find week {week_number} in training_plan. Available weeks: {[w.get('week_number') for w in training_plan.get('weekly_schedules', []) if w.get('week_number')]}"
+            )
         
         # Get required fields
         feedback_message = request.feedback_message
@@ -1252,24 +1209,45 @@ async def chat(
 
         # Update only the specified week in the database
         if plan_id and updated_plan_data:
-            # Prepare plan to save WITHOUT ai_message (never persist)
-            plan_to_save = dict(updated_plan_data)
-            plan_to_save.pop('ai_message', None)
+            # Extract the updated week from the full plan
+            weekly_schedules = updated_plan_data.get("weekly_schedules", [])
+            updated_week = next(
+                (w for w in weekly_schedules if w.get("week_number") == week_number),
+                None
+            )
             
-            update_result_db = await db_service.update_training_plan(
+            if not updated_week:
+                raise Exception(f"Could not find week {week_number} in updated plan data")
+            
+            # Update only this specific week in the database
+            enriched_week = await db_service.update_single_week(
                 plan_id,
-                plan_to_save,
+                week_number,
+                updated_week,
                 jwt_token=request.jwt_token
             )
             
-            if update_result_db is None:
-                raise Exception("Failed to update plan in database")
+            if enriched_week is None:
+                raise Exception("Failed to update week in database")
             
-            logger.info(f"✅ Plan updated in database successfully")
+            logger.info(f"✅ Week {week_number} updated in database successfully")
             
-            # Use the enriched plan returned by update_training_plan
-            enriched_plan = update_result_db
-            logger.info("✅ Using enriched training plan returned by update (IDs present)")
+            # Merge the enriched week back into the full plan
+            # Replace the week in weekly_schedules with the enriched version
+            enriched_weekly_schedules = []
+            for week in weekly_schedules:
+                if week.get("week_number") == week_number:
+                    enriched_weekly_schedules.append(enriched_week)
+                else:
+                    enriched_weekly_schedules.append(week)
+            
+            # Build the enriched full plan
+            enriched_plan = {
+                **updated_plan_data,
+                "weekly_schedules": enriched_weekly_schedules,
+            }
+            
+            logger.info("✅ Using enriched training plan with updated week (IDs present)")
 
             # Add ai_message from coach result (AI-generated, not persisted)
             # Prioritize ai_message from update result (explains changes), fallback to classification ai_message
@@ -1357,11 +1335,22 @@ async def create_week(
         if plan_id is None:
             raise HTTPException(status_code=400, detail="Missing or invalid plan_id in request")
 
+        # Calculate next_week_number from frontend's training_plan (more reliable than DB fetch)
+        weekly_schedules = training_plan.get("weekly_schedules", [])
+        if weekly_schedules:
+            week_numbers = [w.get("week_number", 0) for w in weekly_schedules if w.get("week_number")]
+            next_week_number = max(week_numbers) + 1 if week_numbers else 1
+        else:
+            next_week_number = 1
+        
+        logger.info(f"Calculated next_week_number: {next_week_number} from frontend training plan ({len(weekly_schedules)} existing weeks)")
+        
         # Create the new week using the new method
-        # next_week_number, completed_weeks are calculated internally from the training plan
+        # Uses training_plan from request instead of fetching from database
         result = await coach.create_new_weekly_schedule(
             personal_info=personal_info,
             user_profile_id=user_profile_id,
+            existing_training_plan=training_plan,  # Use training plan from request
             jwt_token=jwt_token,
         )
 
@@ -1372,15 +1361,17 @@ async def create_week(
                 detail=result.get("error", "Failed to create new week")
             )
 
-        # Get next_week_number from result metadata or calculate from updated plan
+        # Get the updated full training plan
         updated_plan_data = result.get("training_plan")
-        next_week_number = result.get("metadata", {}).get("next_week_number")
-        if not next_week_number and updated_plan_data:
-            # Calculate from the plan if not in metadata
-            weekly_schedules = updated_plan_data.get("weekly_schedules", [])
-            if weekly_schedules:
-                week_numbers = [w.get("week_number", 0) for w in weekly_schedules]
-                next_week_number = max(week_numbers) if week_numbers else 1
+        
+        # Verify next_week_number from result metadata matches our calculation
+        result_next_week = result.get("metadata", {}).get("next_week_number")
+        if result_next_week and result_next_week != next_week_number:
+            logger.warning(
+                f"Week number mismatch: calculated {next_week_number} but result has {result_next_week}. "
+                f"Using result value."
+            )
+            next_week_number = result_next_week
 
         logger.info(f"✅ Week {next_week_number} created successfully")
 
@@ -1390,26 +1381,45 @@ async def create_week(
             updated_plan_data = map_daily_training_dates(updated_plan_data)
             logger.info("✅ Mapped scheduled dates to daily trainings for new week")
 
-        # Update the plan in the database with the new week
+        # Create only the new week in the database
         if plan_id and updated_plan_data:
-            # Prepare plan to save WITHOUT ai_message (never persist)
-            plan_to_save = dict(updated_plan_data)
-            plan_to_save.pop('ai_message', None)
-
-            update_result_db = await db_service.update_training_plan(
+            # Extract the new week from the full plan
+            weekly_schedules = updated_plan_data.get("weekly_schedules", [])
+            new_week = next(
+                (w for w in weekly_schedules if w.get("week_number") == next_week_number),
+                None
+            )
+            
+            if not new_week:
+                raise Exception(f"Could not find week {next_week_number} in updated plan data")
+            
+            # Create only this new week in the database
+            enriched_week = await db_service.create_single_week(
                 plan_id,
-                plan_to_save,
+                new_week,
                 jwt_token=jwt_token
             )
-
-            if update_result_db is None:
-                raise Exception("Failed to update plan in database")
-
-            logger.info(f"✅ Plan updated in database successfully")
-
-            # Use the enriched plan returned by update_training_plan
-            enriched_plan = update_result_db
-            logger.info("✅ Using enriched training plan returned by update (IDs present)")
+            
+            if enriched_week is None:
+                raise Exception("Failed to create week in database")
+            
+            logger.info(f"✅ Week {next_week_number} created in database successfully")
+            
+            # Merge the enriched week back into the full plan
+            enriched_weekly_schedules = []
+            for week in weekly_schedules:
+                if week.get("week_number") == next_week_number:
+                    enriched_weekly_schedules.append(enriched_week)
+                else:
+                    enriched_weekly_schedules.append(week)
+            
+            # Build the enriched full plan
+            enriched_plan = {
+                **updated_plan_data,
+                "weekly_schedules": enriched_weekly_schedules,
+            }
+            
+            logger.info("✅ Using enriched training plan with new week (IDs present)")
 
             return {
                 "success": True,

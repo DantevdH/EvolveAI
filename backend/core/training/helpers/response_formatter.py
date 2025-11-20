@@ -6,7 +6,7 @@ for use in AI prompts and training plan generation.
 """
 
 from typing import Dict, Any, List, Optional
-from core.training.schemas.question_schemas import AIQuestion, QuestionType
+from core.training.schemas.question_schemas import AIQuestion
 
 
 class ResponseFormatter:
@@ -147,14 +147,14 @@ class ResponseFormatter:
     ) -> str:
         """Format numeric responses (sliders, ratings) with proper context."""
         if question:
-            if question.response_type == QuestionType.SLIDER:
+            if question.response_type == "slider":
                 # Slider responses: show value with unit
                 if question.unit:
                     return f"{response} {question.unit}"
                 else:
                     return str(response)
 
-            elif question.response_type == QuestionType.RATING:
+            elif question.response_type == "rating":
                 # Rating responses: show value with scale context
                 min_val = question.min_value or 1
                 max_val = question.max_value or 5

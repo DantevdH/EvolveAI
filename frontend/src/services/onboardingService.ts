@@ -160,6 +160,8 @@ export class trainingService {
    * Send feedback about the training plan
    * 
    * Uses user_playbook instead of initial/follow-up questions/responses.
+   * 
+   * @param weekNumber - The current week number to update (required)
    */
   static async sendPlanFeedback(
     userProfileId: number,
@@ -169,14 +171,23 @@ export class trainingService {
     playbook: any,  // Playbook from userProfile (includes context field)
     personalInfo: any,  // Personal info from userProfile
     conversationHistory: Array<{ role: string; content: string }> = [],
+    weekNumber?: number,  // Current week number to update (optional, will use trainingPlan.currentWeek if not provided)
     jwtToken?: string
   ): Promise<PlanFeedbackResponse> {
     try {
+      // Use provided weekNumber or fall back to trainingPlan.currentWeek
+      const currentWeek = weekNumber ?? trainingPlan?.currentWeek;
+      
+      if (!currentWeek) {
+        throw new Error('weekNumber is required. Either provide it as a parameter or ensure trainingPlan.currentWeek is set.');
+      }
+
       const request = {
         user_profile_id: userProfileId,
         plan_id: planId,
         feedback_message: feedbackMessage,
         training_plan: trainingPlan,  // Send training plan to backend
+        week_number: currentWeek,  // Send current week number
         playbook: playbook,  // Send playbook from userProfile
         personal_info: personalInfo,  // Send personal info from userProfile
         conversation_history: conversationHistory,

@@ -14,6 +14,6 @@ export const ONBOARDING_PROGRESS_CONFIG: Record<OnboardingPhase, PhaseProgressCo
   },
   // follow-up phase removed
   plan: {
-    durationMs: 20000,
+    durationMs: 60000,
   },
 };

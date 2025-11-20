@@ -1308,12 +1308,19 @@ class PromptGenerator:
             sections.append(
                 """
             **STRENGTH (General Rules):**
-            • exercise_name: Descriptive name WITHOUT equipment type (e.g., "Chest Press", "Lateral Raise")
             • Schema enforces: main_muscle and equipment must be valid Enum values, execution_order is required
             • DO NOT set exercise_id (will be matched automatically)
             • IMPORTANT: te number of reps should be an even number
             • IMPORTANT: reps, and weight arrays should have the same length as the number of sets AND 
-            • CRITICAL: Equipment type should ONLY appear in the equipment field, NOT in exercise_name
+            
+            **⚠️ CRITICAL: EXERCISE NAMING RULES (MUST FOLLOW):**
+            • exercise_name: Use ONLY the standard/common exercise name WITHOUT any equipment prefix or suffix
+            • Equipment type MUST appear ONLY in the 'equipment' field, NEVER in exercise_name
+            • Use the most widely recognized, standard names that will match the exercise database
+            • ✅ CORRECT examples: "Bench Press", "Row", "Squat", "Deadlift", "Lateral Raise", "Chest Fly", "Shoulder Press"
+            • ❌ WRONG examples: "Barbell Row", "Dumbbell Lateral Raise", "Barbell Bench Press", "Overhead Press" (use "Shoulder Press" instead)
+            • ❌ WRONG examples: "Seated Calf Raise (Machine)", "Cable Fly", "Barbell Squat"
+            • The exercise matching system requires clean names without equipment - including equipment in the name will cause matching failures
             """
             )
 
@@ -1440,10 +1447,27 @@ class PromptGenerator:
             **EXERCISE METADATA REQUIREMENTS:**
             
             When creating or modifying STRENGTH exercises:
-            • exercise_name: Descriptive name WITHOUT equipment type (e.g., "Bench Press", "Lateral Raise")
-              - ✅ CORRECT: "Bench Press", "Lateral Raise", "Back Squat", "Chest Fly"
-              - ❌ WRONG: "Barbell Bench Press", "Dumbbell Lateral Raise", "Seated Calf Raise (Machine)"
-              - Equipment type is specified separately in the 'equipment' field
+            
+            **⚠️ CRITICAL: EXERCISE NAME FORMATTING (MUST FOLLOW TO AVOID MATCHING FAILURES):**
+            • exercise_name: Use ONLY the standard, widely recognized exercise name WITHOUT any equipment prefix, suffix, or modifier
+            • Equipment type MUST be specified separately in the 'equipment' field - NEVER include it in the exercise name
+            • Use the most common, standard names that will successfully match exercises in the database
+            • ✅ CORRECT examples: 
+              - "Bench Press" (NOT "Barbell Bench Press" or "Dumbbell Bench Press")
+              - "Row" (NOT "Barbell Row" or "Cable Row")
+              - "Squat" (NOT "Barbell Squat" or "Back Squat" unless that's the standard name)
+              - "Deadlift" (NOT "Barbell Deadlift")
+              - "Lateral Raise" (NOT "Dumbbell Lateral Raise")
+              - "Chest Fly" (NOT "Dumbbell Fly" or "Cable Fly")
+              - "Shoulder Press" (NOT "Overhead Press" or "Barbell Overhead Press")
+            • ❌ WRONG examples (will cause matching failures):
+              - "Barbell Row" → Use "Row" instead
+              - "Dumbbell Lateral Raise" → Use "Lateral Raise" instead
+              - "Barbell Bench Press" → Use "Bench Press" instead
+              - "Overhead Press" → Use "Shoulder Press" instead
+              - "Seated Calf Raise (Machine)" → Use "Calf Raise" instead
+              - "Cable Fly" → Use "Chest Fly" instead
+            • The exercise matching system searches by name and equipment separately - including equipment in the name prevents successful matching
             • main_muscle and equipment: Schema validation ensures only valid Enum values are accepted
         """
     

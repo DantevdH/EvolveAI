@@ -20,6 +20,7 @@ import openai
 import PyPDF2
 from supabase import create_client, Client
 from dotenv import load_dotenv
+from settings import settings
 
 # Configure logging
 logging.basicConfig(
@@ -43,15 +44,12 @@ class PDFVectorDBPopulator:
 
     def _validate_environment(self):
         """Validate that all required environment variables are set."""
-        # Check for LLM_API_KEY (works for both OpenAI and Gemini)
+        # Check for LLM_API_KEY (works for all providers: OpenAI, Gemini, Claude, etc.)
         llm_api_key = os.getenv("LLM_API_KEY")
         if not llm_api_key:
-            # Fallback to OPENAI_API_KEY for backward compatibility
-            openai_api_key = os.getenv("OPENAI_API_KEY")
-            if not openai_api_key:
-                raise ValueError(
-                    "Missing required environment variable: LLM_API_KEY or OPENAI_API_KEY"
-                )
+            raise ValueError(
+                "Missing required environment variable: LLM_API_KEY"
+            )
         
         required_vars = {
             "SUPABASE_URL": os.getenv("SUPABASE_URL"),
@@ -69,8 +67,8 @@ class PDFVectorDBPopulator:
         self.supabase_url = os.getenv("SUPABASE_URL")
         self.supabase_key = os.getenv("SUPABASE_ANON_KEY")
         
-        # Determine provider from LLM_MODEL env var
-        model_name = os.getenv("LLM_MODEL_CHAT", os.getenv("LLM_MODEL", "gpt-4o"))
+        # Determine provider from Settings (unified LLM configuration)
+        model_name = settings.LLM_MODEL_COMPLEX
         self.use_gemini = model_name.lower().startswith("gemini")
         
         # Get embedding model from env var (default based on provider)
@@ -82,10 +80,10 @@ class PDFVectorDBPopulator:
         else:
             self.embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
         
-        # Get API key (prioritize LLM_API_KEY, fallback to OPENAI_API_KEY)
-        api_key = os.getenv("LLM_API_KEY") or os.getenv("OPENAI_API_KEY")
+        # Get API key
+        api_key = os.getenv("LLM_API_KEY")
         if not api_key:
-            raise ValueError("Missing required environment variable: LLM_API_KEY or OPENAI_API_KEY")
+            raise ValueError("Missing required environment variable: LLM_API_KEY")
 
         # Initialize clients
         self.supabase: Client = create_client(self.supabase_url, self.supabase_key)

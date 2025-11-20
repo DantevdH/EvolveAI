@@ -14,12 +14,29 @@ or stored in a simple telemetry table for analysis.
 
 import os
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Literal
 from logging_config import get_logger
-from enum import Enum
 from supabase import create_client, Client
 
 logger = get_logger(__name__)
+
+# Create Literal type for telemetry events
+# This generates JSON Schema with inline enum constraints, forcing ALL providers to use only valid values
+ACETelemetryEventLiteral = Literal[
+    "ace_feedback_provided",
+    "ace_feedback_skipped",
+    "ace_lessons_generated",
+    "ace_lesson_added",
+    "ace_lesson_merged",
+    "ace_lesson_updated",
+    "ace_lesson_rejected",
+    "ace_contradiction_resolved",
+    "ace_modifications_detected",
+    "ace_deduplication_time",
+    "ace_reflection_time",
+    "ace_playbook_updated",
+    "ace_playbook_cleanup"
+]
 
 # Initialize Supabase client for telemetry
 try:
@@ -36,32 +53,6 @@ except Exception as e:
     supabase = None
 
 
-class ACETelemetryEvent(str, Enum):
-    """Types of telemetry events"""
-    # Feedback events
-    FEEDBACK_PROVIDED = "ace_feedback_provided"
-    FEEDBACK_SKIPPED = "ace_feedback_skipped"
-    
-    # Lesson events
-    LESSONS_GENERATED = "ace_lessons_generated"
-    LESSON_ADDED = "ace_lesson_added"
-    LESSON_MERGED = "ace_lesson_merged"
-    LESSON_UPDATED = "ace_lesson_updated"
-    LESSON_REJECTED = "ace_lesson_rejected"
-    CONTRADICTION_RESOLVED = "ace_contradiction_resolved"
-    
-    # Modification events
-    MODIFICATIONS_DETECTED = "ace_modifications_detected"
-    
-    # Performance events
-    DEDUPLICATION_TIME = "ace_deduplication_time"
-    REFLECTION_TIME = "ace_reflection_time"
-    
-    # Playbook events
-    PLAYBOOK_UPDATED = "ace_playbook_updated"
-    PLAYBOOK_CLEANUP = "ace_playbook_cleanup"
-
-
 class ACETelemetry:
     """
     Telemetry service for ACE pattern.
@@ -76,7 +67,7 @@ class ACETelemetry:
     
     @staticmethod
     def track_event(
-        event: ACETelemetryEvent,
+        event: ACETelemetryEventLiteral,
         user_id: str,
         properties: Optional[Dict[str, Any]] = None
     ):
@@ -84,7 +75,7 @@ class ACETelemetry:
         Track an ACE telemetry event.
         
         Args:
-            event: Type of event
+            event: Type of event (string literal)
             user_id: User identifier
             properties: Additional event properties
         """
@@ -92,15 +83,15 @@ class ACETelemetry:
         if supabase:
             try:
                 supabase.table('telemetry_events').insert({
-                    'event': event.value,
+                    'event': event,
                     'user_id': user_id,
                     'properties': properties or {}
                 }).execute()
             except Exception as e:
                 # Don't let telemetry errors break the application
-                logger.error(f"Failed to store telemetry event '{event.value}': {e}")
+                logger.error(f"Failed to store telemetry event '{event}': {e}")
         else:
-            logger.warning(f"Telemetry event '{event.value}' not tracked - Supabase not configured")
+            logger.warning(f"Telemetry event '{event}' not tracked - Supabase not configured")
         
         # Future: Can also send to analytics services
         # mixpanel.track(user_id, event.value, properties)
@@ -118,7 +109,7 @@ class ACETelemetry:
     ):
         """Track a complete feedback session"""
         
-        event = ACETelemetryEvent.FEEDBACK_PROVIDED if feedback_provided else ACETelemetryEvent.FEEDBACK_SKIPPED
+        event = "ace_feedback_provided" if feedback_provided else "ace_feedback_skipped"
         
         ACETelemetry.track_event(
             event=event,
@@ -145,13 +136,13 @@ class ACETelemetry:
         """Track a curator decision"""
         
         event_map = {
-            "add_new": ACETelemetryEvent.LESSON_ADDED,
-            "merge_with_existing": ACETelemetryEvent.LESSON_MERGED,
-            "update_existing": ACETelemetryEvent.LESSON_UPDATED,
-            "reject": ACETelemetryEvent.LESSON_REJECTED
+            "add_new": "ace_lesson_added",
+            "merge_with_existing": "ace_lesson_merged",
+            "update_existing": "ace_lesson_updated",
+            "reject": "ace_lesson_rejected"
         }
         
-        event = event_map.get(decision_type, ACETelemetryEvent.LESSON_ADDED)
+        event = event_map.get(decision_type, "ace_lesson_added")
         
         ACETelemetry.track_event(
             event=event,
@@ -176,7 +167,7 @@ class ACETelemetry:
         """Track current playbook state"""
         
         ACETelemetry.track_event(
-            event=ACETelemetryEvent.PLAYBOOK_UPDATED,
+            event="ace_playbook_updated",
             user_id=user_id,
             properties={
                 "total_lessons": total_lessons,
@@ -198,11 +189,11 @@ class ACETelemetry:
         """Track performance metrics"""
         
         event_map = {
-            "deduplication": ACETelemetryEvent.DEDUPLICATION_TIME,
-            "reflection": ACETelemetryEvent.REFLECTION_TIME
+            "deduplication": "ace_deduplication_time",
+            "reflection": "ace_reflection_time"
         }
         
-        event = event_map.get(operation, ACETelemetryEvent.REFLECTION_TIME)
+        event = event_map.get(operation, "ace_reflection_time")
         
         ACETelemetry.track_event(
             event=event,

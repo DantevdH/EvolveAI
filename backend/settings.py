@@ -61,18 +61,20 @@ class Settings:
     we keep class attributes. They will be refreshed on module reload.
     """
 
-    # OpenAI Configuration
-    # NOTE: These are evaluated at class definition time (import time)
-    # For fresh values, use os.getenv() directly or call validate()
-    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4")
-    OPENAI_TEMPERATURE: float = float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
+    # Unified LLM Configuration (Primary - supports OpenAI, Gemini, Claude, etc.)
+
+    LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
+    LLM_MODEL_COMPLEX: str = os.getenv("LLM_MODEL_COMPLEX", "gemini-2.5-flash")
+    LLM_MODEL_LIGHTWEIGHT: str = os.getenv("LLM_MODEL_LIGHTWEIGHT", "gemini-2.5-flash-lite")
+    TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.7"))
+    
 
     # Supabase Configuration
     SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
     SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "")
     SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    SUPABASE_JWT_SECRET: str = os.getenv("SUPABASE_JWT_SECRET", "")  # JWT secret for token verification
+    SUPABASE_JWT_SECRET: str = os.getenv("SUPABASE_JWT_SECRET", "")  # Legacy symmetric JWT secret (HS256) - for backward compatibility
+    SUPABASE_JWT_PUBLIC_KEY: str = os.getenv("SUPABASE_JWT_PUBLIC_KEY", "")  # Asymmetric JWT public key (ES256 for ECC P-256 or RS256 for RSA) - for new signing keys
 
     # Service Configuration
     PREMIUM_TIER_ENABLED: bool = (
@@ -113,8 +115,9 @@ class Settings:
         # CRITICAL: Read from os.getenv() directly, not from class attributes
         # Class attributes are evaluated at import time and may be stale
         # This ensures we get the current environment values (including test values)
+        llm_api_key = os.getenv("LLM_API_KEY", "")
         required_settings = [
-            ("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", "")),
+            ("LLM_API_KEY", llm_api_key),
             ("SUPABASE_URL", os.getenv("SUPABASE_URL", "")),
             ("SUPABASE_ANON_KEY", os.getenv("SUPABASE_ANON_KEY", "")),
         ]
@@ -142,11 +145,25 @@ class Settings:
 
     @classmethod
     def get_openai_config(cls) -> dict:
-        """Get OpenAI configuration as a dictionary."""
+        """
+        Get LLM configuration as a dictionary (DEPRECATED - use get_llm_config instead).
+        
+        Returns unified LLM config for backward compatibility.
+        """
         return {
-            "api_key": cls.OPENAI_API_KEY,
-            "model": cls.OPENAI_MODEL,
-            "temperature": cls.OPENAI_TEMPERATURE,
+            "api_key": cls.LLM_API_KEY,
+            "model": cls.LLM_MODEL_COMPLEX,
+            "temperature": cls.TEMPERATURE,
+        }
+    
+    @classmethod
+    def get_llm_config(cls) -> dict:
+        """Get unified LLM configuration as a dictionary."""
+        return {
+            "api_key": cls.LLM_API_KEY,
+            "complex_model": cls.LLM_MODEL_COMPLEX,
+            "lightweight_model": cls.LLM_MODEL_LIGHTWEIGHT,
+            "temperature": cls.TEMPERATURE,
         }
 
     @classmethod
