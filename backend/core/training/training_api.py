@@ -109,11 +109,11 @@ async def _fetch_complete_training_plan(user_profile_id: int) -> Dict[str, Any]:
     """Fetch complete training plan with real IDs from database - exact same as frontend."""
     try:
         from supabase import create_client
-        import os
 
         # Use service role key for backend operations
-        url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        # Use settings (which reads from environment dynamically)
+        url = settings.SUPABASE_URL
+        key = settings.SUPABASE_SERVICE_ROLE_KEY
 
         logger.info(f"🔍 Supabase URL: {url[:30]}..." if url else "❌ No URL")
         logger.info(f"🔍 Service role key present: {'Yes' if key else 'No'}")

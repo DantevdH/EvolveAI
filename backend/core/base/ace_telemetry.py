@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Literal
 from logging_config import get_logger
 from supabase import create_client, Client
+from settings import settings
 
 logger = get_logger(__name__)
 
@@ -40,9 +41,9 @@ ACETelemetryEventLiteral = Literal[
 
 # Initialize Supabase client for telemetry
 try:
-    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_url = settings.SUPABASE_URL
     # Try service role key first, fallback to anon key
-    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+    supabase_key = settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY
     if supabase_url and supabase_key:
         supabase: Client = create_client(supabase_url, supabase_key)
     else:

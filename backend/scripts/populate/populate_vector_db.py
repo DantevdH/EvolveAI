@@ -44,19 +44,22 @@ class PDFVectorDBPopulator:
 
     def _validate_environment(self):
         """Validate that all required environment variables are set."""
-        # Check for LLM_API_KEY (works for all providers: OpenAI, Gemini, Claude, etc.)
-        llm_api_key = os.getenv("LLM_API_KEY")
+        # Use settings (which reads from environment dynamically)
+        llm_api_key = settings.LLM_API_KEY
         if not llm_api_key:
             raise ValueError(
                 "Missing required environment variable: LLM_API_KEY"
             )
         
-        required_vars = {
-            "SUPABASE_URL": os.getenv("SUPABASE_URL"),
-            "SUPABASE_ANON_KEY": os.getenv("SUPABASE_ANON_KEY"),
-        }
+        supabase_url = settings.SUPABASE_URL
+        supabase_key = settings.SUPABASE_ANON_KEY
 
-        missing_vars = [var for var, value in required_vars.items() if not value]
+        missing_vars = []
+        if not supabase_url:
+            missing_vars.append("SUPABASE_URL")
+        if not supabase_key:
+            missing_vars.append("SUPABASE_ANON_KEY")
+
         if missing_vars:
             raise ValueError(
                 f"Missing required environment variables: {', '.join(missing_vars)}"
@@ -64,14 +67,16 @@ class PDFVectorDBPopulator:
 
     def _initialize_clients(self):
         """Initialize Supabase and embedding clients (OpenAI or Gemini)."""
-        self.supabase_url = os.getenv("SUPABASE_URL")
-        self.supabase_key = os.getenv("SUPABASE_ANON_KEY")
+        # Use settings (which reads from environment dynamically)
+        self.supabase_url = settings.SUPABASE_URL
+        self.supabase_key = settings.SUPABASE_ANON_KEY
         
         # Determine provider from Settings (unified LLM configuration)
         model_name = settings.LLM_MODEL_COMPLEX
         self.use_gemini = model_name.lower().startswith("gemini")
         
         # Get embedding model from env var (default based on provider)
+        # Note: EMBEDDING_MODEL is not in Settings, so keep os.getenv() for this
         if self.use_gemini:
             self.embedding_model = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
             # Ensure model name has "models/" prefix if not present
@@ -80,8 +85,8 @@ class PDFVectorDBPopulator:
         else:
             self.embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
         
-        # Get API key
-        api_key = os.getenv("LLM_API_KEY")
+        # Get API key - use settings
+        api_key = settings.LLM_API_KEY
         if not api_key:
             raise ValueError("Missing required environment variable: LLM_API_KEY")
 

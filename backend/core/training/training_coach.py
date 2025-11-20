@@ -418,7 +418,7 @@ class TrainingCoach(BaseAgent):
         """
         try:
             # Check if debug mode is enabled
-            if os.getenv("DEBUG", "false").lower() == "true":
+            if settings.DEBUG:
                 initial_questions = create_mock_initial_questions()
                 return initial_questions
 
@@ -610,7 +610,7 @@ class TrainingCoach(BaseAgent):
         """
         try:
             # Check if debug mode is enabled
-            if os.getenv("DEBUG", "false").lower() == "true":
+            if settings.DEBUG:
                 self.logger.debug("DEBUG MODE: Using mock training plan")
                 training_plan = create_mock_training_plan()
                 training_dict = training_plan.model_dump()

@@ -23,8 +23,7 @@ class LLMClient:
       - LLM_MODEL_LIGHTWEIGHT (e.g., gemini-2.5-flash-lite)
       - TEMPERATURE (applies to both models)
     
-    Follows RAGTool pattern: reads from os.getenv() directly to avoid stale settings
-    in test environments where env vars are set after module import.
+    Uses settings (which reads from environment dynamically) for all configuration.
     """
 
     def __init__(self):

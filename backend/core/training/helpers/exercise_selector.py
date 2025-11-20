@@ -6,14 +6,10 @@ to provide relevant exercise candidates for training generation while minimizing
 token usage and ensuring exercise authenticity.
 """
 
-import os
 from typing import List, Dict, Any, Optional, Tuple
-from dotenv import load_dotenv
 from supabase import create_client, Client
 from logging_config import get_logger
-
-# Load environment variables
-load_dotenv()
+from settings import settings
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -34,12 +30,16 @@ class ExerciseSelector:
 
     def _validate_environment(self):
         """Validate that all required environment variables are set."""
-        required_vars = {
-            "SUPABASE_URL": os.getenv("SUPABASE_URL"),
-            "SUPABASE_ANON_KEY": os.getenv("SUPABASE_ANON_KEY"),
-        }
+        # Use settings (which reads from environment dynamically)
+        supabase_url = settings.SUPABASE_URL
+        supabase_key = settings.SUPABASE_ANON_KEY
 
-        missing_vars = [var for var, value in required_vars.items() if not value]
+        missing_vars = []
+        if not supabase_url:
+            missing_vars.append("SUPABASE_URL")
+        if not supabase_key:
+            missing_vars.append("SUPABASE_ANON_KEY")
+
         if missing_vars:
             raise ValueError(
                 f"Missing required environment variables: {', '.join(missing_vars)}"
@@ -47,8 +47,9 @@ class ExerciseSelector:
 
     def _initialize_clients(self):
         """Initialize Supabase client."""
-        self.supabase_url = os.getenv("SUPABASE_URL")
-        self.supabase_key = os.getenv("SUPABASE_ANON_KEY")
+        # Use settings (which reads from environment dynamically)
+        self.supabase_url = settings.SUPABASE_URL
+        self.supabase_key = settings.SUPABASE_ANON_KEY
         self.supabase: Client = create_client(self.supabase_url, self.supabase_key)
 
     def get_exercise_candidates(

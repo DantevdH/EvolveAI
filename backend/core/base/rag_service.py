@@ -67,7 +67,8 @@ class RAGTool:
             self.embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
         
         # Initialize embedding clients based on provider
-        api_key = os.getenv("LLM_API_KEY")
+        # Use settings (which reads from environment dynamically)
+        api_key = settings.LLM_API_KEY
         if not api_key:
             # In test environment, allow missing API key (tests should mock this)
             if is_test_environment():
