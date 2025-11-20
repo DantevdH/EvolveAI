@@ -25,6 +25,7 @@ def extract_user_id_from_jwt(jwt_token: str) -> str:
     Raises HTTPException(401) if token is invalid.
     """
     logger = get_logger(__name__)
+    # Use settings (which now reads from environment dynamically)
     jwt_public_key = settings.SUPABASE_JWT_PUBLIC_KEY
     jwt_secret = settings.SUPABASE_JWT_SECRET
     
@@ -67,8 +68,9 @@ def extract_user_id_from_jwt(jwt_token: str) -> str:
             except Exception:
                 pass  # Don't fail if we can't decode for logging
             raise HTTPException(status_code=401, detail="JWT token has expired")
-        except jwt.InvalidTokenError:
+        except (jwt.InvalidTokenError, jwt.DecodeError) as e:
             # ES256 failed, try RS256 (RSA keys)
+            logger.debug(f"ES256 decode failed: {str(e)}, trying RS256")
             try:
                 decoded_token = jwt.decode(
                     jwt_token,
@@ -82,8 +84,9 @@ def extract_user_id_from_jwt(jwt_token: str) -> str:
                 return user_id
             except jwt.ExpiredSignatureError:
                 raise HTTPException(status_code=401, detail="JWT token has expired")
-            except jwt.InvalidTokenError:
+            except (jwt.InvalidTokenError, jwt.DecodeError) as e:
                 # Both asymmetric algorithms failed, try HS256 fallback
+                logger.debug(f"RS256 decode failed: {str(e)}, trying HS256 fallback")
                 if not jwt_secret:
                     raise HTTPException(status_code=401, detail="Invalid JWT token")
     
@@ -118,17 +121,21 @@ def extract_user_id_from_jwt(jwt_token: str) -> str:
             except Exception:
                 pass  # Don't fail if we can't decode for logging
             raise HTTPException(status_code=401, detail="JWT token has expired")
-        except jwt.InvalidTokenError as e:
+        except (jwt.InvalidTokenError, jwt.DecodeError) as e:
             logger.error(f"Invalid JWT token: {str(e)}")
             raise HTTPException(status_code=401, detail="Invalid JWT token")
     
     # No verification keys available - fallback to unverified decode (development only)
     logger.warning("No JWT verification keys set - JWT verification disabled (not recommended for production)")
-    decoded_token = jwt.decode(jwt_token, options={"verify_signature": False})
-    user_id = decoded_token.get("sub")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="No user_id found in JWT token")
-    return user_id
+    try:
+        decoded_token = jwt.decode(jwt_token, options={"verify_signature": False})
+        user_id = decoded_token.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="No user_id found in JWT token")
+        return user_id
+    except (jwt.InvalidTokenError, jwt.DecodeError) as e:
+        logger.error(f"Invalid JWT token (unverified decode): {str(e)}")
+        raise HTTPException(status_code=401, detail="Invalid JWT token")
 
 
 class DatabaseService:
@@ -137,6 +144,7 @@ class DatabaseService:
     def __init__(self):
         """Initialize Supabase client."""
         self.logger = get_logger(__name__)
+        # Use settings (which now reads from environment dynamically)
         self.supabase: Client = create_client(
             settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY
         )
@@ -145,6 +153,7 @@ class DatabaseService:
         """Create an authenticated Supabase client with service role key for server-side operations."""
         self.logger.debug("Creating authenticated client with service role key")
 
+        # Use settings (which now reads from environment dynamically)
         # Use service role key for server-side operations (bypasses RLS)
         if settings.SUPABASE_SERVICE_ROLE_KEY:
             client = create_client(

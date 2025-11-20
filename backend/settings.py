@@ -55,42 +55,90 @@ class Settings:
     """
     Application settings.
     
-    NOTE: Class attributes are evaluated at import time and may be stale.
-    For validation, use validate() which reads from os.getenv() directly.
-    For runtime access, properties would be better, but for backward compatibility
-    we keep class attributes. They will be refreshed on module reload.
+    All settings read from environment variables dynamically using properties.
+    This ensures settings always reflect current environment values, even in tests
+    where env vars are set after module import.
     """
 
     # Unified LLM Configuration (Primary - supports OpenAI, Gemini, Claude, etc.)
-
-    LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
-    LLM_MODEL_COMPLEX: str = os.getenv("LLM_MODEL_COMPLEX", "gemini-2.5-flash")
-    LLM_MODEL_LIGHTWEIGHT: str = os.getenv("LLM_MODEL_LIGHTWEIGHT", "gemini-2.5-flash-lite")
-    TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.7"))
+    @property
+    def LLM_API_KEY(self) -> str:
+        """LLM API key (works for all providers: OpenAI, Gemini, Claude, etc.)"""
+        return os.getenv("LLM_API_KEY", "")
     
+    @property
+    def LLM_MODEL_COMPLEX(self) -> str:
+        """Complex model name for advanced tasks"""
+        return os.getenv("LLM_MODEL_COMPLEX", "gemini-2.5-flash")
+    
+    @property
+    def LLM_MODEL_LIGHTWEIGHT(self) -> str:
+        """Lightweight model name for simple tasks"""
+        return os.getenv("LLM_MODEL_LIGHTWEIGHT", "gemini-2.5-flash-lite")
+    
+    @property
+    def TEMPERATURE(self) -> float:
+        """Temperature setting for LLM generation"""
+        return float(os.getenv("TEMPERATURE", "0.7"))
 
     # Supabase Configuration
-    SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
-    SUPABASE_ANON_KEY: str = os.getenv("SUPABASE_ANON_KEY", "")
-    SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    SUPABASE_JWT_SECRET: str = os.getenv("SUPABASE_JWT_SECRET", "")  # Legacy symmetric JWT secret (HS256) - for backward compatibility
-    SUPABASE_JWT_PUBLIC_KEY: str = os.getenv("SUPABASE_JWT_PUBLIC_KEY", "")  # Asymmetric JWT public key (ES256 for ECC P-256 or RS256 for RSA) - for new signing keys
+    @property
+    def SUPABASE_URL(self) -> str:
+        """Supabase project URL"""
+        return os.getenv("SUPABASE_URL", "")
+    
+    @property
+    def SUPABASE_ANON_KEY(self) -> str:
+        """Supabase anonymous key"""
+        return os.getenv("SUPABASE_ANON_KEY", "")
+    
+    @property
+    def SUPABASE_SERVICE_ROLE_KEY(self) -> str:
+        """Supabase service role key (for server-side operations)"""
+        return os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    
+    @property
+    def SUPABASE_JWT_SECRET(self) -> str:
+        """Legacy symmetric JWT secret (HS256) - for backward compatibility"""
+        return os.getenv("SUPABASE_JWT_SECRET", "")
+    
+    @property
+    def SUPABASE_JWT_PUBLIC_KEY(self) -> str:
+        """Asymmetric JWT public key (ES256 for ECC P-256 or RS256 for RSA) - for new signing keys"""
+        return os.getenv("SUPABASE_JWT_PUBLIC_KEY", "")
 
     # Service Configuration
-    PREMIUM_TIER_ENABLED: bool = (
-        os.getenv("PREMIUM_TIER_ENABLED", "true").lower() == "true"
-    )
-    FALLBACK_TO_FREE: bool = os.getenv("FALLBACK_TO_FREE", "true").lower() == "true"
-    PLAYBOOK_CONTEXT_MATCHING_ENABLED: bool = (
-        os.getenv("PLAYBOOK_CONTEXT_MATCHING_ENABLED", "false").lower() == "true"
-    )
+    @property
+    def PREMIUM_TIER_ENABLED(self) -> bool:
+        """Whether premium tier features are enabled"""
+        return os.getenv("PREMIUM_TIER_ENABLED", "true").lower() == "true"
+    
+    @property
+    def FALLBACK_TO_FREE(self) -> bool:
+        """Whether to fallback to free tier when premium fails"""
+        return os.getenv("FALLBACK_TO_FREE", "true").lower() == "true"
+    
+    @property
+    def PLAYBOOK_CONTEXT_MATCHING_ENABLED(self) -> bool:
+        """Whether playbook context matching is enabled"""
+        return os.getenv("PLAYBOOK_CONTEXT_MATCHING_ENABLED", "false").lower() == "true"
 
     # Development Configuration
-    DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
+    @property
+    def DEBUG(self) -> bool:
+        """Debug mode flag"""
+        return os.getenv("DEBUG", "false").lower() == "true"
 
     # Server Configuration
-    HOST: str = os.getenv("HOST", "0.0.0.0")
-    PORT: int = int(os.getenv("PORT", "8000"))
+    @property
+    def HOST(self) -> str:
+        """Server host address"""
+        return os.getenv("HOST", "0.0.0.0")
+    
+    @property
+    def PORT(self) -> int:
+        """Server port number"""
+        return int(os.getenv("PORT", "8000"))
 
     @classmethod
     def validate(cls) -> bool:
@@ -143,33 +191,30 @@ class Settings:
 
         return True
 
-    @classmethod
-    def get_openai_config(cls) -> dict:
+    def get_openai_config(self) -> dict:
         """
         Get LLM configuration as a dictionary (DEPRECATED - use get_llm_config instead).
         
         Returns unified LLM config for backward compatibility.
         """
         return {
-            "api_key": cls.LLM_API_KEY,
-            "model": cls.LLM_MODEL_COMPLEX,
-            "temperature": cls.TEMPERATURE,
+            "api_key": self.LLM_API_KEY,
+            "model": self.LLM_MODEL_COMPLEX,
+            "temperature": self.TEMPERATURE,
         }
     
-    @classmethod
-    def get_llm_config(cls) -> dict:
+    def get_llm_config(self) -> dict:
         """Get unified LLM configuration as a dictionary."""
         return {
-            "api_key": cls.LLM_API_KEY,
-            "complex_model": cls.LLM_MODEL_COMPLEX,
-            "lightweight_model": cls.LLM_MODEL_LIGHTWEIGHT,
-            "temperature": cls.TEMPERATURE,
+            "api_key": self.LLM_API_KEY,
+            "complex_model": self.LLM_MODEL_COMPLEX,
+            "lightweight_model": self.LLM_MODEL_LIGHTWEIGHT,
+            "temperature": self.TEMPERATURE,
         }
 
-    @classmethod
-    def get_supabase_config(cls) -> dict:
+    def get_supabase_config(self) -> dict:
         """Get Supabase configuration as a dictionary."""
-        return {"url": cls.SUPABASE_URL, "anon_key": cls.SUPABASE_ANON_KEY}
+        return {"url": self.SUPABASE_URL, "anon_key": self.SUPABASE_ANON_KEY}
 
 
 # Global settings instance

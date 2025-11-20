@@ -33,6 +33,7 @@ class ExerciseFeaturesFiller:
         """
         self.excel_file_path = excel_file_path
         # Initialize OpenAI client using unified LLM settings
+        # Use settings (which now reads from environment dynamically)
         api_key = settings.LLM_API_KEY
         if not api_key:
             raise ValueError("Missing LLM_API_KEY environment variable")

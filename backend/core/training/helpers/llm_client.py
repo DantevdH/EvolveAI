@@ -13,7 +13,6 @@ from google import genai  # type: ignore
 from anthropic import Anthropic  # type: ignore
 from settings import settings
 
-
 class LLMClient:
     """
     Unified LLM client using Instructor for structured output across all providers.
@@ -23,10 +22,15 @@ class LLMClient:
       - LLM_MODEL_COMPLEX (e.g., gemini-2.5-flash)
       - LLM_MODEL_LIGHTWEIGHT (e.g., gemini-2.5-flash-lite)
       - TEMPERATURE (applies to both models)
+    
+    Follows RAGTool pattern: reads from os.getenv() directly to avoid stale settings
+    in test environments where env vars are set after module import.
     """
 
     def __init__(self):
+
         self.api_key = settings.LLM_API_KEY
+        
         if not self.api_key:
             raise ValueError("LLM_API_KEY not found in environment variables")
         
