@@ -27,12 +27,22 @@ from core.training.schemas.question_schemas import (
     PersonalInfo,
     AIQuestion,
 )
+from core.training.schemas.insights_schemas import (
+    InsightsSummaryRequest,
+    InsightsSummaryResponse,
+    AIInsightsSummary,
+    InsightsMetrics,
+    WeakPoint,
+    TopExercise,
+)
 from core.training.training_coach import TrainingCoach
 from core.training.schemas.training_schemas import TrainingPlan
 from core.training.helpers.database_service import db_service, extract_user_id_from_jwt
 from core.training.helpers.date_mapper import map_daily_training_dates
 # Format responses
 from core.training.helpers.response_formatter import ResponseFormatter
+from core.training.helpers.insights_service import InsightsService
+from core.training.helpers.prompt_generator import PromptGenerator
 from core.base.schemas.playbook_schemas import UserPlaybook
 from settings import settings
 
@@ -109,6 +119,14 @@ async def _fetch_complete_training_plan(user_profile_id: int) -> Dict[str, Any]:
     """Fetch complete training plan with real IDs from database - exact same as frontend."""
     try:
         from supabase import create_client
+        from core.utils.env_loader import is_test_environment
+
+        # Check if we're in a test environment
+        is_test_env = is_test_environment()
+        
+        if is_test_env:
+            logger.debug("Test environment: Cannot fetch training plan (should be mocked)")
+            return None
 
         # Use service role key for backend operations
         # Use settings (which reads from environment dynamically)
@@ -1176,7 +1194,7 @@ async def chat(
 
 
         # Update the week using the new method (uses user_playbook instead of onboarding responses)
-        # Pass training_plan from request instead of fetching from database
+        # Only the current week is processed and returned
         result = await coach.update_weekly_schedule(
             personal_info=personal_info,
             feedback_message=feedback_message,
@@ -1184,7 +1202,6 @@ async def chat(
             current_week=current_week,
             user_profile_id=user_profile_id,
             user_playbook=user_playbook,
-            existing_training_plan=training_plan,  # Use training plan from request
             jwt_token=request.jwt_token,
             conversation_history=conversation_history,
         )
@@ -1198,86 +1215,63 @@ async def chat(
 
         logger.info(f"✅ Week {week_number} updated successfully")
 
-        # Get the updated full training plan
+        # Get the updated week from result (only contains the updated week)
         updated_plan_data = result.get("training_plan")
+        
+        if not updated_plan_data:
+            raise Exception("No training plan data returned from update")
 
+        # Extract the updated week (should be the only week in the array)
+        weekly_schedules = updated_plan_data.get("weekly_schedules", [])
+        updated_week = weekly_schedules[0] if weekly_schedules else None
+            
+        if not updated_week:
+            raise Exception(f"Could not find updated week {week_number} in result")
+        
         # Map scheduled dates to daily trainings (post-processing step)
         # This must happen before saving to DB and returning to frontend
-        if updated_plan_data:
-            updated_plan_data = map_daily_training_dates(updated_plan_data)
-            logger.info("✅ Mapped scheduled dates to daily trainings for updated week")
+        temp_plan = {"weekly_schedules": [updated_week]}
+        temp_plan = map_daily_training_dates(temp_plan)
+        updated_week = temp_plan.get("weekly_schedules", [updated_week])[0]
+        logger.info("✅ Mapped scheduled dates to daily trainings for updated week")
+        
+        # Update only this specific week in the database
+        enriched_week = await db_service.update_single_week(
+            plan_id,
+            week_number,
+            updated_week,
+            jwt_token=request.jwt_token
+        )
+        
+        if enriched_week is None:
+            raise Exception("Failed to update week in database")
+        
+        logger.info(f"✅ Week {week_number} updated in database successfully")
+        
+        # Return only the enriched week (frontend will merge it back into the full plan)
+        # Include plan id for consistency and fallback path compatibility
+        enriched_plan = {
+            "id": plan_id,  # Include plan id so fallback transformTrainingPlan works
+            "weekly_schedules": [enriched_week],  # Return only the updated week
+        }
+        
+        # Add ai_message from coach result (AI-generated, not persisted)
+        # Prioritize ai_message from update result (explains changes), fallback to classification ai_message
+        ai_message = result.get("ai_message") or classification_result.get("ai_message")
+        if ai_message:
+            try:
+                enriched_plan['ai_message'] = ai_message
+            except Exception:
+                pass
 
-        # Update only the specified week in the database
-        if plan_id and updated_plan_data:
-            # Extract the updated week from the full plan
-            weekly_schedules = updated_plan_data.get("weekly_schedules", [])
-            updated_week = next(
-                (w for w in weekly_schedules if w.get("week_number") == week_number),
-                None
-            )
-            
-            if not updated_week:
-                raise Exception(f"Could not find week {week_number} in updated plan data")
-            
-            # Update only this specific week in the database
-            enriched_week = await db_service.update_single_week(
-                plan_id,
-                week_number,
-                updated_week,
-                jwt_token=request.jwt_token
-            )
-            
-            if enriched_week is None:
-                raise Exception("Failed to update week in database")
-            
-            logger.info(f"✅ Week {week_number} updated in database successfully")
-            
-            # Merge the enriched week back into the full plan
-            # Replace the week in weekly_schedules with the enriched version
-            enriched_weekly_schedules = []
-            for week in weekly_schedules:
-                if week.get("week_number") == week_number:
-                    enriched_weekly_schedules.append(enriched_week)
-                else:
-                    enriched_weekly_schedules.append(week)
-            
-            # Build the enriched full plan
-            enriched_plan = {
-                **updated_plan_data,
-                "weekly_schedules": enriched_weekly_schedules,
-            }
-            
-            logger.info("✅ Using enriched training plan with updated week (IDs present)")
-
-            # Add ai_message from coach result (AI-generated, not persisted)
-            # Prioritize ai_message from update result (explains changes), fallback to classification ai_message
-            ai_message = result.get("ai_message") or classification_result.get("ai_message")
-            if ai_message:
-                try:
-                    enriched_plan['ai_message'] = ai_message
-                except Exception:
-                    pass
-
-            return PlanFeedbackResponse(
-                success=True,
-                ai_response=ai_message or "I've updated your week! Take a look and let me know if you'd like any other changes. 💪",
-                plan_updated=True,
-                updated_plan=enriched_plan,
-                updated_playbook=updated_playbook,
-                navigate_to_main_app=False
-            )
-        else:
-            # Return the plan even if DB update fails (shouldn't happen)
-            # Prioritize ai_message from update result, fallback to classification ai_message
-            ai_message = result.get("ai_message") or classification_result.get("ai_message") or "I've updated your week! Take a look and let me know if you'd like any other changes. 💪"
-            return PlanFeedbackResponse(
-                success=True,
-                ai_response=ai_message,
-                plan_updated=True,
-                updated_plan=updated_plan_data,
-                updated_playbook=updated_playbook,
-                navigate_to_main_app=False
-            )
+        return PlanFeedbackResponse(
+            success=True,
+            ai_response=ai_message or "I've updated your week! Take a look and let me know if you'd like any other changes. 💪",
+            plan_updated=True,
+            updated_plan=enriched_plan,  # Contains only the updated week
+            updated_playbook=updated_playbook,
+            navigate_to_main_app=False
+        )
         
     except HTTPException:
         raise
@@ -1441,3 +1435,167 @@ async def create_week(
     except Exception as e:
         logger.error(f"Error creating new week: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create new week: {str(e)}")
+
+
+@router.post("/insights-summary", response_model=InsightsSummaryResponse)
+async def get_insights_summary(
+    request: InsightsSummaryRequest,
+    coach: TrainingCoach = Depends(get_training_coach)
+):
+    """
+    Generate simplified, actionable insights summary with AI enhancement.
+    
+    Returns:
+    - AI-generated summary (2-3 sentences)
+    - Top priority action
+    - Recommendations
+    - Simple metrics (volume progress, recovery, weak points, top exercises)
+    """
+    try:
+        # Extract and validate JWT token
+        user_id = extract_user_id_from_jwt(request.jwt_token)
+        
+        # Get training plan (use provided or fetch from database)
+        training_plan = request.training_plan
+        if not training_plan:
+            # Fetch from database
+            training_plan = await _fetch_complete_training_plan(request.user_profile_id)
+            if not training_plan:
+                return InsightsSummaryResponse(
+                    success=False,
+                    error="No training plan found"
+                )
+        
+        # Map scheduled dates to daily trainings (needed for accurate frequency calculation)
+        training_plan = map_daily_training_dates(training_plan)
+        
+        # Extract simple metrics (volume, frequency, training intensity)
+        volume_progress = InsightsService.extract_volume_progress(training_plan)
+        training_frequency = InsightsService.extract_training_frequency(training_plan)
+        training_intensity, intensity_trend = InsightsService.extract_training_intensity(training_plan)
+        
+        # Use provided weak_points/top_exercises from frontend (frontend calculates these)
+        # If not provided, use empty lists (AI can still generate good summary with volume/frequency/intensity)
+        weak_points = request.weak_points or []
+        top_exercises = request.top_exercises or []
+        
+        # Convert Pydantic models to dicts for prompt generation
+        weak_points_dict = [wp.model_dump() if hasattr(wp, 'model_dump') else wp for wp in weak_points]
+        top_exercises_dict = [ex.model_dump() if hasattr(ex, 'model_dump') else ex for ex in top_exercises]
+        
+        # Prepare metrics dict for AI
+        metrics_dict = {
+            "volume_progress": volume_progress,
+            "training_frequency": training_frequency,
+            "training_intensity": training_intensity,
+            "weak_points": weak_points_dict,
+            "top_exercises": top_exercises_dict
+        }
+        
+        # Calculate data hash for cache invalidation
+        current_data_hash = InsightsService.calculate_data_hash(metrics_dict)
+        
+        # Check cache first
+        cached_summary = await db_service.get_insights_summary_cache(request.user_profile_id)
+        use_cached = False
+        
+        if cached_summary:
+            cached_hash = cached_summary.get("data_hash")
+            cached_created = cached_summary.get("created_at")
+            
+            # Use cache if hash matches (data hasn't changed)
+            if cached_hash == current_data_hash:
+                use_cached = True
+                logger.info(f"✅ Using cached insights summary (hash match)")
+                # Parse cached summary
+                cached_summary_data = cached_summary.get("summary", {})
+                if cached_summary_data:
+                    ai_summary = AIInsightsSummary(**cached_summary_data)
+                else:
+                    use_cached = False  # Invalid cache, regenerate
+            else:
+                logger.info(f"🔄 Cache invalidated (data changed: hash mismatch)")
+        
+        # Generate new AI summary if cache miss or invalid
+        if not use_cached:
+            try:
+                prompt = PromptGenerator.generate_insights_summary_prompt(metrics_dict)
+                
+                # Use lightweight model for fast response
+                ai_summary, completion = coach.llm.chat_parse(
+                    prompt,
+                    AIInsightsSummary,
+                    model_type="lightweight"
+                )
+                
+                logger.info(f"✅ Generated new insights summary (tokens: {completion.usage.total_tokens if hasattr(completion, 'usage') else 'N/A'})")
+                
+                # Save to cache for future requests
+                cache_data = {
+                    "summary": ai_summary.model_dump(),
+                    "metrics": None  # Will be set below
+                }
+                await db_service.save_insights_summary_cache(
+                    request.user_profile_id,
+                    cache_data,
+                    current_data_hash
+                )
+                
+            except Exception as e:
+                logger.error(f"Error generating AI summary: {e}")
+                # Fallback to simple summary if AI fails
+                ai_summary = AIInsightsSummary(
+                    summary=f"Your training is progressing. {volume_progress}. {training_intensity}.",
+                    top_priority="Continue your current training routine",
+                    recommendations=[
+                        "Maintain consistent training frequency",
+                        "Monitor training intensity and adjust as needed"
+                    ]
+                )
+        
+        # Build metrics response (always use current metrics, not cached)
+        # Convert to Pydantic models if needed
+        weak_points_models = [
+            wp if isinstance(wp, WeakPoint) else WeakPoint(**wp) 
+            for wp in weak_points
+        ]
+        top_exercises_models = [
+            ex if isinstance(ex, TopExercise) else TopExercise(**ex)
+            for ex in top_exercises
+        ]
+        
+        metrics = InsightsMetrics(
+            volume_progress=volume_progress,
+            training_frequency=training_frequency,
+            training_intensity=training_intensity,
+            intensity_trend=intensity_trend,
+            weak_points=weak_points_models,
+            top_exercises=top_exercises_models
+        )
+        
+        # Update cache with full metrics if we generated new summary
+        if not use_cached and ai_summary:
+            cache_data = {
+                "summary": ai_summary.model_dump(),
+                "metrics": metrics.model_dump()
+            }
+            await db_service.save_insights_summary_cache(
+                request.user_profile_id,
+                cache_data,
+                current_data_hash
+            )
+        
+        return InsightsSummaryResponse(
+            success=True,
+            summary=ai_summary,
+            metrics=metrics
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating insights summary: {str(e)}")
+        return InsightsSummaryResponse(
+            success=False,
+            error=f"Failed to generate insights summary: {str(e)}"
+        )

@@ -3,8 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 import os
+import sys
 from logging_config import get_logger
 from core.training.training_api import router as training_router
+from core.utils.env_loader import is_test_environment
 from settings import settings
 
 # Load environment variables using centralized utility
@@ -29,17 +31,14 @@ logger = get_logger(__name__)
 
 # Validate environment variables at startup
 # Skip validation in test environment to allow tests to run without real credentials
-is_test_env = (
-    os.getenv("ENVIRONMENT", "").lower() == "test" or
-    os.getenv("PYTEST_CURRENT_TEST") is not None or
-    "pytest" in os.getenv("_", "").lower()
-)
+is_test_env = is_test_environment()
 
-if not is_test_env and not settings.validate():
+# In test environment, skip validation entirely
+if is_test_env:
+    logger.debug("🧪 Test environment detected - skipping environment variable validation")
+elif not settings.validate():
     logger.error("❌ Critical environment variables are missing. Server will not start.")
     raise ValueError("Missing required environment variables. Check logs for details.")
-elif is_test_env:
-    logger.debug("🧪 Test environment detected - skipping environment variable validation")
 
 app = FastAPI(
     title="EvolveAI Training Plan Generator",

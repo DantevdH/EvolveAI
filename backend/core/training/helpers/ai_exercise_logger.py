@@ -15,12 +15,20 @@ from settings import settings
 
 # Use centralized environment loader (respects test environment)
 try:
-    from core.utils.env_loader import load_environment
+    from core.utils.env_loader import load_environment, is_test_environment
     load_environment()  # Will automatically skip in test environment
 except ImportError:
     # Fallback if core.utils not available
     from dotenv import load_dotenv
     load_dotenv()
+    # Fallback test detection
+    def is_test_environment():
+        return (
+            os.getenv("ENVIRONMENT", "").lower() == "test"
+            or os.getenv("PYTEST_CURRENT_TEST") is not None
+            or "pytest" in os.getenv("_", "").lower()
+            or "PYTEST" in os.environ
+        )
 
 logger = get_logger(__name__)
 # Reduce log verbosity - only show warnings and errors
@@ -44,11 +52,7 @@ class AIExerciseLogger:
         self.supabase_key: Optional[str] = None
         
         # Check if we're in a test environment
-        is_test_env = (
-            os.getenv("ENVIRONMENT", "").lower() == "test" or
-            os.getenv("PYTEST_CURRENT_TEST") is not None or
-            "pytest" in os.getenv("_", "").lower()
-        )
+        is_test_env = is_test_environment()
         
         # Only require env vars if explicitly requested AND not in test environment
         if require_env_vars and not is_test_env:

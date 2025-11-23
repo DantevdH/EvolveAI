@@ -13,7 +13,8 @@ class TestCriticalEndpoints:
     def test_initial_questions_endpoint_exists(self, client: TestClient):
         """Test that initial-questions endpoint exists and accepts requests."""
         # Mock the training coach to avoid actual AI calls
-        with patch('core.training.training_api.get_training_coach') as mock_coach:
+        with patch('core.training.training_api.get_training_coach') as mock_coach, \
+             patch('core.training.training_api.db_service') as mock_db_service:
             mock_coach_instance = Mock()
             mock_coach.return_value = mock_coach_instance
             
@@ -25,6 +26,17 @@ class TestCriticalEndpoints:
                 ]
             }
             mock_coach_instance.generate_initial_questions.return_value = mock_response
+            
+            # Mock db_service methods
+            mock_db_service.create_user_profile.return_value = {
+                "success": True,
+                "data": {"id": 1},
+                "message": "User profile created successfully"
+            }
+            mock_db_service.update_user_profile.return_value = {
+                "success": True,
+                "message": "User profile updated successfully"
+            }
             
             payload = {
                 "personal_info": {
@@ -44,9 +56,22 @@ class TestCriticalEndpoints:
     
     def test_generate_plan_endpoint_exists(self, client: TestClient):
         """Test that generate-plan endpoint exists and accepts requests."""
-        with patch('core.training.training_api.get_training_coach') as mock_coach:
+        with patch('core.training.training_api.get_training_coach') as mock_coach, \
+             patch('core.training.training_api.db_service') as mock_db_service:
             mock_coach_instance = Mock()
             mock_coach.return_value = mock_coach_instance
+            
+            # Mock db_service methods
+            mock_db_service.get_training_plan.return_value = {"success": False, "data": None}
+            mock_db_service.update_user_profile.return_value = {
+                "success": True,
+                "message": "User profile updated successfully"
+            }
+            mock_db_service.save_training_plan.return_value = {
+                "success": True,
+                "data": {"id": 1},
+                "message": "Training plan saved successfully"
+            }
             
             payload = {
                 "personal_info": {

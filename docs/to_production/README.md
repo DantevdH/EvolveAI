@@ -67,6 +67,8 @@ This directory contains comprehensive production readiness documentation for all
   - Workout frequency heatmap
   - Analytics service integration
   - Data visualization optimization
+  - Auto-refresh after workout completion
+  - Cache management
 
 ### 8. Frontend - Profile
 - **[07_FRONTEND_PROFILE.md](./07_FRONTEND_PROFILE.md)** - Profile frontend production checklist including:

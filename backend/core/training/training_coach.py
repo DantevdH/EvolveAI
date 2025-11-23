@@ -720,15 +720,14 @@ class TrainingCoach(BaseAgent):
         current_week: Dict[str, Any],
         user_profile_id: int,
         user_playbook,
-        existing_training_plan: Dict[str, Any],
         jwt_token: str = None,
         conversation_history: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
         Update an existing week based on user feedback.
         
-        Updates ONLY the specified week, but returns the full TrainingPlan structure
-        with the updated week inserted into the existing plan.
+        Updates ONLY the specified week and returns only the updated week.
+        The frontend is responsible for merging it back into the full plan.
         We re-assess by week and adjust.
         
         Args:
@@ -738,17 +737,14 @@ class TrainingCoach(BaseAgent):
             current_week: Current week data (WeeklySchedule dict) to update
             user_profile_id: Database ID of the user profile
             user_playbook: User's playbook with learned lessons (instead of onboarding responses)
-            existing_training_plan: Full training plan from request (already fetched)
             jwt_token: JWT token for database authentication
             conversation_history: Optional conversation history for context-aware updates
             
+        Returns:
+            Dict with "success", "training_plan" (containing only the updated week in weekly_schedules),
+            and "ai_message"
         """
         try:
-            # Use existing training plan from request (no need to fetch from database)
-            # The plan is already enriched from database (when loaded) or frontend (when sent back)
-            existing_plan = existing_training_plan
-            existing_weekly_schedules = existing_plan.get("weekly_schedules", [])
-        
             # Build week summary - data should already be in backend format with enriched fields
             week_summary = PromptGenerator.format_current_plan_summary(
                 {"weekly_schedules": [current_week]}
@@ -831,38 +827,15 @@ class TrainingCoach(BaseAgent):
             )
             updated_week = validated_plan.get("weekly_schedules", [validated_week])[0]
             
-            # Step 6: Insert updated week into existing plan
-            updated_weekly_schedules = []
-            week_updated = False
-            for week in existing_weekly_schedules:
-                if week.get("week_number") == week_number:
-                    updated_weekly_schedules.append(updated_week)
-                    week_updated = True
-                else:
-                    updated_weekly_schedules.append(week)
-            
-            if not week_updated:
-                self.logger.warning(
-                    f"Week {week_number} not found in existing plan. "
-                    f"Appending as new week (expected week numbers: {[w.get('week_number') for w in existing_weekly_schedules]})."
-                )
-                updated_weekly_schedules.append(updated_week)
-            
-            # Sort by week_number
-            updated_weekly_schedules.sort(key=lambda x: x.get("week_number", 0))
-            
-            # Build full TrainingPlan structure with updated week
-            full_training_plan = {
-                **existing_plan,  # Keep all existing plan fields (id, title, summary, etc.)
-                "weekly_schedules": updated_weekly_schedules,
-            }
-            
-            # Step 7: Track latency
+            # Step 6: Track latency
             await db_service.log_latency_event("update_week", ai_duration, completion)
             
+            # Return only the updated week (frontend will merge it back into the full plan)
             return {
                 "success": True,
-                "training_plan": full_training_plan,  # Return full plan with updated week
+                "training_plan": {
+                    "weekly_schedules": [updated_week],  # Return only the updated week
+                },
                 "ai_message": ai_message,  # Return AI message explaining the changes
                 "metadata": {
                     "validation_messages": validation_messages,

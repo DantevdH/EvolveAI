@@ -9,9 +9,10 @@ This class provides the foundation for all specialist agents with:
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from supabase import create_client, Client
 from core.training.helpers.llm_client import LLMClient
+from core.utils.env_loader import is_test_environment
 from settings import settings
 
 
@@ -40,11 +41,19 @@ class BaseAgent(ABC):
         self.llm = LLMClient()
 
         # Supabase client - use settings (which reads from environment dynamically)
-        supabase_url = settings.SUPABASE_URL
-        supabase_key = settings.SUPABASE_ANON_KEY
-        if not supabase_url or not supabase_key:
-            raise ValueError("Supabase credentials not found in environment variables")
-        self.supabase: Client = create_client(supabase_url, supabase_key)
+        # In test environment, skip client creation - tests should mock the agent
+        is_test_env = is_test_environment()
+        
+        if is_test_env:
+            # In test environment, don't create client
+            self.supabase: Optional[Client] = None
+        else:
+            # Only create client in non-test environments
+            supabase_url = settings.SUPABASE_URL
+            supabase_key = settings.SUPABASE_ANON_KEY
+            if not supabase_url or not supabase_key:
+                raise ValueError("Supabase credentials not found in environment variables")
+            self.supabase: Client = create_client(supabase_url, supabase_key)
 
     @abstractmethod
     def process_request(self, user_request: str) -> str:

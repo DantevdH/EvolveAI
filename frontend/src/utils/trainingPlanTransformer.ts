@@ -48,10 +48,19 @@ export interface BackendStrengthExercise {
   execution_order: number;  // Order in which to execute this exercise (1-based)
   main_muscle?: string | null;
   equipment?: string | null;
-  // Enriched fields from exercises table (populated via JOIN)
+  // Enriched fields from exercises table (populated via JOIN or enrichment)
   target_area?: string;
   main_muscles?: string[];  // List of main muscles (from exercises.primary_muscles)
+  secondary_muscles?: string[];  // List of secondary muscles
   force?: string;  // Type of force (push, pull, static, etc.)
+  difficulty?: string;  // Difficulty level (Beginner, Intermediate, Advanced)
+  exercise_tier?: string;  // Exercise tier (foundational, standard, variety)
+  preparation?: string;  // Preparation instructions
+  execution?: string;  // Execution instructions
+  description?: string;  // Exercise description
+  video_url?: string | null;  // Video URL
+  tips?: string;  // Exercise tips
+  exercises?: any;  // Full exercise metadata object from exercises table (for round-trip preservation)
 }
 
 export interface BackendEnduranceSession {
@@ -87,7 +96,7 @@ export function transformTrainingPlan(backendPlan: BackendTrainingPlan): any {
   };
 }
 
-function transformWeeklySchedule(backendWeek: BackendWeeklySchedule): any {
+export function transformWeeklySchedule(backendWeek: BackendWeeklySchedule): any {
   if (backendWeek.id == null) console.error('[PlanTransform] Null weekly_schedule id', backendWeek);
   return {
     id: backendWeek.id.toString(),
@@ -172,22 +181,42 @@ function transformStrengthExercise(backendExercise: BackendStrengthExercise): an
     executionOrder: backendExercise.execution_order || 0,
     order: backendExercise.execution_order || 0, // Legacy field for backward compatibility
     // Add nested exercise object for SimplePlanPreview compatibility (includes enriched fields)
+    // Read ALL enriched fields from nested exercises object (cleaner than manual enrichment)
+    // Fallback to top-level if present (for Pydantic validation fields)
     exercise: {
       id: backendExercise.exercise_id?.toString(),
       name: exerciseName,
-      mainMuscle: mainMuscle,
+      mainMuscle: mainMuscle,  // Keep camelCase (not in Exercise type, used by row)
       equipment: equipment,
-      // Enriched fields from exercises table (populated via JOIN)
-      targetArea: backendExercise.target_area || nestedExercise?.target_area,
-      mainMuscles: backendExercise.main_muscles || nestedExercise?.primary_muscles || nestedExercise?.main_muscles,
+      // Enriched fields from exercises table - use snake_case to match Exercise type and getTrainingPlan
+      // Priority: top-level (from backend enrichment) > nested object (from JOIN)
+      target_area: backendExercise.target_area || nestedExercise?.target_area,
+      main_muscles: backendExercise.main_muscles || nestedExercise?.primary_muscles || nestedExercise?.main_muscles,
+      secondary_muscles: nestedExercise?.secondary_muscles,
       force: backendExercise.force || nestedExercise?.force,
+      difficulty: nestedExercise?.difficulty,
+      exercise_tier: nestedExercise?.exercise_tier || nestedExercise?.tier,
+      preparation: nestedExercise?.preparation,
+      execution: nestedExercise?.execution,
+      description: nestedExercise?.description,
+      videoUrl: nestedExercise?.video_url,  // Keep camelCase (it's videoUrl in Exercise type)
+      tips: nestedExercise?.tips,
     },
     mainMuscle: mainMuscle,
     equipment: equipment,
-    // Enriched fields (available for round-trip)
+    // Enriched fields (available for round-trip) - read from nested object
+    // Priority: top-level (from backend enrichment) > nested object (from JOIN)
     targetArea: backendExercise.target_area || nestedExercise?.target_area,
     mainMuscles: backendExercise.main_muscles || nestedExercise?.primary_muscles || nestedExercise?.main_muscles,
+    secondaryMuscles: nestedExercise?.secondary_muscles,
     force: backendExercise.force || nestedExercise?.force,
+    difficulty: nestedExercise?.difficulty,
+    exerciseTier: nestedExercise?.exercise_tier || nestedExercise?.tier,
+    preparation: nestedExercise?.preparation,
+    execution: nestedExercise?.execution,
+    description: nestedExercise?.description,
+    videoUrl: nestedExercise?.video_url,
+    tips: nestedExercise?.tips,
     completed: false,
   };
 }
@@ -249,6 +278,9 @@ function reverseTransformWeeklySchedule(frontendWeek: any): BackendWeeklySchedul
     week_number: frontendWeek.weekNumber,
     justification: frontendWeek.justification,
     daily_trainings: frontendWeek.dailyTrainings?.map(reverseTransformDailyTraining) || [],
+    focus_theme: frontendWeek.focusTheme || frontendWeek.focus_theme || null,
+    primary_goal: frontendWeek.primaryGoal || frontendWeek.primary_goal || null,
+    progression_lever: frontendWeek.progressionLever || frontendWeek.progression_lever || null,
   };
 }
 
@@ -316,6 +348,24 @@ function reverseTransformStrengthExercise(frontendExercise: any): BackendStrengt
   const mainMuscle = frontendExercise.mainMuscle || exercise.mainMuscle || null;
   const equipmentValue = frontendExercise.equipment || exercise.equipment || null;
   
+  // CRITICAL: Preserve all enriched fields for round-trip compatibility
+  // These fields must be preserved so backend doesn't lose metadata for other weeks
+  // Read from frontend exercise object first, then fallback to nested exercise object
+  const targetArea = frontendExercise.targetArea || exercise.targetArea || null;
+  const mainMuscles = frontendExercise.mainMuscles || exercise.mainMuscles || null;
+  const secondaryMuscles = frontendExercise.secondaryMuscles || exercise.secondaryMuscles || null;
+  const force = frontendExercise.force || exercise.force || null;
+  const difficulty = frontendExercise.difficulty || exercise.difficulty || null;
+  const exerciseTier = frontendExercise.exerciseTier || exercise.exerciseTier || null;
+  const preparation = frontendExercise.preparation || exercise.preparation || null;
+  const execution = frontendExercise.execution || exercise.execution || null;
+  const description = frontendExercise.description || exercise.description || null;
+  const videoUrl = frontendExercise.videoUrl || exercise.videoUrl || null;
+  const tips = frontendExercise.tips || exercise.tips || null;
+  
+  // Preserve the full exercises metadata object if available (for complete round-trip)
+  const exercisesMetadata = frontendExercise.exercises || exercise || null;
+  
   return {
     id: typeof frontendExercise.id === 'string' ? parseInt(frontendExercise.id, 10) : frontendExercise.id,
     daily_training_id: frontendExercise.dailyTrainingId || frontendExercise.daily_training_id || 0,
@@ -327,10 +377,20 @@ function reverseTransformStrengthExercise(frontendExercise: any): BackendStrengt
     execution_order: frontendExercise.executionOrder || frontendExercise.order || 0,
     main_muscle: mainMuscle,
     equipment: equipmentValue,
-    // Enriched fields from exercise object (preserved in round-trip)
-    target_area: frontendExercise.targetArea || exercise.targetArea || undefined,
-    main_muscles: frontendExercise.mainMuscles || exercise.mainMuscles || undefined,
-    force: frontendExercise.force || exercise.force || undefined,
+    // CRITICAL: Preserve all enriched fields for round-trip
+    target_area: targetArea,
+    main_muscles: mainMuscles,
+    secondary_muscles: secondaryMuscles,
+    force: force,
+    difficulty: difficulty,
+    exercise_tier: exerciseTier,
+    preparation: preparation,
+    execution: execution,
+    description: description,
+    video_url: videoUrl,
+    tips: tips,
+    // Preserve full exercises metadata object if available (for complete round-trip)
+    exercises: exercisesMetadata,
   };
 }
 

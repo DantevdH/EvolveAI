@@ -31,6 +31,7 @@ import {
   transformTrainingPlan,
   reverseTransformTrainingPlan,
   transformUserProfileToPersonalInfo,
+  transformWeeklySchedule,
 } from '@/src/utils/trainingPlanTransformer';
 import { TrainingPlan } from '@/src/types/training';
 import { useApiCallWithBanner } from '@/src/hooks/useApiCallWithBanner';
@@ -304,9 +305,33 @@ const ChatModal: React.FC<ChatModalProps> = ({
       }
 
       if (data.updated_plan) {
-        const updatedPlan = transformTrainingPlan(data.updated_plan);
-        setCurrentPlan(updatedPlan);
-        setTrainingPlan(updatedPlan);
+        // Backend now returns only the updated week in weekly_schedules array
+        const updatedWeekBackend = data.updated_plan.weekly_schedules?.[0];
+        
+        if (updatedWeekBackend && currentPlan) {
+          // Transform the updated week to frontend format
+          const updatedWeekFrontend = transformWeeklySchedule(updatedWeekBackend);
+          
+          // Merge the updated week back into the full plan
+          const updatedPlan = {
+            ...currentPlan,
+            weeklySchedules: currentPlan.weeklySchedules.map((week: any) =>
+              week.weekNumber === updatedWeekFrontend.weekNumber
+                ? updatedWeekFrontend
+                : week  // Keep other weeks unchanged
+            ),
+            // Preserve ai_message if present
+            aiMessage: data.updated_plan.ai_message || currentPlan.aiMessage,
+          };
+          
+          setCurrentPlan(updatedPlan);
+          setTrainingPlan(updatedPlan);
+        } else {
+          // Fallback: if structure is unexpected, try full transform
+          const updatedPlan = transformTrainingPlan(data.updated_plan);
+          setCurrentPlan(updatedPlan);
+          setTrainingPlan(updatedPlan);
+        }
 
         if (data.updated_playbook && state.userProfile) {
           dispatch({

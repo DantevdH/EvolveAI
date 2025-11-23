@@ -7,10 +7,11 @@ from typing import Optional, Dict, Any, List
 from supabase import create_client, Client
 from settings import settings
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from logging_config import get_logger
 import jwt
 from fastapi import HTTPException
+from core.utils.env_loader import is_test_environment
 
 
 def extract_user_id_from_jwt(jwt_token: str) -> str:
@@ -144,13 +145,101 @@ class DatabaseService:
     def __init__(self):
         """Initialize Supabase client."""
         self.logger = get_logger(__name__)
-        # Use settings (which now reads from environment dynamically)
-        self.supabase: Client = create_client(
-            settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY
+        
+        # Check if we're in a test environment
+        is_test_env = is_test_environment()
+        
+        # Initialize Supabase client, but handle test/missing credentials gracefully
+        self.supabase: Optional[Client] = None
+        
+        # In test environment, skip client creation entirely - tests should mock the service
+        if is_test_env:
+            self.logger.debug("Test environment: Supabase client not initialized (will use mocks)")
+        else:
+            # Only create client in non-test environments
+            try:
+                supabase_url = settings.SUPABASE_URL
+                supabase_key = settings.SUPABASE_ANON_KEY
+                
+                # Only create client if we have valid credentials
+                if supabase_url and supabase_key:
+                    self.supabase = create_client(supabase_url, supabase_key)
+                    self.logger.debug("Supabase client initialized successfully")
+                else:
+                    self.logger.warning("Supabase credentials missing - client not initialized")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize Supabase client: {e}")
+                raise
+    
+    def _ensure_client_available(self) -> Client:
+        """
+        Ensure Supabase client is available.
+        
+        Raises ValueError if client is not initialized (except in test environments).
+        In test environments, returns None to allow mocking.
+        
+        Returns:
+            Client instance if available
+        """
+        if self.supabase is None:
+            is_test_env = is_test_environment()
+            if is_test_env:
+                # In test environment, allow None - tests should mock the service
+                raise ValueError(
+                    "Supabase client not initialized. In test environments, "
+                    "mock DatabaseService methods instead of using the client directly."
+                )
+            else:
+                raise ValueError(
+                    "Supabase client not initialized. Check SUPABASE_URL and "
+                    "SUPABASE_ANON_KEY environment variables."
+                )
+        return self.supabase
+    
+    def _create_supabase_client(self, use_service_role: bool = False) -> Client:
+        """
+        Create a Supabase client, handling test environments gracefully.
+        
+        Args:
+            use_service_role: If True, use service role key; otherwise use anon key
+            
+        Returns:
+            Client instance
+            
+        Raises:
+            ValueError: In test environments (tests should mock this method)
+        """
+        is_test_env = is_test_environment()
+        if is_test_env:
+            raise ValueError(
+                "Cannot create Supabase client in test environment. "
+                "Mock DatabaseService methods instead."
+            )
+        
+        supabase_url = settings.SUPABASE_URL
+        supabase_key = (
+            settings.SUPABASE_SERVICE_ROLE_KEY if use_service_role 
+            else settings.SUPABASE_ANON_KEY
         )
+        
+        if not supabase_url or not supabase_key:
+            raise ValueError(
+                f"Missing Supabase credentials: URL={bool(supabase_url)}, "
+                f"Key={'service_role' if use_service_role else 'anon'}={bool(supabase_key)}"
+            )
+        
+        return create_client(supabase_url, supabase_key)
 
     def _get_authenticated_client(self, jwt_token: Optional[str] = None) -> Client:
         """Create an authenticated Supabase client with service role key for server-side operations."""
+        # In test environment, raise error - tests should mock this method
+        is_test_env = is_test_environment()
+        if is_test_env:
+            raise ValueError(
+                "Cannot create authenticated client in test environment. "
+                "Mock DatabaseService methods instead."
+            )
+        
         self.logger.debug("Creating authenticated client with service role key")
 
         # Use settings (which now reads from environment dynamically)
@@ -1332,10 +1421,7 @@ class DatabaseService:
                 supabase_client = self._get_authenticated_client(jwt_token)
             else:
                 # Use service role key for server-side operations
-                supabase_client = create_client(
-                    settings.SUPABASE_URL,
-                    settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY,
-                )
+                supabase_client = self._create_supabase_client(use_service_role=True)
 
             # Get user_playbook from user_profiles table
             result = (
@@ -1398,10 +1484,7 @@ class DatabaseService:
                 supabase_client = self._get_authenticated_client(jwt_token)
             else:
                 # Use service role key for server-side operations
-                supabase_client = create_client(
-                    settings.SUPABASE_URL,
-                    settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY,
-                )
+                supabase_client = self._create_supabase_client(use_service_role=True)
 
             # Convert playbook to JSON if not already a string
             if isinstance(playbook_data, dict):
@@ -1430,6 +1513,185 @@ class DatabaseService:
 
         except Exception as e:
             self.logger.error(f"Error saving user playbook: {e}")
+            return False
+
+    async def get_insights_summary_cache(
+        self, user_profile_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get cached insights summary from insights_summaries table.
+        
+        Returns:
+            Cached summary dict with 'summary', 'metrics', 'data_hash', 'created_at', 'expires_at' or None
+        """
+        try:
+            supabase_client = self._get_authenticated_client()
+            
+            result = (
+                supabase_client.table("insights_summaries")
+                .select("summary, data_hash, created_at, expires_at")
+                .eq("user_profile_id", user_profile_id)
+                .single()
+                .execute()
+            )
+            
+            if not result.data:
+                return None
+            
+            summary_json = result.data.get("summary")
+            if not summary_json:
+                return None
+            
+            # Check if cache has expired
+            expires_at_str = result.data.get("expires_at")
+            if expires_at_str:
+                try:
+                    # Handle various ISO format variations from database
+                    # PostgreSQL can return timestamps with varying decimal precision
+                    # Normalize the timestamp string to standard ISO format
+                    expires_at_str_clean = str(expires_at_str).replace('Z', '+00:00')
+                    
+                    # If no timezone info, assume UTC
+                    if '+' not in expires_at_str_clean and expires_at_str_clean.count('-') >= 3:
+                        # Has date but no timezone - check if it ends with time
+                        if 'T' in expires_at_str_clean:
+                            expires_at_str_clean += '+00:00'
+                    
+                    # Parse with fromisoformat (handles standard ISO formats)
+                    # If that fails, try parsing as datetime string
+                    try:
+                        expires_at = datetime.fromisoformat(expires_at_str_clean)
+                    except ValueError:
+                        # Fallback: try parsing with strptime for common formats
+                        # Remove microseconds if present and causing issues
+                        if '.' in expires_at_str_clean:
+                            parts = expires_at_str_clean.split('.')
+                            if len(parts) == 2:
+                                # Keep only first 6 digits of microseconds (standard)
+                                microsec = parts[1].split('+')[0].split('-')[0]
+                                if len(microsec) > 6:
+                                    microsec = microsec[:6]
+                                timezone_part = ''
+                                if '+' in parts[1]:
+                                    timezone_part = '+' + parts[1].split('+')[1]
+                                elif '-' in parts[1] and parts[1].count('-') > 1:
+                                    timezone_part = '-' + parts[1].split('-', 2)[2]
+                                expires_at_str_clean = f"{parts[0]}.{microsec}{timezone_part}"
+                                expires_at = datetime.fromisoformat(expires_at_str_clean)
+                            else:
+                                raise
+                        else:
+                            raise
+                    
+                    # Ensure timezone-aware
+                    if expires_at.tzinfo is None:
+                        expires_at = expires_at.replace(tzinfo=timezone.utc)
+                    
+                    if datetime.now(timezone.utc) > expires_at:
+                        self.logger.info(f"Insights summary cache expired for user_profile {user_profile_id}")
+                        return None
+                except (ValueError, AttributeError, TypeError) as e:
+                    # If date parsing fails, log and treat as expired (safer to regenerate)
+                    self.logger.warning(f"Could not parse expires_at '{expires_at_str}': {e}. Treating as expired.")
+                    return None
+            
+            # Parse JSON if it's a string
+            if isinstance(summary_json, str):
+                summary_data = json.loads(summary_json)
+            else:
+                summary_data = summary_json
+            
+            return {
+                "summary": summary_data.get("summary"),
+                "metrics": summary_data.get("metrics"),
+                "data_hash": result.data.get("data_hash"),
+                "created_at": result.data.get("created_at"),
+                "expires_at": expires_at_str
+            }
+            
+        except Exception as e:
+            # If no record found, that's okay - return None
+            if "No rows" in str(e) or "PGRST116" in str(e):
+                return None
+            self.logger.error(f"Error getting insights summary cache: {e}")
+            return None
+
+    async def save_insights_summary_cache(
+        self,
+        user_profile_id: int,
+        summary_data: Dict[str, Any],
+        data_hash: str
+    ) -> bool:
+        """
+        Save insights summary to insights_summaries table cache.
+        Uses UPSERT (INSERT ... ON CONFLICT) to handle both new and existing records.
+        
+        Args:
+            user_profile_id: User profile ID
+            summary_data: Dict with 'summary' and 'metrics'
+            data_hash: Hash of the metrics data
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            supabase_client = self._get_authenticated_client()
+            
+            # For JSONB columns, pass the dict directly - Supabase will handle JSON serialization
+            # Don't use json.dumps() as that would double-encode it as a string
+            
+            # Calculate expiration (24 hours from now)
+            now = datetime.now(timezone.utc)
+            expires_at = now + timedelta(hours=24)
+            
+            # Check if record exists (handle case where no record exists)
+            record_exists = False
+            try:
+                existing = (
+                    supabase_client.table("insights_summaries")
+                    .select("id")
+                    .eq("user_profile_id", user_profile_id)
+                    .single()
+                    .execute()
+                )
+                record_exists = existing.data is not None
+            except Exception as e:
+                # No record found - that's okay, we'll insert
+                # PGRST116 means "The result contains 0 rows" which is expected for new records
+                if "PGRST116" not in str(e):
+                    # Re-raise if it's a different error
+                    raise
+            
+            cache_data = {
+                "user_profile_id": user_profile_id,
+                "summary": summary_data,  # Pass dict directly for JSONB column
+                "data_hash": data_hash,
+                "created_at": now.isoformat(),
+                "expires_at": expires_at.isoformat()
+            }
+            
+            # Insert or update based on existence
+            if record_exists:
+                # Update existing record
+                result = (
+                    supabase_client.table("insights_summaries")
+                    .update(cache_data)
+                    .eq("user_profile_id", user_profile_id)
+                    .execute()
+                )
+            else:
+                # Insert new record
+                result = (
+                    supabase_client.table("insights_summaries")
+                    .insert(cache_data)
+                    .execute()
+                )
+            
+            self.logger.info(f"Saved insights summary cache for user_profile {user_profile_id} (expires at {expires_at.isoformat()})")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error saving insights summary cache: {e}")
             return False
 
     async def update_training_plan(
@@ -1461,10 +1723,7 @@ class DatabaseService:
                 supabase_client = self._get_authenticated_client(jwt_token)
             else:
                 # Use service role key for server-side operations
-                supabase_client = create_client(
-                    settings.SUPABASE_URL,
-                    settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY,
-                )
+                supabase_client = self._create_supabase_client(use_service_role=True)
 
             # Clean the plan data to ensure JSON serialization
             if isinstance(updated_plan_data, dict):
@@ -1849,10 +2108,7 @@ class DatabaseService:
                 supabase_client = self._get_authenticated_client(jwt_token)
             else:
                 # Use service role key for server-side operations
-                supabase_client = create_client(
-                    settings.SUPABASE_URL,
-                    settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY,
-                )
+                supabase_client = self._create_supabase_client(use_service_role=True)
             
             # Clean the week data to ensure JSON serialization
             week_data = self._clean_for_json_serialization(updated_week_data) if isinstance(updated_week_data, dict) else updated_week_data
@@ -2168,10 +2424,7 @@ class DatabaseService:
                 supabase_client = self._get_authenticated_client(jwt_token)
             else:
                 # Use service role key for server-side operations
-                supabase_client = create_client(
-                    settings.SUPABASE_URL,
-                    settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY,
-                )
+                supabase_client = self._create_supabase_client(use_service_role=True)
             
             # Clean the week data to ensure JSON serialization
             week_data = self._clean_for_json_serialization(new_week_data) if isinstance(new_week_data, dict) else new_week_data
@@ -2490,10 +2743,7 @@ class DatabaseService:
                     model = completion.model
             
             # Use service role key to bypass RLS for internal metrics
-            supabase_client = create_client(
-                settings.SUPABASE_URL,
-                settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY,
-            )
+            supabase_client = self._create_supabase_client(use_service_role=True)
             
             # Build insert data
             insert_data = {
@@ -2552,10 +2802,7 @@ class DatabaseService:
             if jwt_token:
                 supabase_client = self._get_authenticated_client(jwt_token)
             else:
-                supabase_client = create_client(
-                    settings.SUPABASE_URL,
-                    settings.SUPABASE_SERVICE_ROLE_KEY or settings.SUPABASE_ANON_KEY,
-                )
+                supabase_client = self._create_supabase_client(use_service_role=True)
             
             inserted_weeks = []
             

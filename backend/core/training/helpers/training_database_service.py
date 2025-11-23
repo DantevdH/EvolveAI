@@ -10,6 +10,7 @@ from settings import settings
 import json
 from datetime import datetime
 from logging_config import get_logger
+from core.utils.env_loader import is_test_environment
 from core.training.schemas.training_schemas import (
     TrainingPlan,
     DailyTraining,
@@ -24,9 +25,31 @@ class TrainingDatabaseService:
     def __init__(self):
         """Initialize Supabase client."""
         self.logger = get_logger(__name__)
-        self.supabase: Client = create_client(
-            settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY
-        )
+        
+        # Check if we're in a test environment
+        is_test_env = is_test_environment()
+        
+        # Initialize Supabase client, but handle test/missing credentials gracefully
+        self.supabase: Optional[Client] = None
+        
+        # In test environment, skip client creation entirely - tests should mock the service
+        if is_test_env:
+            self.logger.debug("Test environment: TrainingDatabaseService not initialized (will use mocks)")
+        else:
+            # Only create client in non-test environments
+            try:
+                supabase_url = settings.SUPABASE_URL
+                supabase_key = settings.SUPABASE_ANON_KEY
+                
+                # Only create client if we have valid credentials
+                if supabase_url and supabase_key:
+                    self.supabase = create_client(supabase_url, supabase_key)
+                    self.logger.debug("TrainingDatabaseService Supabase client initialized successfully")
+                else:
+                    self.logger.warning("Supabase credentials missing - client not initialized")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize Supabase client: {e}")
+                raise
 
     async def save_training_plan(
         self, user_profile_id: int, training_plan_data: Dict[str, Any]

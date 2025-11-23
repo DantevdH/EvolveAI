@@ -12,8 +12,9 @@ class TestErrorHandling:
     
     def test_validation_error_no_sensitive_data(self, client: TestClient):
         """Test that validation errors don't expose request body."""
-        # Mock the training coach to avoid initialization issues
-        with patch('core.training.training_api.get_training_coach') as mock_coach:
+        # Mock the training coach and db_service to avoid initialization issues
+        with patch('core.training.training_api.get_training_coach') as mock_coach, \
+             patch('core.training.training_api.db_service') as mock_db_service:
             mock_coach_instance = Mock()
             mock_coach.return_value = mock_coach_instance
             
@@ -37,8 +38,9 @@ class TestErrorHandling:
     
     def test_error_response_structure(self, client: TestClient):
         """Test that error responses have proper structure."""
-        # Mock the training coach to avoid initialization issues
-        with patch('core.training.training_api.get_training_coach') as mock_coach:
+        # Mock the training coach and db_service to avoid initialization issues
+        with patch('core.training.training_api.get_training_coach') as mock_coach, \
+             patch('core.training.training_api.db_service') as mock_db_service:
             mock_coach_instance = Mock()
             mock_coach.return_value = mock_coach_instance
             

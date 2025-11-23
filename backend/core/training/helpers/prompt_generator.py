@@ -1849,5 +1849,67 @@ class PromptGenerator:
         
         return prompt
 
+    @staticmethod
+    def generate_insights_summary_prompt(metrics: Dict[str, Any]) -> str:
+        """
+        Generate prompt for AI insights summary.
+        
+        Args:
+            metrics: Dictionary with volume_progress, training_frequency, training_intensity, 
+                    weak_points, top_exercises
+        """
+        prompt = f"""
+            You are a friendly training coach. Generate insights EXCLUSIVELY from the data below.
+
+            **TRAINING DATA:**
+            Volume: {metrics.get('volume_progress', 'N/A')}
+            Frequency: {metrics.get('training_frequency', 'N/A')}
+            Intensity: {metrics.get('training_intensity', 'N/A')}
+        """
+        
+        weak_points = metrics.get('weak_points', [])
+        if weak_points:
+            prompt += "Weak Points:\n"
+            for wp in weak_points[:3]:
+                prompt += f"- {wp.get('muscle_group', 'Unknown')}: {wp.get('issue', 'N/A')} ({wp.get('severity', 'N/A')})\n"
+        else:
+            prompt += "Weak Points: None\n"
+        
+        top_exercises = metrics.get('top_exercises', [])
+        if top_exercises:
+            prompt += "Top Exercises:\n"
+            for ex in top_exercises[:3]:
+                prompt += f"- {ex.get('name', 'Unknown')}: {ex.get('trend', 'N/A')}"
+                if ex.get('change'):
+                    prompt += f" ({ex.get('change')})"
+                prompt += "\n"
+        else:
+            prompt += "Top Exercises: None\n"
+        
+        prompt += """
+            **CRITICAL RULES:**
+            • ALL insights MUST come directly from the data above - no assumptions
+            • Reference exact facts: "up 20%" → "increased by 20%", "3/4 days" → "completed 3 of 4 days"
+            • Only mention exercises/muscles listed in the data
+            • Forbidden: "likely", "probably", "might be" - only state facts
+
+            **Examples:**
+            ✅ "Volume increased 20% this week" (from data)
+            ❌ "You're likely ready to increase intensity" (assumption)
+
+            **Task:**
+            Generate friendly 2-3 sentence summary with:
+            1. Progress celebration (only if data shows it)
+            2. Top priority (from weak_points or frequency data)
+            3. 2-3 recommendations (each directly from the metrics)
+
+            **Output (JSON):**
+            - summary: 2-3 sentences (facts only)
+            - top_priority: 1 action from data (e.g., "Focus on chest" only if weak_points lists chest)
+            - recommendations: 2-3 items, each linked to specific metrics
+        """
+        
+        return prompt
+
     
 
