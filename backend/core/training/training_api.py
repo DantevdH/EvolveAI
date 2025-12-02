@@ -1447,8 +1447,8 @@ async def get_insights_summary(
     
     Returns:
     - AI-generated summary (2-3 sentences)
-    - Top priority action
-    - Recommendations
+    - Findings (2-3 observations from training data)
+    - Recommendations (2-3 actionable next steps)
     - Simple metrics (volume progress, recovery, weak points, top exercises)
     """
     try:
@@ -1546,7 +1546,10 @@ async def get_insights_summary(
                 # Fallback to simple summary if AI fails
                 ai_summary = AIInsightsSummary(
                     summary=f"Your training is progressing. {volume_progress}. {training_intensity}.",
-                    top_priority="Continue your current training routine",
+                    findings=[
+                        f"Training volume: {volume_progress}",
+                        f"Training frequency: {training_frequency}"
+                    ],
                     recommendations=[
                         "Maintain consistent training frequency",
                         "Monitor training intensity and adjust as needed"

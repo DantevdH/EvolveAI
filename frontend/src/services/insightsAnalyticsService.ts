@@ -1469,6 +1469,110 @@ export class InsightsAnalyticsService {
   }
 
   /**
+   * Get cached insights summary directly from database (no API call, no LLM risk)
+   * Simple read operation - returns null if cache doesn't exist
+   */
+  static async getCachedInsightsSummaryDirect(
+    userProfileId: number
+  ): Promise<{
+    success: boolean;
+    data?: InsightsSummaryData;
+    error?: string;
+  } | null> {
+    try {
+      const { supabase } = await import('../config/supabase');
+      const { logger } = await import('../utils/logger');
+      
+      logger.info('Reading insights from database', { userProfileId });
+      
+      // Read directly from insights_summaries table
+      // Note: The table only has a 'summary' column (JSONB) that contains both summary and metrics
+      const { data, error } = await supabase
+        .from('insights_summaries')
+        .select('summary')
+        .eq('user_profile_id', userProfileId)
+        .single();
+
+      if (error) {
+        logger.warn('Database query error', { 
+          errorCode: error.code, 
+          errorMessage: error.message,
+          userProfileId 
+        });
+        
+        // No cache found - this is OK, not an error
+        if (error.code === 'PGRST116') {
+          logger.info('No insights cache found in database');
+          return null; // No cache exists
+        }
+        // Other database error
+        return { success: false, error: error.message };
+      }
+
+      if (!data || !data.summary) {
+        logger.info('No data returned from database');
+        return null; // No cache
+      }
+
+      // The summary column contains the entire structure: { summary: {...}, metrics: {...} }
+      const summaryColumn = data.summary;
+      
+      // Extract summary and metrics from the nested structure
+      const summaryJson = summaryColumn.summary;
+      const metricsJson = summaryColumn.metrics;
+
+      logger.info('Raw data from database', {
+        hasSummaryColumn: !!summaryColumn,
+        hasSummary: !!summaryJson,
+        hasMetrics: !!metricsJson,
+        summaryType: typeof summaryJson,
+        metricsType: typeof metricsJson,
+        summaryKeys: summaryJson ? Object.keys(summaryJson) : null,
+        metricsKeys: metricsJson ? Object.keys(metricsJson) : null,
+        summaryValue: summaryJson ? JSON.stringify(summaryJson).substring(0, 200) : null,
+        metricsValue: metricsJson ? JSON.stringify(metricsJson).substring(0, 200) : null
+      });
+
+      // Validate both summary and metrics exist
+      if (!summaryJson || !metricsJson) {
+        logger.warn('Invalid insights cache - missing required fields', {
+          hasSummary: !!summaryJson,
+          hasMetrics: !!metricsJson,
+          summaryColumnKeys: summaryColumn ? Object.keys(summaryColumn) : null,
+          userProfileId
+        });
+        return null; // Invalid cache - missing required fields
+      }
+
+      // Additional validation: ensure summary has required fields
+      if (!summaryJson.summary || !Array.isArray(summaryJson.findings) || !Array.isArray(summaryJson.recommendations)) {
+        logger.warn('Invalid insights summary structure', {
+          hasSummaryText: !!summaryJson.summary,
+          hasFindings: Array.isArray(summaryJson.findings),
+          hasRecommendations: Array.isArray(summaryJson.recommendations),
+          summaryStructure: summaryJson
+        });
+        return null;
+      }
+
+      logger.info('Successfully parsed insights from database');
+      
+      return {
+        success: true,
+        data: {
+          summary: summaryJson as InsightsSummary,
+          metrics: metricsJson as InsightsMetrics,
+        }
+      };
+    } catch (error) {
+      // Use logger for consistency
+      const { logger } = await import('../utils/logger');
+      logger.warn('Error reading cached insights from database', error);
+      return null;
+    }
+  }
+
+  /**
    * Get insights summary from backend API
    * Backend handles caching - only calls LLM if data changed
    */
@@ -1535,6 +1639,8 @@ export class InsightsAnalyticsService {
         change: ex.improvementRate ? `+${ex.improvementRate.toFixed(1)}%` : undefined
       })) || [];
 
+      const { logger } = await import('../utils/logger');
+
       const response = await apiClient.post<InsightsSummaryResponse>('/api/training/insights-summary', {
         user_profile_id: userProfileId,
         jwt_token: session.access_token,
@@ -1548,6 +1654,7 @@ export class InsightsAnalyticsService {
       const responseData = response as unknown as InsightsSummaryResponse;
 
       if (responseData.success && responseData.summary && responseData.metrics) {
+        logger.info('Successfully parsed insights from backend API');
         return {
           success: true,
           data: {
@@ -1556,6 +1663,12 @@ export class InsightsAnalyticsService {
           }
         };
       } else {
+        logger.warn('Backend API response missing required fields', {
+          success: responseData.success,
+          hasSummary: !!responseData.summary,
+          hasMetrics: !!responseData.metrics,
+          error: responseData.error
+        });
         return {
           success: false,
           error: responseData.error || 'Failed to get insights summary'

@@ -3,8 +3,7 @@
  */
 
 import React from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Text, ActivityIndicator } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, StyleSheet, ScrollView, RefreshControl, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, createColorWithOpacity } from '../../../constants/colors';
 import { VolumeTrendChart } from '../VolumeTrendChart';
@@ -18,7 +17,6 @@ interface InsightsContentProps {
   onRefresh: () => void;
   onExercisePress: (exercise: any) => void;
   onWeakPointPress: (weakPoint: any) => void;
-  aiInsightsLoading?: boolean;
 }
 
 export const InsightsContent: React.FC<InsightsContentProps> = ({
@@ -29,34 +27,9 @@ export const InsightsContent: React.FC<InsightsContentProps> = ({
   onRefresh,
   onExercisePress,
   onWeakPointPress,
-  aiInsightsLoading = false,
 }) => {
-  // Use new simplified insights if available, otherwise show empty state
+  // Use new simplified insights if available
   const insightsSummary = data.insightsSummary;
-  
-  // Show empty state if no insights and not loading
-  if (!insightsSummary && !aiInsightsLoading) {
-    return (
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <View style={styles.emptyCard}>
-          <Ionicons name="analytics-outline" size={48} color={colors.muted} />
-          <Text style={styles.emptyTitle}>No Insights Available</Text>
-          <Text style={styles.emptyText}>
-            Complete a workout to see your training insights.
-          </Text>
-        </View>
-        <View style={styles.bottomSpacing} />
-      </ScrollView>
-    );
-  }
-
   const { summary, metrics } = insightsSummary || { summary: null, metrics: null };
 
   return (
@@ -75,27 +48,35 @@ export const InsightsContent: React.FC<InsightsContentProps> = ({
           <Text style={styles.cardTitle}>AI INSIGHTS</Text>
         </View>
         <View style={styles.cardContent}>
-          {aiInsightsLoading ? (
-            <View style={styles.aiLoadingContainer}>
-              <ActivityIndicator size="large" color={colors.secondary} />
-              <Text style={styles.aiLoadingText}>Generating insights...</Text>
-            </View>
-          ) : insightsSummary && summary ? (
+          {summary ? (
             <>
               <Text style={styles.summaryText}>{summary.summary}</Text>
-              <View style={styles.aiPrioritySection}>
-                <Text style={styles.aiPriorityLabel}>Top Priority:</Text>
-                <Text style={styles.aiPriorityText}>{summary.top_priority}</Text>
-              </View>
-              <View style={styles.recommendationsSection}>
-                <Text style={styles.recommendationsLabel}>Recommendations:</Text>
-                {summary.recommendations.map((rec, index) => (
-                  <View key={index} style={styles.recommendationItem}>
-                    <Ionicons name="checkmark-circle" size={16} color={colors.secondary} />
-                    <Text style={styles.recommendationText}>{rec}</Text>
-                  </View>
-                ))}
-              </View>
+              
+              {/* Findings Section */}
+              {summary.findings && summary.findings.length > 0 && (
+                <View style={styles.findingsSection}>
+                  <Text style={styles.findingsLabel}>Findings:</Text>
+                  {summary.findings.slice(0, 3).map((finding, index) => (
+                    <View key={index} style={styles.findingItem}>
+                      <Ionicons name="bulb" size={16} color={colors.secondary} />
+                      <Text style={styles.findingText}>{finding}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+              
+              {/* Recommendations Section */}
+              {summary.recommendations && summary.recommendations.length > 0 && (
+                <View style={styles.recommendationsSection}>
+                  <Text style={styles.recommendationsLabel}>Recommendations:</Text>
+                  {summary.recommendations.slice(0, 3).map((rec, index) => (
+                    <View key={index} style={styles.recommendationItem}>
+                      <Ionicons name="checkmark-circle" size={16} color={colors.secondary} />
+                      <Text style={styles.recommendationText}>{rec}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </>
           ) : null}
         </View>
@@ -195,25 +176,28 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: createColorWithOpacity(colors.secondary, 0.2),
   },
-  aiPrioritySection: {
+  findingsSection: {
     marginTop: 16,
-    padding: 12,
-    backgroundColor: createColorWithOpacity(colors.secondary, 0.1),
-    borderRadius: 12,
-    marginBottom: 16,
   },
-  aiPriorityLabel: {
+  findingsLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.secondary,
-    marginBottom: 4,
+    color: colors.muted,
+    marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  aiPriorityText: {
+  findingItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 8,
+  },
+  findingText: {
+    flex: 1,
     fontSize: 14,
     color: colors.text,
-    fontWeight: '500',
+    lineHeight: 20,
   },
   sectionCard: {
     marginHorizontal: 16,
@@ -255,29 +239,6 @@ const styles = StyleSheet.create({
   },
   bottomSpacing: {
     height: 20,
-  },
-  emptyCard: {
-    marginHorizontal: 16,
-    marginVertical: 8,
-    backgroundColor: colors.card,
-    borderRadius: 28,
-    padding: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 200,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.muted,
-    textAlign: 'center',
-    lineHeight: 20,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -398,17 +359,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.muted,
     textTransform: 'capitalize',
-  },
-  aiLoadingContainer: {
-    padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  aiLoadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: colors.muted,
-    fontStyle: 'italic',
   },
 });
 

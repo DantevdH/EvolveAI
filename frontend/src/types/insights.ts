@@ -28,7 +28,7 @@ export interface InsightsMetrics {
 
 export interface InsightsSummary {
   summary: string;
-  top_priority: string;
+  findings: string[];
   recommendations: string[];
 }
 

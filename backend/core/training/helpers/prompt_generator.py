@@ -1889,24 +1889,35 @@ class PromptGenerator:
         prompt += """
             **CRITICAL RULES:**
             • ALL insights MUST come directly from the data above - no assumptions
-            • Reference exact facts: "up 20%" → "increased by 20%", "3/4 days" → "completed 3 of 4 days"
+            • Use NON-TECHNICAL, everyday language - write as if talking to a friend
+            • Avoid ALL numbers, percentages, and technical metrics in the output
+            • Use descriptive words instead: "more", "less", "better", "consistent", "improving", "stable", "increasing", "decreasing"
             • Only mention exercises/muscles listed in the data
             • Forbidden: "likely", "probably", "might be" - only state facts
+            • Forbidden: Numbers, percentages, specific values - use descriptive language instead
 
-            **Examples:**
-            ✅ "Volume increased 20% this week" (from data)
-            ❌ "You're likely ready to increase intensity" (assumption)
+            **Language Examples:**
+            ✅ "Your training volume is looking great and consistent" (non-technical, no numbers)
+            ✅ "You've been training more frequently lately" (descriptive, no numbers)
+            ✅ "Your intensity feels manageable" (friendly, no numbers)
+            ❌ "Volume increased 20% this week" (has numbers - FORBIDDEN)
+            ❌ "You completed 3 of 4 days" (has numbers - FORBIDDEN)
+            ❌ "Your RPE is stable" (technical term - avoid if possible, use "intensity feels manageable" instead)
 
             **Task:**
             Generate friendly 2-3 sentence summary with:
             1. Progress celebration (only if data shows it)
-            2. Top priority (from weak_points or frequency data)
-            3. 2-3 recommendations (each directly from the metrics)
+            2. EXACTLY 2 findings (observations/insights derived from the data)
+            3. EXACTLY 2 recommendations (actionable next steps based on the findings)
+
+            **Findings vs Recommendations:**
+            - Findings: Simple observations from the data in plain language (e.g., "Your training volume is stable", "Some muscle groups need more attention", "Your consistency is improving")
+            - Recommendations: Actionable next steps in simple terms (e.g., "Focus on training your chest more often", "Consider taking a lighter week", "Keep up the great consistency")
 
             **Output (JSON):**
-            - summary: 2-3 sentences (facts only)
-            - top_priority: 1 action from data (e.g., "Focus on chest" only if weak_points lists chest)
-            - recommendations: 2-3 items, each linked to specific metrics
+            - summary: 2-3 sentences (friendly, non-technical, no numbers)
+            - findings: EXACTLY 2 observations in plain language (no numbers, no technical terms)
+            - recommendations: EXACTLY 2 actionable items in simple terms (no numbers, no technical terms)
         """
         
         return prompt

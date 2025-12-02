@@ -43,7 +43,7 @@ const initialState: TrainingState = {
 };
 
 export const useTraining = (): UseTrainingReturn => {
-  const { state: authState, refreshTrainingPlan: refreshAuthTrainingPlan, setTrainingPlan: setAuthTrainingPlan } = useAuth();
+  const { state: authState, refreshTrainingPlan: refreshAuthTrainingPlan, setTrainingPlan: setAuthTrainingPlan, setInsightsSummary: setAuthInsightsSummary } = useAuth();
   const [trainingState, setTrainingState] = useState<TrainingState>(initialState);
   const [trainingPlan, setTrainingPlan] = useState<TrainingPlan | null>(null);
   const hasInitialized = useRef(false);
@@ -1054,11 +1054,7 @@ export const useTraining = (): UseTrainingReturn => {
         // InsightsScreen will show loading spinner and then load the cached result
         const userProfileId = authState.userProfile?.id;
         if (userProfileId) {
-          // Set module-level flag that insights are being generated
-          // This is accessible to InsightsScreen via the same module
-          (global as any).__aiInsightsGenerating = true;
-          (global as any).__aiInsightsTimestamp = Date.now();
-          
+          // Generate insights asynchronously (non-blocking)
           (async () => {
             try {
               // Get weak points and top exercises for better AI context
@@ -1073,23 +1069,24 @@ export const useTraining = (): UseTrainingReturn => {
                 )
               ]);
 
-              // Call insights summary API (backend will use cache if data hasn't changed)
-              await InsightsAnalyticsService.getInsightsSummary(
+              // Call insights summary API (backend will generate new insights and cache them)
+              const insightsResult = await InsightsAnalyticsService.getInsightsSummary(
                 userProfileId,
                 updatedPlan,
                 weakPointsResult.success ? weakPointsResult.data : undefined,
                 topExercisesResult.success ? topExercisesResult.data : undefined
               );
               
-              logger.info('Insights summary refreshed after workout completion');
-              
-              // Clear the generating flag after completion
-              (global as any).__aiInsightsGenerating = false;
+              // Update context with new insights (if generation succeeded)
+              if (insightsResult.success && insightsResult.data) {
+                setAuthInsightsSummary(insightsResult.data);
+                logger.info('Insights summary refreshed and updated in context after workout completion');
+              } else {
+                logger.warn('Failed to generate insights summary', insightsResult.error);
+              }
             } catch (error) {
               // Non-blocking - log but don't fail
               logger.warn('Failed to refresh insights summary', error);
-              // Clear flag on error too
-              (global as any).__aiInsightsGenerating = false;
             }
           })();
         }

@@ -3,9 +3,8 @@
  * Refactored according to REFACTORING_GUIDE.md
  */
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { SafeAreaView, StyleSheet, Alert } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../../../context/AuthContext';
 import { InsightsAnalyticsService } from '../../../services/insightsAnalyticsService';
 import { colors } from '../../../constants/colors';
@@ -17,14 +16,12 @@ import { InsightsEmptyState } from './InsightsEmptyState';
 import { InsightsData, TimePeriod } from './types';
 
 export const InsightsScreen: React.FC = () => {
-  const { state } = useAuth();
+  const { state, loadInsightsSummary } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>('3M');
-  const [aiInsightsLoading, setAiInsightsLoading] = useState(false);
-  const lastPlanUpdateRef = useRef<string | null>(null);
 
-  // Data states
+  // Data states - insightsSummary comes from context
   const [insightsData, setInsightsData] = useState<InsightsData>({
     weeklyVolumeData: [],
     performanceScoreData: [],
@@ -133,141 +130,48 @@ export const InsightsScreen: React.FC = () => {
     }
   }, [state.userProfile?.id, state.trainingPlan]);
 
-  // Function to load cached insights without triggering LLM
-  const loadCachedInsights = useCallback(async () => {
-    if (!state.userProfile?.id) return;
-    
-    try {
-      // Load cached insights summary (backend cache should have it)
-      const insightsResult = await InsightsAnalyticsService.getInsightsSummary(
-        state.userProfile.id,
-        state.trainingPlan
-      );
-      
-      if (insightsResult.success && insightsResult.data) {
-        setInsightsData(prev => ({
-          ...prev,
-          insightsSummary: insightsResult.data
-        }));
-      }
-    } catch (error) {
-      logger.warn('Failed to load cached insights', error);
-    }
-  }, [state.userProfile?.id, state.trainingPlan]);
-
-  // Track when to reload insights - reload when training plan changes
+  // Sync insights summary from context to local state
   useEffect(() => {
-    if (!state.userProfile?.id) return;
+    logger.info('Insights summary changed in context', {
+      hasInsights: !!state.insightsSummary,
+      hasSummary: !!state.insightsSummary?.summary,
+      hasMetrics: !!state.insightsSummary?.metrics
+    });
+    
+    setInsightsData(prev => ({
+      ...prev,
+      insightsSummary: state.insightsSummary ?? undefined
+    }));
+  }, [state.insightsSummary]);
 
-    let planIdentifier: string | number = 'no-plan';
+  // Ensure insights are loaded when screen mounts (if not already loaded)
+  useEffect(() => {
+    if (state.userProfile?.id && state.insightsSummary === null && !loading) {
+      logger.info('Loading insights on screen mount', { userId: state.userProfile.id });
+      loadInsightsSummary();
+    }
+  }, [state.userProfile?.id, state.insightsSummary, loading, loadInsightsSummary]);
 
-    if (state.trainingPlan) {
-      const completedTrainings = state.trainingPlan.weeklySchedules
-        .flatMap((w) => w.dailyTrainings)
-        .filter((d) => d.completed && d.completedAt);
-
-      if (completedTrainings.length > 0) {
-        const mostRecentCompleted = completedTrainings
-          .map((d) => d.completedAt?.getTime() || 0)
-          .sort((a, b) => b - a)[0];
-
-        planIdentifier = `${completedTrainings.length}-${mostRecentCompleted}`;
-      } else {
-        planIdentifier = 'no-completed';
-      }
+  // Load chart data when component mounts or training plan changes
+  useEffect(() => {
+    if (!state.userProfile?.id) {
+      setLoading(false);
+      return;
     }
 
-    // Only reload if the plan identifier changed
-    if (lastPlanUpdateRef.current !== planIdentifier) {
-      lastPlanUpdateRef.current = planIdentifier;
-      loadAllInsights();
-    }
+    loadAllInsights();
   }, [state.userProfile?.id, state.trainingPlan, loadAllInsights]);
-
-  // Refresh insights when screen comes into focus (handles navigation back from training)
-  useFocusEffect(
-    useCallback(() => {
-      // Small delay to ensure training plan state is updated
-      const timeoutId = setTimeout(() => {
-        if (state.userProfile?.id && state.trainingPlan) {
-          // Check if insights are being generated (from workout completion)
-          const isGenerating = (global as any).__aiInsightsGenerating === true;
-          
-          if (isGenerating) {
-            // Set loading state to show spinner
-            setAiInsightsLoading(true);
-            
-            // Poll for insights to be ready (check every 2 seconds, max 30 seconds)
-            let pollCount = 0;
-            const maxPolls = 15; // 30 seconds max
-            
-            const pollForInsights = async () => {
-              try {
-                // Try to load cached insights (backend should have them by now)
-                const insightsResult = await InsightsAnalyticsService.getInsightsSummary(
-                  state.userProfile!.id,
-                  state.trainingPlan
-                );
-                
-                if (insightsResult.success && insightsResult.data) {
-                  // Insights are ready!
-                  setInsightsData(prev => ({
-                    ...prev,
-                    insightsSummary: insightsResult.data
-                  }));
-                  setAiInsightsLoading(false);
-                  
-                  // Clear the generating flag
-                  (global as any).__aiInsightsGenerating = false;
-                } else if (pollCount < maxPolls) {
-                  // Not ready yet, poll again
-                  pollCount++;
-                  setTimeout(pollForInsights, 2000);
-                } else {
-                  // Timeout - stop loading
-                  setAiInsightsLoading(false);
-                  (global as any).__aiInsightsGenerating = false;
-                }
-              } catch (error) {
-                logger.warn('Error polling for insights', error);
-                setAiInsightsLoading(false);
-                (global as any).__aiInsightsGenerating = false;
-              }
-            };
-            
-            // Start polling after a short delay
-            setTimeout(pollForInsights, 1000);
-          } else {
-            // Not generating, just check for new completed trainings
-            const completedTrainings = state.trainingPlan.weeklySchedules
-              .flatMap((w) => w.dailyTrainings)
-              .filter((d) => d.completed && d.completedAt);
-            
-            if (completedTrainings.length > 0) {
-              const mostRecentCompleted = completedTrainings
-                .map((d) => d.completedAt?.getTime() || 0)
-                .sort((a, b) => b - a)[0];
-              
-              const currentIdentifier = `${completedTrainings.length}-${mostRecentCompleted}`;
-              
-              // Reload if identifier changed or if we haven't loaded yet
-              if (lastPlanUpdateRef.current !== currentIdentifier || lastPlanUpdateRef.current === null) {
-                // Try to load cached insights without triggering API
-                loadCachedInsights();
-              }
-            }
-          }
-        }
-      }, 300);
-
-      return () => clearTimeout(timeoutId);
-    }, [state.userProfile?.id, state.trainingPlan, loadAllInsights, loadCachedInsights])
-  );
 
   const onRefresh = async () => {
     setRefreshing(true);
     InsightsAnalyticsService.clearCache();
-    await loadAllInsights();
+    
+    // Reload both chart data and insights summary
+    await Promise.all([
+      loadAllInsights(),
+      loadInsightsSummary() // Reload insights from DB
+    ]);
+    
     setRefreshing(false);
   };
 
@@ -280,11 +184,9 @@ export const InsightsScreen: React.FC = () => {
   };
 
   // Check if we have any data at all
-  // Check if we have new simplified insights or legacy data
-  // Also check if we're loading AI insights (show content with loading spinner)
+  // Insights summary comes from context, chart data from API
   const hasData =
     insightsData.insightsSummary !== undefined ||
-    aiInsightsLoading ||
     insightsData.weeklyVolumeData.length > 0 ||
     insightsData.performanceScoreData.length > 0 ||
     insightsData.weakPoints.length > 0 ||
@@ -319,7 +221,6 @@ export const InsightsScreen: React.FC = () => {
         onRefresh={onRefresh}
         onExercisePress={handleExercisePress}
         onWeakPointPress={handleWeakPointPress}
-        aiInsightsLoading={aiInsightsLoading}
       />
     </SafeAreaView>
   );

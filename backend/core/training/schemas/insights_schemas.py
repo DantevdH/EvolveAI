@@ -57,7 +57,7 @@ class AIInsightsSummary(BaseModel):
     """AI-generated insights summary."""
     
     summary: str = Field(..., description="Friendly 2-3 sentence summary of training progress")
-    top_priority: str = Field(..., description="Top priority action (1 specific thing to do)")
+    findings: List[str] = Field(..., description="2-3 key findings/observations derived from the training data")
     recommendations: List[str] = Field(..., description="2-3 specific actionable recommendations")
 
 
