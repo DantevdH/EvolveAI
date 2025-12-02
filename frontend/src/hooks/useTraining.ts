@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { TrainingService } from '../services/trainingService';
 import { NotificationService } from '../services/NotificationService';
 import { ExerciseSwapService } from '../services/exerciseSwapService';
+import { InsightsAnalyticsService } from '../services/insightsAnalyticsService';
 import { supabase } from '../config/supabase';
 import SessionRPEModal from '../components/training/SessionRPEModal';
 import { colors } from '../constants/colors';
@@ -42,7 +43,7 @@ const initialState: TrainingState = {
 };
 
 export const useTraining = (): UseTrainingReturn => {
-  const { state: authState, refreshTrainingPlan: refreshAuthTrainingPlan, setTrainingPlan: setAuthTrainingPlan } = useAuth();
+  const { state: authState, refreshTrainingPlan: refreshAuthTrainingPlan, setTrainingPlan: setAuthTrainingPlan, setInsightsSummary: setAuthInsightsSummary } = useAuth();
   const [trainingState, setTrainingState] = useState<TrainingState>(initialState);
   const [trainingPlan, setTrainingPlan] = useState<TrainingPlan | null>(null);
   const hasInitialized = useRef(false);
@@ -982,7 +983,21 @@ export const useTraining = (): UseTrainingReturn => {
             ...week,
             dailyTrainings: week.dailyTrainings.map((daily: DailyTraining) =>
               daily.id === dailyTrainingId
-                ? { ...daily, completed: true, completedAt: now, sessionRPE: rpe }
+                ? { 
+                    ...daily, 
+                    completed: true, 
+                    completedAt: now, 
+                    sessionRPE: rpe,
+                    // CRITICAL: Mark all exercises and sets as completed for insights extraction
+                    exercises: daily.exercises.map((exercise: TrainingExercise) => ({
+                      ...exercise,
+                      completed: true,  // Mark exercise as completed
+                      sets: exercise.sets?.map((set: any) => ({
+                        ...set,
+                        completed: true  // Mark all sets as completed
+                      })) || []
+                    }))
+                  }
                 : daily
             )
           }))
@@ -991,7 +1006,7 @@ export const useTraining = (): UseTrainingReturn => {
         // Update exercise IDs if they were recreated (saveDailyTrainingExercises deletes and recreates)
         const exerciseIdMap = result.data?.exerciseIdMap;
         if (exerciseIdMap && exerciseIdMap.size > 0) {
-          // Update exercises with new IDs from the database
+          // Update exercises with new IDs from the database (preserve completed flags)
           updatedPlan = {
             ...updatedPlan,
             weeklySchedules: updatedPlan.weeklySchedules.map((week: WeeklySchedule) => ({
@@ -1002,6 +1017,7 @@ export const useTraining = (): UseTrainingReturn => {
                       ...daily,
                       exercises: daily.exercises.map((exercise: TrainingExercise) => {
                         const newId = exerciseIdMap.get(exercise.id);
+                        // Preserve completed flags when updating ID
                         return newId ? { ...exercise, id: newId } : exercise;
                       })
                     }
@@ -1024,6 +1040,56 @@ export const useTraining = (): UseTrainingReturn => {
           isLoading: false,
           pendingCompletionDailyTrainingId: null
         }));
+
+        // Clear insights cache to ensure fresh data after workout completion
+        try {
+          InsightsAnalyticsService.clearCache();
+          logger.info('Cleared insights cache after workout completion');
+        } catch (error) {
+          logger.warn('Failed to clear insights cache', error);
+        }
+
+        // Fetch fresh insights summary after workout completion (backend handles caching)
+        // This triggers LLM generation, so we set a flag that InsightsScreen can detect
+        // InsightsScreen will show loading spinner and then load the cached result
+        const userProfileId = authState.userProfile?.id;
+        if (userProfileId) {
+          // Generate insights asynchronously (non-blocking)
+          (async () => {
+            try {
+              // Get weak points and top exercises for better AI context
+              const [weakPointsResult, topExercisesResult] = await Promise.all([
+                InsightsAnalyticsService.getWeakPointsAnalysis(
+                  userProfileId,
+                  updatedPlan
+                ),
+                InsightsAnalyticsService.getTopPerformingExercises(
+                  userProfileId,
+                  updatedPlan
+                )
+              ]);
+
+              // Call insights summary API (backend will generate new insights and cache them)
+              const insightsResult = await InsightsAnalyticsService.getInsightsSummary(
+                userProfileId,
+                updatedPlan,
+                weakPointsResult.success ? weakPointsResult.data : undefined,
+                topExercisesResult.success ? topExercisesResult.data : undefined
+              );
+              
+              // Update context with new insights (if generation succeeded)
+              if (insightsResult.success && insightsResult.data) {
+                setAuthInsightsSummary(insightsResult.data);
+                logger.info('Insights summary refreshed and updated in context after workout completion');
+              } else {
+                logger.warn('Failed to generate insights summary', insightsResult.error);
+              }
+            } catch (error) {
+              // Non-blocking - log but don't fail
+              logger.warn('Failed to refresh insights summary', error);
+            }
+          })();
+        }
 
         // Cancel today's training reminder since training is completed
         await NotificationService.cancelTrainingReminder();

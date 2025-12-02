@@ -3,6 +3,7 @@ import { AuthService, AuthState } from '@/src/services/authService';
 import { UserService } from '@/src/services/userService';
 import { UserProfile } from '@/src/types';
 import { TrainingPlan } from '@/src/types/training';
+import { InsightsSummaryData } from '@/src/types/insights';
 import { supabase } from '@/src/config/supabase';
 import { NotificationService } from '@/src/services/NotificationService';
 import { logger } from '@/src/utils/logger';
@@ -16,6 +17,7 @@ interface SimpleAuthState {
   session: any | null;  // Store full session (includes access_token)
   userProfile: UserProfile | null;
   trainingPlan: TrainingPlan | null;
+  insightsSummary: InsightsSummaryData | null;
   exercises: any[] | null;
   isLoading: boolean;
   trainingPlanLoading: boolean;
@@ -35,6 +37,7 @@ type SimpleAuthAction =
   | { type: 'SET_SESSION'; payload: any | null }
   | { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
   | { type: 'SET_WORKOUT_PLAN'; payload: TrainingPlan | null }
+  | { type: 'SET_INSIGHTS_SUMMARY'; payload: InsightsSummaryData | null }
   | { type: 'SET_EXERCISES'; payload: any[] | null }
   | { type: 'SET_ERROR'; payload: string | null }
   | { type: 'SET_INITIALIZED'; payload: boolean }
@@ -46,6 +49,7 @@ const initialState: SimpleAuthState = {
   session: null,
   userProfile: null,
   trainingPlan: null,
+  insightsSummary: null,
   exercises: null,
   isLoading: false,
   trainingPlanLoading: false,
@@ -98,6 +102,11 @@ const authReducer = (state: SimpleAuthState, action: SimpleAuthAction): SimpleAu
         ...state,
         trainingPlan: action.payload,
       };
+    case 'SET_INSIGHTS_SUMMARY':
+      return {
+        ...state,
+        insightsSummary: action.payload,
+      };
     case 'SET_EXERCISES':
       return {
         ...state,
@@ -149,6 +158,10 @@ interface AuthContextType {
   refreshTrainingPlan: () => Promise<void>;
   setTrainingPlan: (trainingPlan: TrainingPlan) => void;
   setPollingPlan: (isPolling: boolean) => void;
+  
+  // Insights methods
+  loadInsightsSummary: () => Promise<void>;
+  setInsightsSummary: (insightsSummary: InsightsSummaryData | null) => void;
   
   // Exercise methods
   loadAllExercises: () => Promise<void>;
@@ -224,46 +237,49 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         logger.info('User profile loaded');
         dispatch({ type: 'SET_USER_PROFILE', payload: response.data || null });
         
-        // Load training plan if user profile exists (non-blocking)
-        if (response.data) {
-          // Don't await - let this load in background
-          (async () => {
-            try {
-              logger.info('Loading training plan...');
-              dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: true });
-              
-              const { TrainingService } = await import('../services/trainingService');
-              const trainingResult = await TrainingService.getTrainingPlan(response.data!.id!);
-              
-              if (trainingResult.success) {
-                logger.info('Training plan loaded');
-              } else {
-                logger.info('No training plan found');
-              }
-              
-              const trainingPlan = trainingResult.success ? trainingResult.data || null : null;
-              dispatch({ type: 'SET_WORKOUT_PLAN', payload: trainingPlan });
-              
-              // Schedule training reminder if training plan exists
-              if (trainingPlan) {
-                try {
-                  await NotificationService.scheduleTrainingReminder(trainingPlan);
-                  logger.info('Training reminder scheduled');
-                } catch (notificationError) {
-                  logger.warn('Failed to schedule training reminder', notificationError);
+          // Load training plan and insights if user profile exists (non-blocking)
+          if (response.data) {
+            // Don't await - let this load in background
+            (async () => {
+              try {
+                logger.info('Loading training plan...');
+                dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: true });
+                
+                const { TrainingService } = await import('../services/trainingService');
+                const trainingResult = await TrainingService.getTrainingPlan(response.data!.id!);
+                
+                if (trainingResult.success) {
+                  logger.info('Training plan loaded');
+                } else {
+                  logger.info('No training plan found');
                 }
+                
+                const trainingPlan = trainingResult.success ? trainingResult.data || null : null;
+                dispatch({ type: 'SET_WORKOUT_PLAN', payload: trainingPlan });
+                
+                // Schedule training reminder if training plan exists
+                if (trainingPlan) {
+                  try {
+                    await NotificationService.scheduleTrainingReminder(trainingPlan);
+                    logger.info('Training reminder scheduled');
+                  } catch (notificationError) {
+                    logger.warn('Failed to schedule training reminder', notificationError);
+                  }
+                }
+
+                // Load insights summary from database (non-blocking)
+                await loadInsightsSummary(response.data!.id!);
+              } catch (trainingError) {
+                logger.error('Error loading training plan', trainingError instanceof Error ? trainingError : String(trainingError));
+                dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
+              } finally {
+                dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: false });
               }
-            } catch (trainingError) {
-              logger.error('Error loading training plan', trainingError instanceof Error ? trainingError : String(trainingError));
-              dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
-            } finally {
-              dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: false });
-            }
-          })();
-        } else {
-          logger.info('No user profile data');
-          dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
-        }
+            })();
+          } else {
+            logger.info('No user profile data');
+            dispatch({ type: 'SET_WORKOUT_PLAN', payload: null });
+          }
 
       } else {
         logger.info('User profile not found');
@@ -882,6 +898,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     dispatch({ type: 'SET_POLLING_PLAN', payload: isPolling });
   };
 
+  // Load insights summary from database (direct read, no API call)
+  const loadInsightsSummary = useCallback(async (userProfileId?: number): Promise<void> => {
+    const profileId = userProfileId || state.userProfile?.id;
+    if (!profileId) {
+      return;
+    }
+
+    try {
+      logger.info('Loading insights summary from database', { profileId });
+      const { InsightsAnalyticsService } = await import('../services/insightsAnalyticsService');
+      const cachedInsights = await InsightsAnalyticsService.getCachedInsightsSummaryDirect(
+        profileId
+      );
+
+      logger.info('Insights loading result', {
+        hasResult: !!cachedInsights,
+        success: cachedInsights?.success,
+        hasData: !!cachedInsights?.data,
+        error: cachedInsights?.error
+      });
+
+      if (cachedInsights?.success && cachedInsights.data) {
+        dispatch({ type: 'SET_INSIGHTS_SUMMARY', payload: cachedInsights.data });
+        logger.info('Insights summary loaded from database and set in context', {
+          hasSummary: !!cachedInsights.data.summary,
+          hasMetrics: !!cachedInsights.data.metrics
+        });
+      } else {
+        // No insights found - this is expected for new users
+        logger.info('No insights found in database', {
+          result: cachedInsights,
+          reason: cachedInsights?.error || 'Not found'
+        });
+        dispatch({ type: 'SET_INSIGHTS_SUMMARY', payload: null });
+      }
+    } catch (error) {
+      logger.warn('Failed to load insights summary from database', error);
+      // Don't set error state - insights are optional
+      dispatch({ type: 'SET_INSIGHTS_SUMMARY', payload: null });
+    }
+  }, [state.userProfile?.id]);
+
+  // Set insights summary directly (for use after workout completion)
+  const setInsightsSummary = (insightsSummary: InsightsSummaryData | null): void => {
+    dispatch({ type: 'SET_INSIGHTS_SUMMARY', payload: insightsSummary });
+  };
+
   const contextValue: AuthContextType = {
     state,
     signInWithEmail,
@@ -901,6 +964,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     refreshTrainingPlan,
     setTrainingPlan,
     setPollingPlan,
+    loadInsightsSummary,
+    setInsightsSummary,
     loadAllExercises,
     setExercises,
     clearExercises,

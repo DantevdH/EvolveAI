@@ -26,3 +26,4 @@ These rules apply specifically to the frontend codebase:
 
 
 
+

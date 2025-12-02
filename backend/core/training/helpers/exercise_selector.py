@@ -7,9 +7,11 @@ token usage and ensuring exercise authenticity.
 """
 
 from typing import List, Dict, Any, Optional, Tuple
+import os
 from supabase import create_client, Client
 from logging_config import get_logger
 from settings import settings
+from core.utils.env_loader import is_test_environment
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -24,9 +26,22 @@ class ExerciseSelector:
 
     def __init__(self):
         """Initialize the exercise selector."""
-        self._validate_environment()
-        self._initialize_clients()
-        logger.info("✅ Exercise Selector initialized")
+        # Check if we're in a test environment
+        is_test_env = is_test_environment()
+        
+        # Initialize Supabase client, but handle test/missing credentials gracefully
+        self.supabase: Optional[Client] = None
+        self.supabase_url: Optional[str] = None
+        self.supabase_key: Optional[str] = None
+        
+        # In test environment, skip client creation entirely - tests should mock the service
+        if is_test_env:
+            logger.debug("Test environment: Exercise Selector not initialized (will use mocks)")
+        else:
+            # Only create client in non-test environments
+            self._validate_environment()
+            self._initialize_clients()
+            logger.info("✅ Exercise Selector initialized")
 
     def _validate_environment(self):
         """Validate that all required environment variables are set."""
@@ -50,7 +65,7 @@ class ExerciseSelector:
         # Use settings (which reads from environment dynamically)
         self.supabase_url = settings.SUPABASE_URL
         self.supabase_key = settings.SUPABASE_ANON_KEY
-        self.supabase: Client = create_client(self.supabase_url, self.supabase_key)
+        self.supabase = create_client(self.supabase_url, self.supabase_key)
 
     def get_exercise_candidates(
         self, difficulty: str, equipment: Optional[List[str]] = None

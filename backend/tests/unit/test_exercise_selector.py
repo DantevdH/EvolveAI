@@ -11,8 +11,12 @@ class TestExerciseSelector:
     
     @pytest.fixture
     def exercise_selector(self):
-        """Create ExerciseSelector instance."""
-        return ExerciseSelector()
+        """Create ExerciseSelector instance with mocked supabase client."""
+        selector = ExerciseSelector()
+        # Mock the supabase client since it's None in test environments
+        mock_supabase = Mock()
+        selector.supabase = mock_supabase
+        return selector
     
     @pytest.fixture
     def mock_exercises(self):

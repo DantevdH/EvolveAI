@@ -4,6 +4,12 @@
 import { supabase } from '@/src/config/supabase';
 import { ExerciseAnalyticsEngine } from '@/src/services/exerciseAnalyticsEngine';
 import { TrainingPlan, TrainingExercise, DailyTraining } from '@/src/types/training';
+import { 
+  InsightsSummary, 
+  InsightsMetrics, 
+  InsightsSummaryResponse, 
+  InsightsSummaryData 
+} from '@/src/types/insights';
 
 /**
  * Extract completed exercises from local TrainingPlan and convert to database-like format
@@ -1326,6 +1332,127 @@ export class InsightsAnalyticsService {
   }
 
   /**
+   * Get recovery trend based on RPE data
+   */
+  static async getRecoveryTrend(
+    userProfileId: number,
+    localPlan?: TrainingPlan | null
+  ): Promise<{
+    success: boolean;
+    data?: Array<{
+      week: string;
+      avgRPE: number;
+      trend: 'improving' | 'stable' | 'declining';
+    }>;
+    error?: string;
+  }> {
+    try {
+      let strengthExercises: ExtractedExercise[] = [];
+
+      if (localPlan) {
+        strengthExercises = extractCompletedExercisesFromLocalPlan(localPlan);
+      } else {
+        // Get from database
+        const oneYearAgo = new Date();
+        oneYearAgo.setDate(oneYearAgo.getDate() - 365);
+
+        const { data, error } = await supabase
+          .from('strength_exercise')
+          .select(`
+            *,
+            daily_training!inner(
+              session_rpe,
+              updated_at,
+              weekly_schedules!inner(
+                week_number,
+                training_plans!inner(user_profile_id)
+              )
+            )
+          `)
+          .eq('completed', true)
+          .eq('daily_training.completed', true)
+          .eq('daily_training.weekly_schedules.training_plans.user_profile_id', userProfileId)
+          .gte('updated_at', oneYearAgo.toISOString())
+          .order('updated_at', { ascending: false });
+
+        if (error) {
+          return { success: false, error: error.message };
+        }
+
+        strengthExercises = (data || []).map((se: any) => ({
+          exercise_id: se.exercise_id,
+          weight: se.weight || [],
+          reps: se.reps || [],
+          updated_at: se.updated_at,
+          completed: se.completed,
+          exercises: {
+            name: 'Unknown',
+            primary_muscle: 'Unknown'
+          },
+          daily_training: {
+            completedAt: se.daily_training?.updated_at ? new Date(se.daily_training.updated_at) : undefined,
+            sessionRPE: se.daily_training?.session_rpe || undefined
+          },
+          weekNumber: se.daily_training?.weekly_schedules?.week_number || undefined
+        }));
+      }
+
+      if (strengthExercises.length === 0) {
+        return { success: true, data: [] };
+      }
+
+      // Group by week and calculate average RPE
+      const weeklyRPE: { [key: string]: number[] } = {};
+
+      strengthExercises.forEach(ex => {
+        if (!ex.daily_training.sessionRPE) return;
+        
+        const date = ex.daily_training.completedAt || new Date(ex.updated_at);
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay());
+        const weekKey = weekStart.toISOString().split('T')[0];
+
+        if (!weeklyRPE[weekKey]) {
+          weeklyRPE[weekKey] = [];
+        }
+        weeklyRPE[weekKey].push(ex.daily_training.sessionRPE);
+      });
+
+      // Calculate average RPE per week and determine trend
+      const result = Object.entries(weeklyRPE)
+        .map(([week, rpes]) => {
+          const avgRPE = rpes.reduce((sum, rpe) => sum + rpe, 0) / rpes.length;
+          return { week, avgRPE };
+        })
+        .sort((a, b) => a.week.localeCompare(b.week))
+        .map((item, index, array) => {
+          let trend: 'improving' | 'stable' | 'declining' = 'stable';
+          if (index > 0) {
+            const prevRPE = array[index - 1].avgRPE;
+            if (item.avgRPE < prevRPE - 0.3) {
+              trend = 'improving';
+            } else if (item.avgRPE > prevRPE + 0.3) {
+              trend = 'declining';
+            }
+          }
+          return {
+            week: item.week,
+            avgRPE: item.avgRPE,
+            trend
+          };
+        });
+
+      return { success: true, data: result };
+
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
+  }
+
+  /**
    * Helper method to get exercise training history
    */
   private static async getExerciseTrainingHistory(exerciseId: number, userProfileId: number): Promise<any[]> {
@@ -1339,5 +1466,220 @@ export class InsightsAnalyticsService {
    */
   static clearCache(): void {
     this.cache.clear();
+  }
+
+  /**
+   * Get cached insights summary directly from database (no API call, no LLM risk)
+   * Simple read operation - returns null if cache doesn't exist
+   */
+  static async getCachedInsightsSummaryDirect(
+    userProfileId: number
+  ): Promise<{
+    success: boolean;
+    data?: InsightsSummaryData;
+    error?: string;
+  } | null> {
+    try {
+      const { supabase } = await import('../config/supabase');
+      const { logger } = await import('../utils/logger');
+      
+      logger.info('Reading insights from database', { userProfileId });
+      
+      // Read directly from insights_summaries table
+      // Note: The table only has a 'summary' column (JSONB) that contains both summary and metrics
+      const { data, error } = await supabase
+        .from('insights_summaries')
+        .select('summary')
+        .eq('user_profile_id', userProfileId)
+        .single();
+
+      if (error) {
+        logger.warn('Database query error', { 
+          errorCode: error.code, 
+          errorMessage: error.message,
+          userProfileId 
+        });
+        
+        // No cache found - this is OK, not an error
+        if (error.code === 'PGRST116') {
+          logger.info('No insights cache found in database');
+          return null; // No cache exists
+        }
+        // Other database error
+        return { success: false, error: error.message };
+      }
+
+      if (!data || !data.summary) {
+        logger.info('No data returned from database');
+        return null; // No cache
+      }
+
+      // The summary column contains the entire structure: { summary: {...}, metrics: {...} }
+      const summaryColumn = data.summary;
+      
+      // Extract summary and metrics from the nested structure
+      const summaryJson = summaryColumn.summary;
+      const metricsJson = summaryColumn.metrics;
+
+      logger.info('Raw data from database', {
+        hasSummaryColumn: !!summaryColumn,
+        hasSummary: !!summaryJson,
+        hasMetrics: !!metricsJson,
+        summaryType: typeof summaryJson,
+        metricsType: typeof metricsJson,
+        summaryKeys: summaryJson ? Object.keys(summaryJson) : null,
+        metricsKeys: metricsJson ? Object.keys(metricsJson) : null,
+        summaryValue: summaryJson ? JSON.stringify(summaryJson).substring(0, 200) : null,
+        metricsValue: metricsJson ? JSON.stringify(metricsJson).substring(0, 200) : null
+      });
+
+      // Validate both summary and metrics exist
+      if (!summaryJson || !metricsJson) {
+        logger.warn('Invalid insights cache - missing required fields', {
+          hasSummary: !!summaryJson,
+          hasMetrics: !!metricsJson,
+          summaryColumnKeys: summaryColumn ? Object.keys(summaryColumn) : null,
+          userProfileId
+        });
+        return null; // Invalid cache - missing required fields
+      }
+
+      // Additional validation: ensure summary has required fields
+      if (!summaryJson.summary || !Array.isArray(summaryJson.findings) || !Array.isArray(summaryJson.recommendations)) {
+        logger.warn('Invalid insights summary structure', {
+          hasSummaryText: !!summaryJson.summary,
+          hasFindings: Array.isArray(summaryJson.findings),
+          hasRecommendations: Array.isArray(summaryJson.recommendations),
+          summaryStructure: summaryJson
+        });
+        return null;
+      }
+
+      logger.info('Successfully parsed insights from database');
+      
+      return {
+        success: true,
+        data: {
+          summary: summaryJson as InsightsSummary,
+          metrics: metricsJson as InsightsMetrics,
+        }
+      };
+    } catch (error) {
+      // Use logger for consistency
+      const { logger } = await import('../utils/logger');
+      logger.warn('Error reading cached insights from database', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get insights summary from backend API
+   * Backend handles caching - only calls LLM if data changed
+   */
+  static async getInsightsSummary(
+    userProfileId: number,
+    trainingPlan: TrainingPlan | null,
+    weakPoints?: WeakPointAnalysis[],
+    topExercises?: TopPerformingExercise[]
+  ): Promise<{
+    success: boolean;
+    data?: InsightsSummaryData;
+    error?: string;
+  }> {
+    try {
+      const { apiClient } = await import('./apiClient');
+      const { supabase } = await import('../config/supabase');
+      
+      // Get JWT token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        return { success: false, error: 'No authentication token' };
+      }
+
+      // Transform training plan to backend format if provided
+      let backendPlan: any = null;
+      if (trainingPlan) {
+        // Convert camelCase to snake_case for backend
+        backendPlan = {
+          weekly_schedules: trainingPlan.weeklySchedules.map(week => ({
+            week_number: week.weekNumber,
+            completed: week.completed,
+            daily_trainings: week.dailyTrainings.map(daily => ({
+              id: daily.id,
+              day_of_week: daily.dayOfWeek,
+              is_rest_day: daily.isRestDay,
+              completed: daily.completed,
+              completed_at: daily.completedAt?.toISOString(),
+              session_rpe: daily.sessionRPE,
+              strength_exercise: daily.exercises
+                .filter(ex => ex.exercise && !ex.enduranceSession)
+                .map(ex => ({
+                  exercise_id: ex.exerciseId ? Number(ex.exerciseId) : null,
+                  exercise_name: ex.exercise?.name,
+                  weights: ex.sets?.map(s => s.weight).filter(w => w != null) || [],
+                  reps: ex.sets?.map(s => s.reps).filter(r => r != null) || [],
+                  sets: ex.sets?.length || 0,
+                  completed: ex.completed
+                }))
+            }))
+          }))
+        };
+      }
+
+      // Transform weak points and top exercises to backend format
+      const weakPointsBackend = weakPoints?.map(wp => ({
+        muscle_group: wp.muscleGroup,
+        issue: wp.issue || 'plateau',
+        severity: wp.severity || 'medium'
+      })) || [];
+
+      const topExercisesBackend = topExercises?.map(ex => ({
+        name: ex.name,
+        trend: ex.trend === 'increasing' ? 'improving' : ex.trend === 'decreasing' ? 'declining' : 'stable',
+        change: ex.improvementRate ? `+${ex.improvementRate.toFixed(1)}%` : undefined
+      })) || [];
+
+      const { logger } = await import('../utils/logger');
+
+      const response = await apiClient.post<InsightsSummaryResponse>('/api/training/insights-summary', {
+        user_profile_id: userProfileId,
+        jwt_token: session.access_token,
+        training_plan: backendPlan,
+        weak_points: weakPointsBackend,
+        top_exercises: topExercisesBackend
+      });
+
+      // Backend returns summary and metrics at top level, not nested under data
+      // apiClient.post returns ApiResponse<T> but the actual response structure matches the backend directly
+      const responseData = response as unknown as InsightsSummaryResponse;
+
+      if (responseData.success && responseData.summary && responseData.metrics) {
+        logger.info('Successfully parsed insights from backend API');
+        return {
+          success: true,
+          data: {
+            summary: responseData.summary,
+            metrics: responseData.metrics
+          }
+        };
+      } else {
+        logger.warn('Backend API response missing required fields', {
+          success: responseData.success,
+          hasSummary: !!responseData.summary,
+          hasMetrics: !!responseData.metrics,
+          error: responseData.error
+        });
+        return {
+          success: false,
+          error: responseData.error || 'Failed to get insights summary'
+        };
+      }
+
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      };
+    }
   }
 }

@@ -86,8 +86,26 @@ class ApiClient {
         
         if (newToken) {
           console.log('✅ Token refreshed successfully, retrying request...');
+          
+          // CRITICAL: Update jwt_token in request body if present
+          // The backend reads jwt_token from the body, not the Authorization header
+          let updatedOptions = { ...options };
+          if (options.body) {
+            try {
+              const bodyJson = JSON.parse(options.body as string);
+              if (bodyJson.jwt_token) {
+                bodyJson.jwt_token = newToken;
+                updatedOptions.body = JSON.stringify(bodyJson);
+                console.log('🔄 Updated jwt_token in request body with refreshed token');
+              }
+            } catch (e) {
+              // If body is not JSON or doesn't have jwt_token, continue with original body
+              console.warn('Could not update jwt_token in request body:', e);
+            }
+          }
+          
           // Retry the request with the new token (only once to avoid infinite loops)
-          return this.request<T>(endpoint, options, false);
+          return this.request<T>(endpoint, updatedOptions, false);
         } else {
           console.error('❌ Failed to refresh token');
           const errorData = await response.json().catch(() => ({}));
