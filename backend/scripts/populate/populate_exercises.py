@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from supabase import create_client, Client
 from dotenv import load_dotenv
+from settings import settings
 import logging
 
 # Configure logging
@@ -38,12 +39,16 @@ class ExercisePopulator:
 
     def _validate_environment(self):
         """Validate that all required environment variables are set."""
-        required_vars = {
-            "SUPABASE_URL": os.getenv("SUPABASE_URL"),
-            "SUPABASE_ANON_KEY": os.getenv("SUPABASE_ANON_KEY"),
-        }
+        # Use settings (which reads from environment dynamically)
+        supabase_url = settings.SUPABASE_URL
+        supabase_key = settings.SUPABASE_ANON_KEY
 
-        missing_vars = [var for var, value in required_vars.items() if not value]
+        missing_vars = []
+        if not supabase_url:
+            missing_vars.append("SUPABASE_URL")
+        if not supabase_key:
+            missing_vars.append("SUPABASE_ANON_KEY")
+
         if missing_vars:
             raise ValueError(
                 f"Missing required environment variables: {', '.join(missing_vars)}"
@@ -51,8 +56,9 @@ class ExercisePopulator:
 
     def _initialize_clients(self):
         """Initialize Supabase client."""
-        self.supabase_url = os.getenv("SUPABASE_URL")
-        self.supabase_key = os.getenv("SUPABASE_ANON_KEY")
+        # Use settings (which reads from environment dynamically)
+        self.supabase_url = settings.SUPABASE_URL
+        self.supabase_key = settings.SUPABASE_ANON_KEY
 
         # Initialize Supabase client
         self.supabase: Client = create_client(self.supabase_url, self.supabase_key)

@@ -3,6 +3,11 @@ import { useAuth } from '@/src/context/AuthContext';
 import { useAppRouting } from '@/src/hooks/useAppRouting';
 import { useEffect, useRef } from 'react';
 import { LoadingScreen } from '@/src/components/shared/LoadingScreen';
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SimpleSpinner } from '@/src/components/ui/SimpleSpinner';
+import { colors, createColorWithOpacity, goldenGradient } from '@/src/constants/colors';
 import { logNavigation, logWarn } from '@/src/utils/logger';
 
 export default function Index() {
@@ -12,22 +17,9 @@ export default function Index() {
   const navigationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastNavigationRef = useRef<string | null>(null);
   const isNavigatingRef = useRef<boolean>(false);
-  const lastStateRef = useRef<string>('');
 
   // Use useEffect to handle navigation based on routing state
   useEffect(() => {
-    // Create a state signature to detect actual changes
-    // Include responses to detect when they're added to context
-    const hasInitialResponses = !!state.userProfile?.initial_responses && Object.keys(state.userProfile.initial_responses).length > 0;
-    const currentState = `${state.isLoading}-${state.trainingPlanLoading}-${!!state.user}-${!!state.userProfile}-${!!state.trainingPlan}-${!!state.error}-${hasInitialResponses}`;
-    
-    // Skip if state hasn't actually changed
-    if (currentState === lastStateRef.current) {
-      return;
-    }
-    
-    lastStateRef.current = currentState;
-
     // Clear any existing timeout and reset navigation state
     if (navigationTimeoutRef.current) {
       clearTimeout(navigationTimeoutRef.current);
@@ -107,9 +99,78 @@ export default function Index() {
 
   // Show loading screen when auth is loading
   if (routingState.isLoading) {
-    return <LoadingScreen message="Loading your profile..." />;
+    return (
+      <View style={styles.container}>
+        <View style={styles.card}>
+          <LinearGradient
+            colors={goldenGradient as readonly [string, string]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.header}
+          >
+            <Text style={styles.headerTitle}>Loading your profile...</Text>
+          </LinearGradient>
+          <View style={styles.content}>
+            <Text style={styles.subtitle}>Please hold on while we prepare your setup.</Text>
+            <View style={styles.spinnerWrap}>
+              <SimpleSpinner size={56} color={colors.secondary} strokeWidth={4} />
+            </View>
+          </View>
+        </View>
+      </View>
+    );
   }
 
   // Return null while navigation is being handled by useEffect
   return null;
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  card: {
+    width: '80%',
+    maxWidth: 420,
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.45),
+    overflow: 'hidden',
+  },
+  header: {
+    height: 56,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    letterSpacing: 1,
+  },
+  content: {
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: colors.muted,
+    textAlign: 'center',
+  },
+  spinnerWrap: {
+    marginTop: 24,
+    alignItems: 'center',
+  },
+});

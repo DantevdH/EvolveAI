@@ -9,21 +9,12 @@ This module defines the data structures for:
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
-from enum import Enum
 
-
-class OutcomeType(str, Enum):
-    """Types of outcomes that can be tracked."""
-
-    COMPLETION = "completion"
-    FEEDBACK = "feedback"
-    HEART_RATE = "heart_rate"
-    RATING = "rating"
-    INJURY = "injury"
-    ENERGY = "energy"
-    PROGRESS = "progress"
+# Create Literal types for unified schemas
+# These generate JSON Schema with inline enum constraints, forcing ALL providers to use only valid values
+OutcomeTypeLiteral = Literal["completion", "feedback", "heart_rate", "rating", "injury", "energy", "progress"]
 
 
 class PlaybookLesson(BaseModel):

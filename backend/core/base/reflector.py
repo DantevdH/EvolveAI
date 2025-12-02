@@ -165,7 +165,7 @@ class Reflector:
             """
 
             ai_start = time.time()
-            analyses_list, completion = self.llm.chat_parse(prompt, ReflectorAnalysisList)
+            analyses_list, completion = self.llm.parse_structured(prompt, ReflectorAnalysisList, model_type="lightweight")
             ai_duration = time.time() - ai_start
             
             # Track latency
@@ -295,7 +295,7 @@ class Reflector:
             """
             
             ai_start = time.time()
-            analyses_list, completion = self.llm.chat_parse(prompt, ReflectorAnalysisList)
+            analyses_list, completion = self.llm.parse_structured(prompt, ReflectorAnalysisList, model_type="lightweight")
             ai_duration = time.time() - ai_start
             
             # Track latency

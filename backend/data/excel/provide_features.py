@@ -32,10 +32,14 @@ class ExerciseFeaturesFiller:
             excel_file_path: Path to the Excel file containing exercise features
         """
         self.excel_file_path = excel_file_path
-        # Initialize OpenAI client directly using settings
-        self._openai_client = openai.OpenAI(api_key=settings.OPENAI_API_KEY)
-        self._openai_model = settings.OPENAI_MODEL
-        self._openai_temperature = settings.OPENAI_TEMPERATURE
+        # Initialize OpenAI client using unified LLM settings
+        # Use settings (which now reads from environment dynamically)
+        api_key = settings.LLM_API_KEY
+        if not api_key:
+            raise ValueError("Missing LLM_API_KEY environment variable")
+        self._openai_client = openai.OpenAI(api_key=api_key)
+        self._openai_model = settings.LLM_MODEL_COMPLEX  # Use complex model for feature generation
+        self._openai_temperature = settings.TEMPERATURE
         self.df = None
         self.backup_file = None
 

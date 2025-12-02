@@ -160,6 +160,8 @@ export class trainingService {
    * Send feedback about the training plan
    * 
    * Uses user_playbook instead of initial/follow-up questions/responses.
+   * 
+   * @param weekNumber - The current week number to update (required)
    */
   static async sendPlanFeedback(
     userProfileId: number,
@@ -169,14 +171,23 @@ export class trainingService {
     playbook: any,  // Playbook from userProfile (includes context field)
     personalInfo: any,  // Personal info from userProfile
     conversationHistory: Array<{ role: string; content: string }> = [],
+    weekNumber?: number,  // Current week number to update (optional, will use trainingPlan.currentWeek if not provided)
     jwtToken?: string
   ): Promise<PlanFeedbackResponse> {
     try {
+      // Use provided weekNumber or fall back to trainingPlan.currentWeek
+      const currentWeek = weekNumber ?? trainingPlan?.currentWeek;
+      
+      if (!currentWeek) {
+        throw new Error('weekNumber is required. Either provide it as a parameter or ensure trainingPlan.currentWeek is set.');
+      }
+
       const request = {
         user_profile_id: userProfileId,
         plan_id: planId,
         feedback_message: feedbackMessage,
         training_plan: trainingPlan,  // Send training plan to backend
+        week_number: currentWeek,  // Send current week number
         playbook: playbook,  // Send playbook from userProfile
         personal_info: personalInfo,  // Send personal info from userProfile
         conversation_history: conversationHistory,
@@ -184,7 +195,7 @@ export class trainingService {
       };
 
       const response = await apiClient.post<PlanFeedbackResponse>(
-        `${this.BASE_URL}/update-week`,
+        `${this.BASE_URL}/chat`,
         request
       );
 
@@ -192,6 +203,38 @@ export class trainingService {
     } catch (error) {
       console.error(`Failed to send plan feedback: ${error instanceof Error ? error.message : 'Unknown error'}`);
       throw new Error(error instanceof Error ? error.message : 'Failed to send plan feedback');
+    }
+  }
+
+  /**
+   * Generate a new week in the training plan
+   * Calls the create-week endpoint to generate the next week
+   */
+  static async generateWeek(
+    planId: number,
+    trainingPlan: any,  // Full training plan data from frontend
+    userProfileId: number,
+    personalInfo: any,  // Personal info from userProfile
+    jwtToken?: string
+  ): Promise<any> {
+    try {
+      const request = {
+        plan_id: planId,
+        training_plan: trainingPlan,  // Send training plan to backend
+        user_profile_id: userProfileId,
+        personal_info: personalInfo,  // Send personal info from userProfile
+        jwt_token: jwtToken,
+      };
+
+      const response = await apiClient.post<any>(
+        `${this.BASE_URL}/create-week`,
+        request
+      );
+
+      return response;
+    } catch (error) {
+      console.error(`Failed to generate week: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(error instanceof Error ? error.message : 'Failed to generate week');
     }
   }
 }

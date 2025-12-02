@@ -78,7 +78,7 @@ Automatically retrieves and validates best practices context from the knowledge 
     ├─ Gets playbook from userProfile (includes context from Flow 1)
     └─ trainingService.sendPlanFeedback(..., playbook, ...)
     ↓
-[Frontend] POST /api/training/update-week
+[Frontend] POST /api/training/chat
     ├─ Request: { playbook: userProfile.playbook, ... }
     └─ playbook includes context field from previous flows
     ↓

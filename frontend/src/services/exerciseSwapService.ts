@@ -11,7 +11,6 @@ const SIMILARITY_STOP_WORDS = ['exercise', 'movement', 'incline', 'decline', 'ra
 
 export interface ExerciseRecommendation {
   exercise: Exercise;
-  reason: string;
   similarityScore: number;
 }
 
@@ -134,7 +133,6 @@ export class ExerciseSwapService {
         const exerciseData = this.convertDatabaseExerciseToExercise(exercise);
         return {
           exercise: exerciseData,
-          reason: this.generateAIRecommendationReason(exerciseData, primaryMuscle, targetArea),
           similarityScore: 0.8 // High score since they share the same primary muscle
         };
       });
@@ -616,42 +614,5 @@ export class ExerciseSwapService {
     return Math.min(score, 1.0); // Cap at 1.0
   }
 
-  /**
-   * Generate AI recommendation reason
-   */
-  private static generateAIRecommendationReason(
-    exercise: Exercise,
-    primaryMuscle: string,
-    targetArea?: string
-  ): string {
-    const reasons = [];
-
-    if (exercise.main_muscles?.includes(primaryMuscle)) {
-      reasons.push(`targets the same ${primaryMuscle} muscles`);
-    }
-
-    if (exercise.target_area === targetArea) {
-      reasons.push(`focuses on ${targetArea}`);
-    }
-
-    if (exercise.equipment === 'Body Weight') {
-      reasons.push('requires no equipment');
-    } else if (exercise.equipment) {
-      reasons.push(`uses ${exercise.equipment}`);
-    }
-
-    if (exercise.difficulty === 'Beginner') {
-      reasons.push('perfect for beginners');
-    } else if (exercise.difficulty === 'Advanced') {
-      reasons.push('challenging for advanced users');
-    }
-
-    // Default AI-like reason if no specific reasons found
-    if (reasons.length === 0) {
-      reasons.push('AI recommends this based on muscle activation patterns');
-    }
-
-    return `AI recommends this because it ${reasons.join(' and ')}.`;
-  }
 }
 

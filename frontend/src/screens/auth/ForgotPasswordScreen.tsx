@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, ImageBackground, KeyboardAvoidingView, Platform, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { validateForgotPasswordForm } from '@/src/utils/validation';
-import { colors } from '../../constants/designSystem';
+import { colors, secondary, createColorWithOpacity } from '../../constants/colors';
 
 // Custom Text Input Component (matching Swift design)
 const CustomTextField: React.FC<{
@@ -98,8 +99,14 @@ export const ForgotPasswordScreen: React.FC = () => {
               <TouchableOpacity
                 style={styles.backButton}
                 onPress={handleBackToLogin}
-                activeOpacity={0.8}>
-                <Text style={styles.backButtonText}>Back to Sign In</Text>
+                activeOpacity={0.85}>
+                <LinearGradient
+                  colors={[createColorWithOpacity(secondary, 0.35), createColorWithOpacity(secondary, 0.15)]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.gradientButton}>
+                  <Text style={styles.backButtonText}>Back to Sign In</Text>
+                </LinearGradient>
               </TouchableOpacity>
             </View>
           </SafeAreaView>
@@ -154,14 +161,21 @@ export const ForgotPasswordScreen: React.FC = () => {
               <View style={styles.resetSection}>
                 {state.isLoading ? (
                   <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color="#FFFFFF" />
+                    <ActivityIndicator size="large" color={colors.primary} />
                   </View>
                 ) : (
                   <TouchableOpacity
                     style={styles.resetButton}
                     onPress={handleResetPassword}
-                    activeOpacity={0.8}>
-                    <Text style={styles.resetButtonText}>Send Reset Link</Text>
+                    disabled={state.isLoading}
+                    activeOpacity={0.85}>
+                    <LinearGradient
+                      colors={[createColorWithOpacity(secondary, 0.55), createColorWithOpacity(secondary, 0.25)]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.gradientButton}>
+                      <Text style={styles.resetButtonText}>Send Reset Link</Text>
+                    </LinearGradient>
                   </TouchableOpacity>
                 )}
                 
@@ -198,7 +212,7 @@ const styles = StyleSheet.create({
   },
   dimmingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(248, 248, 248, 0.85)',
   },
   safeArea: {
     flex: 1,
@@ -220,12 +234,12 @@ const styles = StyleSheet.create({
   mainTitle: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: colors.text,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: colors.muted,
     textAlign: 'center',
   },
   
@@ -243,6 +257,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.inputBackground,
     borderRadius: 12,
     padding: 16,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
   },
   placeholderText: {
     position: 'absolute',
@@ -276,23 +292,27 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   resetButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 18,
-    paddingVertical: 18,
-    paddingHorizontal: 8,
+    borderRadius: 14,
+    overflow: 'hidden',
+    minHeight: 48,
+  },
+  gradientButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    width: '100%',
+    minHeight: 48,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.borderLight,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.7,
-    shadowRadius: 14,
-    elevation: 8,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(secondary, 0.45),
   },
   resetButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.primary,
+    letterSpacing: 0.4,
+    textAlign: 'center',
   },
   
   // Error Text
@@ -349,22 +369,15 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   backButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 18,
-    paddingVertical: 18,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.borderLight,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.7,
-    shadowRadius: 14,
-    elevation: 8,
+    borderRadius: 14,
+    overflow: 'hidden',
+    minHeight: 48,
   },
   backButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.primary,
+    letterSpacing: 0.4,
+    textAlign: 'center',
   },
 });

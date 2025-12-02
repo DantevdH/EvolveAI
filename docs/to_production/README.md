@@ -37,19 +37,28 @@ This directory contains comprehensive production readiness documentation for all
   - Error handling and edge cases
   - User experience optimization
 
-### 5. Frontend - Training
-- **[04_FRONTEND_TRAINING.md](./04_FRONTEND_TRAINING.md)** - Training frontend production checklist including:
+### 5. Plan Generation (Backend + Frontend)
+- **[04_PLAN_GENERATION.md](./04_PLAN_GENERATION.md)** - Plan generation production checklist including:
+  - Backend plan generation API and logic
+  - LLM integration and prompt generation
+  - Database operations and transaction safety
+  - Background playbook generation
+  - Frontend generation screen and error handling
+  - Progress tracking and user feedback
+  - Idempotency and retry logic
+
+### 6. Frontend - Training
+- **[05_FRONTEND_TRAINING.md](./05_FRONTEND_TRAINING.md)** - Training frontend production checklist including:
   - Training screen and daily training detail
   - Exercise management (add, swap, remove)
   - Exercise detail views
   - Daily feedback collection
   - Session RPE tracking
-  - OneRM calculator
   - Journey map visualization
-  - Performance monitoring
+  - Performance monitoring / kpi calculation with unit testing
 
-### 6. Frontend - Insights
-- **[05_FRONTEND_INSIGHTS.md](./05_FRONTEND_INSIGHTS.md)** - Insights frontend production checklist including:
+### 7. Frontend - Insights
+- **[06_FRONTEND_INSIGHTS.md](./06_FRONTEND_INSIGHTS.md)** - Insights frontend production checklist including:
   - Performance score charts
   - Volume trend analysis
   - Top performing exercises
@@ -58,33 +67,26 @@ This directory contains comprehensive production readiness documentation for all
   - Workout frequency heatmap
   - Analytics service integration
   - Data visualization optimization
+  - Auto-refresh after workout completion
+  - Cache management
 
-### 7. Frontend - Profile
-- **[06_FRONTEND_PROFILE.md](./06_FRONTEND_PROFILE.md)** - Profile frontend production checklist including:
+### 8. Frontend - Profile
+- **[07_FRONTEND_PROFILE.md](./07_FRONTEND_PROFILE.md)** - Profile frontend production checklist including:
   - User profile display and editing
   - Playbook lessons display
   - Profile statistics
   - Settings management
 
-### 8. Frontend - Chat
-- **[07_FRONTEND_CHAT.md](./07_FRONTEND_CHAT.md)** - Chat frontend production checklist including:
+### 9. Frontend - Chat
+- **[08_FRONTEND_CHAT.md](./08_FRONTEND_CHAT.md)** - Chat frontend production checklist including:
   - General chat interface
   - Plan feedback chat
   - AI message rendering
   - Conversation history management
   - Real-time updates
 
-### 9. Frontend - Home
-- **[08_FRONTEND_HOME.md](./08_FRONTEND_HOME.md)** - Home screen production checklist including:
-  - Welcome header
-  - Progress summary
-  - Quick actions
-  - Recent activity
-  - AI insights cards
-  - Today's training overview
-
 ### 10. Infrastructure & DevOps
-- **[09_INFRASTRUCTURE.md](./09_INFRASTRUCTURE.md)** - Infrastructure and DevOps production checklist including:
+- **[10_INFRASTRUCTURE.md](./10_INFRASTRUCTURE.md)** - Infrastructure and DevOps production checklist including:
   - Deployment strategy
   - CI/CD pipelines
   - Environment setup (dev, staging, production)
@@ -94,7 +96,7 @@ This directory contains comprehensive production readiness documentation for all
   - Security hardening
 
 ### 11. Testing
-- **[10_TESTING.md](./10_TESTING.md)** - Testing production checklist including:
+- **[11_TESTING.md](./11_TESTING.md)** - Testing production checklist including:
   - Unit tests
   - Integration tests
   - End-to-end tests
@@ -103,7 +105,7 @@ This directory contains comprehensive production readiness documentation for all
   - Test coverage requirements
 
 ### 12. Security
-- **[11_SECURITY.md](./11_SECURITY.md)** - Security production checklist including:
+- **[12_SECURITY.md](./12_SECURITY.md)** - Security production checklist including:
   - Authentication and authorization
   - Data encryption
   - API security

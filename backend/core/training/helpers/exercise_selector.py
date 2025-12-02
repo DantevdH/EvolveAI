@@ -6,14 +6,12 @@ to provide relevant exercise candidates for training generation while minimizing
 token usage and ensuring exercise authenticity.
 """
 
-import os
 from typing import List, Dict, Any, Optional, Tuple
-from dotenv import load_dotenv
+import os
 from supabase import create_client, Client
 from logging_config import get_logger
-
-# Load environment variables
-load_dotenv()
+from settings import settings
+from core.utils.env_loader import is_test_environment
 
 # Initialize logger
 logger = get_logger(__name__)
@@ -28,18 +26,35 @@ class ExerciseSelector:
 
     def __init__(self):
         """Initialize the exercise selector."""
-        self._validate_environment()
-        self._initialize_clients()
-        logger.info("✅ Exercise Selector initialized")
+        # Check if we're in a test environment
+        is_test_env = is_test_environment()
+        
+        # Initialize Supabase client, but handle test/missing credentials gracefully
+        self.supabase: Optional[Client] = None
+        self.supabase_url: Optional[str] = None
+        self.supabase_key: Optional[str] = None
+        
+        # In test environment, skip client creation entirely - tests should mock the service
+        if is_test_env:
+            logger.debug("Test environment: Exercise Selector not initialized (will use mocks)")
+        else:
+            # Only create client in non-test environments
+            self._validate_environment()
+            self._initialize_clients()
+            logger.info("✅ Exercise Selector initialized")
 
     def _validate_environment(self):
         """Validate that all required environment variables are set."""
-        required_vars = {
-            "SUPABASE_URL": os.getenv("SUPABASE_URL"),
-            "SUPABASE_ANON_KEY": os.getenv("SUPABASE_ANON_KEY"),
-        }
+        # Use settings (which reads from environment dynamically)
+        supabase_url = settings.SUPABASE_URL
+        supabase_key = settings.SUPABASE_ANON_KEY
 
-        missing_vars = [var for var, value in required_vars.items() if not value]
+        missing_vars = []
+        if not supabase_url:
+            missing_vars.append("SUPABASE_URL")
+        if not supabase_key:
+            missing_vars.append("SUPABASE_ANON_KEY")
+
         if missing_vars:
             raise ValueError(
                 f"Missing required environment variables: {', '.join(missing_vars)}"
@@ -47,9 +62,10 @@ class ExerciseSelector:
 
     def _initialize_clients(self):
         """Initialize Supabase client."""
-        self.supabase_url = os.getenv("SUPABASE_URL")
-        self.supabase_key = os.getenv("SUPABASE_ANON_KEY")
-        self.supabase: Client = create_client(self.supabase_url, self.supabase_key)
+        # Use settings (which reads from environment dynamically)
+        self.supabase_url = settings.SUPABASE_URL
+        self.supabase_key = settings.SUPABASE_ANON_KEY
+        self.supabase = create_client(self.supabase_url, self.supabase_key)
 
     def get_exercise_candidates(
         self, difficulty: str, equipment: Optional[List[str]] = None
@@ -127,6 +143,8 @@ class ExerciseSelector:
     ) -> Tuple[List[str], List[str]]:
         """
         Validate exercise IDs and return valid and invalid ones.
+        
+        OPTIMIZATION: Uses batch query instead of N+1 queries for better performance.
 
         Args:
             exercise_ids: List of exercise IDs to validate
@@ -134,17 +152,50 @@ class ExerciseSelector:
         Returns:
             Tuple of (valid_ids, invalid_ids)
         """
-        valid_ids = []
-        invalid_ids = []
-
-        for exercise_id in exercise_ids:
-            exercise = self.get_exercise_by_id(exercise_id)
-            if exercise:
-                valid_ids.append(exercise_id)
-            else:
-                invalid_ids.append(exercise_id)
-
-        return valid_ids, invalid_ids
+        if not exercise_ids:
+            return [], []
+        
+        try:
+            # Batch query: Fetch all exercise IDs in a single query instead of N queries
+            # This reduces database round trips from N to 1
+            
+            # CRITICAL: Convert all IDs to integers for database query (id column is integer)
+            # But normalize input to handle both int and string IDs
+            try:
+                exercise_ids_int = [int(eid) for eid in exercise_ids]
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Error converting exercise_ids to int: {e}, will try as-is")
+                exercise_ids_int = exercise_ids
+            
+            response = (
+                self.supabase.table("exercises")
+                .select("id")
+                .in_("id", exercise_ids_int)
+                .execute()
+            )
+            
+            # Create set of valid IDs from database response (normalize to strings for comparison)
+            # Database returns integers, but we want to return strings to match input format
+            valid_ids_from_db = {str(ex["id"]) for ex in (response.data or [])}
+            
+            # Normalize input IDs to strings for comparison
+            exercise_ids_normalized = [str(eid) for eid in exercise_ids]
+            
+            # Separate valid and invalid IDs
+            valid_ids = [eid for eid in exercise_ids_normalized if eid in valid_ids_from_db]
+            invalid_ids = [eid for eid in exercise_ids_normalized if eid not in valid_ids_from_db]
+            
+            logger.debug(
+                f"Batch validated {len(exercise_ids)} IDs: "
+                f"{len(valid_ids)} valid, {len(invalid_ids)} invalid"
+            )
+            
+            return valid_ids, invalid_ids
+            
+        except Exception as e:
+            logger.error(f"Error batch validating exercise IDs: {e}")
+            # On error, return all as invalid to be safe
+            return [], exercise_ids
 
     def _clean_exercise_data(self, exercises: List[Dict]) -> List[Dict]:
         """

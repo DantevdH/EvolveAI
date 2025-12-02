@@ -147,7 +147,9 @@ class ExerciseValidator:
                         for exercise_idx, exercise in enumerate(strength_exercises):
                             exercise_id = exercise.get("exercise_id")
                             if exercise_id:
-                                exercise_id_str = exercise_id
+                                # CRITICAL: Convert to string for validation
+                                # exercise_id can be int (from database) or str, but validate_exercise_ids expects strings
+                                exercise_id_str = str(exercise_id)
                                 all_ids.append(exercise_id_str)
 
                                 # Store location for efficient replacement later
@@ -667,6 +669,27 @@ class ExerciseValidator:
                     # CRITICAL: Filter out exercises without matches after processing
                     exercises_to_keep = []
                     
+                    # OPTIMIZATION #2: Collect ALL exercise_ids that need validation FIRST
+                    # This allows us to batch validate them all at once instead of individual queries
+                    all_exercise_ids_to_validate = []
+                    for exercise in strength_exercises:
+                        exercise_id = exercise.get("exercise_id")
+                        if exercise_id is not None:
+                            all_exercise_ids_to_validate.append(str(exercise_id))
+                    
+                    # Batch validate all existing exercise_ids once
+                    validated_exercise_ids_set = set()
+                    if all_exercise_ids_to_validate:
+                        try:
+                            valid_ids, _ = self.exercise_selector.validate_exercise_ids(all_exercise_ids_to_validate)
+                            validated_exercise_ids_set = set(valid_ids)
+                            logger.debug(
+                                f"Batch validated {len(all_exercise_ids_to_validate)} exercise_ids: "
+                                f"{len(valid_ids)} valid, {len(all_exercise_ids_to_validate) - len(valid_ids)} invalid"
+                            )
+                        except Exception as e:
+                            logger.error(f"Error batch validating exercise_ids: {e}")
+                    
                     # Track exercise names already in this day's plan (for fallback diversity)
                     # First, collect exercise_ids from exercises that already have them
                     existing_exercise_ids = [
@@ -686,6 +709,9 @@ class ExerciseValidator:
                         except Exception as e:
                             logger.warning(f"Could not fetch existing exercise names: {e}")
                     
+                    # Track exercise_ids found during matching for batch validation later
+                    matched_exercise_ids_to_validate = []
+                    
                     # CRITICAL: Process ALL exercises regardless of whether existing IDs exist
                     # This loop must always run to match exercises and set exercise_id
                     for exercise in strength_exercises:
@@ -693,20 +719,18 @@ class ExerciseValidator:
                         exercise_id = exercise.get("exercise_id")
                         
                         # If already has exercise_id (from previous processing or user data), validate it before keeping
+                        # OPTIMIZATION #2: Use cached validation result from batch validation above
                         if exercise_id is not None:
-                            # Validate that the exercise_id still exists in database
-                            try:
-                                valid_ids, invalid_ids = self.exercise_selector.validate_exercise_ids([str(exercise_id)])
-                                if str(exercise_id) in valid_ids:
-                                    exercises_to_keep.append(exercise)
-                                    continue
-                                else:
-                                    # Don't continue - fall through to rematch logic
-                                    # Clear the invalid exercise_id so it can be rematched
-                                    exercise.pop("exercise_id", None)
-                            except Exception as e:
-                                logger.error(f"Error validating exercise_id {exercise_id} for '{exercise_name}': {e}")
-                                # Clear invalid exercise_id and fall through to rematch
+                            if str(exercise_id) in validated_exercise_ids_set:
+                                # Exercise_id is valid (from batch validation cache)
+                                exercises_to_keep.append(exercise)
+                                continue
+                            else:
+                                # Invalid exercise_id - clear and rematch
+                                logger.debug(
+                                    f"Exercise_id {exercise_id} for '{exercise_name}' not found in validated set, "
+                                    f"will rematch"
+                                )
                                 exercise.pop("exercise_id", None)
                         
                         # Check if this exercise has AI-generated metadata
@@ -742,36 +766,35 @@ class ExerciseValidator:
                             # CRITICAL: Validate exercise_id exists before using
                             matched_exercise_id = matched_exercise.get("id")
                             if matched_exercise_id:
-                                # Verify the exercise ID still exists in database (edge case: exercise deleted between match and save)
-                                valid_ids, _ = self.exercise_selector.validate_exercise_ids([str(matched_exercise_id)])
-                                if str(matched_exercise_id) in valid_ids:
-                                    exercise["exercise_id"] = matched_exercise_id
-                                    # Keep exercise_name for frontend display, update with matched name
-                                    exercise["exercise_name"] = matched_exercise_name
-                                    # Update other metadata with matched values
-                                    # Extract main_muscle from main_muscles array (first item) - database has main_muscles, not main_muscle
-                                    main_muscles_array = matched_exercise.get("primary_muscles") or matched_exercise.get("main_muscles", [])
-                                    exercise["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
-                                    exercise["equipment"] = matched_exercise.get("equipment")
-                                    stats["exercises_matched"] += 1
-                                    
-                                    if similarity_score < 0.70:
-                                        stats["low_similarity_count"] += 1
-                                    
-                                    logger.debug(
-                                        f"Matched exercise: '{exercise_name}' -> "
-                                        f"'{matched_exercise_name}' (ID: {matched_exercise_id}, "
-                                        f"score: {similarity_score:.3f}, status: {status})"
-                                    )
-                                    # Add to existing names for fallback diversity tracking
-                                    existing_exercise_names.append(matched_exercise_name)
-                                else:
-                                    # Exercise was deleted between match and validation
-                                    logger.warning(
-                                        f"Matched exercise ID {matched_exercise_id} no longer exists in database. "
-                                        f"Exercise '{exercise_name}' will be removed from plan."
-                                    )
-                                    exercise["_remove_from_plan"] = True
+                                matched_exercise_id_str = str(matched_exercise_id)
+                                # OPTIMIZATION #2: Check if already validated, otherwise add to batch validation list
+                                is_valid = matched_exercise_id_str in validated_exercise_ids_set
+                                if not is_valid:
+                                    matched_exercise_ids_to_validate.append(matched_exercise_id_str)
+                                
+                                # Set exercise_id - will validate in batch after loop if not already validated
+                                exercise["exercise_id"] = matched_exercise_id
+                                # Keep exercise_name for frontend display, update with matched name
+                                exercise["exercise_name"] = matched_exercise_name
+                                # Update other metadata with matched values
+                                # Extract main_muscle from main_muscles array (first item) - database has main_muscles, not main_muscle
+                                main_muscles_array = matched_exercise.get("primary_muscles") or matched_exercise.get("main_muscles", [])
+                                exercise["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
+                                exercise["equipment"] = matched_exercise.get("equipment")
+                                stats["exercises_matched"] += 1
+                                
+                                if similarity_score < 0.70:
+                                    stats["low_similarity_count"] += 1
+                                
+                                logger.debug(
+                                    f"Matched exercise: '{exercise_name}' -> "
+                                    f"'{matched_exercise_name}' (ID: {matched_exercise_id}, "
+                                    f"score: {similarity_score:.3f}, status: {status})"
+                                )
+                                # Add to existing names for fallback diversity tracking
+                                existing_exercise_names.append(matched_exercise_name)
+                                
+                                # Note: Invalid IDs will be removed after batch validation
                             else:
                                 logger.warning(
                                     f"Matched exercise has no ID. Exercise '{exercise_name}' will be removed from plan."
@@ -799,32 +822,32 @@ class ExerciseValidator:
                                 
                                 # Verify the exercise ID still exists in database
                                 if fallback_exercise_id:
-                                    valid_ids, _ = self.exercise_selector.validate_exercise_ids([str(fallback_exercise_id)])
-                                    if str(fallback_exercise_id) in valid_ids:
-                                        # Replace with fallback exercise
-                                        exercise["exercise_id"] = fallback_exercise_id
-                                        # Keep exercise_name for frontend display, update with fallback name
-                                        exercise["exercise_name"] = fallback_exercise_name
-                                        # Update other metadata with fallback values
-                                        # Extract main_muscle from main_muscles array (first item) - database has main_muscles, not main_muscle
-                                        main_muscles_array = fallback_exercise.get("primary_muscles") or fallback_exercise.get("main_muscles", [])
-                                        exercise["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
-                                        exercise["equipment"] = fallback_exercise.get("equipment")
-                                        stats["exercises_matched"] += 1
-                                        
-                                        logger.debug(
-                                            f"✅ Fallback replacement: '{exercise_name}' -> "
-                                            f"'{fallback_exercise_name}' (ID: {fallback_exercise_id})"
-                                        )
-                                        
-                                        # Add to existing names for next iterations
-                                        existing_exercise_names.append(fallback_exercise_name)
-                                    else:
-                                        logger.warning(
-                                            f"Fallback exercise ID {fallback_exercise_id} no longer exists. "
-                                            f"Exercise '{exercise_name}' will be removed from plan."
-                                        )
-                                        exercise["_remove_from_plan"] = True
+                                    fallback_exercise_id_str = str(fallback_exercise_id)
+                                    # OPTIMIZATION #2: Check if already validated, otherwise add to batch validation list
+                                    is_valid = fallback_exercise_id_str in validated_exercise_ids_set
+                                    if not is_valid:
+                                        matched_exercise_ids_to_validate.append(fallback_exercise_id_str)
+                                    
+                                    # Set exercise_id - will validate in batch after loop if not already validated
+                                    exercise["exercise_id"] = fallback_exercise_id
+                                    # Keep exercise_name for frontend display, update with fallback name
+                                    exercise["exercise_name"] = fallback_exercise_name
+                                    # Update other metadata with fallback values
+                                    # Extract main_muscle from main_muscles array (first item) - database has main_muscles, not main_muscle
+                                    main_muscles_array = fallback_exercise.get("primary_muscles") or fallback_exercise.get("main_muscles", [])
+                                    exercise["main_muscle"] = main_muscles_array[0] if isinstance(main_muscles_array, list) and main_muscles_array else None
+                                    exercise["equipment"] = fallback_exercise.get("equipment")
+                                    stats["exercises_matched"] += 1
+                                    
+                                    logger.debug(
+                                        f"✅ Fallback replacement: '{exercise_name}' -> "
+                                        f"'{fallback_exercise_name}' (ID: {fallback_exercise_id})"
+                                    )
+                                    
+                                    # Add to existing names for next iterations
+                                    existing_exercise_names.append(fallback_exercise_name)
+                                    
+                                    # Note: Invalid IDs will be removed after batch validation
                                 else:
                                     logger.warning(
                                         f"Fallback exercise has no ID. Exercise '{exercise_name}' will be removed from plan."
@@ -873,6 +896,44 @@ class ExerciseValidator:
                                 f"✅ Keeping exercise '{exercise_name}' with exercise_id={final_exercise_id}"
                             )
                             exercises_to_keep.append(exercise)
+                    
+                    # OPTIMIZATION #2: Batch validate all newly matched/fallback exercise_ids after loop
+                    if matched_exercise_ids_to_validate:
+                        try:
+                            # Remove duplicates
+                            unique_new_ids = list(set(matched_exercise_ids_to_validate))
+                            valid_new_ids, _ = self.exercise_selector.validate_exercise_ids(unique_new_ids)
+                            # Add validated IDs to cache
+                            validated_exercise_ids_set.update(valid_new_ids)
+                            logger.debug(
+                                f"Batch validated {len(unique_new_ids)} newly matched exercise_ids: "
+                                f"{len(valid_new_ids)} valid"
+                            )
+                            
+                            # Now verify exercises that were deferred - remove invalid ones
+                            # Only filter exercises with exercise_ids that were in the batch to validate
+                            filtered_exercises = []
+                            for ex in exercises_to_keep:
+                                ex_id = ex.get("exercise_id")
+                                if ex_id is None:
+                                    # Keep exercises without IDs (they'll be filtered by final safety check)
+                                    filtered_exercises.append(ex)
+                                else:
+                                    ex_id_str = str(ex_id)
+                                    # Only remove if it was in the batch and found invalid
+                                    if ex_id_str in matched_exercise_ids_to_validate:
+                                        if ex_id_str in validated_exercise_ids_set:
+                                            filtered_exercises.append(ex)
+                                        else:
+                                            logger.warning(
+                                                f"Removing exercise with invalid ID {ex_id}: {ex.get('exercise_name')}"
+                                            )
+                                    else:
+                                        # Exercise ID was already validated earlier, keep it
+                                        filtered_exercises.append(ex)
+                            exercises_to_keep = filtered_exercises
+                        except Exception as e:
+                            logger.error(f"Error batch validating newly matched exercise_ids: {e}")
                     
                     # Preserve all existing exercises unless explicitly marked for removal
                     # Only drop exercises that are flagged with _remove_from_plan
@@ -940,3 +1001,164 @@ class ExerciseValidator:
         except Exception as e:
             logger.error(f"Error in post-processing strength exercises: {e}")
             return training_plan_dict  # Return original on error
+
+    @staticmethod
+    def normalize_reps_weight_arrays(tp: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Post-process LLM response to ensure reps/weight arrays match sets count.
+        
+        This function:
+        1. Ensures reps and weight are proper lists matching sets count
+        2. Sorts reps from HIGH to LOW (descending order)
+        3. Reorders weights to match the new rep order (maintains rep-weight pairing)
+        
+        Handles cases where LLM returns incorrect array lengths:
+        - If arrays are shorter than sets: pad with last value
+        - If arrays are longer than sets: truncate to sets count
+        - If single values: convert to arrays and pad
+        
+        Args:
+            tp: Training plan dictionary from LLM
+            
+        Returns:
+            Training plan with normalized and sorted reps/weight arrays
+        """
+        schedules = tp.get("weekly_schedules") or []
+        fixed_count = 0
+        sorted_count = 0
+        
+        for week in schedules:
+            dailies = week.get("daily_trainings") or []
+            for dt in dailies:
+                if dt.get("is_rest_day", False):
+                    continue
+                
+                strength_exercises = dt.get("strength_exercises") or []
+                for exercise in strength_exercises:
+                    sets = exercise.get("sets", 3)
+                    reps = exercise.get("reps", [])
+                    weight = exercise.get("weight", [])
+                    exercise_name = exercise.get("exercise_name", "Unknown")
+                    day_of_week = dt.get("day_of_week", "Unknown")
+                    
+                    # Store original values for logging
+                    original_sets = sets
+                    original_reps = reps.copy() if isinstance(reps, list) else reps
+                    original_weight = weight.copy() if isinstance(weight, list) else weight
+                    changes = []  # Track what changed
+                    
+                    # Ensure sets is an integer
+                    if not isinstance(sets, int):
+                        try:
+                            sets = int(sets)
+                            if sets != original_sets:
+                                changes.append(f"sets: {original_sets} -> {sets}")
+                        except (ValueError, TypeError):
+                            sets = 3
+                            if original_sets != 3:
+                                changes.append(f"sets: {original_sets} -> {sets} (defaulted)")
+                    
+                    # Normalize reps array
+                    if not isinstance(reps, list):
+                        # Convert single value to list
+                        reps = [reps] if reps is not None else [10]
+                        changes.append(f"reps: {original_reps} -> {reps} (converted to list)")
+                    
+                    # Normalize weight array
+                    if not isinstance(weight, list):
+                        # Convert single value to list
+                        weight = [weight] if weight is not None else [0.0]
+                        changes.append(f"weight: {original_weight} -> {weight} (converted to list)")
+                    
+                    # Fix reps array length
+                    if len(reps) < sets:
+                        # Pad with last value or default
+                        last_rep = reps[-1] if reps else 10
+                        reps.extend([last_rep] * (sets - len(reps)))
+                        changes.append(f"reps: padded from {len(original_reps) if isinstance(original_reps, list) else 1} to {sets} sets")
+                        fixed_count += 1
+                    elif len(reps) > sets:
+                        # Truncate to sets count
+                        original_len = len(reps)
+                        reps = reps[:sets]
+                        weight = weight[:sets]  # Also truncate weight to match
+                        changes.append(f"reps: truncated from {original_len} to {sets} sets")
+                        fixed_count += 1
+                    
+                    # Fix weight array length to match reps
+                    if len(weight) < len(reps):
+                        # Pad with last value or default
+                        last_weight = weight[-1] if weight else 0.0
+                        original_len = len(weight)
+                        weight.extend([last_weight] * (len(reps) - len(weight)))
+                        changes.append(f"weight: padded from {original_len} to {len(reps)} sets")
+                        fixed_count += 1
+                    elif len(weight) > len(reps):
+                        # Truncate to reps length
+                        original_len = len(weight)
+                        weight = weight[:len(reps)]
+                        changes.append(f"weight: truncated from {original_len} to {len(reps)} sets")
+                        fixed_count += 1
+                    
+                    # Ensure proper types (int for reps, float for weight)
+                    try:
+                        reps = [int(r) for r in reps]
+                    except (ValueError, TypeError):
+                        logger.warning(
+                            f"Invalid reps values for exercise '{exercise_name}': {reps}. Using defaults."
+                        )
+                        reps = [10] * sets
+                        weight = [0.0] * sets
+                        changes.append(f"reps/weight: type conversion failed, using defaults")
+                    
+                    try:
+                        weight = [float(w) for w in weight]
+                    except (ValueError, TypeError):
+                        logger.warning(
+                            f"Invalid weight values for exercise '{exercise_name}': {weight}. Using defaults."
+                        )
+                        weight = [0.0] * sets
+                        changes.append(f"weight: type conversion failed, using defaults")
+                    
+                    # CRITICAL: Sort reps from HIGH to LOW (descending)
+                    # Pair reps with weights before sorting to maintain correspondence
+                    reps_weight_pairs = list(zip(reps, weight))
+                    # Sort by reps (first element) in descending order (high to low)
+                    reps_weight_pairs.sort(key=lambda x: x[0], reverse=True)
+                    
+                    # Check if sorting was needed (i.e., if not already sorted high->low)
+                    reps_before_sort = reps.copy()
+                    weight_before_sort = weight.copy()
+                    reps_sorted = [pair[0] for pair in reps_weight_pairs]
+                    weight_sorted = [pair[1] for pair in reps_weight_pairs]
+                    
+                    # Only update if order changed
+                    if reps_sorted != reps_before_sort:
+                        reps = reps_sorted
+                        weight = weight_sorted
+                        sorted_count += 1
+                        changes.append(f"reps sorted high->low: {reps_before_sort} -> {reps} (weights adjusted: {weight_before_sort} -> {weight})")
+                        logger.debug(
+                            f"Sorted reps for '{exercise_name}': {reps_before_sort} -> {reps} "
+                            f"(weights adjusted: {weight_before_sort} -> {weight})"
+                        )
+                    
+                    # Log if any changes were made
+                    if changes:
+                        logger.info(
+                            f"📊 [NORMALIZE] Post-processed exercise '{exercise_name}' ({day_of_week}): "
+                            f"{'; '.join(changes)}"
+                        )
+                    
+                    # Update exercise with normalized and sorted arrays
+                    exercise["sets"] = sets
+                    exercise["reps"] = reps
+                    exercise["weight"] = weight
+        
+        if fixed_count > 0 or sorted_count > 0:
+            logger.info(
+                f"✅ Normalized {fixed_count} reps/weight arrays to match sets counts, "
+                f"sorted {sorted_count} exercises (reps high->low)"
+            )
+        
+        return tp

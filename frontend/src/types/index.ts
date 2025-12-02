@@ -68,7 +68,6 @@ export interface UserProfile {
   height: number;
   heightUnit: string;
   gender: string;
-  finalChatNotes: string;
   
   // Raw questions and responses (for consistency)
   initial_questions?: AIQuestion[] | null;

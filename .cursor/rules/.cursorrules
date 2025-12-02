@@ -1,0 +1,35 @@
+# Cursor Rules for EvolveAI Project
+
+This file contains project-wide rules for the Cursor AI assistant.
+
+## Project Overview
+EvolveAI is a fitness training plan generator with:
+- FastAPI backend (Python)
+- React Native frontend (TypeScript/Expo)
+- Supabase for database and authentication
+- OpenAI/Gemini for AI features
+
+## Project-Wide Rules
+
+### Security
+- Never commit `.env` files or real API keys
+- Always validate JWT tokens for authenticated endpoints
+- Don't expose sensitive data in error responses
+- Use GitHub Secrets for CI/CD
+- Test environment should use dummy values
+
+### Git & Version Control
+- Use meaningful commit messages
+- Keep commits focused and atomic
+- Never commit sensitive data
+
+### Documentation
+- Keep README files up to date
+- Document complex logic and decisions
+- Include examples in documentation
+
+## See Also
+For detailed rules, see:
+- `.cursor/rules/` - Project-wide rules (security, git, etc.)
+- `backend/.cursor/rules/` - Backend-specific rules (Python, FastAPI, testing)
+- `frontend/.cursor/rules/` - Frontend-specific rules (TypeScript, React Native, Expo)

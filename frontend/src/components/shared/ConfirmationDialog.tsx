@@ -53,12 +53,12 @@ const ConfirmationDialog: ConfirmationDialogComponent = ({
                     end={{ x: 1, y: 1 }}
                     style={styles.iconGradient}
                   >
-                    <Ionicons name={icon} size={22} color={colors.primary} />
+                    <Ionicons name={icon} size={22} color={confirmButtonColor} />
                   </LinearGradient>
                 </View>
               )}
               {!!title && (
-                <Text style={styles.title}>{title}</Text>
+                <Text style={[styles.title, { color: confirmButtonColor }]}>{title}</Text>
               )}
             </View>
           )}
@@ -133,9 +133,9 @@ const styles = StyleSheet.create({
     borderRadius: 29,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: createColorWithOpacity(colors.primary, 0.2),
+    shadowColor: createColorWithOpacity(colors.secondary, 0.25),
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.25,
     shadowRadius: 5,
     elevation: 4,
   },
@@ -178,9 +178,9 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: createColorWithOpacity(colors.primary, 0.25),
+    shadowColor: createColorWithOpacity(colors.secondary, 0.3),
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 5,
   },

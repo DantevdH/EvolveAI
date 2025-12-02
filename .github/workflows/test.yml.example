@@ -1,0 +1,70 @@
+name: Backend Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    # Use Python version from your project
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11"]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    
+    - name: Create virtual environment
+      run: |
+        python -m venv venv
+        source venv/bin/activate
+    
+    - name: Install dependencies
+      working-directory: ./backend
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov  # Add any additional test dependencies
+    
+    - name: Run tests
+      working-directory: ./backend
+      env:
+        # Test environment marker (required)
+        ENVIRONMENT: test
+        PYTEST: true
+        DEBUG: true
+        
+        # Test API keys (use GitHub Secrets for real values in integration tests)
+        # For unit tests, dummy values from conftest.py are sufficient
+        OPENAI_API_KEY: ${{ secrets.TEST_OPENAI_API_KEY || 'test-openai-key' }}
+        LLM_API_KEY: ${{ secrets.TEST_LLM_API_KEY || 'test-llm-api-key' }}
+        
+        # Test Supabase configuration (use GitHub Secrets for real values)
+        SUPABASE_URL: ${{ secrets.TEST_SUPABASE_URL || 'https://test.supabase.co' }}
+        SUPABASE_ANON_KEY: ${{ secrets.TEST_SUPABASE_ANON_KEY || 'test-anon-key' }}
+        SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY || 'test-service-role-key' }}
+      run: |
+        source ../venv/bin/activate
+        pytest tests/ -v --cov=. --cov-report=xml --cov-report=term
+    
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./backend/coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+

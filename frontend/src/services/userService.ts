@@ -3,6 +3,7 @@ import { UserProfile } from '@/src/types';
 import { AIQuestion } from '@/src/types/onboarding';
 import { DEFAULT_VALUES } from '../constants/api';
 import { mapOnboardingToDatabase } from '../utils/profileDataMapping';
+import { logger } from '../utils/logger';
 
 export interface UserServiceResponse<T> {
   success: boolean;
@@ -15,18 +16,15 @@ export interface UserServiceResponse<T> {
  */
 const extractAIMessage = (questionsData: any): string | null => {
   if (!questionsData) {
-    console.log('📍 extractAIMessage: questionsData is null/undefined');
     return null;
   }
   
   // Handle new format: object with AImessage or ai_message
   if (typeof questionsData === 'object' && !Array.isArray(questionsData)) {
     const aiMessage = questionsData.AImessage || questionsData.ai_message || null;
-    console.log(`📍 extractAIMessage: Found AI message: ${aiMessage?.substring(0, 50) || 'NONE'}`);
     return aiMessage;
   }
   
-  console.log('📍 extractAIMessage: questionsData is not an object or is an array');
   return null;
 };
 
@@ -101,7 +99,7 @@ export class UserService {
         .select();
 
       if (error) {
-        console.error('❌ FRONTEND: Failed to create user profile:', error.message);
+        logger.data('Create user profile', 'error', { error: error.message });
         return {
           success: false,
           error: `Failed to create user profile: ${error.message}`,
@@ -109,20 +107,20 @@ export class UserService {
       }
 
       if (data && data.length > 0) {
-        console.log(`✅ FRONTEND: User profile created successfully (ID: ${data[0].id})`);
+        logger.data('Create user profile', 'success', { profileId: data[0].id });
         return {
           success: true,
           data: { id: data[0].id },
         };
       } else {
-        console.error('❌ FRONTEND: No data returned from profile creation');
+        logger.data('Create user profile', 'error', { reason: 'No data returned' });
         return {
           success: false,
           error: 'No data returned from profile creation',
         };
       }
     } catch (error) {
-      console.error('❌ FRONTEND: Error creating user profile:', error);
+      logger.error('Error creating user profile', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'An unexpected error occurred',
@@ -166,7 +164,7 @@ export class UserService {
         .select();
 
       if (error) {
-        console.error(`❌ FRONTEND: Failed to update user profile for ${stage} stage:`, error.message);
+        logger.data(`Update user profile (${stage})`, 'error', { error: error.message });
         return {
           success: false,
           error: `Failed to update user profile for ${stage} stage: ${error.message}`,
@@ -174,20 +172,20 @@ export class UserService {
       }
 
       if (updatedProfile && updatedProfile.length > 0) {
-        console.log(`✅ FRONTEND: User profile updated successfully for ${stage} stage (ID: ${updatedProfile[0].id})`);
+        logger.data(`Update user profile (${stage})`, 'success', { profileId: updatedProfile[0].id });
         return {
           success: true,
           data: updatedProfile[0],
         };
       } else {
-        console.error(`❌ FRONTEND: No data returned from profile update for ${stage} stage`);
+        logger.data(`Update user profile (${stage})`, 'error', { reason: 'No data returned' });
         return {
           success: false,
           error: `No data returned from profile update for ${stage} stage`,
         };
       }
     } catch (error) {
-      console.error(`❌ FRONTEND: Error updating user profile for ${stage} stage:`, error);
+      logger.error(`Error updating user profile for ${stage} stage`, error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'An unexpected error occurred',
@@ -197,23 +195,22 @@ export class UserService {
 
   static async getUserProfile(userId: string): Promise<UserServiceResponse<UserProfile>> {
     try {
-      console.log('🔍 userService: Fetching user profile for user_id:', userId);
-      
-      // Use the existing Supabase client with proper query
-      const { data: user_profiles, error, status } = await supabase
+      if (!supabase || !supabase.auth) {
+        return {
+          success: false,
+          error: 'Supabase client not initialized',
+        };
+      }
+
+      const { data: user_profiles, error } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('user_id', userId);
 
-
-
       if (error) {
-        console.error('❌ userService: Error fetching profile:', error);
-        
         // If it's an "Invalid API key" error, it might be due to RLS policies
         // In this case, treat it as "no profile found" since the user is authenticated
-        if (error.message.includes('Invalid API key') || error.message.includes('permission denied')) {
-          console.warn('⚠️ userService: Permission error - returning undefined (may indicate RLS issue)');
+        if (error.message?.includes('Invalid API key') || error.message?.includes('permission denied')) {
           return {
             success: true,
             data: undefined,
@@ -228,7 +225,6 @@ export class UserService {
 
       // Check if we got any profiles
       if (user_profiles && user_profiles.length > 0) {
-        console.log('✅ userService: Found profile, ID:', user_profiles[0].id);
         const rawProfile = user_profiles[0];
         
         // Parse playbook if it exists
@@ -245,7 +241,7 @@ export class UserService {
               last_updated: playbookData.last_updated || playbookData.lastUpdated || new Date().toISOString(),
             };
           } catch (error) {
-            console.warn('⚠️ userService: Failed to parse playbook:', error);
+            // Playbook parsing failed, continue without it
           }
         }
         
@@ -263,16 +259,12 @@ export class UserService {
           height: rawProfile.height || 170,
           heightUnit: rawProfile.height_unit || 'cm',
           gender: rawProfile.gender || '',
-          finalChatNotes: rawProfile.final_chat_notes || '',
           // Raw questions and responses (for consistency)
           initial_questions: convertToAIQuestions(rawProfile.initial_questions),
           initial_responses: rawProfile.initial_responses || null,
           
           // AI messages from database
-          initial_ai_message: (() => {
-            console.log('📍 userService: rawProfile.initial_questions:', typeof rawProfile.initial_questions, JSON.stringify(rawProfile.initial_questions)?.substring(0, 200));
-            return extractAIMessage(rawProfile.initial_questions);
-          })(),
+          initial_ai_message: extractAIMessage(rawProfile.initial_questions),
           outline_ai_message: rawProfile.plan_outline?.ai_message || null,
           // Plan outline and feedback (separated)
           plan_outline: rawProfile.plan_outline || null,
@@ -289,8 +281,6 @@ export class UserService {
           data: mappedProfile,
         };
       } else {
-        console.warn('⚠️ userService: No profiles found for user_id:', userId);
-        console.warn('⚠️ userService: This means the profile was never created or user_id mismatch');
         return {
           success: true,
           data: undefined,
@@ -323,9 +313,6 @@ export class UserService {
       if (updates.height !== undefined) updateData.height = updates.height;
       if (updates.heightUnit !== undefined) updateData.height_unit = updates.heightUnit;
       if (updates.gender !== undefined) updateData.gender = updates.gender;
-      if (updates.hasLimitations !== undefined) updateData.has_limitations = updates.hasLimitations;
-      if (updates.limitationsDescription !== undefined) updateData.limitations_description = updates.limitationsDescription;
-      if (updates.finalChatNotes !== undefined) updateData.final_chat_notes = updates.finalChatNotes;
       if (updates.planAccepted !== undefined) updateData.plan_accepted = updates.planAccepted;
 
       const { data, error } = await supabase
@@ -350,18 +337,12 @@ export class UserService {
         goalDescription: data.goal_description || '',
         coachId: data.coach_id,
         experienceLevel: data.experience_level || '',
-        daysPerWeek: data.days_per_week || 3,
-        minutesPerSession: data.minutes_per_session || 45,
-        equipment: data.equipment || '',
         age: data.age || 25,
         weight: data.weight || 70,
         weightUnit: data.weight_unit || 'kg',
         height: data.height || 170,
         heightUnit: data.height_unit || 'cm',
         gender: data.gender || '',
-        hasLimitations: data.has_limitations || false,
-        limitationsDescription: data.limitations_description || '',
-        finalChatNotes: data.final_chat_notes || '',
         planAccepted: data.plan_accepted || false,
         createdAt: data.created_at ? new Date(data.created_at) : undefined,
         updatedAt: data.updated_at ? new Date(data.updated_at) : undefined,

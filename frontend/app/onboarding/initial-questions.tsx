@@ -3,6 +3,7 @@ import { StyleSheet, View, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { ConversationalOnboarding } from '@/src/components/onboarding/ConversationalOnboarding';
+import { logError } from '@/src/utils/logger';
 
 const InitialQuestionsResume: React.FC = () => {
   const router = useRouter();
@@ -14,8 +15,15 @@ const InitialQuestionsResume: React.FC = () => {
   };
 
   const handleError = (error: string) => {
-    console.error('❌ Onboarding error:', error);
-    Alert.alert('Error', error, [{ text: 'Try Again' }, { text: 'Go Back', onPress: () => router.replace('/onboarding') }]);
+    logError('Onboarding initial-questions error', error);
+    Alert.alert(
+      'Error',
+      'We hit a snag while collecting your initial answers. Please try again.',
+      [
+        { text: 'Try Again' },
+        { text: 'Go Back', onPress: () => router.replace('/onboarding') },
+      ]
+    );
   };
 
   return (

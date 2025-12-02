@@ -250,17 +250,6 @@ const FullProfileScreen: React.FC = () => {
             </View>
           )}
 
-          {/* Additional Notes */}
-          {state.userProfile?.finalChatNotes && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Additional Notes</Text>
-              
-              <View style={styles.profileItem}>
-                <Text style={styles.profileLabel}>Coach Notes</Text>
-                <Text style={styles.profileValue}>{formatValue(state.userProfile?.finalChatNotes)}</Text>
-              </View>
-            </View>
-          )}
 
           {/* Account Information */}
           <View style={styles.section}>

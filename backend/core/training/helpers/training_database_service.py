@@ -10,6 +10,7 @@ from settings import settings
 import json
 from datetime import datetime
 from logging_config import get_logger
+from core.utils.env_loader import is_test_environment
 from core.training.schemas.training_schemas import (
     TrainingPlan,
     DailyTraining,
@@ -24,9 +25,31 @@ class TrainingDatabaseService:
     def __init__(self):
         """Initialize Supabase client."""
         self.logger = get_logger(__name__)
-        self.supabase: Client = create_client(
-            settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY
-        )
+        
+        # Check if we're in a test environment
+        is_test_env = is_test_environment()
+        
+        # Initialize Supabase client, but handle test/missing credentials gracefully
+        self.supabase: Optional[Client] = None
+        
+        # In test environment, skip client creation entirely - tests should mock the service
+        if is_test_env:
+            self.logger.debug("Test environment: TrainingDatabaseService not initialized (will use mocks)")
+        else:
+            # Only create client in non-test environments
+            try:
+                supabase_url = settings.SUPABASE_URL
+                supabase_key = settings.SUPABASE_ANON_KEY
+                
+                # Only create client if we have valid credentials
+                if supabase_url and supabase_key:
+                    self.supabase = create_client(supabase_url, supabase_key)
+                    self.logger.debug("TrainingDatabaseService Supabase client initialized successfully")
+                else:
+                    self.logger.warning("Supabase credentials missing - client not initialized")
+            except Exception as e:
+                self.logger.error(f"Failed to initialize Supabase client: {e}")
+                raise
 
     async def save_training_plan(
         self, user_profile_id: int, training_plan_data: Dict[str, Any]
@@ -287,22 +310,73 @@ class TrainingDatabaseService:
                     )
                     strength_exercises = exercises_result.data or []
 
-                    # Enrich each strength exercise with exercise metadata (JOIN with exercises table)
+                    # OPTIMIZATION #4: Batch enrich strength exercises with exercise metadata
+                    # Collect all exercise_ids first, then bulk fetch metadata
+                    exercise_ids_to_enrich = []
+                    for strength_exercise in strength_exercises:
+                        exercise_id = strength_exercise.get("exercise_id")
+                        if exercise_id:
+                            exercise_ids_to_enrich.append(exercise_id)
+                    
+                    # Bulk fetch all exercise metadata in a single query
+                    exercise_metadata_map = {}
+                    if exercise_ids_to_enrich:
+                        try:
+                            # Remove duplicates
+                            unique_exercise_ids = list(set(exercise_ids_to_enrich))
+                            
+                            if len(unique_exercise_ids) == 1:
+                                # Single exercise - use .eq() with .single()
+                                metadata_result = (
+                                    self.supabase.table("exercises")
+                                    .select("*")
+                                    .eq("id", unique_exercise_ids[0])
+                                    .single()
+                                    .execute()
+                                )
+                                if metadata_result.data:
+                                    exercise_metadata_map[unique_exercise_ids[0]] = metadata_result.data
+                            else:
+                                # Multiple exercises - use .in_() for bulk query
+                                metadata_result = (
+                                    self.supabase.table("exercises")
+                                    .select("*")
+                                    .in_("id", unique_exercise_ids)
+                                    .execute()
+                                )
+                                if metadata_result.data:
+                                    # Build lookup map: exercise_id -> metadata
+                                    for exercise_metadata in metadata_result.data:
+                                        exercise_metadata_map[exercise_metadata.get("id")] = exercise_metadata
+                        except Exception as e:
+                            logger.warning(f"Error bulk-fetching exercise metadata: {e}. Falling back to sequential queries.")
+                            exercise_metadata_map = {}  # Will fall back to sequential if bulk fails
+                    
+                    # Enrich each strength exercise using the metadata map
                     # Store as "exercises" (plural) to match Supabase relational query format
                     # Frontend TrainingService expects se.exercises from Supabase queries
                     for strength_exercise in strength_exercises:
                         exercise_id = strength_exercise.get("exercise_id")
                         if exercise_id:
-                            # Fetch exercise metadata from exercises table
-                            exercise_metadata_result = (
-                                self.supabase.table("exercises")
-                                .select("*")
-                                .eq("id", exercise_id)
-                                .single()
-                                .execute()
-                            )
-                            if exercise_metadata_result.data:
-                                exercise_metadata = exercise_metadata_result.data
+                            exercise_metadata = exercise_metadata_map.get(exercise_id)
+                            
+                            # Fallback to sequential query if bulk fetch failed or missed this exercise
+                            if not exercise_metadata:
+                                try:
+                                    exercise_metadata_result = (
+                                        self.supabase.table("exercises")
+                                        .select("*")
+                                        .eq("id", exercise_id)
+                                        .single()
+                                        .execute()
+                                    )
+                                    if exercise_metadata_result.data:
+                                        exercise_metadata = exercise_metadata_result.data
+                                        exercise_metadata_map[exercise_id] = exercise_metadata  # Cache for future use
+                                except Exception as e:
+                                    logger.warning(f"Error fetching metadata for exercise {exercise_id}: {e}")
+                            
+                            if exercise_metadata:
                                 # Store as "exercises" (plural) to match Supabase format (for frontend compatibility)
                                 strength_exercise["exercises"] = exercise_metadata
                                 # Also flatten enriched fields to top-level for schema validation

@@ -8,11 +8,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTraining } from '../hooks/useTraining';
 import { useAuth } from '../context/AuthContext';
 import { colors, createColorWithOpacity, goldenGradient } from '../constants/colors';
+import { logger } from '../utils/logger';
+import { calculateKPIs } from '../utils/trainingKPIs';
 import { TrainingHeader } from '../components/training/header';
 import { DailyTrainingDetail } from '../components/training/dailyDetail';
 import ConfirmationDialog from '../components/shared/ConfirmationDialog';
 import { ExerciseDetailView } from '../components/training/exerciseDetail';
-import OneRMCalculatorView from '../components/training/OneRMCalculatorView';
 import { ExerciseSwapModal } from '../components/training/exerciseSwapModal';
 import SessionRPEModal from '../components/training/SessionRPEModal';
 import { DailyFeedbackModal, DailyFeedbackData } from '../components/training/dailyFeedback';
@@ -22,11 +23,14 @@ import { AddEnduranceSessionModal } from '../components/training/addEnduranceSes
 import { FitnessJourneyMap } from '../components/training/journeyMap';
 import { WelcomeHeader } from '../components/home/WelcomeHeader';
 import { ProgressSummary } from '../components/home/ProgressSummary';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import { trainingService } from '../services/onboardingService';
+import { reverseTransformTrainingPlan, transformUserProfileToPersonalInfo } from '../utils/trainingPlanTransformer';
+import { supabase } from '../config/supabase';
+import { useApiCallWithBanner } from '../hooks/useApiCallWithBanner';
 
-const TrainingScreen: React.FC = () => {
-  const { state: authState } = useAuth();
-  const [oneRMCalculatorVisible, setOneRMCalculatorVisible] = useState(false);
-  const [selectedExerciseForCalculator, setSelectedExerciseForCalculator] = useState<string>('');
+const TrainingScreenContent: React.FC = () => {
+  const { state: authState, refreshTrainingPlan, setTrainingPlan } = useAuth();
   const [addExerciseModalVisible, setAddExerciseModalVisible] = useState(false);
   const [removeExerciseId, setRemoveExerciseId] = useState<{ id: string; isEndurance: boolean; name: string } | null>(null);
   const [selectedWeekFromMap, setSelectedWeekFromMap] = useState<number | null>(null);
@@ -44,7 +48,6 @@ const TrainingScreen: React.FC = () => {
     updateSetDetails,
     showExerciseDetail,
     hideExerciseDetail,
-    toggleOneRMCalculator,
     completeTraining,
     reopenTraining,
     confirmReopenTraining,
@@ -60,7 +63,9 @@ const TrainingScreen: React.FC = () => {
     currentWeekProgress,
     addExercise: addExerciseHook,
     addEnduranceSession: addEnduranceSessionHook,
-    removeExercise: removeExerciseHook
+    removeExercise: removeExerciseHook,
+    SwapExerciseErrorBanner,
+    CompleteTrainingErrorBanner
   } = useTraining();
 
   // Daily Feedback Hook for ACE Pattern
@@ -114,37 +119,6 @@ const TrainingScreen: React.FC = () => {
     }
   }, [selectedWeekFromMap, authState.trainingPlan, authState.userProfile?.planAccepted]);
 
-  const handleOneRMCalculator = (exerciseName: string) => {
-    setSelectedExerciseForCalculator(exerciseName);
-    setOneRMCalculatorVisible(true);
-  };
-
-  const handleOneRMCalculate = (estimated1RM: number) => {
-    console.log('Calculated 1RM:', estimated1RM, 'for exercise:', selectedExerciseForCalculator);
-    
-    // Find the exercise in the current training and apply the 1RM calculation
-    if (selectedDayTraining && selectedExerciseForCalculator) {
-      const exercise = selectedDayTraining.exercises.find(
-        ex => ex.exercise?.name === selectedExerciseForCalculator
-      );
-      
-      if (exercise && exercise.weight1RM) {
-        // Calculate weights based on weight_1rm percentages
-        const calculatedWeights = exercise.weight1RM.map((percentage: number) => {
-          return Math.round((estimated1RM * percentage) / 100);
-        });
-        
-        console.log('Applying calculated weights:', calculatedWeights, 'based on percentages:', exercise.weight1RM);
-        
-        // Update each set with the calculated weight
-        calculatedWeights.forEach((weight: number, index: number) => {
-          if (exercise.sets[index]) {
-            updateSetDetails(exercise.id, index, exercise.sets[index].reps, weight);
-          }
-        });
-      }
-    }
-  };
 
   const handleExerciseSwap = (exercise: any) => {
     showExerciseSwapModal(exercise);
@@ -172,7 +146,7 @@ const TrainingScreen: React.FC = () => {
       // Success message is shown by the hook
     } catch (error) {
       // Error is already handled by the hook
-      console.error('Failed to submit feedback');
+      logger.error('Failed to submit feedback', error);
     }
   };
 
@@ -230,15 +204,88 @@ const TrainingScreen: React.FC = () => {
     setRemoveExerciseId(null);
   };
 
-  const handleToggleChange = (isStrength: boolean) => {
-    setIsStrengthMode(isStrength);
-  };
-
   // Handle week selection from map
   const handleWeekSelectFromMap = (weekNumber: number) => {
     setSelectedWeekFromMap(weekNumber);
     selectWeek(weekNumber);
   };
+
+  // Handle week generation
+  // API call with error handling for week generation
+  const { execute: executeGenerateWeek, ErrorBannerComponent: GenerateWeekErrorBanner } = useApiCallWithBanner(
+    async (weekNumber: number) => {
+      if (!trainingPlan || !authState.userProfile) {
+        throw new Error('Unable to generate week: missing training plan or user profile');
+      }
+
+      const planId = typeof trainingPlan.id === 'string' ? parseInt(trainingPlan.id, 10) : trainingPlan.id;
+      if (!planId) {
+        throw new Error('Invalid plan ID');
+      }
+
+      // Get JWT token
+      let jwtToken = authState.session?.access_token;
+      if (!jwtToken) {
+        const { data: { session } } = await supabase.auth.getSession();
+        jwtToken = session?.access_token;
+      }
+
+      if (!jwtToken) {
+        throw new Error('JWT token not available. Please sign in again.');
+      }
+
+      // Prepare data
+      const backendFormatPlan = reverseTransformTrainingPlan(trainingPlan);
+      const personalInfo = transformUserProfileToPersonalInfo(authState.userProfile);
+
+      if (!personalInfo) {
+        throw new Error('Failed to prepare user profile data.');
+      }
+
+      // Call API
+      const userProfileId = authState.userProfile.id;
+      if (!userProfileId) {
+        throw new Error('User profile ID not available.');
+      }
+
+      const response = await trainingService.generateWeek(
+        planId,
+        backendFormatPlan,
+        userProfileId,
+        personalInfo,
+        jwtToken
+      );
+
+      // Update training plan with new week
+      if (response?.data) {
+        // Transform the response back to frontend format
+        const { transformTrainingPlan } = await import('../utils/trainingPlanTransformer');
+        const updatedPlan = transformTrainingPlan(response.data);
+        
+        // Update the training plan in auth context
+        setTrainingPlan(updatedPlan);
+        
+        // Refresh to get the latest data
+        await refreshTrainingPlan();
+        
+        logger.info(`Week ${weekNumber} generated successfully`);
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    },
+    {
+      retryAttempts: 3,
+    }
+  );
+
+  const handleGenerateWeek = useCallback(async (weekNumber: number) => {
+    try {
+      await executeGenerateWeek(weekNumber);
+    } catch (error) {
+      // Error is already handled by useApiCallWithBanner, but we re-throw for modal to handle
+      throw error;
+    }
+  }, [executeGenerateWeek]);
 
   // Handle back to map
   const handleBackToMap = () => {
@@ -249,6 +296,9 @@ const TrainingScreen: React.FC = () => {
   if (trainingState.isLoading) {
     return (
       <SafeAreaView style={styles.container}>
+        <SwapExerciseErrorBanner />
+        <CompleteTrainingErrorBanner />
+        <GenerateWeekErrorBanner />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading training plan...</Text>
@@ -269,10 +319,13 @@ const TrainingScreen: React.FC = () => {
     );
   }
 
-  // Handle no training plan
+  // Handle no training plan (graceful handling of null/undefined)
   if (!trainingPlan) {
     return (
       <SafeAreaView style={styles.container}>
+        <SwapExerciseErrorBanner />
+        <CompleteTrainingErrorBanner />
+        <GenerateWeekErrorBanner />
         <View style={styles.noPlanContainer}>
           <Text style={styles.noPlanTitle}>No Training Plan</Text>
           <Text style={styles.noPlanText}>
@@ -297,96 +350,23 @@ const TrainingScreen: React.FC = () => {
     );
   }
 
-  // Calculate current week stats
+  // Calculate current week stats (with null/undefined validation)
   const currentWeek = trainingPlan?.weeklySchedules?.find(
     week => week.weekNumber === trainingState.currentWeekSelected
   );
   
-  const completedTrainingsThisWeek = currentWeek?.dailyTrainings.filter(
+  const completedTrainingsThisWeek = currentWeek?.dailyTrainings?.filter(
     training => training.completed && !training.isRestDay
   ).length || 0;
   
-  const totalTrainingsThisWeek = currentWeek?.dailyTrainings.filter(
+  const totalTrainingsThisWeek = currentWeek?.dailyTrainings?.filter(
     training => !training.isRestDay
   ).length || 0;
 
   const isPastWeek = trainingState.currentWeekSelected < (trainingPlan?.currentWeek || 1);
 
-  // Calculate KPIs for ProgressSummary
-  const completedWeeks = trainingPlan?.weeklySchedules?.filter(
-    week => week.weekNumber < trainingPlan.currentWeek
-  ).length || 0;
-
-  // Calculate streak (consecutive completed days)
-  const calculateStreak = () => {
-    if (!trainingPlan?.weeklySchedules) return 0;
-    
-    const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    const today = new Date();
-    const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, etc.
-    const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0
-    const todayName = dayOrder[mondayFirstIndex];
-    const todayIndex = dayOrder.indexOf(todayName);
-    
-    const allDailyTrainings: Array<{ weekNumber: number; dayOfWeek: string; completed: boolean }> = [];
-    
-    trainingPlan.weeklySchedules.forEach(week => {
-      week.dailyTrainings.forEach(daily => {
-        if (!daily.isRestDay) {
-          const dayIndex = dayOrder.indexOf(daily.dayOfWeek);
-          const isPastOrToday = dayIndex <= todayIndex;
-          
-          if (isPastOrToday) {
-            const isCompleted = daily.exercises.length > 0 && daily.exercises.every(ex => ex.completed);
-            allDailyTrainings.push({
-              weekNumber: week.weekNumber,
-              dayOfWeek: daily.dayOfWeek,
-              completed: isCompleted
-            });
-          }
-        }
-      });
-    });
-    
-    // Sort by week number (descending) and day order (descending) - most recent first
-    allDailyTrainings.sort((a, b) => {
-      if (a.weekNumber !== b.weekNumber) {
-        return b.weekNumber - a.weekNumber;
-      }
-      return dayOrder.indexOf(b.dayOfWeek) - dayOrder.indexOf(a.dayOfWeek);
-    });
-    
-    let streak = 0;
-    for (const training of allDailyTrainings) {
-      if (training.completed) {
-        streak++;
-      } else {
-        break;
-      }
-    }
-    
-    return streak;
-  };
-
-  // Calculate weekly trainings (completed trainings in current week)
-  const calculateWeeklyTrainings = () => {
-    if (!trainingPlan?.weeklySchedules) return 0;
-    
-    const currentWeek = trainingPlan.weeklySchedules.find(
-      week => week.weekNumber === trainingPlan.currentWeek
-    );
-    
-    if (!currentWeek) return 0;
-    
-    return currentWeek.dailyTrainings.filter(
-      training => !training.isRestDay && 
-                  training.exercises.length > 0 && 
-                  training.exercises.every(ex => ex.completed)
-    ).length;
-  };
-
-  const streak = calculateStreak();
-  const weeklyTrainings = calculateWeeklyTrainings();
+  // Calculate KPIs using extracted utility functions
+  const { streak, weeklyTrainings, completedWeeks: validatedCompletedWeeks } = calculateKPIs(trainingPlan);
 
   const renderJourneyAccessory = (
     <TouchableOpacity
@@ -418,7 +398,7 @@ const TrainingScreen: React.FC = () => {
           <ProgressSummary 
             streak={streak}
             weeklyTrainings={weeklyTrainings}
-            weeksCompleted={completedWeeks}
+            weeksCompleted={validatedCompletedWeeks}
           />
           {/* Journey Map - Scrollable Card */}
           <View style={styles.journeyMapContainer}>
@@ -426,6 +406,7 @@ const TrainingScreen: React.FC = () => {
               trainingPlan={trainingPlan}
               currentWeek={trainingPlan.currentWeek}
               onWeekSelect={handleWeekSelectFromMap}
+              onGenerateWeek={handleGenerateWeek}
               headerTitle={trainingPlan.title}
               headerAccessory={renderJourneyAccessory}
             />
@@ -438,6 +419,8 @@ const TrainingScreen: React.FC = () => {
   // Show detail view if a week is selected
   return (
     <SafeAreaView style={styles.container}>
+      <SwapExerciseErrorBanner />
+      <CompleteTrainingErrorBanner />
       <ScrollView 
         style={styles.scrollView} 
         contentContainerStyle={styles.scrollContent}
@@ -455,11 +438,9 @@ const TrainingScreen: React.FC = () => {
         {/* Daily Training Detail */}
         <DailyTrainingDetail
           dailyTraining={selectedDayTraining}
-          isPastWeek={isPastWeek}
           onExerciseToggle={toggleExerciseCompletion}
           onSetUpdate={updateSetDetails}
           onExerciseDetail={showExerciseDetail}
-          onOneRMCalculator={handleOneRMCalculator}
           onSwapExercise={handleExerciseSwap}
           onReopenTraining={reopenTraining}
           onAddExercise={handleAddExercise}
@@ -479,14 +460,6 @@ const TrainingScreen: React.FC = () => {
         />
       )}
 
-      {/* OneRM Calculator Modal */}
-      <OneRMCalculatorView
-        exerciseName={selectedExerciseForCalculator}
-        isVisible={oneRMCalculatorVisible}
-        onClose={() => setOneRMCalculatorVisible(false)}
-        onCalculate={handleOneRMCalculate}
-      />
-
       {/* Exercise Swap Modal */}
       {exerciseToSwap && (
         <ExerciseSwapModal
@@ -494,8 +467,8 @@ const TrainingScreen: React.FC = () => {
           currentExercise={exerciseToSwap}
           onClose={hideExerciseSwapModal}
           onSwapExercise={handleConfirmExerciseSwap}
-          scheduledExerciseIds={selectedDayTraining?.exercises.map(ex => ex.exercise?.id).filter(Boolean) || []}
-          scheduledExerciseNames={selectedDayTraining?.exercises.map(ex => ex.exercise?.name).filter(Boolean) || []}
+          scheduledExerciseIds={selectedDayTraining?.exercises.map(ex => ex.exercise?.id).filter((id): id is string => !!id) || []}
+          scheduledExerciseNames={selectedDayTraining?.exercises.map(ex => ex.exercise?.name).filter((name): name is string => !!name) || []}
         />
       )}
 
@@ -514,7 +487,7 @@ const TrainingScreen: React.FC = () => {
         cancelText="Cancel"
         onConfirm={() => confirmReopenTraining(true)}
         onCancel={() => confirmReopenTraining(false)}
-        confirmButtonColor={colors.primary}
+        confirmButtonColor={colors.secondary}
         icon="refresh"
       />
 
@@ -535,8 +508,8 @@ const TrainingScreen: React.FC = () => {
         onClose={() => setAddExerciseModalVisible(false)}
         onAddExercise={handleConfirmAddExercise}
         onAddEnduranceSession={handleAddEnduranceSession}
-        scheduledExerciseIds={selectedDayTraining?.exercises.map(ex => ex.exercise?.id).filter(Boolean) || []}
-        scheduledExerciseNames={selectedDayTraining?.exercises.map(ex => ex.exercise?.name).filter(Boolean) || []}
+        scheduledExerciseIds={selectedDayTraining?.exercises.map(ex => ex.exercise?.id).filter((id): id is string => !!id) || []}
+        scheduledExerciseNames={selectedDayTraining?.exercises.map(ex => ex.exercise?.name).filter((name): name is string => !!name) || []}
       />
 
       {/* Remove Exercise Confirmation Dialog */}
@@ -668,4 +641,24 @@ const styles = StyleSheet.create({
   },
 });
 
+// Wrap TrainingScreen with ErrorBoundary to prevent crashes
+// Note: ErrorBoundary will show a fallback UI if an error occurs, but this is better than crashing the entire app
+// The default ErrorBoundary UI includes a "Try Again" button that resets the error state
+const TrainingScreen: React.FC = () => {
+  return (
+    <ErrorBoundary
+      onError={(error, errorInfo) => {
+        logger.error('TrainingScreen error caught by ErrorBoundary', {
+          error: error.message,
+          stack: error.stack,
+          componentStack: errorInfo.componentStack
+        });
+      }}
+    >
+      <TrainingScreenContent />
+    </ErrorBoundary>
+  );
+};
+
 export default TrainingScreen;
+export { TrainingScreen };

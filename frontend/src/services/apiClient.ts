@@ -1,5 +1,6 @@
 import {API_CONFIG} from '../constants/api';
 import {userStorage} from '../utils/storage';
+import {TokenManager} from './tokenManager';
 
 export interface ApiResponse<T> {
   data: T;
@@ -43,7 +44,8 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    retryOn401: boolean = true
   ): Promise<ApiResponse<T>> {
     try {
       const url = `${this.baseURL}${endpoint}`;
@@ -77,6 +79,43 @@ class ApiClient {
         headers: Object.fromEntries(response.headers.entries())
       });
 
+      // Handle 401 Unauthorized - try to refresh token and retry
+      if (response.status === 401 && retryOn401) {
+        console.log('🔄 401 Unauthorized - attempting token refresh...');
+        const newToken = await TokenManager.refreshAccessToken();
+        
+        if (newToken) {
+          console.log('✅ Token refreshed successfully, retrying request...');
+          
+          // CRITICAL: Update jwt_token in request body if present
+          // The backend reads jwt_token from the body, not the Authorization header
+          let updatedOptions = { ...options };
+          if (options.body) {
+            try {
+              const bodyJson = JSON.parse(options.body as string);
+              if (bodyJson.jwt_token) {
+                bodyJson.jwt_token = newToken;
+                updatedOptions.body = JSON.stringify(bodyJson);
+                console.log('🔄 Updated jwt_token in request body with refreshed token');
+              }
+            } catch (e) {
+              // If body is not JSON or doesn't have jwt_token, continue with original body
+              console.warn('Could not update jwt_token in request body:', e);
+            }
+          }
+          
+          // Retry the request with the new token (only once to avoid infinite loops)
+          return this.request<T>(endpoint, updatedOptions, false);
+        } else {
+          console.error('❌ Failed to refresh token');
+          const errorData = await response.json().catch(() => ({}));
+          throw new ApiError(
+            errorData.detail || errorData.message || 'Authentication failed. Please sign in again.',
+            'AUTH_ERROR'
+          );
+        }
+      }
+
       if (!response.ok) {
         console.error('❌ Response not OK:', {
           status: response.status,
@@ -84,7 +123,7 @@ class ApiClient {
         });
         const errorData = await response.json().catch(() => ({}));
         console.error('❌ Error response data:', errorData);
-        throw new Error(errorData.message || `HTTP ${response.status}`);
+        throw new Error(errorData.detail || errorData.message || `HTTP ${response.status}`);
       }
 
       const data = await response.json();
@@ -103,6 +142,10 @@ class ApiClient {
         isAbortError: error instanceof Error && error.name === 'AbortError',
         endpoint: endpoint
       });
+      
+      if (error instanceof ApiError) {
+        throw error;
+      }
       
       if (error instanceof Error) {
         if (error.name === 'AbortError') {

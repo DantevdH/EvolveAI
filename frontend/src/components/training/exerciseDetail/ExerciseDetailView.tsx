@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../../constants/colors';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, createColorWithOpacity } from '../../../constants/colors';
 import { Exercise } from '../../../types/training';
 import { getExerciseHistory } from '../../../services/trainingService';
 import { useAuth } from '../../../context/AuthContext';
@@ -11,6 +12,8 @@ import { TabNavigation } from './TabNavigation';
 import { GeneralInfoTab } from './GeneralInfoTab';
 import { InstructionsTab } from './InstructionsTab';
 import { HistoryTab } from './HistoryTab';
+import { logger } from '../../../utils/logger';
+import { validateExerciseDetail } from '../../../utils/validation';
 
 const ExerciseDetailView: React.FC<ExerciseDetailViewProps> = ({
   exercise,
@@ -32,13 +35,25 @@ const ExerciseDetailView: React.FC<ExerciseDetailViewProps> = ({
   // Fetch historical data when modal opens
   useEffect(() => {
     if (isVisible && exercise && state.userProfile?.id) {
+      // Validate exercise data before proceeding
+      const validationResult = validateExerciseDetail(exercise);
+      if (!validationResult.isValid) {
+        logger.error('Invalid exercise data in ExerciseDetailView', {
+          error: validationResult.errorMessage,
+          exercise
+        });
+        // Close modal if exercise is invalid
+        onClose();
+        return;
+      }
+
       const timeoutId = setTimeout(() => {
         fetchHistoryData();
       }, 500);
       
       return () => clearTimeout(timeoutId);
     }
-  }, [isVisible, exercise, state.userProfile?.id, state.trainingPlan]);
+  }, [isVisible, exercise, state.userProfile?.id, state.trainingPlan, onClose]);
 
   const fetchHistoryData = async () => {
     if (!exercise || !state.userProfile?.id) return;
@@ -49,9 +64,18 @@ const ExerciseDetailView: React.FC<ExerciseDetailViewProps> = ({
       const result = await getExerciseHistory(Number(exercise.id), state.userProfile.id, localPlan);
       if (result.success && result.data) {
         setHistoryData(result.data);
+      } else {
+        logger.warn('Failed to fetch exercise history', {
+          exerciseId: exercise.id,
+          error: result.error
+        });
       }
     } catch (error) {
-      console.error('Error fetching history data:', error);
+      logger.error('Error fetching history data', {
+        error,
+        exerciseId: exercise.id,
+        userProfileId: state.userProfile?.id
+      });
     } finally {
       setHistoryLoading(false);
     }
@@ -81,23 +105,35 @@ const ExerciseDetailView: React.FC<ExerciseDetailViewProps> = ({
         <TouchableOpacity style={styles.overlayTouchable} onPress={onClose} />
         
         <View style={styles.modalContainer}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.exerciseTitle}>{exercise.name}</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close-circle" size={24} color={colors.muted} />
-            </TouchableOpacity>
-          </View>
+          {/* Header with Golden Gradient */}
+          <LinearGradient
+            colors={[createColorWithOpacity(colors.secondary, 0.08), createColorWithOpacity(colors.secondary, 0.03)]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.headerGradient}
+          >
+            <View style={styles.header}>
+              <View style={styles.headerRow}>
+                <Text style={styles.exerciseTitle} numberOfLines={2}>
+                  {exercise.name}
+                </Text>
+                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                  <Ionicons name="close-circle" size={24} color={colors.secondary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </LinearGradient>
 
           {/* Tab Switcher */}
           <TabNavigation selectedTab={selectedTab} onTabChange={setSelectedTab} />
 
           {/* Tab Content */}
-          <ScrollView 
-            style={styles.tabContent} 
-            showsVerticalScrollIndicator={true}
-            contentContainerStyle={styles.scrollContentContainer}
-          >
+          <View style={styles.content}>
+            <ScrollView 
+              style={styles.tabContent} 
+              showsVerticalScrollIndicator={true}
+              contentContainerStyle={styles.scrollContentContainer}
+            >
             {selectedTab === ExerciseTab.General && (
               <GeneralInfoTab exercise={exercise} difficultyColor={difficultyColor} />
             )}
@@ -107,7 +143,8 @@ const ExerciseDetailView: React.FC<ExerciseDetailViewProps> = ({
             {selectedTab === ExerciseTab.History && (
               <HistoryTab exercise={exercise} historyData={historyData} loading={historyLoading} />
             )}
-          </ScrollView>
+            </ScrollView>
+          </View>
         </View>
       </View>
     </Modal>
@@ -131,32 +168,55 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   modalContainer: {
-    backgroundColor: colors.background,
-    borderRadius: 20,
+    backgroundColor: colors.card,
+    borderRadius: 28,
     width: '100%',
     height: Dimensions.get('window').height * 0.65,
     maxHeight: Dimensions.get('window').height * 0.65,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 15 },
-    shadowOpacity: 0.3,
-    shadowRadius: 25,
-    elevation: 25,
+    overflow: 'hidden',
+    shadowColor: createColorWithOpacity(colors.secondary, 0.15),
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 8,
+    borderWidth: 1.5,
+    borderColor: createColorWithOpacity(colors.secondary, 0.2),
+  },
+  headerGradient: {
+    borderBottomWidth: 1,
+    borderBottomColor: createColorWithOpacity(colors.secondary, 0.1),
   },
   header: {
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 16,
+  },
+  headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    paddingBottom: 8,
+    justifyContent: 'space-between',
+    gap: 12,
+    width: '100%',
   },
   exerciseTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
     flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    lineHeight: 22,
   },
   closeButton: {
     padding: 4,
+    flexShrink: 0,
+  },
+  content: {
+    flex: 1,
+    paddingTop: 8,
+    paddingBottom: 24,
+    paddingHorizontal: 24,
+    minHeight: 0,
   },
   tabContent: {
     flex: 1,

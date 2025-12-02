@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../../constants/colors';
+import { colors, createColorWithOpacity } from '../../../constants/colors';
+import { validateExerciseSearch } from '../../../utils/validation';
 
 interface SearchBarProps {
   searchQuery: string;
@@ -22,8 +23,18 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           style={styles.input}
           placeholder="Search for exercises..."
           value={searchQuery}
-          onChangeText={onQueryChange}
+          onChangeText={(text) => {
+            // Validate search input
+            const validationResult = validateExerciseSearch(text);
+            if (validationResult.isValid) {
+              onQueryChange(validationResult.searchTerm || text);
+            } else {
+              // If invalid, use empty string (validation allows empty search)
+              onQueryChange('');
+            }
+          }}
           placeholderTextColor={colors.muted}
+          maxLength={100}
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => onQueryChange('')}>
@@ -33,7 +44,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       </View>
       
       <TouchableOpacity style={styles.filterButton} onPress={onToggleFilters}>
-        <Ionicons name="options-outline" size={20} color={colors.primary} />
+        <Ionicons name="options-outline" size={20} color={colors.secondary} />
       </TouchableOpacity>
     </View>
   );
@@ -42,7 +53,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
     marginTop: 16,
     marginBottom: 20,
     gap: 8,
@@ -55,8 +66,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: createColorWithOpacity(colors.secondary, 0.2),
     gap: 8,
   },
   input: {
@@ -68,8 +79,8 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: colors.card,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: createColorWithOpacity(colors.secondary, 0.2),
     alignItems: 'center',
     justifyContent: 'center',
   },

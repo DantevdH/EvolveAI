@@ -48,3 +48,8 @@ export const SCREEN_CONFIG = {
   TAB_BAR_HEIGHT: 80,
   SAFE_AREA_PADDING: 20,
 } as const;
+
+// Chat Configuration
+export const CHAT_CONFIG = {
+  HISTORY_EXPIRATION_MS: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
+} as const;

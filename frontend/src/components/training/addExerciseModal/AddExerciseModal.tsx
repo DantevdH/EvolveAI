@@ -11,9 +11,12 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../../constants/colors';
+import { LinearGradient } from 'expo-linear-gradient';
+import { colors, createColorWithOpacity } from '../../../constants/colors';
 import { useAuth } from '../../../context/AuthContext';
-import { ExerciseSwapService } from '../../../services/exerciseSwapService';
+import { ExerciseSwapService, ExerciseSearchResult } from '../../../services/exerciseSwapService';
+import { Exercise } from '../../../types/training';
+import { ExerciseFilterOptions } from '../../../types/common';
 import { AddExerciseModalProps } from './types';
 import { 
   getAvailableUnits, 
@@ -40,9 +43,9 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
-  const [searchResults, setSearchResults] = useState([]);
+  const [searchResults, setSearchResults] = useState<ExerciseSearchResult[]>([]);
   const [loadingResults, setLoadingResults] = useState(false);
-  const [filterOptions, setFilterOptions] = useState({
+  const [filterOptions, setFilterOptions] = useState<ExerciseFilterOptions>({
     targetAreas: [],
     equipment: [],
     difficulties: [],
@@ -143,14 +146,14 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
     try {
       const result = await ExerciseSwapService.getFilterOptions();
       if (result.success && result.data) {
-        setFilterOptions(result.data);
+        setFilterOptions(result.data as ExerciseFilterOptions);
       }
     } catch (error) {
       console.error('Error loading filter options:', error);
     }
   };
 
-  const handleAddExercise = (exercise) => {
+  const handleAddExercise = (exercise: Exercise) => {
     onAddExercise(exercise);
     onClose();
   };
@@ -208,13 +211,20 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
       onRequestClose={onClose}
     >
       <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Add Exercise</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={28} color={colors.text} />
-          </TouchableOpacity>
-        </View>
+        {/* Header with Golden Gradient */}
+        <LinearGradient
+          colors={[createColorWithOpacity(colors.secondary, 0.08), createColorWithOpacity(colors.secondary, 0.03)]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Add Exercise</Text>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close-circle" size={24} color={colors.secondary} />
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
 
         {/* Toggle Switch */}
         <View style={styles.toggleContainer}>
@@ -222,8 +232,8 @@ const AddExerciseModal: React.FC<AddExerciseModalProps> = ({
           <Switch
             value={isStrengthMode}
             onValueChange={setIsStrengthMode}
-            trackColor={{ false: colors.muted + '40', true: colors.primary + '40' }}
-            thumbColor={isStrengthMode ? colors.primary : colors.muted}
+            trackColor={{ false: colors.muted + '40', true: colors.secondary + '40' }}
+            thumbColor={isStrengthMode ? colors.secondary : colors.muted}
           />
           <Text style={styles.toggleLabel}>Strength</Text>
         </View>
@@ -289,31 +299,37 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  headerGradient: {
+    borderBottomWidth: 1,
+    borderBottomColor: createColorWithOpacity(colors.secondary, 0.1),
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 16,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.primary,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   closeButton: {
     padding: 4,
+    flexShrink: 0,
   },
   toggleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: createColorWithOpacity(colors.secondary, 0.1),
     gap: 12,
   },
   toggleLabel: {

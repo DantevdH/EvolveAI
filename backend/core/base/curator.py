@@ -232,7 +232,7 @@ class Curator:
 
             # Call LLM with schema (returns validated Pydantic model or dict)
             ai_start = time.time()
-            updated_playbook_result, completion = self.llm.chat_parse(prompt, UpdatedUserPlaybook)
+            updated_playbook_result, completion = self.llm.parse_structured(prompt, UpdatedUserPlaybook, model_type="lightweight")
             ai_duration = time.time() - ai_start
             
             # Track latency

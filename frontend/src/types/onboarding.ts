@@ -25,6 +25,7 @@ export interface AIQuestion {
   max_value?: number;
   step?: number;
   unit?: string;
+  min_length?: number;
   max_length?: number;
   placeholder?: string;
   help_text?: string;

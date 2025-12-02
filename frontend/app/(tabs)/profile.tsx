@@ -11,7 +11,8 @@ import {
   ScrollView, 
   TouchableOpacity, 
   SafeAreaView,
-  useWindowDimensions
+  useWindowDimensions,
+  ActivityIndicator
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,44 +20,67 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../src/context/AuthContext';
 import { colors, createColorWithOpacity, goldenGradient } from '../../src/constants/colors';
 import { WelcomeHeader } from '../../src/components/home/WelcomeHeader';
+import { ErrorBoundary } from '../../src/components/ErrorBoundary';
+import {
+  formatProfileValue,
+  validateAndFilterLessons,
+  sortLessonsByConfidence,
+  getLessonsForPage,
+  calculatePaginationBounds,
+} from '../../src/utils/profileUtils';
 
 const LESSONS_PER_PAGE = 1;
 
-export default function FullProfileScreen() {
+function FullProfileScreenContent() {
   const { state } = useAuth();
   const { width: screenWidth } = useWindowDimensions();
   const [currentPage, setCurrentPage] = useState(0);
 
-  // Sort lessons by confidence (highest first) and paginate
+  // Check if profile is loading
+  const isLoading = (state as any).profileLoading === true;
+
+  // Validate, filter, and sort lessons by confidence (highest first)
   const sortedLessons = useMemo(() => {
     if (!state.userProfile?.playbook?.lessons) return [];
-    return [...state.userProfile.playbook.lessons].sort((a, b) => b.confidence - a.confidence);
+    
+    // Validate and filter lessons
+    const validLessons = validateAndFilterLessons(state.userProfile.playbook.lessons);
+    
+    // Sort by confidence
+    return sortLessonsByConfidence(validLessons);
   }, [state.userProfile?.playbook?.lessons]);
 
-  const totalPages = Math.ceil(sortedLessons.length / LESSONS_PER_PAGE);
-  const currentLessons = sortedLessons.slice(
-    currentPage * LESSONS_PER_PAGE,
-    (currentPage + 1) * LESSONS_PER_PAGE
-  );
+  const totalPages = Math.max(1, Math.ceil(sortedLessons.length / LESSONS_PER_PAGE));
+  
+  // Get lessons for current page with safe pagination
+  const currentLessons = useMemo(() => {
+    return getLessonsForPage(sortedLessons, currentPage, LESSONS_PER_PAGE);
+  }, [sortedLessons, currentPage]);
 
   // Reset to first page when playbook changes
   useEffect(() => {
     setCurrentPage(0);
   }, [state.userProfile?.playbook?.lessons?.length]);
 
+  // Ensure current page is within bounds when lessons change
+  useEffect(() => {
+    if (totalPages > 0 && currentPage >= totalPages) {
+      setCurrentPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, currentPage]);
+
   const goToPreviousPage = () => {
-    setCurrentPage((prev) => Math.max(0, prev - 1));
+    setCurrentPage((prev) => {
+      const { page: safePage } = calculatePaginationBounds(prev - 1, totalPages);
+      return safePage;
+    });
   };
 
   const goToNextPage = () => {
-    setCurrentPage((prev) => Math.min(totalPages - 1, prev + 1));
-  };
-
-  const formatValue = (value: any, unit?: string) => {
-    if (value === null || value === undefined || value === '') {
-      return 'Not set';
-    }
-    return unit ? `${value} ${unit}` : value;
+    setCurrentPage((prev) => {
+      const { page: safePage } = calculatePaginationBounds(prev + 1, totalPages);
+      return safePage;
+    });
   };
 
   // Calculate responsive dimensions for profile cards
@@ -78,40 +102,44 @@ export default function FullProfileScreen() {
     return [
       {
         title: 'Age',
-        value: formatValue(state.userProfile?.age),
+        value: formatProfileValue(state.userProfile?.age),
         subtitle: 'years',
         icon: 'calendar' as keyof typeof Ionicons.glyphMap,
       },
       {
         title: 'Weight',
-        value: formatValue(state.userProfile?.weight),
+        value: formatProfileValue(state.userProfile?.weight),
         subtitle: state.userProfile?.weightUnit || 'kg',
         icon: 'scale' as keyof typeof Ionicons.glyphMap,
       },
       {
         title: 'Height',
-        value: formatValue(state.userProfile?.height),
+        value: formatProfileValue(state.userProfile?.height),
         subtitle: state.userProfile?.heightUnit || 'cm',
         icon: 'resize' as keyof typeof Ionicons.glyphMap,
       },
     ];
   }, [state.userProfile]);
 
-  if (!state.userProfile?.playbook || sortedLessons.length === 0) {
+  // Show loading state only if profile itself is loading
+  if (isLoading && !state.userProfile) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar style="dark" />
-        <WelcomeHeader username={state.userProfile?.username} />
-        <View style={styles.emptyContainer}>
-          <Ionicons name="sparkles" size={64} color={colors.muted} />
-          <Text style={styles.emptyTitle}>Extracted Lessons</Text>
-          <Text style={styles.emptySubtitle}>
-            AI-extracted lessons will appear here once they're generated
-          </Text>
+        <WelcomeHeader username={undefined} />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading profile...</Text>
         </View>
       </SafeAreaView>
     );
   }
+
+  // Determine playbook state for dynamic content
+  const isPolling = state.isPollingPlan === true;
+  const hasPlaybook = !!state.userProfile?.playbook;
+  const hasLessons = sortedLessons.length > 0;
+  const showPlaybookContent = hasPlaybook && hasLessons;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -155,7 +183,7 @@ export default function FullProfileScreen() {
                 >
                   Extracted Lessons
                 </Text>
-            {sortedLessons.length > 0 && (
+            {showPlaybookContent && (
                   <View style={styles.headerAccessory}>
               <View style={styles.playbookBadge}>
                 <Text style={styles.playbookBadgeText}>
@@ -169,9 +197,28 @@ export default function FullProfileScreen() {
           </LinearGradient>
 
           <View style={styles.content}>
-          {/* Lesson Card - Minimalistic Design */}
-          {currentLessons.map((lesson, index) => (
-            <View key={lesson.id || index} style={styles.lessonCard}>
+          {/* Dynamic content based on polling and playbook state */}
+          {isPolling ? (
+            /* Show spinner while polling */
+            <View style={styles.playbookGeneratingContainer}>
+              <ActivityIndicator size="large" color={colors.secondary} />
+              <Text style={styles.playbookGeneratingText}>
+                Generating AI-extracted lessons...
+              </Text>
+              <Text style={styles.playbookGeneratingSubtext}>
+                This may take a few moments
+              </Text>
+            </View>
+          ) : showPlaybookContent ? (
+            /* Show lessons when playbook exists */
+            currentLessons.map((lesson, index) => {
+            // Additional validation check before rendering
+            if (!lesson || !lesson.id || !lesson.text) {
+              return null;
+            }
+            
+            return (
+            <View key={lesson.id} style={styles.lessonCard}>
               {/* Lesson Header */}
               <View style={styles.lessonHeader}>
                 <View style={styles.lessonNumberBadge}>
@@ -216,10 +263,23 @@ export default function FullProfileScreen() {
               )}
 
             </View>
-          ))}
+            );
+          })
+          ) : (
+            /* Show "no lessons" message when polling stopped but no playbook */
+            <View style={styles.playbookGeneratingContainer}>
+              <Ionicons name="sparkles" size={48} color={colors.muted} />
+              <Text style={styles.playbookGeneratingText}>
+                No lessons extracted
+              </Text>
+              <Text style={styles.playbookGeneratingSubtext}>
+                AI-extracted lessons will appear here once they're generated
+              </Text>
+            </View>
+          )}
 
           {/* Page Navigation - Minimalistic */}
-          {totalPages > 1 && (
+          {showPlaybookContent && totalPages > 1 && (
             <View style={styles.pageNavigation}>
               <TouchableOpacity
                 style={[styles.navButton, currentPage === 0 && styles.navButtonDisabled]}
@@ -264,6 +324,15 @@ export default function FullProfileScreen() {
         <View style={styles.bottomSpacing} />
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+// Wrap with ErrorBoundary
+export default function FullProfileScreen() {
+  return (
+    <ErrorBoundary>
+      <FullProfileScreenContent />
+    </ErrorBoundary>
   );
 }
 
@@ -378,6 +447,40 @@ const styles = StyleSheet.create({
     color: colors.muted,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    gap: 16,
+    marginTop: 40,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: colors.muted,
+    textAlign: 'center',
+  },
+  playbookGeneratingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    paddingHorizontal: 24,
+    minHeight: 300,
+    gap: 16,
+  },
+  playbookGeneratingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  playbookGeneratingSubtext: {
+    fontSize: 14,
+    color: colors.muted,
+    textAlign: 'center',
+    marginTop: 4,
   },
   // Profile Cards - Matching homepage style
   profileCards: {

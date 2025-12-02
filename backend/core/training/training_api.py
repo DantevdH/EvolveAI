@@ -8,7 +8,7 @@ Handles the complete training workflow with a clean, unified interface:
 """
 
 import asyncio
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException, Depends, Header, BackgroundTasks
 from typing import Dict, Any, Optional
 from datetime import datetime
 import logging
@@ -26,28 +26,112 @@ from core.training.schemas.question_schemas import (
     CreateWeekRequest,
     PersonalInfo,
     AIQuestion,
-    QuestionType,
+)
+from core.training.schemas.insights_schemas import (
+    InsightsSummaryRequest,
+    InsightsSummaryResponse,
+    AIInsightsSummary,
+    InsightsMetrics,
+    WeakPoint,
+    TopExercise,
 )
 from core.training.training_coach import TrainingCoach
 from core.training.schemas.training_schemas import TrainingPlan
-from core.training.helpers.database_service import db_service
+from core.training.helpers.database_service import db_service, extract_user_id_from_jwt
+from core.training.helpers.date_mapper import map_daily_training_dates
 # Format responses
 from core.training.helpers.response_formatter import ResponseFormatter
+from core.training.helpers.insights_service import InsightsService
+from core.training.helpers.prompt_generator import PromptGenerator
 from core.base.schemas.playbook_schemas import UserPlaybook
 from settings import settings
 
 logger = logging.getLogger(__name__)
 
 
+def validate_plan_generation_request(request: PlanGenerationRequest) -> None:
+    """
+    Validate a PlanGenerationRequest and raise HTTPException if validation fails.
+    
+    This function performs runtime validation beyond Pydantic's type checking:
+    - Ensures initial_responses is a non-empty dictionary
+    - Ensures initial_questions is a non-empty list
+    - Ensures personal_info exists and has required fields
+    - Ensures user_profile_id is a positive integer if provided
+    - Ensures jwt_token is present
+    
+    Args:
+        request: The PlanGenerationRequest to validate
+        
+    Raises:
+        HTTPException: If any validation fails (400 for bad request, 401 for auth)
+    """
+    # Validate initial_responses
+    if not request.initial_responses:
+        raise HTTPException(status_code=400, detail="Initial responses cannot be empty")
+    
+    if not isinstance(request.initial_responses, dict):
+        raise HTTPException(status_code=400, detail="Initial responses must be a dictionary")
+    
+    if len(request.initial_responses) == 0:
+        raise HTTPException(status_code=400, detail="Initial responses cannot be empty")
+
+    # Validate initial_questions
+    if not request.initial_questions:
+        raise HTTPException(status_code=400, detail="Initial questions cannot be empty")
+    
+    if not isinstance(request.initial_questions, list):
+        raise HTTPException(status_code=400, detail="Initial questions must be a list")
+    
+    if len(request.initial_questions) == 0:
+        raise HTTPException(status_code=400, detail="Initial questions cannot be empty")
+
+    # Validate personal_info
+    if not request.personal_info:
+        raise HTTPException(status_code=400, detail="Personal info is required")
+    
+    # Validate required personal_info fields
+    required_fields = ['username', 'age', 'weight', 'height', 'gender', 'goal_description', 'experience_level']
+    missing_fields = [
+        field for field in required_fields 
+        if not hasattr(request.personal_info, field) or getattr(request.personal_info, field) is None
+    ]
+    if missing_fields:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Missing required personal info fields: {', '.join(missing_fields)}"
+        )
+
+    # Validate JWT token
+    if not request.jwt_token:
+        raise HTTPException(status_code=401, detail="JWT token is required")
+    
+    # Validate user_profile_id if provided
+    if request.user_profile_id is not None:
+        if not isinstance(request.user_profile_id, int) or request.user_profile_id <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid user_profile_id: must be a positive integer"
+            )
+
+
 async def _fetch_complete_training_plan(user_profile_id: int) -> Dict[str, Any]:
     """Fetch complete training plan with real IDs from database - exact same as frontend."""
     try:
         from supabase import create_client
-        import os
+        from core.utils.env_loader import is_test_environment
+
+        # Check if we're in a test environment
+        is_test_env = is_test_environment()
+        
+        if is_test_env:
+            logger.debug("Test environment: Cannot fetch training plan (should be mocked)")
+            return None
 
         # Use service role key for backend operations
-        url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        # Use settings (which reads from environment dynamically)
+        url = settings.SUPABASE_URL
+        key = settings.SUPABASE_SERVICE_ROLE_KEY
 
         logger.info(f"🔍 Supabase URL: {url[:30]}..." if url else "❌ No URL")
         logger.info(f"🔍 Service role key present: {'Yes' if key else 'No'}")
@@ -171,25 +255,6 @@ def get_training_coach() -> TrainingCoach:
     return TrainingCoach()
 
 
-def extract_user_id_from_jwt(jwt_token: str) -> str:
-    """
-    Extract user_id from JWT token.
-    
-    Raises HTTPException(401) if token is invalid.
-    """
-    try:
-        decoded_token = jwt.decode(jwt_token, options={"verify_signature": False})
-        user_id = decoded_token.get("sub")
-        
-        if not user_id:
-            raise HTTPException(status_code=401, detail="No user_id found in JWT token")
-        
-        return user_id
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ JWT token error: {str(e)}")
-        raise HTTPException(status_code=401, detail=f"Invalid JWT token: {str(e)}")
 
 
 async def safe_db_update(
@@ -272,7 +337,7 @@ async def get_initial_questions(
         for q in questions_response.questions:
             sq = q.model_dump(exclude_none=False, mode='json')
             # Safety check: ensure multiselect is included for multiple_choice/dropdown
-            if q.response_type in [QuestionType.MULTIPLE_CHOICE, QuestionType.DROPDOWN]:
+            if q.response_type in ["multiple_choice", "dropdown"]:
                 if 'multiselect' not in sq or sq.get('multiselect') is None:
                     sq['multiselect'] = q.multiselect
             serialized_questions_for_storage.append(sq)
@@ -298,7 +363,7 @@ async def get_initial_questions(
         for q in questions_response.questions:
             sq = q.model_dump(exclude_none=False, mode='json')
             # Safety check: ensure multiselect is included for multiple_choice/dropdown
-            if q.response_type in [QuestionType.MULTIPLE_CHOICE, QuestionType.DROPDOWN]:
+            if q.response_type in ["multiple_choice", "dropdown"]:
                 if 'multiselect' not in sq or sq.get('multiselect') is None:
                     sq['multiselect'] = q.multiselect
             serialized_questions.append(sq)
@@ -328,29 +393,33 @@ async def get_initial_questions(
 @router.post("/generate-plan")
 async def generate_training_plan(
     request: PlanGenerationRequest,
+    background_tasks: BackgroundTasks,
     coach: TrainingCoach = Depends(get_training_coach)
 ):
     """Generate the final training plan using initial questions and exercises."""
     try:
-        # Validate input
-        if not request.initial_responses:
-            raise HTTPException(status_code=400, detail="Initial responses cannot be empty")
-
-        if not request.initial_questions or not isinstance(request.initial_questions, list):
-            raise HTTPException(status_code=400, detail="Invalid initial questions structure")
+        # === INPUT VALIDATION ===
+        validate_plan_generation_request(request)
         
-        # Extract and validate JWT token
-        user_id = extract_user_id_from_jwt(request.jwt_token)
-        
-        logger.info(f"Generating training plan for: {request.personal_info.goal_description}")
-        
-        # OPTIMIZATION: user_profile_id should be provided by frontend
+        # Validate user_profile_id is required (not just if provided)
         if not request.user_profile_id:
             logger.error("❌ Missing user_profile_id in request - this should be provided by frontend")
             raise HTTPException(
                 status_code=400,
                 detail="Missing user_profile_id in request"
             )
+        
+        # Extract and validate JWT token
+        try:
+            user_id = extract_user_id_from_jwt(request.jwt_token)
+        except HTTPException:
+            # Re-raise HTTPException from extract_user_id_from_jwt (already has proper status code)
+            raise
+        except Exception as e:
+            logger.error(f"❌ Unexpected error extracting user_id from JWT: {str(e)}")
+            raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
+        
+        logger.info(f"Generating training plan for: {request.personal_info.goal_description}")
         
         user_profile_id = request.user_profile_id
         logger.info(f"✅ Using user_profile_id from request: {user_profile_id}")
@@ -372,10 +441,27 @@ async def generate_training_plan(
                 }
             }
         
-        # Format responses
-        formatted_initial_responses = ResponseFormatter.format_responses(
-            request.initial_responses, request.initial_questions
-        )
+        # Format responses with validation
+        try:
+            formatted_initial_responses = ResponseFormatter.format_responses(
+                request.initial_responses, request.initial_questions
+            )
+            
+            # Validate formatted response is not empty
+            if not formatted_initial_responses or len(formatted_initial_responses.strip()) == 0:
+                logger.error("❌ Formatted initial responses is empty after formatting")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Failed to format initial responses: result is empty"
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"❌ Error formatting initial responses: {str(e)}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to format initial responses: {str(e)}"
+            )
         
         # Store initial responses (non-critical)
         await safe_db_update(
@@ -391,110 +477,124 @@ async def generate_training_plan(
             update={"user_id": user_id}
         )
         
+        async def build_initial_playbook_inner():
+            """Inner playbook generation logic with timeout protection."""
+            # extract initial analyses (may be sync or async)
+            if inspect.iscoroutinefunction(coach.extract_initial_lessons_from_onboarding):
+                initial_analyses = await coach.extract_initial_lessons_from_onboarding(
+                    personal_info=personal_info_with_user_id,
+                    formatted_initial_responses=formatted_initial_responses,
+                )
+            else:
+                initial_analyses = await asyncio.to_thread(
+                    coach.extract_initial_lessons_from_onboarding,
+                    personal_info_with_user_id,
+                    formatted_initial_responses,
+                )
+
+            if not initial_analyses or len(initial_analyses) == 0:
+                logger.warning("⚠️ (async) No initial lessons extracted - skipping playbook creation")
+                return
+
+            from core.base.schemas.playbook_schemas import UserPlaybook
+
+            empty_playbook = UserPlaybook(
+                user_id=user_id,
+                lessons=[],
+                total_lessons=0,
+            )
+
+            logger.info("📘 (async) Processing initial lessons through Curator...")
+            # process_batch_lessons may be sync or async (LLM wrappers sometimes sync)
+            if inspect.iscoroutinefunction(coach.curator.process_batch_lessons):
+                curated_playbook = await coach.curator.process_batch_lessons(
+                    analyses=initial_analyses,
+                    existing_playbook=empty_playbook,
+                    source_plan_id="onboarding",
+                )
+            else:
+                curated_playbook = await asyncio.to_thread(
+                    coach.curator.process_batch_lessons,
+                    initial_analyses,
+                    empty_playbook,
+                    "onboarding",
+                )
+
+            initial_playbook = coach.curator.update_playbook_from_curated(
+                updated_playbook=curated_playbook,
+                user_id=user_id,
+            )
+
+            if settings.PLAYBOOK_CONTEXT_MATCHING_ENABLED:
+                logger.info("📘 (async) Enriching lessons with knowledge base context...")
+                if inspect.iscoroutinefunction(coach.curator.enrich_lessons_with_context):
+                    initial_playbook = await coach.curator.enrich_lessons_with_context(
+                        playbook=initial_playbook,
+                        rag_service=coach.rag_service,
+                    )
+                else:
+                    initial_playbook = await asyncio.to_thread(
+                        coach.curator.enrich_lessons_with_context,
+                        initial_playbook,
+                        coach.rag_service,
+                    )
+            else:
+                logger.info("📘 (async) Playbook context enrichment disabled; skipping knowledge base matching.")
+
+            logger.info(
+                f"📘 (async) Curated initial playbook: {len(empty_playbook.lessons)} → {len(initial_playbook.lessons)} lessons (deduplicated)"
+            )
+
+            await safe_db_update(
+                "Store initial playbook",
+                db_service.update_user_profile,
+                user_id=user_id,
+                data={"user_playbook": initial_playbook.model_dump()},
+                jwt_token=request.jwt_token
+            )
+            logger.info("✅ (async) Playbook stored successfully")
+
         async def build_initial_playbook_async():
             """Run the playbook extraction/curation pipeline without blocking plan generation."""
             try:
                 logger.info("📘 (async) START playbook generation")
-                # yield control immediately so other background tasks can start
-                await asyncio.sleep(0)
-                # extract initial analyses (may be sync or async)
-                if inspect.iscoroutinefunction(coach.extract_initial_lessons_from_onboarding):
-                    initial_analyses = await coach.extract_initial_lessons_from_onboarding(
-                        personal_info=personal_info_with_user_id,
-                        formatted_initial_responses=formatted_initial_responses,
+                
+                # Add timeout for playbook generation (5 minutes max)
+                try:
+                    await asyncio.wait_for(
+                        build_initial_playbook_inner(),
+                        timeout=300.0  # 5 minutes
                     )
-                else:
-                    initial_analyses = await asyncio.to_thread(
-                        coach.extract_initial_lessons_from_onboarding,
-                        personal_info_with_user_id,
-                        formatted_initial_responses,
-                    )
-
-                if not initial_analyses or len(initial_analyses) == 0:
-                    logger.warning("⚠️ (async) No initial lessons extracted - skipping playbook creation")
+                except asyncio.TimeoutError:
+                    logger.error("❌ (async) Playbook generation timed out after 5 minutes")
                     return
-
-                from core.base.schemas.playbook_schemas import UserPlaybook
-
-                empty_playbook = UserPlaybook(
-                    user_id=user_id,
-                    lessons=[],
-                    total_lessons=0,
-                )
-
-                logger.info("📘 (async) Processing initial lessons through Curator...")
-                # process_batch_lessons may be sync or async (LLM wrappers sometimes sync)
-                if inspect.iscoroutinefunction(coach.curator.process_batch_lessons):
-                    curated_playbook = await coach.curator.process_batch_lessons(
-                        analyses=initial_analyses,
-                        existing_playbook=empty_playbook,
-                        source_plan_id="onboarding",
-                    )
-                else:
-                    curated_playbook = await asyncio.to_thread(
-                        coach.curator.process_batch_lessons,
-                        initial_analyses,
-                        empty_playbook,
-                        "onboarding",
-                    )
-
-                initial_playbook = coach.curator.update_playbook_from_curated(
-                    updated_playbook=curated_playbook,
-                    user_id=user_id,
-                )
-
-                if settings.PLAYBOOK_CONTEXT_MATCHING_ENABLED:
-                    logger.info("📘 (async) Enriching lessons with knowledge base context...")
-                    if inspect.iscoroutinefunction(coach.curator.enrich_lessons_with_context):
-                        initial_playbook = await coach.curator.enrich_lessons_with_context(
-                            playbook=initial_playbook,
-                            rag_service=coach.rag_service,
-                        )
-                    else:
-                        initial_playbook = await asyncio.to_thread(
-                            coach.curator.enrich_lessons_with_context,
-                            initial_playbook,
-                            coach.rag_service,
-                        )
-                else:
-                    logger.info("📘 (async) Playbook context enrichment disabled; skipping knowledge base matching.")
-
-                logger.info(
-                    f"📘 (async) Curated initial playbook: {len(empty_playbook.lessons)} → {len(initial_playbook.lessons)} lessons (deduplicated)"
-                )
-
-                await safe_db_update(
-                    "Store initial playbook",
-                    db_service.update_user_profile,
-                    user_id=user_id,
-                    data={"user_playbook": initial_playbook.model_dump()},
-                    jwt_token=request.jwt_token
-                )
-                logger.info("✅ (async) Playbook stored successfully")
             except Exception as async_error:
-                logger.error(f"❌ (async) Playbook generation failed: {str(async_error)}")
-        # Start playbook generation immediately (runs in background while we save plan)
-        playbook_task = asyncio.create_task(build_initial_playbook_async())
-        def _task_done_logger(task: asyncio.Task, label: str):
-            try:
-                task.result()
-            except Exception as task_err:
-                logger.error(f"❌ Background task {label} failed: {task_err}")
-        playbook_task.add_done_callback(lambda t: _task_done_logger(t, "playbook"))
+                logger.error(f"❌ (async) Playbook generation failed: {str(async_error)}", exc_info=True)
+        
+        # Register playbook generation as a background task (runs after response is sent)
+        background_tasks.add_task(build_initial_playbook_async)
 
         # === PHASE 1: Generate Week 1 (SYNCHRONOUS) ===
-        result = await coach.generate_initial_training_plan(
-            personal_info=personal_info_with_user_id,
-            formatted_initial_responses=formatted_initial_responses,
-            user_profile_id=user_profile_id,
-            jwt_token=request.jwt_token,
-        )
-        
-        if not result.get("success"):
-            logger.error(f"Training plan generation failed: {result.get('error')}")
+        try:
+            result = await coach.generate_initial_training_plan(
+                personal_info=personal_info_with_user_id,
+                formatted_initial_responses=formatted_initial_responses,
+                user_profile_id=user_profile_id,
+                jwt_token=request.jwt_token,
+            )
+        except Exception as gen_error:
+            logger.error(f"❌ Training plan generation exception: {str(gen_error)}", exc_info=True)
             raise HTTPException(
                 status_code=500,
-                detail=result.get("error", "Failed to generate training plan")
+                detail="Failed to generate training plan. Please try again."
+            )
+        
+        if not result.get("success"):
+            error_msg = result.get("error", "Failed to generate training plan")
+            logger.error(f"❌ Training plan generation failed: {error_msg}")
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to generate training plan. Please try again."
             )
         
         logger.info("✅ Training plan generated successfully")
@@ -502,18 +602,39 @@ async def generate_training_plan(
         # Save to DB immediately to get training_plan_id
         training_plan_data = result.get("training_plan")
         
-        save_result = await db_service.save_training_plan(
-            user_profile_id=user_profile_id,
-            training_plan_data=training_plan_data,
-            jwt_token=request.jwt_token,
-            user_playbook=None,  # Generated asynchronously
-        )
-        
-        if not save_result.get("success"):
-            logger.error(f"❌ Failed to save training plan: {save_result.get('error')}")
+        if not training_plan_data:
+            logger.error("❌ Training plan data is missing from generation result")
             raise HTTPException(
                 status_code=500,
-                detail=f"Training plan generated but failed to save: {save_result.get('error')}"
+                detail="Training plan generation succeeded but returned no data"
+            )
+        
+        # Map scheduled dates to daily trainings (post-processing step)
+        # This must happen before saving to DB and returning to frontend
+        
+        training_plan_data = map_daily_training_dates(training_plan_data)
+        logger.info("✅ Mapped scheduled dates to daily trainings")
+        
+        try:
+            save_result = await db_service.save_training_plan(
+                user_profile_id=user_profile_id,
+                training_plan_data=training_plan_data,
+                jwt_token=request.jwt_token,
+                user_playbook=None,  # Generated asynchronously
+            )
+        except Exception as save_error:
+            logger.error(f"❌ Exception saving training plan: {str(save_error)}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail="Training plan generated but failed to save. Please try again."
+            )
+        
+        if not save_result.get("success"):
+            error_msg = save_result.get("error", "Unknown error")
+            logger.error(f"❌ Failed to save training plan: {error_msg}")
+            raise HTTPException(
+                status_code=500,
+                detail="Training plan generated but failed to save. Please try again."
             )
         
         training_plan_id = save_result.get("data", {}).get("training_plan_id")
@@ -535,8 +656,7 @@ async def generate_training_plan(
             """Generate future week outlines and append to weekly_schedules table."""
             try:
                 logger.info("📘 (async) START outline generation")
-                # yield control immediately so other background tasks can start
-                await asyncio.sleep(0)
+                
                 # _generate_future_week_outlines may be async or sync
                 if inspect.iscoroutinefunction(coach._generate_future_week_outlines):
                     outline_payload = await coach._generate_future_week_outlines(
@@ -575,11 +695,10 @@ async def generate_training_plan(
                     else:
                         logger.error(f"❌ (async) Failed to append outlines: {result.get('error')}")
             except Exception as async_error:
-                logger.error(f"❌ (async) Plan outline generation failed: {async_error}")
+                logger.error(f"❌ (async) Plan outline generation failed: {async_error}", exc_info=True)
         
-        # Start outline generation now that plan is saved (playbook already started)
-        outline_task = asyncio.create_task(build_plan_outline_async(training_plan_id))
-        outline_task.add_done_callback(lambda t: _task_done_logger(t, "outline"))
+        # Register outline generation as a background task (runs after response is sent)
+        background_tasks.add_task(build_plan_outline_async, training_plan_id)
         
         # Get completion message from result (generated during plan creation)
         completion_message = result.get("completion_message")
@@ -598,19 +717,19 @@ async def generate_training_plan(
         else:
             # Fallback: fetch if enriched plan not available (shouldn't happen)
             logger.warning("⚠️ Enriched plan not available, falling back to database fetch")
-        try:
-            complete_plan = await _fetch_complete_training_plan(user_profile_id)
-            if complete_plan:
-                return {
-                    "success": True,
-                    "data": complete_plan,
-                    "playbook": None,
-                    "message": "Training plan generated and saved successfully",
-                    "completion_message": completion_message,
-                    "metadata": result.get("metadata", {}),
-                }
-        except Exception as fetch_error:
-            logger.error(f"❌ Error fetching complete training plan: {str(fetch_error)}")
+            try:
+                complete_plan = await _fetch_complete_training_plan(user_profile_id)
+                if complete_plan:
+                    return {
+                        "success": True,
+                        "data": complete_plan,
+                        "playbook": None,
+                        "message": "Training plan generated and saved successfully",
+                        "completion_message": completion_message,
+                        "metadata": result.get("metadata", {}),
+                    }
+            except Exception as fetch_error:
+                logger.error(f"❌ Error fetching complete training plan: {str(fetch_error)}")
             
             # Final fallback
             return {
@@ -772,7 +891,7 @@ async def _handle_playbook_extraction_for_satisfied(
     try:
         logger.info(f"📘 Extracting lessons from conversation history ({len(conversation_history)} messages)")
         
-        # OPTIMIZATION: user_profile_id is already validated in parent /update-week endpoint
+        # OPTIMIZATION: user_profile_id is already validated in parent /chat endpoint
         # No need for fallback DB call
         try:
             user_profile_id = int(request.user_profile_id) if request.user_profile_id is not None else None
@@ -854,19 +973,26 @@ async def _handle_playbook_extraction_for_satisfied(
     return updated_playbook
 
 
-@router.post("/update-week", response_model=PlanFeedbackResponse)
-async def update_week(
+@router.post("/chat", response_model=PlanFeedbackResponse)
+async def chat(
     request: PlanFeedbackRequest,
     coach: TrainingCoach = Depends(get_training_coach)
 ):
     """
-    Update an existing week in the training plan based on user feedback.
+    Multi-purpose training chat endpoint that handles various user intents.
     
-    Updates ONLY the latest week (highest week_number), but returns the full TrainingPlan structure
-    with the updated week inserted into the existing plan.
+    This endpoint intelligently classifies user intent and responds accordingly:
+    - **Questions/Clarity**: Returns AI response without plan updates
+    - **Plan Updates**: Updates the latest week based on feedback and returns updated plan
+    - **Satisfaction**: Marks plan as accepted and navigates to main app
+    - **Unclear**: Asks for clarification
+    
+    The endpoint automatically determines the appropriate action based on the user's message
+    and conversation history. It can update ONLY the latest week (highest week_number) when needed,
+    but always returns the full TrainingPlan structure.
     
     Request includes:
-    - feedback_message: User feedback message (required)
+    - feedback_message: User message/feedback (required)
     - training_plan: Full training plan data (required)
     - plan_id: Training plan ID (required)
     - conversation_history: Previous conversation messages for context (optional, default: [])
@@ -896,28 +1022,27 @@ async def update_week(
         if plan_id is None:
             raise HTTPException(status_code=400, detail="Missing or invalid plan_id in request")
         
-        # Derive week_number from training_plan (latest week = max week_number)
-        week_number = None
-        if isinstance(training_plan, dict):
-            weekly_schedules = training_plan.get("weekly_schedules", [])
-            if weekly_schedules:
-                week_numbers = [w.get("week_number", 0) for w in weekly_schedules if w.get("week_number")]
-                week_number = max(week_numbers) if week_numbers else None
-        
+        # Get week_number from request (required - should be the current week from frontend)
+        week_number = request.week_number
         if week_number is None:
-            raise HTTPException(status_code=400, detail="Could not determine week_number from training_plan (no weekly_schedules found)")
+            raise HTTPException(status_code=400, detail="week_number is required in request (should be the current week)")
         
-        # Get current_week (latest week) from training_plan
+        # Get the specific week from training_plan based on week_number
         current_week = None
         if isinstance(training_plan, dict):
             weekly_schedules = training_plan.get("weekly_schedules", [])
             if weekly_schedules:
-                # Find the week with the highest week_number
-                latest_week = max(weekly_schedules, key=lambda w: w.get("week_number", 0))
-                current_week = latest_week
+                # Find the week with the matching week_number
+                current_week = next(
+                    (w for w in weekly_schedules if w.get("week_number") == week_number),
+                    None
+                )
         
         if not current_week:
-            raise HTTPException(status_code=400, detail="Could not determine current_week from training_plan")
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Could not find week {week_number} in training_plan. Available weeks: {[w.get('week_number') for w in training_plan.get('weekly_schedules', []) if w.get('week_number')]}"
+            )
         
         # Get required fields
         feedback_message = request.feedback_message
@@ -1069,7 +1194,7 @@ async def update_week(
 
 
         # Update the week using the new method (uses user_playbook instead of onboarding responses)
-        # Pass training_plan from request instead of fetching from database
+        # Only the current week is processed and returned
         result = await coach.update_weekly_schedule(
             personal_info=personal_info,
             feedback_message=feedback_message,
@@ -1077,7 +1202,6 @@ async def update_week(
             current_week=current_week,
             user_profile_id=user_profile_id,
             user_playbook=user_playbook,
-            existing_training_plan=training_plan,  # Use training plan from request
             jwt_token=request.jwt_token,
             conversation_history=conversation_history,
         )
@@ -1091,59 +1215,63 @@ async def update_week(
 
         logger.info(f"✅ Week {week_number} updated successfully")
 
-        # Get the updated full training plan
+        # Get the updated week from result (only contains the updated week)
         updated_plan_data = result.get("training_plan")
+        
+        if not updated_plan_data:
+            raise Exception("No training plan data returned from update")
 
-        # Update only the specified week in the database
-        if plan_id and updated_plan_data:
-            # Prepare plan to save WITHOUT ai_message (never persist)
-            plan_to_save = dict(updated_plan_data)
-            plan_to_save.pop('ai_message', None)
+        # Extract the updated week (should be the only week in the array)
+        weekly_schedules = updated_plan_data.get("weekly_schedules", [])
+        updated_week = weekly_schedules[0] if weekly_schedules else None
             
-            update_result_db = await db_service.update_training_plan(
-                plan_id,
-                plan_to_save,
-                jwt_token=request.jwt_token
-            )
-            
-            if update_result_db is None:
-                raise Exception("Failed to update plan in database")
-            
-            logger.info(f"✅ Plan updated in database successfully")
-            
-            # Use the enriched plan returned by update_training_plan
-            enriched_plan = update_result_db
-            logger.info("✅ Using enriched training plan returned by update (IDs present)")
+        if not updated_week:
+            raise Exception(f"Could not find updated week {week_number} in result")
+        
+        # Map scheduled dates to daily trainings (post-processing step)
+        # This must happen before saving to DB and returning to frontend
+        temp_plan = {"weekly_schedules": [updated_week]}
+        temp_plan = map_daily_training_dates(temp_plan)
+        updated_week = temp_plan.get("weekly_schedules", [updated_week])[0]
+        logger.info("✅ Mapped scheduled dates to daily trainings for updated week")
+        
+        # Update only this specific week in the database
+        enriched_week = await db_service.update_single_week(
+            plan_id,
+            week_number,
+            updated_week,
+            jwt_token=request.jwt_token
+        )
+        
+        if enriched_week is None:
+            raise Exception("Failed to update week in database")
+        
+        logger.info(f"✅ Week {week_number} updated in database successfully")
+        
+        # Return only the enriched week (frontend will merge it back into the full plan)
+        # Include plan id for consistency and fallback path compatibility
+        enriched_plan = {
+            "id": plan_id,  # Include plan id so fallback transformTrainingPlan works
+            "weekly_schedules": [enriched_week],  # Return only the updated week
+        }
+        
+        # Add ai_message from coach result (AI-generated, not persisted)
+        # Prioritize ai_message from update result (explains changes), fallback to classification ai_message
+        ai_message = result.get("ai_message") or classification_result.get("ai_message")
+        if ai_message:
+            try:
+                enriched_plan['ai_message'] = ai_message
+            except Exception:
+                pass
 
-            # Add ai_message from coach result (AI-generated, not persisted)
-            # Prioritize ai_message from update result (explains changes), fallback to classification ai_message
-            ai_message = result.get("ai_message") or classification_result.get("ai_message")
-            if ai_message:
-                try:
-                    enriched_plan['ai_message'] = ai_message
-                except Exception:
-                    pass
-
-            return PlanFeedbackResponse(
-                success=True,
-                ai_response=ai_message or "I've updated your week! Take a look and let me know if you'd like any other changes. 💪",
-                plan_updated=True,
-                updated_plan=enriched_plan,
-                updated_playbook=updated_playbook,
-                navigate_to_main_app=False
-            )
-        else:
-            # Return the plan even if DB update fails (shouldn't happen)
-            # Prioritize ai_message from update result, fallback to classification ai_message
-            ai_message = result.get("ai_message") or classification_result.get("ai_message") or "I've updated your week! Take a look and let me know if you'd like any other changes. 💪"
-            return PlanFeedbackResponse(
-                success=True,
-                ai_response=ai_message,
-                plan_updated=True,
-                updated_plan=updated_plan_data,
-                updated_playbook=updated_playbook,
-                navigate_to_main_app=False
-            )
+        return PlanFeedbackResponse(
+            success=True,
+            ai_response=ai_message or "I've updated your week! Take a look and let me know if you'd like any other changes. 💪",
+            plan_updated=True,
+            updated_plan=enriched_plan,  # Contains only the updated week
+            updated_playbook=updated_playbook,
+            navigate_to_main_app=False
+        )
         
     except HTTPException:
         raise
@@ -1201,11 +1329,22 @@ async def create_week(
         if plan_id is None:
             raise HTTPException(status_code=400, detail="Missing or invalid plan_id in request")
 
+        # Calculate next_week_number from frontend's training_plan (more reliable than DB fetch)
+        weekly_schedules = training_plan.get("weekly_schedules", [])
+        if weekly_schedules:
+            week_numbers = [w.get("week_number", 0) for w in weekly_schedules if w.get("week_number")]
+            next_week_number = max(week_numbers) + 1 if week_numbers else 1
+        else:
+            next_week_number = 1
+        
+        logger.info(f"Calculated next_week_number: {next_week_number} from frontend training plan ({len(weekly_schedules)} existing weeks)")
+        
         # Create the new week using the new method
-        # next_week_number, completed_weeks are calculated internally from the training plan
+        # Uses training_plan from request instead of fetching from database
         result = await coach.create_new_weekly_schedule(
             personal_info=personal_info,
             user_profile_id=user_profile_id,
+            existing_training_plan=training_plan,  # Use training plan from request
             jwt_token=jwt_token,
         )
 
@@ -1216,38 +1355,65 @@ async def create_week(
                 detail=result.get("error", "Failed to create new week")
             )
 
-        # Get next_week_number from result metadata or calculate from updated plan
+        # Get the updated full training plan
         updated_plan_data = result.get("training_plan")
-        next_week_number = result.get("metadata", {}).get("next_week_number")
-        if not next_week_number and updated_plan_data:
-            # Calculate from the plan if not in metadata
-            weekly_schedules = updated_plan_data.get("weekly_schedules", [])
-            if weekly_schedules:
-                week_numbers = [w.get("week_number", 0) for w in weekly_schedules]
-                next_week_number = max(week_numbers) if week_numbers else 1
+        
+        # Verify next_week_number from result metadata matches our calculation
+        result_next_week = result.get("metadata", {}).get("next_week_number")
+        if result_next_week and result_next_week != next_week_number:
+            logger.warning(
+                f"Week number mismatch: calculated {next_week_number} but result has {result_next_week}. "
+                f"Using result value."
+            )
+            next_week_number = result_next_week
 
         logger.info(f"✅ Week {next_week_number} created successfully")
 
-        # Update the plan in the database with the new week
-        if plan_id and updated_plan_data:
-            # Prepare plan to save WITHOUT ai_message (never persist)
-            plan_to_save = dict(updated_plan_data)
-            plan_to_save.pop('ai_message', None)
+        # Map scheduled dates to daily trainings (post-processing step)
+        # This must happen before saving to DB and returning to frontend
+        if updated_plan_data:
+            updated_plan_data = map_daily_training_dates(updated_plan_data)
+            logger.info("✅ Mapped scheduled dates to daily trainings for new week")
 
-            update_result_db = await db_service.update_training_plan(
+        # Create only the new week in the database
+        if plan_id and updated_plan_data:
+            # Extract the new week from the full plan
+            weekly_schedules = updated_plan_data.get("weekly_schedules", [])
+            new_week = next(
+                (w for w in weekly_schedules if w.get("week_number") == next_week_number),
+                None
+            )
+            
+            if not new_week:
+                raise Exception(f"Could not find week {next_week_number} in updated plan data")
+            
+            # Create only this new week in the database
+            enriched_week = await db_service.create_single_week(
                 plan_id,
-                plan_to_save,
+                new_week,
                 jwt_token=jwt_token
             )
-
-            if update_result_db is None:
-                raise Exception("Failed to update plan in database")
-
-            logger.info(f"✅ Plan updated in database successfully")
-
-            # Use the enriched plan returned by update_training_plan
-            enriched_plan = update_result_db
-            logger.info("✅ Using enriched training plan returned by update (IDs present)")
+            
+            if enriched_week is None:
+                raise Exception("Failed to create week in database")
+            
+            logger.info(f"✅ Week {next_week_number} created in database successfully")
+            
+            # Merge the enriched week back into the full plan
+            enriched_weekly_schedules = []
+            for week in weekly_schedules:
+                if week.get("week_number") == next_week_number:
+                    enriched_weekly_schedules.append(enriched_week)
+                else:
+                    enriched_weekly_schedules.append(week)
+            
+            # Build the enriched full plan
+            enriched_plan = {
+                **updated_plan_data,
+                "weekly_schedules": enriched_weekly_schedules,
+            }
+            
+            logger.info("✅ Using enriched training plan with new week (IDs present)")
 
             return {
                 "success": True,
@@ -1269,3 +1435,170 @@ async def create_week(
     except Exception as e:
         logger.error(f"Error creating new week: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create new week: {str(e)}")
+
+
+@router.post("/insights-summary", response_model=InsightsSummaryResponse)
+async def get_insights_summary(
+    request: InsightsSummaryRequest,
+    coach: TrainingCoach = Depends(get_training_coach)
+):
+    """
+    Generate simplified, actionable insights summary with AI enhancement.
+    
+    Returns:
+    - AI-generated summary (2-3 sentences)
+    - Findings (2-3 observations from training data)
+    - Recommendations (2-3 actionable next steps)
+    - Simple metrics (volume progress, recovery, weak points, top exercises)
+    """
+    try:
+        # Extract and validate JWT token
+        user_id = extract_user_id_from_jwt(request.jwt_token)
+        
+        # Get training plan (use provided or fetch from database)
+        training_plan = request.training_plan
+        if not training_plan:
+            # Fetch from database
+            training_plan = await _fetch_complete_training_plan(request.user_profile_id)
+            if not training_plan:
+                return InsightsSummaryResponse(
+                    success=False,
+                    error="No training plan found"
+                )
+        
+        # Map scheduled dates to daily trainings (needed for accurate frequency calculation)
+        training_plan = map_daily_training_dates(training_plan)
+        
+        # Extract simple metrics (volume, frequency, training intensity)
+        volume_progress = InsightsService.extract_volume_progress(training_plan)
+        training_frequency = InsightsService.extract_training_frequency(training_plan)
+        training_intensity, intensity_trend = InsightsService.extract_training_intensity(training_plan)
+        
+        # Use provided weak_points/top_exercises from frontend (frontend calculates these)
+        # If not provided, use empty lists (AI can still generate good summary with volume/frequency/intensity)
+        weak_points = request.weak_points or []
+        top_exercises = request.top_exercises or []
+        
+        # Convert Pydantic models to dicts for prompt generation
+        weak_points_dict = [wp.model_dump() if hasattr(wp, 'model_dump') else wp for wp in weak_points]
+        top_exercises_dict = [ex.model_dump() if hasattr(ex, 'model_dump') else ex for ex in top_exercises]
+        
+        # Prepare metrics dict for AI
+        metrics_dict = {
+            "volume_progress": volume_progress,
+            "training_frequency": training_frequency,
+            "training_intensity": training_intensity,
+            "weak_points": weak_points_dict,
+            "top_exercises": top_exercises_dict
+        }
+        
+        # Calculate data hash for cache invalidation
+        current_data_hash = InsightsService.calculate_data_hash(metrics_dict)
+        
+        # Check cache first
+        cached_summary = await db_service.get_insights_summary_cache(request.user_profile_id)
+        use_cached = False
+        
+        if cached_summary:
+            cached_hash = cached_summary.get("data_hash")
+            cached_created = cached_summary.get("created_at")
+            
+            # Use cache if hash matches (data hasn't changed)
+            if cached_hash == current_data_hash:
+                use_cached = True
+                logger.info(f"✅ Using cached insights summary (hash match)")
+                # Parse cached summary
+                cached_summary_data = cached_summary.get("summary", {})
+                if cached_summary_data:
+                    ai_summary = AIInsightsSummary(**cached_summary_data)
+                else:
+                    use_cached = False  # Invalid cache, regenerate
+            else:
+                logger.info(f"🔄 Cache invalidated (data changed: hash mismatch)")
+        
+        # Generate new AI summary if cache miss or invalid
+        if not use_cached:
+            try:
+                prompt = PromptGenerator.generate_insights_summary_prompt(metrics_dict)
+                
+                # Use lightweight model for fast response
+                ai_summary, completion = coach.llm.chat_parse(
+                    prompt,
+                    AIInsightsSummary,
+                    model_type="lightweight"
+                )
+                
+                logger.info(f"✅ Generated new insights summary (tokens: {completion.usage.total_tokens if hasattr(completion, 'usage') else 'N/A'})")
+                
+                # Save to cache for future requests
+                cache_data = {
+                    "summary": ai_summary.model_dump(),
+                    "metrics": None  # Will be set below
+                }
+                await db_service.save_insights_summary_cache(
+                    request.user_profile_id,
+                    cache_data,
+                    current_data_hash
+                )
+                
+            except Exception as e:
+                logger.error(f"Error generating AI summary: {e}")
+                # Fallback to simple summary if AI fails
+                ai_summary = AIInsightsSummary(
+                    summary=f"Your training is progressing. {volume_progress}. {training_intensity}.",
+                    findings=[
+                        f"Training volume: {volume_progress}",
+                        f"Training frequency: {training_frequency}"
+                    ],
+                    recommendations=[
+                        "Maintain consistent training frequency",
+                        "Monitor training intensity and adjust as needed"
+                    ]
+                )
+        
+        # Build metrics response (always use current metrics, not cached)
+        # Convert to Pydantic models if needed
+        weak_points_models = [
+            wp if isinstance(wp, WeakPoint) else WeakPoint(**wp) 
+            for wp in weak_points
+        ]
+        top_exercises_models = [
+            ex if isinstance(ex, TopExercise) else TopExercise(**ex)
+            for ex in top_exercises
+        ]
+        
+        metrics = InsightsMetrics(
+            volume_progress=volume_progress,
+            training_frequency=training_frequency,
+            training_intensity=training_intensity,
+            intensity_trend=intensity_trend,
+            weak_points=weak_points_models,
+            top_exercises=top_exercises_models
+        )
+        
+        # Update cache with full metrics if we generated new summary
+        if not use_cached and ai_summary:
+            cache_data = {
+                "summary": ai_summary.model_dump(),
+                "metrics": metrics.model_dump()
+            }
+            await db_service.save_insights_summary_cache(
+                request.user_profile_id,
+                cache_data,
+                current_data_hash
+            )
+        
+        return InsightsSummaryResponse(
+            success=True,
+            summary=ai_summary,
+            metrics=metrics
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating insights summary: {str(e)}")
+        return InsightsSummaryResponse(
+            success=False,
+            error=f"Failed to generate insights summary: {str(e)}"
+        )

@@ -12,8 +12,8 @@ import { DayHeaderProps } from './types';
 
 const DayHeader: React.FC<DayHeaderProps> = ({
   dayOfWeek,
-  isTodaysWorkout,
-  isPastWeek,
+  isEditable,
+  dayStatus,
   isRestDay,
   hideDayName = false,
 }) => {
@@ -22,18 +22,45 @@ const DayHeader: React.FC<DayHeaderProps> = ({
     return null;
   }
   
+  const getStatusLabel = () => {
+    switch (dayStatus) {
+      case 'past':
+        return 'Past';
+      case 'today':
+        return 'Today';
+      case 'future':
+        return 'Future';
+      default:
+        return null;
+    }
+  };
+  
+  const statusLabel = getStatusLabel();
+  // Don't show lock icon on rest days
+  const showLockIcon = !isRestDay && !isEditable && dayStatus !== 'unknown';
+  
   return (
     <View style={styles.dayHeaderContainer}>
       <View style={styles.dayHeaderCard}>
         <View style={styles.dayHeader}>
           <View style={styles.dayNameBadge}>
-            <Text style={styles.dayName}>{dayOfWeek.toUpperCase()}</Text>
+            <Text style={[styles.dayName, !isEditable && !isRestDay && styles.lockedDayName]}>
+              {dayOfWeek.toUpperCase()}
+            </Text>
           </View>
 
-          {isPastWeek && (
-            <View style={styles.pastWeekIndicator}>
+          {showLockIcon && (
+            <View style={styles.statusIndicator}>
               <Ionicons name="lock-closed" size={12} color={colors.muted} />
-              <Text style={styles.pastWeekText}>Past Week</Text>
+              {statusLabel && (
+                <Text style={styles.statusText}>{statusLabel}</Text>
+              )}
+            </View>
+          )}
+          
+          {isEditable && dayStatus === 'today' && !isRestDay && (
+            <View style={styles.todayIndicator}>
+              <Text style={styles.todayText}>Today</Text>
             </View>
           )}
         </View>
@@ -72,7 +99,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: 'uppercase', // Ensure all uppercase
   },
-  pastWeekIndicator: {
+  lockedDayName: {
+    opacity: 0.6,
+  },
+  statusIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -81,10 +111,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.muted + '20',
     borderRadius: 8
   },
-  pastWeekText: {
+  statusText: {
     fontSize: 12,
     color: colors.muted,
     fontWeight: '500'
+  },
+  todayIndicator: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: colors.primary + '20',
+    borderRadius: 8
+  },
+  todayText: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: '600'
   },
 });
 

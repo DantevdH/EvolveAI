@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { ActivityIndicator, Alert, ImageBackground, Image, KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/src/context/AuthContext';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { supabase } from '@/src/config/supabase';
 import { validateLoginForm } from '@/src/utils/validation';
-import { colors } from '../../constants/designSystem';
+import { logger } from '@/src/utils/logger';
+import { colors, secondary, createColorWithOpacity } from '../../constants/colors';
 
 // Complete auth session if needed (recommended by Expo)
 WebBrowser.maybeCompleteAuthSession();
@@ -79,7 +81,7 @@ const SocialLoginButton: React.FC<{
         <IconSymbol
           name={iconName as any}
           size={20}
-          color="#FFFFFF"
+          color={secondary}
         />
         )}
         <Text style={[styles.socialButtonText, disabled && styles.socialButtonTextDisabled]}>
@@ -131,7 +133,7 @@ export const LoginScreen: React.FC = () => {
       });
 
       if (error) {
-        console.error('Error setting session from email verification:', error);
+        logger.error('Error setting session from email verification', error);
         Alert.alert('Error', 'Invalid or expired verification link. Please try again.');
         return;
       }
@@ -145,7 +147,7 @@ export const LoginScreen: React.FC = () => {
         );
       }
     } catch (error) {
-      console.error('Error handling email verification:', error);
+      logger.error('Error handling email verification', error);
       Alert.alert('Error', 'Something went wrong. Please try again.');
     }
   };
@@ -171,22 +173,21 @@ export const LoginScreen: React.FC = () => {
   };
 
   const handleGoogleLogin = async () => {
-    console.log('🔵 Google login button clicked');
+    logger.info('Google login button clicked');
     try {
       clearError();
-      console.log('🔵 Calling signInWithGoogle...');
+      logger.info('Calling signInWithGoogle...');
       const success = await signInWithGoogle();
-      console.log('🔵 signInWithGoogle returned:', success);
-      console.log('🔵 Current error state:', state.error);
+      logger.info('signInWithGoogle returned', { success, error: state.error });
       if (!success) {
         const errorMessage = state.error || 'Google sign in failed. Please try again.';
-        console.error('❌ Google sign in failed:', errorMessage);
+        logger.error('Google sign in failed', errorMessage);
         Alert.alert('Google Sign In Failed', errorMessage);
       } else {
-        console.log('✅ Google sign in initiated successfully');
+        logger.info('Google sign in initiated successfully');
       }
     } catch (error) {
-      console.error('❌ Error in handleGoogleLogin:', error);
+      logger.error('Error in handleGoogleLogin', error);
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     }
   };
@@ -198,7 +199,7 @@ export const LoginScreen: React.FC = () => {
     // if (!success && state.error) {
     //   Alert.alert('Apple Sign In Failed', state.error);
     // }
-    console.log('🍎 Apple login clicked - disabled for now');
+    logger.info('Apple login clicked - disabled for now');
   };
 
   // Facebook login commented out for now
@@ -328,15 +329,22 @@ export const LoginScreen: React.FC = () => {
               <View style={styles.loginSection}>
                 {state.isLoading ? (
                   <View style={styles.loadingContainer} testID="loading-indicator">
-                    <ActivityIndicator size="large" color="#FFFFFF" />
+                    <ActivityIndicator size="large" color={colors.primary} />
                   </View>
                 ) : (
                   <TouchableOpacity
                     style={styles.loginButton}
                     onPress={handleEmailLogin}
-                    activeOpacity={0.8}
+                    disabled={state.isLoading}
+                    activeOpacity={0.85}
                     testID="login-button">
-                    <Text style={styles.loginButtonText}>Sign In</Text>
+                    <LinearGradient
+                      colors={[createColorWithOpacity(secondary, 0.55), createColorWithOpacity(secondary, 0.25)]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.gradientButton}>
+                      <Text style={styles.loginButtonText}>Sign In</Text>
+                    </LinearGradient>
                   </TouchableOpacity>
                 )}
                 
@@ -373,7 +381,7 @@ const styles = StyleSheet.create({
   },
   dimmingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(248, 248, 248, 0.85)',
   },
   safeArea: {
     flex: 1,
@@ -394,7 +402,7 @@ const styles = StyleSheet.create({
   mainTitle: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: colors.text,
     marginBottom: 8,
   },
   subtitle: {
@@ -405,22 +413,16 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   subtitleAccent: {
-    color: colors.primary,
+    color: secondary,
     fontWeight: '700',
     fontSize: 14,
     letterSpacing: 1.5,
-    textShadowColor: colors.primary,
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
   },
   subtitleRegular: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontWeight: '600',
     fontSize: 14,
     letterSpacing: 1.5,
-    textShadowColor: 'rgba(147, 35, 34, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
   },
   
   // Spacing
@@ -434,11 +436,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   socialButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    backgroundColor: colors.card,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: colors.border,
+    shadowColor: colors.overlay,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   socialButtonDisabled: {
     opacity: 0.5,
@@ -451,11 +458,11 @@ const styles = StyleSheet.create({
   socialButtonText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.text,
     marginLeft: 12,
   },
   socialButtonTextDisabled: {
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: colors.muted,
   },
   socialButtonImage: {
     width: 17,
@@ -473,12 +480,12 @@ const styles = StyleSheet.create({
   separatorLine: {
     flex: 1,
     height: 1,
-    backgroundColor: colors.text,
+    backgroundColor: colors.border,
   },
   separatorText: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: colors.text,
+    color: colors.muted,
     marginHorizontal: 16,
   },
   
@@ -492,6 +499,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.inputBackground,
     borderRadius: 12,
     padding: 16,
+    borderWidth: 1,
+    borderColor: colors.inputBorder,
   },
   placeholderText: {
     position: 'absolute',
@@ -536,23 +545,27 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   loginButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 18,
-    paddingVertical: 18,
-    paddingHorizontal: 8,
+    borderRadius: 14,
+    overflow: 'hidden',
+    minHeight: 48,
+  },
+  gradientButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    width: '100%',
+    minHeight: 48,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.borderLight,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.7,
-    shadowRadius: 14,
-    elevation: 8,
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(secondary, 0.45),
   },
   loginButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.primary,
+    letterSpacing: 0.4,
+    textAlign: 'center',
   },
   
   // Error Text
@@ -572,11 +585,11 @@ const styles = StyleSheet.create({
   },
   signUpText: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: colors.muted,
   },
   signUpLink: {
     fontSize: 16,
-    color: '#932322', // Your evolvePrimary color
+    color: colors.primary,
     fontWeight: '600',
   },
 });
