@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Alert } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../constants/colors';
+import { colors, createColorWithOpacity } from '../../constants/colors';
 import { validateRPE } from '../../utils/validation';
 import { logger } from '../../utils/logger';
 
@@ -22,12 +23,42 @@ const SessionRPEModal: React.FC<SessionRPEModalProps> = ({
     { value: 5, label: 'Very Hard', description: 'Maximum effort' }
   ];
 
-  const getRPEButtonColor = (rpe: number) => {
-    if (rpe === 1) return colors.success;
-    if (rpe === 2) return colors.secondary;
-    if (rpe === 3) return colors.warning;
-    if (rpe === 4) return '#FF6B6B';
-    return colors.error;
+  const getRPEButtonGradient = (rpe: number): [string, string] => {
+    // Use golden-based gradients with varying intensity, blending to primary red for higher levels
+    // Maintains app's golden accent theme while providing visual distinction
+    if (rpe === 1) {
+      // Very Easy - Very light golden
+      return [
+        createColorWithOpacity(colors.secondary, 0.4),
+        createColorWithOpacity(colors.secondary, 0.25)
+      ];
+    }
+    if (rpe === 2) {
+      // Easy - Light golden
+      return [
+        createColorWithOpacity(colors.secondary, 0.55),
+        createColorWithOpacity(colors.secondary, 0.35)
+      ];
+    }
+    if (rpe === 3) {
+      // Moderate - Medium golden
+      return [
+        createColorWithOpacity(colors.secondary, 0.7),
+        createColorWithOpacity(colors.secondary, 0.5)
+      ];
+    }
+    if (rpe === 4) {
+      // Hard - Strong golden with subtle red blend
+      return [
+        createColorWithOpacity(colors.secondary, 0.8),
+        createColorWithOpacity(colors.primary, 0.4)
+      ];
+    }
+    // Very Hard - Rich golden-red blend (primary + secondary)
+    return [
+      createColorWithOpacity(colors.secondary, 0.9),
+      createColorWithOpacity(colors.primary, 0.6)
+    ];
   };
 
   const handleSelect = (rpe: number) => {
@@ -60,7 +91,19 @@ const SessionRPEModal: React.FC<SessionRPEModalProps> = ({
       <View style={styles.overlay}>
         <View style={styles.dialog}>
           <View style={styles.header}>
-            <Ionicons name="fitness" size={32} color={colors.primary} />
+            <View style={styles.iconContainer}>
+              <LinearGradient
+                colors={[
+                  createColorWithOpacity(colors.secondary, 0.35),
+                  createColorWithOpacity(colors.secondary, 0.18)
+                ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.iconGradient}
+              >
+                <Ionicons name="fitness" size={24} color={colors.secondary} />
+              </LinearGradient>
+            </View>
             <Text style={styles.title}>Rate Your Session</Text>
             <Text style={styles.subtitle}>How hard was this workout?</Text>
           </View>
@@ -73,18 +116,22 @@ const SessionRPEModal: React.FC<SessionRPEModalProps> = ({
                   styles.rpeButton,
                   {
                     backgroundColor: colors.card,
-                    borderColor: colors.border,
+                    borderColor: createColorWithOpacity(colors.secondary, 0.2),
                     borderWidth: 1
                   }
                 ]}
                 onPress={() => handleSelect(item.value)}
                 activeOpacity={0.7}
               >
-                <View style={[
-                  styles.rpeCircle,
-                  { backgroundColor: getRPEButtonColor(item.value) }
-                ]}>
-                  <Text style={styles.rpeValue}>{item.value}</Text>
+                <View style={styles.rpeCircle}>
+                  <LinearGradient
+                    colors={getRPEButtonGradient(item.value)}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.rpeCircleGradient}
+                  >
+                    <Text style={styles.rpeValue}>{item.value}</Text>
+                  </LinearGradient>
                 </View>
                 <View style={styles.rpeInfo}>
                   <Text style={styles.rpeLabel}>{item.label}</Text>
@@ -102,36 +149,51 @@ const SessionRPEModal: React.FC<SessionRPEModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: createColorWithOpacity(colors.text, 0.35),
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20
   },
   dialog: {
-    backgroundColor: colors.background,
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: colors.card,
+    borderRadius: 24,
+    padding: 24,
     width: '100%',
-    maxWidth: 400,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    maxWidth: 420,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.35),
+    shadowColor: createColorWithOpacity(colors.text, 0.12),
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
     elevation: 8
   },
   header: {
     alignItems: 'center',
-    marginBottom: 16
+    marginBottom: 20
+  },
+  iconContainer: {
+    marginBottom: 12
+  },
+  iconGradient: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: createColorWithOpacity(colors.secondary, 0.25),
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 4
   },
   title: {
     fontSize: 22,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: 12,
-    textAlign: 'center'
+    fontWeight: '700',
+    color: colors.secondary,
+    marginTop: 4,
+    textAlign: 'center',
+    letterSpacing: 0.4
   },
   subtitle: {
     fontSize: 14,
@@ -146,22 +208,32 @@ const styles = StyleSheet.create({
   rpeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
-    paddingVertical: 10,
-    borderRadius: 8,
-    gap: 10
+    padding: 12,
+    paddingVertical: 14,
+    borderRadius: 12,
+    gap: 12
   },
   rpeCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: createColorWithOpacity(colors.secondary, 0.2),
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3
+  },
+  rpeCircleGradient: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center'
   },
   rpeValue: {
     fontSize: 16,
     fontWeight: '700',
-    color: colors.background
+    color: colors.card
   },
   rpeInfo: {
     flex: 1,

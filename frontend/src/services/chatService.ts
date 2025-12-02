@@ -1,4 +1,6 @@
 import { storage } from '@/src/utils/storage';
+import { logger } from '../utils/logger';
+import { CHAT_CONFIG } from '@/src/constants';
 
 export interface ChatMessageData {
   id: string;
@@ -19,6 +21,7 @@ const getChatStorageKey = (userProfileId: number, planId?: number | null): strin
 export class ChatService {
   /**
    * Save conversation history to AsyncStorage
+   * Automatically filters out messages older than expiration time
    */
   static async saveConversation(
     userProfileId: number,
@@ -27,19 +30,33 @@ export class ChatService {
   ): Promise<void> {
     try {
       const key = getChatStorageKey(userProfileId, planId);
-      // Filter out typing indicators and welcome messages (don't save these)
-      const messagesToSave = messages.filter(
-        msg => msg.id !== 'typing' && msg.id !== 'welcome'
-      );
+      const now = Date.now();
+      
+      // Filter out typing indicators, welcome messages, and expired messages
+      const messagesToSave = messages.filter(msg => {
+        if (msg.id === 'typing' || msg.id === 'welcome') {
+          return false;
+        }
+        
+        // Check if message is expired
+        const messageTime = msg.timestamp instanceof Date 
+          ? msg.timestamp.getTime() 
+          : new Date(msg.timestamp).getTime();
+        const age = now - messageTime;
+        
+        return age < CHAT_CONFIG.HISTORY_EXPIRATION_MS;
+      });
+      
       await storage.setItem(key, messagesToSave);
     } catch (error) {
-      console.error('Error saving conversation:', error);
+      logger.error('Error saving conversation', error);
       // Don't throw - we don't want to block the UI if saving fails
     }
   }
 
   /**
    * Load conversation history from AsyncStorage
+   * Automatically filters out expired messages
    */
   static async loadConversationHistory(
     userProfileId: number,
@@ -52,13 +69,31 @@ export class ChatService {
         return [];
       }
       
-      // Convert timestamp strings back to Date objects (they get serialized as strings)
-      return messages.map(msg => ({
-        ...msg,
-        timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
-      }));
+      const now = Date.now();
+      
+      // Convert timestamp strings back to Date objects and filter expired messages
+      const validMessages = messages
+        .map(msg => ({
+          ...msg,
+          timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+        }))
+        .filter(msg => {
+          const messageTime = msg.timestamp instanceof Date 
+            ? msg.timestamp.getTime() 
+            : new Date(msg.timestamp).getTime();
+          const age = now - messageTime;
+          
+          return age < CHAT_CONFIG.HISTORY_EXPIRATION_MS;
+        });
+      
+      // If we filtered out expired messages, save the cleaned list back
+      if (validMessages.length < messages.length) {
+        await storage.setItem(key, validMessages);
+      }
+      
+      return validMessages;
     } catch (error) {
-      console.error('Error loading conversation history:', error);
+      logger.error('Error loading conversation history', error);
       return [];
     }
   }
@@ -74,7 +109,7 @@ export class ChatService {
       const key = getChatStorageKey(userProfileId, planId);
       await storage.removeItem(key);
     } catch (error) {
-      console.error('Error clearing conversation history:', error);
+      logger.error('Error clearing conversation history', error);
     }
   }
 }

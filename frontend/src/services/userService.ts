@@ -3,6 +3,7 @@ import { UserProfile } from '@/src/types';
 import { AIQuestion } from '@/src/types/onboarding';
 import { DEFAULT_VALUES } from '../constants/api';
 import { mapOnboardingToDatabase } from '../utils/profileDataMapping';
+import { logger } from '../utils/logger';
 
 export interface UserServiceResponse<T> {
   success: boolean;
@@ -15,18 +16,15 @@ export interface UserServiceResponse<T> {
  */
 const extractAIMessage = (questionsData: any): string | null => {
   if (!questionsData) {
-    console.log('📍 extractAIMessage: questionsData is null/undefined');
     return null;
   }
   
   // Handle new format: object with AImessage or ai_message
   if (typeof questionsData === 'object' && !Array.isArray(questionsData)) {
     const aiMessage = questionsData.AImessage || questionsData.ai_message || null;
-    console.log(`📍 extractAIMessage: Found AI message: ${aiMessage?.substring(0, 50) || 'NONE'}`);
     return aiMessage;
   }
   
-  console.log('📍 extractAIMessage: questionsData is not an object or is an array');
   return null;
 };
 
@@ -101,7 +99,7 @@ export class UserService {
         .select();
 
       if (error) {
-        console.error('❌ FRONTEND: Failed to create user profile:', error.message);
+        logger.data('Create user profile', 'error', { error: error.message });
         return {
           success: false,
           error: `Failed to create user profile: ${error.message}`,
@@ -109,20 +107,20 @@ export class UserService {
       }
 
       if (data && data.length > 0) {
-        console.log(`✅ FRONTEND: User profile created successfully (ID: ${data[0].id})`);
+        logger.data('Create user profile', 'success', { profileId: data[0].id });
         return {
           success: true,
           data: { id: data[0].id },
         };
       } else {
-        console.error('❌ FRONTEND: No data returned from profile creation');
+        logger.data('Create user profile', 'error', { reason: 'No data returned' });
         return {
           success: false,
           error: 'No data returned from profile creation',
         };
       }
     } catch (error) {
-      console.error('❌ FRONTEND: Error creating user profile:', error);
+      logger.error('Error creating user profile', error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'An unexpected error occurred',
@@ -166,7 +164,7 @@ export class UserService {
         .select();
 
       if (error) {
-        console.error(`❌ FRONTEND: Failed to update user profile for ${stage} stage:`, error.message);
+        logger.data(`Update user profile (${stage})`, 'error', { error: error.message });
         return {
           success: false,
           error: `Failed to update user profile for ${stage} stage: ${error.message}`,
@@ -174,20 +172,20 @@ export class UserService {
       }
 
       if (updatedProfile && updatedProfile.length > 0) {
-        console.log(`✅ FRONTEND: User profile updated successfully for ${stage} stage (ID: ${updatedProfile[0].id})`);
+        logger.data(`Update user profile (${stage})`, 'success', { profileId: updatedProfile[0].id });
         return {
           success: true,
           data: updatedProfile[0],
         };
       } else {
-        console.error(`❌ FRONTEND: No data returned from profile update for ${stage} stage`);
+        logger.data(`Update user profile (${stage})`, 'error', { reason: 'No data returned' });
         return {
           success: false,
           error: `No data returned from profile update for ${stage} stage`,
         };
       }
     } catch (error) {
-      console.error(`❌ FRONTEND: Error updating user profile for ${stage} stage:`, error);
+      logger.error(`Error updating user profile for ${stage} stage`, error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'An unexpected error occurred',

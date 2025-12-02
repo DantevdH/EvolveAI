@@ -35,6 +35,8 @@ import {
 } from '@/src/utils/trainingPlanTransformer';
 import { TrainingPlan } from '@/src/types/training';
 import { useApiCallWithBanner } from '@/src/hooks/useApiCallWithBanner';
+import { logger } from '@/src/utils/logger';
+import { ErrorBoundary } from '@/src/components/ErrorBoundary';
 
 interface ChatMessageType {
   id: string;
@@ -140,7 +142,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
             setMessages([welcome]);
           }
         } catch (error) {
-          console.error('Error loading conversation history:', error);
+          logger.error('Error loading conversation history', error);
           // On error, still show welcome message
           if (welcomeMessage) {
             const welcome: ChatMessageType = {
@@ -194,21 +196,25 @@ const ChatModal: React.FC<ChatModalProps> = ({
       isUser: false,
       timestamp: new Date(),
     };
-    const updatedMessages = [...messages.filter(msg => msg.id !== 'typing'), aiMessage];
-    setMessages(updatedMessages);
-
-    // Save entire conversation to AsyncStorage
-    if (state.userProfile?.id) {
-      const planId = isPlanReview && currentPlan?.id 
-        ? (typeof currentPlan.id === 'string' ? parseInt(currentPlan.id, 10) : currentPlan.id)
-        : null;
+    
+    // Use functional update to get current messages state (includes user message)
+    setMessages(prevMessages => {
+      const updatedMessages = [...prevMessages.filter(msg => msg.id !== 'typing'), aiMessage];
       
-      // Save asynchronously - don't block UI
-      ChatService.saveConversation(state.userProfile.id, updatedMessages, planId).catch(
-        error => console.error('Error saving conversation:', error)
-      );
-    }
-  }, [messages, state.userProfile?.id, isPlanReview, currentPlan?.id]);
+      // Save entire conversation to AsyncStorage (asynchronously, don't block UI)
+      if (state.userProfile?.id) {
+        const planId = isPlanReview && currentPlan?.id 
+          ? (typeof currentPlan.id === 'string' ? parseInt(currentPlan.id, 10) : currentPlan.id)
+          : null;
+        
+        ChatService.saveConversation(state.userProfile.id, updatedMessages, planId).catch(
+          error => logger.error('Error saving conversation', error)
+        );
+      }
+      
+      return updatedMessages;
+    });
+  }, [state.userProfile?.id, isPlanReview, currentPlan?.id]);
 
   const buildConversationHistory = useCallback(
     (userMessage: ChatMessageType) => {
@@ -389,7 +395,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
         : null;
       
       ChatService.saveConversation(state.userProfile.id, updatedMessages, planId).catch(
-        error => console.error('Error saving conversation:', error)
+        error => logger.error('Error saving conversation', error)
       );
     }
 
@@ -432,12 +438,13 @@ const ChatModal: React.FC<ChatModalProps> = ({
     lastMessage.id !== 'typing';
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
+    <ErrorBoundary>
+      <Modal
+        visible={visible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={onClose}
+      >
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -476,11 +483,22 @@ const ChatModal: React.FC<ChatModalProps> = ({
                 showsVerticalScrollIndicator={false}
               >
                 {messages.map((message) => {
+                  // Validate message before rendering
+                  if (!message || !message.id || typeof message.message !== 'string') {
+                    return null;
+                  }
+
+                  // Sanitize message content (basic XSS protection)
+                  const sanitizedMessage = message.message
+                    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                    .replace(/javascript:/gi, '')
+                    .replace(/on\w+\s*=/gi, '');
+
                   if (message.isUser) {
                     return (
                       <ChatBubble
                         key={message.id}
-                        message={message.message}
+                        message={sanitizedMessage || ''}
                         isUser={true}
                         timestamp={message.timestamp}
                         isTyping={message.isTyping}
@@ -494,7 +512,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
                   return (
                     <AIChatMessage
                       key={message.id}
-                      customMessage={isTypingIndicator ? undefined : message.message}
+                      customMessage={isTypingIndicator ? undefined : (sanitizedMessage || '')}
                       username={state.userProfile?.username}
                       isLoading={isTypingIndicator}
                       skipAnimation={isTypingIndicator ? true : !isWelcomeMessage}
@@ -576,6 +594,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
         </View>
       </KeyboardAvoidingView>
     </Modal>
+    </ErrorBoundary>
   );
 };
 

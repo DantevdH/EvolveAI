@@ -7,15 +7,15 @@
  * These tests verify component integration and state handling.
  */
 
-import { useAuth } from '../../../../src/context/AuthContext';
-import { PlaybookLesson } from '../../../../src/types';
+import { useAuth } from '../../../context/AuthContext';
+import { PlaybookLesson } from '../../../types';
 import {
   formatProfileValue,
   validateAndFilterLessons,
   sortLessonsByConfidence,
   getLessonsForPage,
   calculatePaginationBounds,
-} from '../../../../src/utils/profileUtils';
+} from '../../../utils/profileUtils';
 
 // Mock AuthContext
 jest.mock('../../../../src/context/AuthContext');
