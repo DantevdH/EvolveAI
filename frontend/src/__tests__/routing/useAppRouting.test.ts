@@ -1,5 +1,5 @@
 import { renderHook } from '@testing-library/react-native';
-import { useAppRouting } from '../../../src/hooks/useAppRouting';
+import { useAppRouting } from '../../hooks/useAppRouting';
 
 // Mock expo-router pathname
 jest.mock('expo-router', () => ({

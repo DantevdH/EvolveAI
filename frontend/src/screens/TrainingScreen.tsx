@@ -487,7 +487,7 @@ const TrainingScreenContent: React.FC = () => {
         cancelText="Cancel"
         onConfirm={() => confirmReopenTraining(true)}
         onCancel={() => confirmReopenTraining(false)}
-        confirmButtonColor={colors.primary}
+        confirmButtonColor={colors.secondary}
         icon="refresh"
       />
 

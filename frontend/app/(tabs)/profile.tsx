@@ -330,12 +330,7 @@ function FullProfileScreenContent() {
 // Wrap with ErrorBoundary
 export default function FullProfileScreen() {
   return (
-    <ErrorBoundary
-      onError={(error, errorInfo) => {
-        // Error is already logged by ErrorBoundary
-        console.error('ProfileScreen error:', error, errorInfo);
-      }}
-    >
+    <ErrorBoundary>
       <FullProfileScreenContent />
     </ErrorBoundary>
   );
