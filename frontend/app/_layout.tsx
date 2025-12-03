@@ -5,6 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator } from 'react-native';
 import { useEffect } from 'react';
 import * as Linking from 'expo-linking';
+// Import reanimated - required for animations
+// Note: Expo Go has worklets 0.5.1 natively, but reanimated 4.x works with it
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';

@@ -5,12 +5,12 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/evolve-logo.png",
-    "scheme": "frontendexpo2",
+    "scheme": "evolveai",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.frontendexpo2"
+      "bundleIdentifier": "com.evolveai.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +18,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.frontendexpo2"
+      "package": "com.evolveai.app"
     },
     "web": {
       "bundler": "metro",
