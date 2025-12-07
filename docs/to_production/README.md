@@ -4,8 +4,8 @@ This directory contains comprehensive production readiness documentation for all
 
 ## Documentation Structure
 
-### 1. General/Overview
-- **[00_GENERAL_OVERVIEW.md](./00_GENERAL_OVERVIEW.md)** - Overall production checklist, architecture overview, deployment strategy, and cross-cutting concerns
+### 0. Production Deployment (START HERE)
+- **[00_PRODUCTION_DEPLOYMENT.md](./00_PRODUCTION_DEPLOYMENT.md)** - **FINAL PRODUCTION CHECKLIST** - Consolidated critical items for main branch deployment. Complete all 🔴 items before production.
 
 ### 2. Backend
 - **[01_BACKEND.md](./01_BACKEND.md)** - Backend production readiness checklist including:
@@ -115,7 +115,7 @@ This directory contains comprehensive production readiness documentation for all
 
 ## How to Use This Documentation
 
-1. **Start with the General Overview** - Review `00_GENERAL_OVERVIEW.md` to understand the overall production strategy
+1. **Start with Production Deployment** - Review `00_PRODUCTION_DEPLOYMENT.md` for the final production checklist
 2. **Work through each component** - Go through each numbered document systematically
 3. **Focus on Critical items first** - Complete all 🔴 items before TestFlight deployment
 4. **Complete Important items** - Finish 🟡 items before App Store public release

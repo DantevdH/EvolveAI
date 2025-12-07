@@ -44,6 +44,9 @@ module.exports = {
       // Make these available via expo-constants
       ...appJson.expo.extra,
       DEBUG: process.env.DEBUG || process.env.EXPO_PUBLIC_DEBUG || 'false',
+      eas: {
+        projectId: 'bcfa6b40-30f4-4745-acbd-a99275186481',
+      },
     },
   },
 };

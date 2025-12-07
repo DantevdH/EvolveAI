@@ -1,10 +1,10 @@
 export * from './theme';
 
 // API Configuration
+// Note: Use API_CONFIG from './api' instead - this is kept for backward compatibility
+// This should use environment variable, but api.ts is the source of truth
 export const API_CONFIG = {
-  BASE_URL: __DEV__
-    ? 'http://localhost:8000' // Development backend URL
-    : 'https://api.evolveai.com', // Production backend URL
+  BASE_URL: process.env.EXPO_PUBLIC_BACKEND_URL || (__DEV__ ? 'http://localhost:8000' : 'https://api.evolveai.com'),
   TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3,
 };

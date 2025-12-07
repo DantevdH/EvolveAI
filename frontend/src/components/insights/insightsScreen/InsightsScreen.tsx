@@ -183,14 +183,11 @@ export const InsightsScreen: React.FC = () => {
     // TODO: Navigate to exercise detail or show recommendations
   };
 
-  // Check if we have any data at all
-  // Insights summary comes from context, chart data from API
+  // Check if we have any actual workout data (volume or RPE)
+  // Only show insights page if there's real training data, not just AI-generated insights
   const hasData =
-    insightsData.insightsSummary !== undefined ||
     insightsData.weeklyVolumeData.length > 0 ||
-    insightsData.performanceScoreData.length > 0 ||
-    insightsData.weakPoints.length > 0 ||
-    insightsData.topPerformingExercises.length > 0;
+    (insightsData.recoveryData && insightsData.recoveryData.length > 0);
 
   if (loading) {
     return (

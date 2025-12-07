@@ -1310,8 +1310,19 @@ class PromptGenerator:
             **STRENGTH (General Rules):**
             • Schema enforces: main_muscle and equipment must be valid Enum values, execution_order is required
             • DO NOT set exercise_id (will be matched automatically)
-            • IMPORTANT: te number of reps should be an even number
-            • IMPORTANT: reps, and weight arrays should have the same length as the number of sets AND 
+            
+            **⚠️ CRITICAL: SETS vs REPS (MUST UNDERSTAND):**
+            • SETS = Number of times you perform the exercise (e.g., 3 sets means you do the exercise 3 times)
+              - Normal range: 1-6 sets per exercise (typically 3-5 sets) unless specified otherwise by the user
+              - Example: If doing "Bench Press" with 3 sets of 10 reps, you perform 10 repetitions, rest, then do 10 more, rest, then 10 more (3 total sets)
+            • REPS = Number of repetitions per set (e.g., 10 reps means you do the movement 10 times in one set)
+              - Normal range: 1-30 reps per set (typically 6-15 reps for most exercises) unless specified otherwise by the user
+              - Example: In "3 sets of 10 reps", the 10 is the reps (repetitions per set), the 3 is the sets (number of times)
+            • IMPORTANT: The "sets" field must be an INTEGER (1-6), representing how many times you perform the exercise
+            • IMPORTANT: The "reps" field must be an ARRAY of integers, with one value per set
+            • IMPORTANT: The "weight" field must be an ARRAY of floats, with one value per set
+            • IMPORTANT: reps and weight arrays MUST have the same length as the number of sets
+            • IMPORTANT: The number of reps per set should typically be an even number (easier to track)
             
             **⚠️ CRITICAL: EXERCISE NAMING RULES (MUST FOLLOW):**
             • exercise_name: Use ONLY the standard/common exercise name WITHOUT any equipment prefix or suffix
