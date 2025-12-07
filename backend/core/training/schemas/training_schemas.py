@@ -348,7 +348,7 @@ class StrengthExercise(BaseModel):
         description="Equipment type required (required when exercise_id is None, validated against database)"
     )
     
-    sets: int = Field(..., description="Number of sets")
+    sets: int = Field(..., ge=1, le=6, description="Number of sets (1-6)")
     reps: List[int] = Field(..., description="Reps for each set. Should have the same length as the sets field.")
     weight: List[float] = Field(..., description="Actual weight (in kg or lbs) for each set. Should have the same length as the sets field.")
     execution_order: int = Field(
