@@ -33,6 +33,8 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
   const [typingComplete, setTypingComplete] = useState(false);
   const typingStartedRef = useRef(false);
   const mountedRef = useRef(true);
+  const callbackCalledRef = useRef(false);
+  const lastMessageRef = useRef<string>('');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -80,23 +82,40 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
   }, [fadeAnim, pulseAnim]);
 
   useEffect(() => {
-    typingStartedRef.current = false;
-    setDisplayedText('');
-    setShowTypingIndicator(true);
-    setTypingComplete(false);
+    // Only reset if this is a new message
+    const isNewMessage = lastMessageRef.current !== fullMessage;
+    if (isNewMessage) {
+      typingStartedRef.current = false;
+      callbackCalledRef.current = false;
+      lastMessageRef.current = fullMessage;
+      setDisplayedText('');
+      setShowTypingIndicator(true);
+      setTypingComplete(false);
+    }
     
     // If loading, don't start typing animation - just show loading dots
     if (isLoading) {
-      setDisplayedText('');
-      setShowTypingIndicator(false);
+      if (isNewMessage) {
+        setDisplayedText('');
+        setShowTypingIndicator(false);
+      }
       return;
     }
     
-    if (skipAnimation) {
+    // Don't restart if we've already completed this message
+    if (isNewMessage && skipAnimation) {
       setDisplayedText(fullMessage);
       setShowTypingIndicator(false);
       setTypingComplete(true);
-      memoizedOnTypingComplete();
+      if (!callbackCalledRef.current && onTypingComplete) {
+        callbackCalledRef.current = true;
+        memoizedOnTypingComplete();
+      }
+      return;
+    }
+    
+    // Don't restart typing if we've already completed
+    if (!isNewMessage && typingComplete) {
       return;
     }
     
@@ -113,21 +132,27 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
       } else {
         setShowTypingIndicator(false);
         setTypingComplete(true);
-        memoizedOnTypingComplete();
+        if (!callbackCalledRef.current && onTypingComplete) {
+          callbackCalledRef.current = true;
+          memoizedOnTypingComplete();
+        }
       }
     };
 
-    const startTimeout = setTimeout(() => {
-      if (mountedRef.current) {
-        typeText();
-      }
-    }, 500);
+    // Only start typing if this is a new message
+    if (isNewMessage) {
+      const startTimeout = setTimeout(() => {
+        if (mountedRef.current) {
+          typeText();
+        }
+      }, 500);
 
-    return () => {
-      clearTimeout(startTimeout);
-      clearTimeout(timeoutId);
-    };
-  }, [fullMessage, skipAnimation, isLoading, memoizedOnTypingComplete]);
+      return () => {
+        clearTimeout(startTimeout);
+        clearTimeout(timeoutId);
+      };
+    }
+  }, [fullMessage, skipAnimation, isLoading, memoizedOnTypingComplete, onTypingComplete, typingComplete]);
 
   return (
     <View style={styles.container}>

@@ -163,103 +163,11 @@ class PromptGenerator:
         """
 
     @staticmethod
-    def get_question_generation_context() -> str:
-        """Get the context section (ROLE, CONTEXT, TASK) for question generation prompts."""
-        return """
-        **ROLE:**
-        You are an AI training coach that generates personalized training plans. Your role is to gather structured information about users so the AI system can create tailored training plans that match their constraints, preferences, and goals.
-        
-        **CONTEXT:**
-        This is a mobile fitness app that creates SUPPLEMENTAL training programs (strength & conditioning).
-        • ✅ Scope: Strength training, running, cycling, swimming, hiking, and general conditioning
-        • ❌ NOT included: Sport-specific drills, technical skill training, or team practice schedules
-        • 🎯 For athletes: We create supportive strength/conditioning work to complement existing sport training
-        • ⚠️ Important: This is NOT real-life personal coaching—you are an AI assistant that needs structured information to generate effective plans programmatically
-        
-        **TASK:**
-        Generate questions that gather essential information the AI needs to design personalized training plans.
-        Questions must be structured, self-contained, and optimized for mobile app interaction (one question at a time).
-        """
-    
-    @staticmethod
-    def get_question_generation_guidelines() -> str:
-        """Get the key principle section for question generation prompts."""
-        return """
-        **KEY PRINCIPLE:**
-        Users provide information ABOUT themselves (constraints, preferences, goals, abilities).
-        The AI uses this information to DESIGN the training plan (exercises, structure, volume, intensity).
-        """
-    
-    @staticmethod
-    def _get_general_themes_to_collect() -> str:
-        """Get the general themes to collect information on."""
-        return """
-        **General Themes (Apply to All Users):**
-        Focus ONLY on information that directly affects plan design:
-        • **Schedule:** time availability, existing training commitments you need to plan around
-        • **Preferences:** activities enjoyed/avoided, focus areas, training environments
-        • **Fitness Baseline:** baseline fitness levels, known benchmarks, experience with specific activities
-        • **Health:** injuries, physical limitations, sleep, stress, etc.
-        """
-    
-    @staticmethod
-    def _get_question_presentation_context() -> str:
-        """Get the shared explanation of how questions are presented to users."""
-        return """
-        **CRITICAL - QUESTION PRESENTATION CONTEXT:**
-        • Questions are shown ONE AT A TIME in the mobile app
-        • Users can only respond using the format you provide (multiple choice selection, slider value, rating, etc.)
-        • Users CANNOT add additional context, clarification, or follow-up information beyond what the formatted question allows
-        • Therefore, each question must be complete, self-contained, and capture all necessary information in a single response
-        • Each question stands alone—don't assume users can provide context from previous questions
-        """
-        
-    @staticmethod
-    def _get_themes_to_avoid() -> str:
-        """Get the themes to avoid collecting information on."""
-        return """
-        **Themes to AVOID (What NOT to Ask About):**
-        The AI system decides these based on user information, don't ask users to make these kind of technical decisions:
-        • How to structure training (splits, frequency, progression models)
-        • What volumes/intensities to prescribe
-        • How to periodize the plan
-        • Technical coaching decisions
-        • Nutrition 
-        """
-
-    @staticmethod
-    def _format_intent_summaries(
-        intents: List[Dict[str, Any]],
-        experience_level: str,
-    ) -> str:
-        lines: List[str] = []
-        for intent in intents:
-            priority = intent.get("priority", "primary").upper()
-            intent_id = intent.get("intent_id", "unknown_intent")
-            description = intent.get("description", "").strip()
-            header = f"  - [{priority}] {intent_id}: {description}"
-            lines.append(header)
-            tags = intent.get("tags") or []
-            if tags:
-                lines.append(f"    • Tags: {', '.join(tags)}")
-            experience_note = intent.get("experience_note")
-            if experience_note:
-                lines.append(
-                    f"    • {experience_level.title()} focus: {experience_note}"
-                )
-            applicability = intent.get("applicability_conditions") or []
-            if applicability:
-                lines.append(
-                    f"    • Applicability: {'; '.join(applicability)}"
-                )
-        return "\n".join(lines) if lines else "  - No athlete-specific intents available."
-
-    @staticmethod
     def _get_app_scope_section() -> str:
         """Shared app scope description used across prompts."""
         return """
         **CRITICAL - APP SCOPE:**
-        This app creates SUPPLEMENTAL training programs (strength & conditioning).
+        This app creates training programs (strength & conditioning).
         • ✅ We provide: Strength training, running, cycling, swimming, hiking, and general conditioning
         • ❌ We do NOT provide: Sport-specific drills, technical skill training, or team practice schedules
         • 🎯 For athletes: We create supportive strength/conditioning work to complement their existing sport training
@@ -282,425 +190,147 @@ class PromptGenerator:
         """
 
     @staticmethod
-    def generate_question_content_prompt_initial(
+    def generate_initial_question_prompt(
         personal_info: PersonalInfo,
-        unified_checklist: List[Dict[str, Any]],
-        athlete_type: Dict[str, Any]
+        question_history: Optional[str] = None,
     ) -> str:
-        """Generate prompt for Step 3: Question Content Generation (Initial Questions)."""
-        primary_type = athlete_type.get("primary_type", "")
-        secondary_types = athlete_type.get("secondary_types", [])
-        
-        athlete_type_desc = primary_type
-        if secondary_types:
-            athlete_type_desc += f" + {', '.join(secondary_types)}"
-        
-        checklist_text = PromptGenerator._format_intent_summaries(
-            unified_checklist,
-            personal_info.experience_level,
-        )
-        
+        """
+        Generate a single onboarding question with full formatting in one LLM call.
+
+        Combines question generation and formatting for:
+        - Faster response (single API call vs two)
+        - Better quality (full context available during formatting)
+        - Reduced token usage
+        """
+
+        history_section = f"""
+            **QUESTION HISTORY:**
+            {question_history if question_history else "None — this is the first question."}
+        """
+
         prompt = f"""
-        {PromptGenerator.get_question_generation_context()}
-        
-        {PromptGenerator.get_question_generation_guidelines()}
-        
-        {PromptGenerator._get_question_presentation_context()}
-        
-        **TASK:**
-        Generate personalized question content for the assessment. This is the ONLY opportunity to ask questions.
-        Create comprehensive questions that gather ALL essential information needed to generate a tailored training plan.
-        
-        **CONTEXT:**
-        • Workflow: This is the ONLY round of questions. There will be NO follow-up questions after this. You must ask ALL essential questions now—if you miss critical information, it cannot be collected later. Ensure your questions are comprehensive and cover all necessary themes.
-        • User Status: {personal_info.username} has provided basic profile information (age, weight, height, goal, experience level).
-        • Athlete Type: Primary: {primary_type}{" | Secondary: " + ", ".join(secondary_types) if secondary_types else ""}
-        • Classification Rationale: {athlete_type.get("reasoning", "Not provided")}
-        
-        {PromptGenerator.format_client_information(personal_info)}
-        
-        **QUESTION THEMES TO COVER:**
-        Generate personalized questions that cover these themes. Each theme represents essential information needed for plan generation.
-        Treat athlete-specific themes as inspiration—translate them into tailored questions that reflect this user's goal and experience level.
-        Ensure you cover ALL relevant themes below while avoiding the themes listed in the "Themes to AVOID" section.
-        
-        {PromptGenerator._get_general_themes_to_collect()}
-        
-        **Athlete-Specific Themes (For {athlete_type_desc}):**
-        {checklist_text}
-        
-        {PromptGenerator._get_themes_to_avoid()}
-        
-        **META REASONING (INTERNAL ONLY):**
-        Before drafting the final output, silently list must-have information gaps for this user, map each gap to the relevant intent IDs, and decide whether it is primary or optional. Use this internal plan to guide question creation. Do NOT include the internal plan text verbatim in the final answer—summarize it in the structured `intent_plan` output instead.
-        
-        **STEP-BY-STEP APPROACH:**
-        
-        Step 0: Plan Coverage
-        - Review ALL themes above: general themes (apply to all users) and athlete-specific intents (for {athlete_type_desc})
-        - Identify which themes are most relevant for this user (age: {personal_info.age}, experience: {personal_info.experience_level}, goal: "{personal_info.goal_description}")
-        - Map each must-have information gap to intent IDs and note whether it is primary or optional for this user
-        - Prepare to report this plan in the `intent_plan` output field
-        
-        Step 1: Draft Questions
-        - Create an initial set of 7-10 questions (quality over quantity—better to ask 5 focused questions than 8 irrelevant ones)
-        - Each question should cover one or more related intents and add new insight beyond general themes
-        - Ensure questions are self-contained and don't require follow-ups
-        
-        Step 2: Self-Review & Revise (Two-Pass Loop)
-        - Re-read each drafted question for clarity, uniqueness, and whether it captures the mapped intent
-        - Revise or replace questions that are redundant, unclear, or insufficiently personalized
-        
-        Step 3: Assign Order
-        - Order questions logically: Equipment → Schedule → Goals → Constraints → Preferences
-        - Assign order numbers (1, 2, 3, ...) where 1 is the first question
-        
-        Step 4: Validate
-        - Ensure each question is ~20 words, clear, and self-contained
-        - Verify all intents in the `intent_plan` are addressed appropriately
-        - Confirm questions don't require follow-ups
-        
-        **CONSTRAINTS & REQUIREMENTS:**
-        
-        {PromptGenerator._get_common_question_constraints(personal_info, include_athlete_type=True, athlete_type_desc=athlete_type_desc)}
-        
-        3. **Theme Coverage**
-           - Cover ALL relevant themes: general themes (apply to all) and athlete-specific themes (for {athlete_type_desc})
-           - DO NOT ask about themes listed in "Themes to AVOID" section
-           - Combine related themes into single comprehensive questions when logical
-           - Do not restate information already covered by the general themes; ensure each question contributes new theme-specific insight
-           - Skip themes only if clearly not applicable to this user
-           - Add questions if critical gaps are identified
-        
-        **FEW-SHOT EXAMPLES:**
-        
-        Example 1: Equipment Question
-        Theme: "Current strength levels for key lifts and any known one-rep max values"
-        Generated Question: "What training equipment do you have access to?"
-        Order: 1
-        Note: This question is self-contained, ~9 words, clear, and captures essential information
-        
-        Example 2: Schedule Question
-        Theme: "Training environment preferences including indoor versus outdoor or pool versus open water"
-        Generated Question: "How many days per week can you dedicate to training?"
-        Order: 2
-        Note: This question is self-contained, ~10 words, clear, and captures essential information
-        
-        Example 3: Goals Question
-        Theme: "Specific strength goals"
-        Generated Question: "What is your primary strength training goal?"
-        Order: 3
-        Note: This question is self-contained, ~8 words, clear, and captures essential information
-        
-        {PromptGenerator._get_initial_output_format()}
-        
-        **VALIDATION CHECKLIST:**
-        Before finalizing, ensure:
-        ✓ All themes are covered
-        {PromptGenerator._get_common_validation_base()}
-        ✓ Questions are ordered logically (Equipment → Schedule → Goals → Constraints → Preferences)
-        ✓ Questions are personalized to this user's profile
+            # ROLE & CONTEXT
+            You are an AI fitness coach for a multi-sport training app. You collect information to generate personalized training plans automatically.
+
+            **What this app does:**
+            - Generates AI-driven training plans for ANY fitness goal (strength, endurance, multi-sport, general fitness)
+            - Supports: Strength training, running, cycling, swimming, hiking, bodyweight training, hybrid/functional fitness
+            - Plans are algorithm-generated based on user constraints and preferences
+
+            **What you're NOT doing:**
+            - NOT live coaching or conversation
+            - NOT asking about training design (splits, sets/reps, periodization — the AI decides this)
+            - NOT collecting excessive detail — gather what's needed to generate a good plan, then stop
+
+            # USER CONTEXT
+            **Profile:**
+            - Name: {personal_info.username}
+            - Age: {personal_info.age}, Gender: {personal_info.gender}
+            - Body: {personal_info.weight} {personal_info.weight_unit}, {personal_info.height} {personal_info.height_unit}
+            - Experience: {personal_info.experience_level}
+            - Goal: "{personal_info.goal_description}"
+
+            {history_section}
+
+            # YOUR TASK
+            Generate ONE strategic question to gather essential planning information, OR signal completion if you have enough.
+
+            **What makes information "essential":**
+            - Directly impacts what the AI can/cannot prescribe (e.g., equipment access, schedule availability)
+            - Affects safety or effectiveness (e.g., injuries, medical restrictions)
+            - Strong user preference that would make a default plan unusable (e.g., "I hate running")
+
+            **What to collect (priority order, adapt to goal):**
+            1. **Schedule** — How many days/week can they train? Any time constraints?
+            2. **Resources** — What do they have access to? (gym, equipment at home, outdoor space, pool, nothing)
+            3. **Limitations** — Any injuries, medical conditions, or physical restrictions?
+            4. **Preferences** — Strong likes/dislikes about training modalities or styles? Preferred session length?
+            5. **Baseline** (optional) — Current fitness level or performance benchmarks (only if critical for goal and not inferable from experience level)
+            6. **Other** — If there is anything else that is relevant to the user's goal, profile and experience level, AND critical to the plan, ask it.
+
+            # QUESTION STRATEGY
+
+            **Asking follow-ups:**
+            - If previous answer was vague or incomplete, ask clarifying follow-up
+            - Examples: "I have equipment" → "What equipment do you have?", "I have an injury" → "What injury/limitation should I know about?"
+
+            **When to STOP (set information_complete=true):**
+            - You know: Schedule frequency + Resource access + Critical limitations (if any)
+            - Remaining unknowns can be reasonably defaulted based on goal + experience
+            - **You decide** how many questions are needed (typically 3-6, but you have full autonomy)
+            - **Stop when you're satisfied** — quality over quantity, don't over-collect
+
+            # QUESTION FORMAT GUIDE
+
+            **Type selection:**
+            | Type | Use when | Example |
+            |------|----------|---------|
+            | **multiple_choice** | 2-4 discrete options | "How many days per week can you train?" (3, 4, 5, 6+) |
+            | **dropdown** | 5+ options | "What equipment do you have?" (long list) |
+            | **slider** | Continuous numeric range | "Session duration preference?" (20-90 min) |
+            | **rating** | Subjective 1-5 scale | "Current fitness level?" (1=beginner, 5=advanced) |
+            | **conditional_boolean** | Yes/No + optional detail | "Any injuries?" Yes → explain |
+            | **free_text** | AVOID unless truly necessary | Last resort only |
+
+            **Option design (multiple_choice/dropdown):**
+            - Structure: `{{"id": "opt_1", "text": "Display text", "value": "stored_value"}}`
+            - Provide 2-6 clear, mutually exclusive options
+            - Include "Other" or "None" when appropriate
+            - Keep text concise (<10 words per option)
+
+            **Slider design:**
+            - Set logical min_value, max_value, step
+            - Include unit string (e.g., "days", "minutes", "km")
+            - Example: `{{"min_value": 20, "max_value": 90, "step": 5, "unit": "minutes"}}`
+
+            # OUTPUT SCHEMA
+            ```json
+            {{
+            "questions": [/* ONE formatted question object OR empty array */],
+            "total_questions": 1 or 0,
+            "estimated_time_minutes": 2,
+            "ai_message": "/* 40-60 word warm message, 2 emojis */",
+            "information_complete": true or false
+            }}
+            ```
+
+            **AI message guidelines:**
+            - **Purpose:** Welcome and motivate the user, acknowledge their commitment to their goal
+            - **Tone:** Warm, proud, encouraging — celebrate that they're here taking action
+            - **Content:** Acknowledge their specific goal from the profile, express excitement about helping them
+            - **Length:** 40-60 words, include 2 emojis
+            - **Focus:** The USER and their journey, not just the question itself
+
+            **Examples:**
+            - During questions: "So excited to help you {personal_info.goal_description}! 🎯 Taking this step shows real commitment. I'm going to ask you a few quick questions to design something perfect for your lifestyle. Let's make this happen! 💪"
+            - On completion: "Amazing work, {personal_info.username}! 🎉 I'm so proud you're taking action on your goal to {personal_info.goal_description}. I have everything I need to create your personalized plan — let's build something incredible together! 💪"
+
+            # CONSTRAINTS
+            - Generate EXACTLY ONE question (or zero if complete)
+            - Question text MUST end with "?"
+            - Questions must be sport-agnostic (adapt to user's stated goal, don't assume specifics)
+            - NO questions about: nutrition, supplements, training design decisions, periodization strategies
+            - NO repeating questions from history
+            - Prefer structured formats (multiple_choice/slider/dropdown) over free_text
+
+            # EXAMPLES OF GOOD QUESTIONS
+
+            **Schedule:** "How many days per week can you consistently train?" (slider: 2-7 days)
+
+            **Equipment:** "What training resources do you have access to?" (multiple_choice: Gym membership, Home equipment, Outdoor space only, Nothing/bodyweight only)
+
+            **Limitations:** "Do you have any injuries or physical limitations I should know about?" (conditional_boolean: Yes → explain)
+
+            **Preferences:** "What's your preferred training session length?" (slider: 20-90 minutes)
+
+            **Follow-up example:** Previous answer: "I have some equipment" → Next question: "What specific equipment do you have at home?" (dropdown: Dumbbells, Barbell, Resistance bands, etc.)
+
+            Now generate your question or signal completion.
         """
-        
-        # TODO: REMOVE THIS - Prompt saving for review only
-        _save_prompt_to_file("generate_question_content_prompt_initial", prompt)
-        
+
+        _save_prompt_to_file("generate_initial_question_prompt", prompt)
+
         return prompt
-
-    @staticmethod
-    def generate_question_content_prompt_followup(
-        personal_info: PersonalInfo,
-        formatted_responses: str,
-    ) -> str:
-        # Follow-up prompt generation has been deprecated and removed from the onboarding flow.
-        # This function remains as a no-op to maintain backward compatibility and will return
-        # a short notice string if invoked.
-        return "DEPRECATED: follow-up prompt generation removed."
-
-    @staticmethod
-    def generate_question_formatting_prompt(
-        question_content: List[Dict[str, Any]],
-        personal_info: PersonalInfo,
-        is_initial: bool = True
-    ) -> str:
-        """Generate prompt for Step 4: Question Formatting (Schema Formatting)."""
-        # Format question content for prompt (questions should already be sorted by order)
-        questions_text = "\n".join([
-            f"  {i+1}. Order: {q.get('order', i+1)} - {q.get('question_text', 'N/A')}"
-            for i, q in enumerate(question_content)
-        ])
-        
-        # Build AI message guidelines based on phase
-        if is_initial:
-            ai_message_guidelines = f"""
-        **AI MESSAGE GUIDELINES (Initial Questions):**
-        Write an enthusiastic message (max 70 words, 2-3 emojis) that:
-        • Greets {personal_info.username} warmly
-        • Mentions you've analyzed their profile and are excited about their goal: {personal_info.goal_description}
-        • Indicates you have a few questions to refine their plan
-        • Tone: Energetic, personal, confidence-boosting
-        """
-        else:
-            ai_message_guidelines = f"""
-        **AI MESSAGE GUIDELINES (Follow-up Questions):**
-        Write a warm message (max 70 words, 2-3 emojis) that:
-        • Greets {personal_info.username} and acknowledges their initial responses
-        • References specific details they mentioned to show attentiveness
-        • States this is the FINAL round—after this, their plan will be generated
-        • Tone: Motivational, conversational, reassuring
-        """
-        
-        prompt = f"""
-        **ROLE:**
-        You are an AI assistant that formats questions for a mobile fitness app. Convert raw question text into well-structured, user-friendly formats optimized for mobile interaction.
-        
-        **CONTEXT:**
-        • Goal: Create an engaging onboarding experience that makes users excited about their fitness journey, not overwhelmed
-        • User Experience Priorities: Easy to answer, visually appealing, mobile-friendly, actionable for AI
-        • Questions are shown ONE AT A TIME—users can only respond using the format you provide
-        • Users CANNOT add additional context beyond what the formatted question allows
-        • Each question must be complete, self-contained, and capture all necessary information in a single response
-        
-        **TASK:**
-        Convert the question content below into properly formatted questions with correct UI structure and schema compliance.
-        Format each question using the most appropriate question type that balances user experience with information collection needs.
-        You are allowed and encouraged to rephrase questions to better fit structured question types.
-        
-        **QUESTION CONTENT TO FORMAT:**
-        {questions_text}
-        
-        **CRITICAL RULES:**
-        
-        1. **Question Type Selection (STRICT)**
-           • 2+ options → MULTIPLE_CHOICE (use for ANY number of options: 2, 3, 4, 5, 10, 50+, etc.)
-             - CRITICAL: You MUST explicitly set multiselect to true or false based on the question context
-             - Set multiselect: true if user can select multiple options (e.g., "Which equipment do you have?" allows multiple selections)
-             - Set multiselect: false if user selects only ONE option (e.g., "What is your primary goal?" - single selection)
-           • Numeric range (6+ distinct values) → SLIDER
-           • Subjective scale (1-5) → RATING
-           • Questions requiring detailed text/narrative → Consider CONDITIONAL_BOOLEAN if it makes sense (Yes/No where Yes requires detail)
-             - If a question needs free text/narrative, consider converting it to a Yes/No question where Yes allows for detailed information
-             - Example: "Describe any injuries" → "Do you have any injuries or physical limitations?" (Yes = provide details, No = skip)
-             - Use CONDITIONAL_BOOLEAN when it makes sense and provides better UX
-           • Questions requiring open-ended text → FREE_TEXT
-             - Use FREE_TEXT when the question genuinely needs open-ended text and cannot be naturally converted to Yes/No
-             - Example: "Describe your specific training goals in detail" (if everyone must provide context, not just Yes/No)
-             - Try to use CONDITIONAL_BOOLEAN when possible, but use FREE_TEXT when it makes more sense
-        
-        2. **Schema Compliance**
-           • Include ALL required fields for selected question type
-           • Correct data types: numbers (not strings), strings (not arrays), arrays (for options)
-           • CRITICAL: Slider unit must be SINGLE STRING (e.g., "days") NOT array
-           • ALL question texts MUST end with question mark (?)
-           • Include 'order' field from question content
-        
-        3. **User Experience**
-           • Prefer structured types (multiple_choice, slider, rating, conditional_boolean) - minimize unstructured free text
-           • If a question needs narrative/detailed text, consider converting it to CONDITIONAL_BOOLEAN (Yes/No with conditional detail) if it makes sense
-           • Use FREE_TEXT when the question genuinely requires open-ended text and CONDITIONAL_BOOLEAN doesn't fit naturally
-           • Options must be clear, mutually exclusive, easy to understand
-           • Slider ranges: reasonable width, appropriate steps
-           • help_text: Concise (1-2 sentences max)
-        
-        **OUTPUT FORMAT:**
-        Return AIQuestionResponse schema:
-        - questions: List[AIQuestion] (ordered by 'order' field: 1, 2, 3, ...)
-        - total_questions: int
-        - estimated_time_minutes: int
-        - ai_message: string (max 70 words, 2-3 emojis)
-        
-        {ai_message_guidelines}
-        
-        **FEW-SHOT EXAMPLES:**
-        
-        Example 1: Equipment (Multiple Choice - 4 options)
-        Input: "What training equipment do you have access to?"
-        Output:
-        {{
-          "id": "equipment_access",
-          "text": "What training equipment do you have access to?",
-          "help_text": "Select the option that best describes your equipment availability",
-          "response_type": "multiple_choice",
-          "order": 1,
-          "options": [
-            {{"id": "bodyweight", "text": "Body Weight Only", "value": "bodyweight"}},
-            {{"id": "dumbbells", "text": "Dumbbells", "value": "dumbbells"}},
-            {{"id": "full_gym", "text": "Full Gym Access", "value": "full_gym"}},
-            {{"id": "resistance_bands", "text": "Resistance Bands", "value": "resistance_bands"}}
-          ]
-        }}
-        Note: Any number of options = MULTIPLE_CHOICE
-        
-        Example 2: Training Days (Slider)
-        Input: "How many days per week can you train?"
-        Output:
-        {{
-          "id": "training_days",
-          "text": "How many days per week can you train?",
-          "help_text": "Select your realistic training frequency",
-          "response_type": "slider",
-          "order": 2,
-          "min_value": 1,
-          "max_value": 7,
-          "step": 1,
-          "unit": "days"
-        }}
-        Note: Numeric range (7 values) = SLIDER, unit is string not array
-        
-        Example 3: Goals (Rephrased to Multiple Choice)
-        Input: "What are your goals?"
-        Rephrased: "What is your primary strength training goal?"
-        Output:
-        {{
-          "id": "strength_goal",
-          "text": "What is your primary strength training goal?",
-          "help_text": "Select your main focus",
-          "response_type": "multiple_choice",
-          "order": 3,
-          "options": [
-            {{"id": "increase_strength", "text": "Increase Strength", "value": "increase_strength"}},
-            {{"id": "build_muscle", "text": "Build Muscle", "value": "build_muscle"}},
-            {{"id": "functional", "text": "Functional Strength", "value": "functional"}},
-            {{"id": "endurance", "text": "Muscular Endurance", "value": "endurance"}}
-          ]
-        }}
-        Note: Rephrased vague question into structured format with 4 options = MULTIPLE_CHOICE
-        
-        **QUESTION TYPE REFERENCE AND REQUIRED FIELDS:**
-        
-        **MULTIPLE_CHOICE** (2+ options): 
-            When to use: Use when user selects ONE or MULTIPLE options from a list of predefined choices (equipment, environment, preferences, sports, etc.). 
-            Required fields: id, text, help_text, response_type: "multiple_choice", options[], multiselect (boolean), order
-            - multiselect: true if user can select multiple options (e.g., "Which equipment do you have?" - user may have multiple)
-            - multiselect: false if user selects only ONE option (e.g., "What is your primary goal?" - single selection)
-            CRITICAL: multiselect MUST be explicitly set to either true or false - you must decide based on the question context
-        
-        **SLIDER** (6+ values): 
-            When to use: Use when user needs to select a specific numeric value from a continuous range (days per week, hours, weight, etc.). 
-            Required fields: id, text, help_text, response_type: "slider", min_value, max_value, step, unit (STRING), order
-        
-        **RATING** (1-5 scale): 
-            When to use: Use when user rates something on a subjective scale with labeled endpoints (energy level, motivation, satisfaction, etc.). 
-            Required fields: id, text, help_text, response_type: "rating", min_value, max_value, min_description, max_description, order
-        
-        **CONDITIONAL_BOOLEAN**: 
-            When to use: Use when a question can be answered with Yes/No and the Yes answer requires further detailed information. Consider this format for questions that would otherwise need free text/narrative, if it makes sense. You can convert questions that need detailed descriptions into Yes/No format where Yes allows for detail (e.g., "Do you have any injuries?" instead of "Describe any injuries"). 
-            Required fields: id, text, help_text, response_type: "conditional_boolean", max_length, placeholder, order
-            Examples:
-            - "Do you have any past injuries or physical limitations?" (Yes = describe in detail, No = skip)
-            - "Do you have existing training commitments?" (Yes = describe schedule, No = skip)
-            - "Do you have any dietary restrictions?" (Yes = specify details, No = skip)
-            Note: Try CONDITIONAL_BOOLEAN when it makes sense, but use FREE_TEXT if the question naturally requires open-ended text
-        
-        **FREE_TEXT**: 
-            When to use: Use when a question genuinely requires open-ended text that doesn't fit naturally into a Yes/No format. 
-            Required fields: id, text, help_text, response_type: "free_text", max_length, placeholder, order
-            Examples where FREE_TEXT makes sense:
-            - "Describe your specific training goals in detail" (if everyone must provide context, not just Yes/No)
-            - "How many days per week can you commit to training, and what are your preferred training times?" (requires multiple details that don't fit Yes/No)
-            - Use when the question naturally needs open-ended text rather than forcing it into Yes/No format
-        
-        **STEP-BY-STEP PROCESS:**
-        
-        Step 1: Analyze question text and determine if it can be structured (prefer structured types)
-        Step 2: Rephrase if needed to fit structured format (you are encouraged to rephrase)
-        Step 3: If question needs narrative/detailed text, consider CONDITIONAL_BOOLEAN (Yes/No format) if it makes sense
-        Step 4: Use FREE_TEXT when the question naturally requires open-ended text and CONDITIONAL_BOOLEAN doesn't fit well
-        Step 5: Select question type based on response options (STRICT: 2+ options = MULTIPLE_CHOICE)
-        Step 6: Format with all required fields, ensure question text ends with "?"
-        Step 7: Validate schema compliance, data types, and self-containment
-        
-        **VALIDATION CHECKLIST:**
-        ✓ Question type matches option count (2+ options = MULTIPLE_CHOICE)
-        ✓ All required fields present for question type
-        ✓ Data types correct (numbers not strings, strings not arrays)
-        ✓ Question text ends with "?"
-        ✓ Questions self-contained (no follow-ups needed)
-        ✓ Structured types preferred - consider CONDITIONAL_BOOLEAN when it makes sense, use FREE_TEXT when appropriate
-        ✓ Questions ordered by 'order' field (1, 2, 3, ...)
-        """
-        
-        # TODO: REMOVE THIS - Prompt saving for review only
-        _save_prompt_to_file("generate_question_formatting_prompt", prompt)
-        
-        return prompt
-
-    
-
-    
-    
-    @staticmethod
-    def _get_common_question_constraints(personal_info: PersonalInfo, include_athlete_type: bool = False, athlete_type_desc: str = "", start_number: int = 1) -> str:
-        """Get common constraints & requirements section for question content generation prompts.
-        
-        Focuses on content quality only - formatting/schema details are handled in the formatting prompt.
-        
-        Args:
-            personal_info: User's personal information
-            include_athlete_type: Whether to include athlete type in personalization
-            athlete_type_desc: Description of athlete type (if include_athlete_type is True)
-            start_number: Starting number for section numbering (default: 1)
-        """
-        personalization_line = f"- Tailor to user: Age {personal_info.age}, Experience {personal_info.experience_level}, Goal \"{personal_info.goal_description}\""
-        if include_athlete_type and athlete_type_desc:
-            personalization_line += f", Type {athlete_type_desc}"
-        
-        num1 = start_number
-        num2 = start_number + 1
-        
-        return f"""
-        {num1}. **Question Characteristics**
-           - Length: Approximately 20 words per question (clear and concise)
-           - Clarity: Direct, easy to understand at a glance, no ambiguity
-           - Self-contained: Complete and comprehensive—no follow-up questions needed
-           - Examples:
-             * ✅ Good: "What training equipment do you have access to?" (9 words, clear, self-contained)
-             * ❌ Bad: "Do you have equipment?" (requires follow-up: "What kind?")
-             * ❌ Bad: "How many days per week?" (missing context—unclear what it refers to)
-             * ✅ Better: "How many days per week can you dedicate to training?" (clear context)
-        
-        {num2}. **Personalization**
-           {personalization_line}
-           - Adapt complexity: Simpler language for beginners, technical terms for advanced users
-           - Be specific: Avoid generic templates, make questions relevant to their situation
-        """
-    
-    @staticmethod
-    def _get_common_output_format() -> str:
-        """Get common output format section for question generation prompts."""
-        return """
-        **OUTPUT FORMAT:**
-        Return data that conforms to the `QuestionContent` schema:
-        - intent_plan: List of intent plan items (can be empty if not needed for this round)
-        - questions_content: List of objects, each with:
-          * question_text: The actual question text (~20 words, clear, self-contained)
-          * order: Display order number (1-based, lower numbers appear first)
-        """
-
-    @staticmethod
-    def _get_initial_output_format() -> str:
-        """Get output format for initial question generation with intent planning."""
-        return """
-        **OUTPUT FORMAT:**
-        Return data that conforms to the `QuestionContent` schema:
-        - intent_plan: Required. List of items documenting your coverage plan. Each item must include:
-          * information_gap: The critical information to gather
-          * selected_intent_ids: List of intent IDs used to address this gap
-          * priority: "primary" or "optional" for this user
-          * reasoning: Brief explanation of why this gap and intents were selected
-        - questions_content: Required. List of question content items, each with:
-          * question_text: The final, revised question (~20 words, clear, self-contained)
-          * order: Display order number (1-based, lower numbers appear first)
-        """
-    
-    @staticmethod
-    def _get_common_validation_base() -> str:
-        """Get base validation checklist items that are common to both initial and follow-up prompts."""
-        return """
-        ✓ Each question is ~20 words, clear, and self-contained
-        ✓ Questions don't require follow-ups
-        ✓ Questions are ordered logically
-        """
 
     @staticmethod
     def format_client_information(personal_info: PersonalInfo) -> str:
@@ -1252,31 +882,6 @@ class PromptGenerator:
             • Spread recovery/deload weeks strategically (e.g., after 3 hard weeks).
         """
     
-    @staticmethod
-    def generate_training_plan_prompt(
-        personal_info: PersonalInfo,
-        formatted_initial_responses: str,
-        formatted_follow_up_responses: str,
-        metadata_options: Dict[str, List[str]] = None,
-        playbook_lessons: List = None,
-        feedback_message: str = None,
-        current_plan_summary: str = None,
-        conversation_history: str = None,
-    ) -> str:
-        """
-        DEPRECATED: Use generate_initial_weekly_schedule_prompt instead.
-        Kept for backward compatibility - delegates to new function.
-        """
-        # Legacy support: if feedback_message provided, it's a regeneration (should use update_weekly_schedule_prompt)
-        # For now, delegate to initial generation prompt for backward compatibility
-        return PromptGenerator.generate_initial_weekly_schedule_prompt(
-            personal_info=personal_info,
-            formatted_initial_responses=formatted_initial_responses,
-            formatted_follow_up_responses=formatted_follow_up_responses,
-            metadata_options=metadata_options,
-            playbook_lessons=playbook_lessons,
-        )
-
     @staticmethod
     def _get_one_week_enforcement() -> str:
         """Shared section enforcing exactly 1-week output."""

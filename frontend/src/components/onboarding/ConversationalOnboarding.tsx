@@ -29,6 +29,19 @@ import {
 import { logStep, logData, logError, logNavigation } from '../../utils/logger';
 import { useApiCallWithBanner } from '../../hooks/useApiCallWithBanner';
 
+type ChatEntry = {
+  id: string;
+  from: 'ai' | 'user';
+  text: string;
+  isTyping?: boolean;
+  questionId?: string;
+};
+
+const buildHistoryEntry = (question: string, answer: string, prev: string) => {
+  const entry = `Q: ${question}\nA: ${answer}`;
+  return prev ? `${prev}\n\n${entry}` : entry;
+};
+
 const introTracker = {
   initial: false,
 };
@@ -59,12 +72,16 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     currentInitialQuestionIndex: 0,
     initialAiMessage: undefined,
     initialIntroShown: introTracker.initial,
+    chatMessages: [],
+    questionHistory: '',
+    informationComplete: false,
     // follow-up removed
     error: null,
   });
 
   const { progressState, runWithProgress } = useProgressOverlay();
   const [overlayTitle, setOverlayTitle] = useState<string>('Loading…');
+  const [isFetchingQuestion, setIsFetchingQuestion] = useState(false);
 
   // Add retry state for error recovery
   const [retryCount, setRetryCount] = useState(0);
@@ -93,7 +110,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       const cleanedProfile = cleanUserProfileForResume(authState.userProfile);
       
       if (!cleanedProfile) {
-        console.error('Invalid user profile data, cannot resume onboarding');
         onError('Invalid user profile data. Please restart onboarding.');
         return;
       }
@@ -105,39 +121,69 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }
       
       // Initialize with cleaned and validated profile data
-      setState(prev => ({
-        ...prev,
-        username: cleanedProfile.username,
-        usernameValid: true,
-        personalInfo: {
-          username: cleanedProfile.username,
-          age: cleanedProfile.age,
-          weight: cleanedProfile.weight,
-          height: cleanedProfile.height,
-          weight_unit: cleanedProfile.weight_unit,
-          height_unit: cleanedProfile.height_unit,
-          measurement_system: cleanedProfile.measurement_system as 'imperial' | 'metric',
-          gender: cleanedProfile.gender,
-          goal_description: cleanedProfile.goal_description,
-        },
-        personalInfoValid: true,
-        goalDescription: cleanedProfile.goal_description,
-        goalDescriptionValid: true,
-        experienceLevel: cleanedProfile.experience_level,
-        experienceLevelValid: true,
-        // Load questions and responses from profile
-        initialQuestions: cleanedProfile.initial_questions || [],
-        initialResponses: cleanedProfile.initial_responses ? new Map(Object.entries(cleanedProfile.initial_responses)) : new Map(),
+      setState(prev => {
+        // Rebuild chatMessages from profile data (AI message + questions)
+        const rebuiltChatMessages: ChatEntry[] = [];
         
-        // Load AI messages from database
-        initialAiMessage: cleanedProfile.initial_ai_message,
-        initialIntroShown: introTracker.initial,
-      }));
-      
-      console.log(`📍 Onboarding Resume: Starting from ${startFromStep} - Initial: ${cleanedProfile.initial_questions?.length || 0} questions, Initial AI Message: ${cleanedProfile.initial_ai_message?.substring(0, 50) || 'NONE'}`);
+        // Add AI message if present
+        if (cleanedProfile.initial_ai_message) {
+          rebuiltChatMessages.push({
+            id: `ai-message-${Date.now()}`,
+            from: 'ai',
+            text: cleanedProfile.initial_ai_message,
+          });
+        }
+        
+        // Add all questions as chat entries
+        if (cleanedProfile.initial_questions && cleanedProfile.initial_questions.length > 0) {
+          cleanedProfile.initial_questions.forEach((q: any) => {
+            rebuiltChatMessages.push({
+              id: q.id || `question-${Date.now()}-${Math.random()}`,
+              from: 'ai',
+              text: q.text || q.question_text || '',
+              questionId: q.id,
+            });
+          });
+        }
+
+        return {
+          ...prev,
+          username: cleanedProfile.username,
+          usernameValid: true,
+          personalInfo: {
+            username: cleanedProfile.username,
+            age: cleanedProfile.age,
+            weight: cleanedProfile.weight,
+            height: cleanedProfile.height,
+            weight_unit: cleanedProfile.weight_unit,
+            height_unit: cleanedProfile.height_unit,
+            measurement_system: cleanedProfile.measurement_system as 'imperial' | 'metric',
+            gender: cleanedProfile.gender,
+            goal_description: cleanedProfile.goal_description,
+          },
+          personalInfoValid: true,
+          goalDescription: cleanedProfile.goal_description,
+          goalDescriptionValid: true,
+          experienceLevel: cleanedProfile.experience_level,
+          experienceLevelValid: true,
+          // Load questions and responses from profile
+          initialQuestions: cleanedProfile.initial_questions || [],
+          initialResponses: cleanedProfile.initial_responses ? new Map(Object.entries(cleanedProfile.initial_responses)) : new Map(),
+          
+          // Load AI messages from database and rebuild chatMessages
+          initialAiMessage: cleanedProfile.initial_ai_message,
+          chatMessages: rebuiltChatMessages,
+          initialIntroShown: introTracker.initial,
+        };
+      });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // ✅ Empty deps - only run on mount, ref prevents duplicate runs
+
+  // Track authState.userProfile changes to detect when refreshUserProfile updates it
+  useEffect(() => {
+    // Profile change tracking for debugging if needed
+  }, [authState.userProfile]);
 
   // Track if we've already triggered loading for each step
   const hasTriggeredInitialQuestionsRef = useRef(false);
@@ -153,9 +199,9 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     }
   }, [currentStep]);
 
-  // Debug: log current step transitions to help trace why API calls may not fire
+  // Track current step transitions
   useEffect(() => {
-    console.log('[Onboarding] currentStep ->', currentStep);
+    // Step transition tracking for debugging if needed
   }, [currentStep]);
 
   // Step 1: Username and Gender
@@ -276,6 +322,21 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     }));
   }, []);
 
+  const appendChatMessages = useCallback((entries: ChatEntry | ChatEntry[]) => {
+    const list = Array.isArray(entries) ? entries : [entries];
+    setState(prev => ({
+      ...prev,
+      chatMessages: [...prev.chatMessages.filter(m => !m.isTyping), ...list],
+    }));
+  }, []);
+
+  const clearTypingIndicator = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      chatMessages: prev.chatMessages.filter(m => !m.isTyping),
+    }));
+  }, []);
+
   const handleGoalDescriptionNext = useCallback(() => {
     if (!state.goalDescriptionValid) {
       Alert.alert('Error', 'Please describe your training goal (at least 10 characters)');
@@ -297,18 +358,18 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   const handleExperienceLevelNext = useCallback(() => {
     // Simply move to initial questions step
-    console.log('[Onboarding] experience completed -> moving to initial questions');
     setCurrentStep('initial');
   }, []);
 
   // API call with error handling for initial questions
   const { execute: executeGetInitialQuestions, loading: initialQuestionsApiLoading, ErrorBannerComponent: InitialQuestionsErrorBanner } = useApiCallWithBanner(
-    async (fullPersonalInfo: PersonalInfo, userProfileId: number | undefined, jwtToken: string | undefined) => {
-      return await trainingService.getInitialQuestions(fullPersonalInfo, userProfileId, jwtToken);
+    async (fullPersonalInfo: PersonalInfo, userProfileId: number | undefined, jwtToken: string | undefined, questionHistory?: string) => {
+      return await trainingService.getInitialQuestions(fullPersonalInfo, userProfileId, jwtToken, questionHistory);
     },
     {
       retryCount: 3,
       onSuccess: async (response) => {
+        // Handle user profile ID updates BEFORE state update to prevent re-render issues
         if (response.user_profile_id && response.user_profile_id !== authState.userProfile?.id) {
           if (authState.userProfile) {
             dispatch({
@@ -316,7 +377,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
               payload: { ...authState.userProfile, id: response.user_profile_id },
             });
           } else {
-            // Wait for profile refresh before proceeding
+            // Refresh profile before state update to ensure we have the latest profile
+            // This prevents the profile refresh from clearing state after it's been set
             await refreshUserProfile();
           }
         }
@@ -327,39 +389,78 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           return orderA - orderB;
         });
 
-        setState(prev => ({
-          ...prev,
-          initialQuestions: sortedQuestions,
-          initialQuestionsLoading: false,
-          currentInitialQuestionIndex: 0,
-          initialAiMessage: response.ai_message,
-        }));
-        
-        // CRITICAL FIX: Update profile in context with BOTH questions AND ai_message
-        // This ensures the new component instance has complete data
-        if (authState.userProfile) {
+        // Only mark complete when backend explicitly signals it or no questions are returned
+        const informationComplete = response.information_complete || sortedQuestions.length === 0;
+
+        // Update state atomically with all question and message data
+        setState(prev => {
+          // Build complete chat messages array before state update to ensure atomicity
+          const existingMessages = prev.chatMessages.filter(m => !m.isTyping);
+          const isFirstQuestion = existingMessages.length === 0;
+          
+          // Build new chat messages: AI message (if first question) + questions
+          const newChatMessages: ChatEntry[] = [...existingMessages];
+          
+          if (informationComplete) {
+            // If complete, only add AI message if present
+            if (response.ai_message) {
+              newChatMessages.push({
+                id: `ai-message-${Date.now()}`,
+                from: 'ai',
+                text: response.ai_message,
+              });
+            }
+          } else {
+            // If not complete, add AI message (if first question) then questions
+            if (response.ai_message && isFirstQuestion) {
+              newChatMessages.push({
+                id: `ai-message-${Date.now()}`,
+                from: 'ai',
+                text: response.ai_message,
+              });
+            }
+            
+            // Add all questions as chat entries
+            sortedQuestions.forEach(q => {
+              newChatMessages.push({
+                id: q.id,
+                from: 'ai',
+                text: q.text,
+                questionId: q.id,
+              });
+            });
+          }
+
+          const updatedQuestions = [...prev.initialQuestions, ...sortedQuestions];
+          
+          return {
+            ...prev,
+            initialQuestions: updatedQuestions,
+            initialQuestionsLoading: false,
+            currentInitialQuestionIndex: Math.max(updatedQuestions.length - 1, 0),
+            initialAiMessage: response.ai_message ?? prev.initialAiMessage,
+            informationComplete,
+            chatMessages: newChatMessages,
+          };
+        });
+
+        // Update profile context only if information is complete
+        // For ongoing questions, profile will be updated when user submits answers
+        if (informationComplete && authState.userProfile) {
           dispatch({
             type: 'SET_USER_PROFILE',
             payload: {
               ...authState.userProfile,
-              initial_questions: sortedQuestions,
-              initial_ai_message: response.ai_message, // CRITICAL: Include AI message
+              initial_questions: [...(authState.userProfile.initial_questions || []), ...sortedQuestions],
+              initial_ai_message: response.ai_message,
             },
           });
-        } else if (response.user_profile_id) {
-          // If profile doesn't exist yet, refresh it first
-          await refreshUserProfile();
-          // After refresh, update the profile with questions and AI message
-          // Note: refreshUserProfile updates context via dispatch, but we need to ensure
-          // the profile has questions and AI message. The backend stores them in the database,
-          // so the refreshed profile should have them, but we update context to be sure.
-          // The new component instance will read from context which now has complete data.
         }
-        
-        // Navigate to the dedicated initial-questions route after profile is updated
-        router.replace('/onboarding/initial-questions');
+
         setRetryStep(null);
         setOverlayTitle('Loading…');
+        clearTypingIndicator();
+        setIsFetchingQuestion(false);
       },
       onError: (error) => {
         const errorMessage = error instanceof Error ? error.message : 'Failed to load questions';
@@ -371,21 +472,19 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         setRetryStep('initial');
         onError(errorMessage);
         setOverlayTitle('Loading…');
+        clearTypingIndicator();
+        setIsFetchingQuestion(false);
       },
     }
   );
 
-  // Simple function to load initial questions
-  const loadInitialQuestions = useCallback(async () => {
-    if (!state.personalInfo) {
+  const fetchNextQuestion = useCallback(async (overrideHistory?: string) => {
+    if (!state.personalInfo || isFetchingQuestion || state.informationComplete) {
       return;
     }
-    logStep('loadInitialQuestions', 'started');
-    setOverlayTitle('Analyzing your profile…');
-    setState(prev => ({
-      ...prev,
-      initialQuestionsLoading: true,
-    }));
+
+    const historyToSend = overrideHistory ?? state.questionHistory;
+    setIsFetchingQuestion(true);
 
     const fullPersonalInfo = {
       ...state.personalInfo,
@@ -396,28 +495,28 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
     const jwtToken = authState.session?.access_token;
 
-    // Use the new error handling system
     await runWithProgress('initial', async () => {
       await executeGetInitialQuestions(
         fullPersonalInfo,
         authState.userProfile?.id,
-        jwtToken
+        jwtToken,
+        historyToSend
       );
     });
-  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, authState.session?.access_token, authState.userProfile, executeGetInitialQuestions, runWithProgress, dispatch, refreshUserProfile, onError]);
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.questionHistory, state.informationComplete, isFetchingQuestion, authState.session?.access_token, authState.userProfile, executeGetInitialQuestions, runWithProgress, appendChatMessages]);
 
   // follow-up flow removed: feature deprecated and handled outside this flow
 
-  // Load questions when step changes to 'initial'
+  // Load first question when step changes to 'initial'
   useEffect(() => {
     if (currentStep === 'initial' &&
         state.initialQuestions.length === 0 &&
         !state.initialQuestionsLoading &&
         !hasTriggeredInitialQuestionsRef.current) {
       hasTriggeredInitialQuestionsRef.current = true;
-      loadInitialQuestions();
+      fetchNextQuestion();
     }
-  }, [currentStep, state.initialQuestions.length, state.initialQuestionsLoading, loadInitialQuestions]);
+  }, [currentStep, state.initialQuestions.length, state.initialQuestionsLoading, fetchNextQuestion]);
 
   // Follow-up flow removed; no effect required.
 
@@ -432,13 +531,10 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           ...authState.userProfile,
           initial_responses: initialResponsesObject,
         },
-      });
-      console.log('📍 Onboarding: Initial responses saved to context. Routing to plan generation.');
+        });
     }
     // Navigation handled by centralized routing hook (no direct push to avoid duplicate navigation)
-  }, [state.initialResponses, authState.userProfile, dispatch, router]);
-
-  // follow-up removed
+  }, [state.initialResponses, authState.userProfile, dispatch, router]);  // follow-up removed
 
   // Step 2: Initial Questions
   const handleInitialResponseChange = useCallback((questionId: string, value: any) => {
@@ -451,6 +547,30 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       };
     });
   }, []);
+
+  const handleSubmitAnswer = useCallback((question: AIQuestion, displayAnswer: string, rawValue: any) => {
+    let nextHistory = '';
+
+    setState(prev => {
+      const newResponses = new Map(prev.initialResponses);
+      newResponses.set(question.id, rawValue);
+      nextHistory = buildHistoryEntry(question.text, displayAnswer, prev.questionHistory);
+      const newMessages = [
+        ...prev.chatMessages.filter(m => !m.isTyping),
+        { id: `user-${question.id}-${Date.now()}`, from: 'user', text: displayAnswer } as ChatEntry,
+      ];
+
+      return {
+        ...prev,
+        initialResponses: newResponses,
+        questionHistory: nextHistory,
+        chatMessages: newMessages,
+      };
+    });
+
+    // Profile updates are deferred until informationComplete is true
+    fetchNextQuestion(nextHistory);
+  }, [fetchNextQuestion]);
 
   // follow-up removed
 
@@ -510,12 +630,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         handleGoalDescriptionNext();
         break;
       case 'initial':
-        loadInitialQuestions();
+        fetchNextQuestion();
         break;
       default:
         break;
     }
-  }, [currentStep, retryCount, retryStep, handleWelcomeNext, handlePersonalInfoNext, handleGoalDescriptionNext, loadInitialQuestions, router]);
+  }, [currentStep, retryCount, retryStep, handleWelcomeNext, handlePersonalInfoNext, handleGoalDescriptionNext, router]);
 
   // Handle start over action
   const handleStartOver = useCallback(() => {
@@ -612,16 +732,10 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             onComplete={() => {}}
             error={state.error || undefined}
             stepTitle="Initial Questions"
-            username={state.username}
-            aiMessage={state.initialAiMessage}
-            introAlreadyCompleted={state.initialIntroShown}
-            onIntroComplete={() => {
-              introTracker.initial = true;
-              setState(prev => ({
-                ...prev,
-                initialIntroShown: true,
-              }));
-            }}
+            chatMessages={state.chatMessages}
+            onSubmitAnswer={handleSubmitAnswer}
+            isFetchingNext={isFetchingQuestion || initialQuestionsApiLoading}
+            informationComplete={state.informationComplete}
           />
         );
       

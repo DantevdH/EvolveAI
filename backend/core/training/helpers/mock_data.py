@@ -16,8 +16,13 @@ from core.training.schemas.training_schemas import (
 )
 from core.training.schemas.question_schemas import (
     AIQuestionResponse,
-    AIQuestion,
     QuestionOption,
+    MultipleChoiceQuestion,
+    DropdownQuestion,
+    RatingQuestion,
+    SliderQuestion,
+    FreeTextQuestion,
+    ConditionalBooleanQuestion,
 )
 
 # Mock user profile data
@@ -274,89 +279,27 @@ def create_mock_training_plan(user_request: Any = None) -> TrainingPlan:
 
 
 def create_mock_initial_questions() -> AIQuestionResponse:
-    """Create mock initial questions for debug mode."""
+    """Create a single mock question for debug mode (one-by-one flow)."""
     questions = [
-        # Multiple Choice (≤ 5 options)
-        AIQuestion(
+        MultipleChoiceQuestion(
             id="training_frequency",
             text="How many days per week do you currently train?",
-            response_type="multiple_choice",
+            help_text="Helps us tailor your schedule to your availability.",
             options=[
                 QuestionOption(id="1", text="1-2 days", value="1-2"),
                 QuestionOption(id="2", text="3-4 days", value="3-4"),
                 QuestionOption(id="3", text="5-6 days", value="5-6"),
                 QuestionOption(id="4", text="Daily", value="daily"),
             ],
-            required=True,
-            help_text="This helps us understand your current training schedule.",
-        ),
-        # Dropdown (> 5 options)
-        AIQuestion(
-            id="equipment_access",
-            text="What equipment do you have access to?",
-            response_type="dropdown",
-            options=[
-                QuestionOption(id="1", text="Full commercial gym", value="full_gym"),
-                QuestionOption(
-                    id="2", text="Home gym with weights", value="home_gym_weights"
-                ),
-                QuestionOption(id="3", text="Basic home equipment", value="home_basic"),
-                QuestionOption(id="4", text="Bodyweight only", value="bodyweight"),
-                QuestionOption(id="5", text="Resistance bands", value="bands"),
-                QuestionOption(id="6", text="Limited equipment", value="limited"),
-            ],
-            required=True,
-            help_text="Select the option that best describes your available equipment.",
-        ),
-        # Rating (≤ 5 scale)
-        AIQuestion(
-            id="experience_rating",
-            text="How would you rate your current training experience?",
-            response_type="rating",
-            min_value=1,
-            max_value=5,
-            required=True,
-            help_text="1 = Complete Beginner, 5 = Very Experienced",
-        ),
-        # Slider (> 5 scale with unit)
-        AIQuestion(
-            id="session_duration",
-            text="How many minutes per session can you commit?",
-            response_type="slider",
-            min_value=15,
-            max_value=120,
-            step=15,
-            unit="minutes",
-            required=True,
-            help_text="Move the slider to select your available time per training session.",
-        ),
-        # Text Input
-        AIQuestion(
-            id="specific_goals",
-            text="What are your specific training goals?",
-            response_type="free_text",
-            placeholder="E.g., lose 10kg, run a marathon, build muscle...",
-            max_length=500,
-            required=True,
-            help_text="Be as specific as possible to help us create the perfect plan.",
-        ),
-        # Conditional Boolean
-        AIQuestion(
-            id="has_injuries",
-            text="Do you have any injuries or physical limitations?",
-            response_type="conditional_boolean",
-            placeholder="Please describe your injuries or limitations in detail...",
-            max_length=300,
-            required=True,
-            help_text="This information is crucial for creating a safe training plan tailored to your needs.",
-        ),
+            multiselect=False,
+        )
     ]
 
     return AIQuestionResponse(
         questions=questions,
-        total_questions=len(questions),
-        estimated_time_minutes=5,
-        ai_message="👋 Hey there! I'm excited to help you build a personalized training plan. Let me ask you a few quick questions to understand your goals, experience, and what you have available. This will only take about 5 minutes!",
+        total_questions=1,
+        estimated_time_minutes=2,
+        ai_message="👋 Hey there! Quick one: how many days per week do you currently train? This helps me tailor your plan.",
     )
 
 

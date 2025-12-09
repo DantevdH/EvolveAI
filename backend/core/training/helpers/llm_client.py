@@ -6,12 +6,16 @@ Provides complex and lightweight model instances for different use cases.
 """
 
 import os
+import logging
 from typing import Any, Dict, List, Optional, Type
 import instructor
 from openai import OpenAI
 from google import genai  # type: ignore
 from anthropic import Anthropic  # type: ignore
 from settings import settings
+from logging_config import get_logger
+
+logger = get_logger(__name__)
 
 class LLMClient:
     """

@@ -10,7 +10,11 @@ class TopExercise(BaseModel):
     """Top performing exercise information."""
     
     name: str = Field(..., description="Exercise name")
-    trend: Literal["improving", "stable", "declining"] = Field(..., description="Performance trend")
+    trend: Literal["improving", "stable", "declining"] = Field(
+        ...,
+        json_schema_extra={"type": "string"},
+        description="Performance trend"
+    )
     change: Optional[str] = Field(None, description="Change description (e.g., '+5kg', '+10%')")
 
 
@@ -18,8 +22,16 @@ class WeakPoint(BaseModel):
     """Muscle group weak point information."""
     
     muscle_group: str = Field(..., description="Muscle group name")
-    issue: Literal["plateau", "declining", "inconsistent", "low_frequency"] = Field(..., description="Issue type")
-    severity: Literal["high", "medium", "low"] = Field(..., description="Severity level")
+    issue: Literal["plateau", "declining", "inconsistent", "low_frequency"] = Field(
+        ...,
+        json_schema_extra={"type": "string"},
+        description="Issue type"
+    )
+    severity: Literal["high", "medium", "low"] = Field(
+        ...,
+        json_schema_extra={"type": "string"},
+        description="Severity level"
+    )
 
 
 class InsightsSummaryRequest(BaseModel):
@@ -48,7 +60,11 @@ class InsightsMetrics(BaseModel):
     volume_progress: str = Field(..., description="Volume progress description (e.g., '+15% from last week')")
     training_frequency: str = Field(..., description="Training frequency description (e.g., '4/4 days (on track)')")
     training_intensity: str = Field(..., description="Training intensity description based on RPE (e.g., 'Average RPE: 3.0/5 (manageable)')")
-    intensity_trend: Literal["improving", "stable", "declining"] = Field(..., description="Training intensity trend (improving = lower RPE, declining = higher RPE)")
+    intensity_trend: Literal["improving", "stable", "declining"] = Field(
+        ...,
+        json_schema_extra={"type": "string"},
+        description="Training intensity trend (improving = lower RPE, declining = higher RPE)"
+    )
     weak_points: List[WeakPoint] = Field(default_factory=list, description="Top 2-3 weak points from MSI")
     top_exercises: List[TopExercise] = Field(default_factory=list, description="Top performing exercises")
 

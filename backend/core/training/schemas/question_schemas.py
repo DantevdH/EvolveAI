@@ -8,7 +8,6 @@ FeedbackIntentLiteral = Literal["question", "unclear", "update_request", "satisf
 FeedbackActionLiteral = Literal["respond_only", "update_plan", "navigate_to_main_app"]
 OperationTypeLiteral = Literal["swap_exercise", "adjust_intensity", "move_day", "add_rest_day", "adjust_volume", "add_exercise", "remove_exercise"]
 AthleteTypeLiteral = Literal["strength", "endurance", "sport_specific", "functional_fitness"]
-IntentPlanPriorityLiteral = Literal["primary", "optional"]
 
 
 class QuestionOption(BaseModel):
@@ -19,68 +18,110 @@ class QuestionOption(BaseModel):
     value: str = Field(..., description="Value to be stored when selected")
 
 
-class AIQuestion(BaseModel):
-    """
-    Unified question model for multi-provider structured output compatibility.
-
-    Uses Literal types to force valid values at generation time for all providers.
-    """
-
-    model_config = ConfigDict(extra="ignore")  # Ignore unknown fields for flexibility
-
-    # Common fields (required for all types)
+# Base fields common to all question types
+class BaseQuestion(BaseModel):
+    """Base fields shared by all question types."""
+    
     id: str = Field(..., description="Unique identifier for the question")
     text: str = Field(..., description="Question text")
     help_text: str = Field(default="", description="Additional help text")
-    response_type: QuestionTypeLiteral = Field(..., description="Type of question")
-    order: Optional[int] = Field(default=None, description="Display order for this question (1-based, lower numbers appear first). Frontend can use this to maintain question order.")
 
-    # Conditional fields (required based on response_type)
-    options: Optional[List[QuestionOption]] = Field(
-        default=None,
-        description="Options list - REQUIRED for multiple_choice and dropdown ONLY",
-    )
-    multiselect: Optional[bool] = Field(
-        default=None,
-        description="REQUIRED for multiple_choice and dropdown: Whether user can select multiple options (true) or only one option (false). Must be explicitly set.",
-    )
-    min_value: Optional[float] = Field(
-        default=None, description="Minimum value - REQUIRED for slider and rating ONLY"
-    )
-    max_value: Optional[float] = Field(
-        default=None, description="Maximum value - REQUIRED for slider and rating ONLY"
-    )
-    step: Optional[float] = Field(
-        default=None, description="Step increment - REQUIRED for slider ONLY"
-    )
-    unit: Optional[str] = Field(
-        default=None, description="Unit of measurement - REQUIRED for slider ONLY (must be a single string, not array)"
-    )
-    min_description: Optional[str] = Field(
-        default=None, description="Minimum value label - REQUIRED for rating ONLY"
-    )
-    max_description: Optional[str] = Field(
-        default=None, description="Maximum value label - REQUIRED for rating ONLY"
-    )
-    max_length: Optional[int] = Field(
-        default=None,
-        description="Maximum text length - REQUIRED for free_text and conditional_boolean ONLY",
-        ge=1,
-        le=5000,
-    )
-    placeholder: Optional[str] = Field(
-        default=None,
-        description="Placeholder text - REQUIRED for free_text and conditional_boolean ONLY",
-    )
+
+# Specific question type schemas with required fields
+class MultipleChoiceQuestion(BaseQuestion):
+    """Multiple choice question - user selects one or multiple options."""
     
-    # Validation moved to TrainingCoach._filter_valid_questions()
-    # Invalid questions are filtered out gracefully instead of throwing 422 errors
+    response_type: Literal["multiple_choice"] = Field(
+        "multiple_choice",
+        json_schema_extra={"type": "string"},
+        description="Response type identifier"
+    )
+    options: List[QuestionOption] = Field(..., description="List of options (minimum 2)")
+    multiselect: bool = Field(..., description="Whether user can select multiple options (true) or only one (false)")
+
+
+class DropdownQuestion(BaseQuestion):
+    """Dropdown question - user selects one option from a dropdown."""
+    
+    response_type: Literal["dropdown"] = Field(
+        "dropdown",
+        json_schema_extra={"type": "string"},
+        description="Response type identifier"
+    )
+    options: List[QuestionOption] = Field(..., description="List of options (minimum 2)")
+    multiselect: bool = Field(..., description="Whether user can select multiple options (true) or only one (false)")
+
+
+class SliderQuestion(BaseQuestion):
+    """Slider question - user selects a numeric value from a range."""
+    
+    response_type: Literal["slider"] = Field(
+        "slider",
+        json_schema_extra={"type": "string"},
+        description="Response type identifier"
+    )
+    min_value: float = Field(..., description="Minimum value")
+    max_value: float = Field(..., description="Maximum value")
+    step: float = Field(..., description="Step increment")
+    unit: str = Field(..., description="Unit of measurement (single string, not array)")
+
+
+class RatingQuestion(BaseQuestion):
+    """Rating question - user rates on a subjective scale."""
+    
+    response_type: Literal["rating"] = Field(
+        "rating",
+        json_schema_extra={"type": "string"},
+        description="Response type identifier"
+    )
+    min_value: float = Field(..., description="Minimum value (typically 1)")
+    max_value: float = Field(..., description="Maximum value (typically 5)")
+    min_description: str = Field(..., description="Label for minimum value")
+    max_description: str = Field(..., description="Label for maximum value")
+
+
+class ConditionalBooleanQuestion(BaseQuestion):
+    """Conditional boolean question - Yes/No where Yes requires detailed text."""
+    
+    response_type: Literal["conditional_boolean"] = Field(
+        "conditional_boolean",
+        json_schema_extra={"type": "string"},
+        description="Response type identifier"
+    )
+    max_length: int = Field(..., ge=1, le=5000, description="Maximum text length for detailed response")
+    placeholder: str = Field(..., description="Placeholder text for the text input")
+
+
+class FreeTextQuestion(BaseQuestion):
+    """Free text question - user provides open-ended text response."""
+    
+    response_type: Literal["free_text"] = Field(
+        "free_text",
+        json_schema_extra={"type": "string"},
+        description="Response type identifier"
+    )
+    max_length: int = Field(..., ge=1, le=5000, description="Maximum text length")
+    placeholder: str = Field(..., description="Placeholder text for the text input")
+
+
+# Union type for all question types
+QuestionUnion = Union[
+    MultipleChoiceQuestion,
+    DropdownQuestion,
+    SliderQuestion,
+    RatingQuestion,
+    ConditionalBooleanQuestion,
+    FreeTextQuestion,
+]
+
+# Backward compatibility alias
+AIQuestion = QuestionUnion
 
 
 class AIQuestionResponse(BaseModel):
     """Response from AI containing generated questions."""
 
-    questions: List[AIQuestion] = Field(..., description="List of generated questions")
+    questions: List[QuestionUnion] = Field(..., description="List of generated questions (one question per response in one-by-one flow)")
     total_questions: int = Field(..., description="Total number of questions")
     estimated_time_minutes: int = Field(
         ..., description="Estimated time to complete in minutes"
@@ -88,12 +129,16 @@ class AIQuestionResponse(BaseModel):
     ai_message: Optional[str] = Field(
         default=None, description="Personalized AI coach message for this phase"
     )
+    information_complete: bool = Field(
+        default=False,
+        description="True when all essential information has been collected"
+    )
 
 
 class AIQuestionResponseWithFormatted(BaseModel):
     """Response from AI containing generated questions and formatted responses."""
 
-    questions: List[AIQuestion] = Field(..., description="List of generated questions")
+    questions: List[QuestionUnion] = Field(..., description="List of generated questions")
     total_questions: int = Field(..., description="Total number of questions")
     estimated_time_minutes: int = Field(
         ..., description="Estimated time to complete in minutes"
@@ -135,7 +180,7 @@ class PersonalInfo(BaseModel):
 
 
 class InitialQuestionsRequest(BaseModel):
-    """Request for initial questions generation."""
+    """Request for initial questions generation (one-by-one flow)."""
 
     personal_info: PersonalInfo = Field(..., description="Basic personal information")
     user_profile_id: Optional[str] = Field(
@@ -143,6 +188,9 @@ class InitialQuestionsRequest(BaseModel):
     )
     jwt_token: Optional[str] = Field(
         default=None, description="JWT token for authentication"
+    )
+    question_history: Optional[str] = Field(
+        default=None, description="Previous questions and answers for context (one-by-one flow)"
     )
 
 
@@ -153,7 +201,7 @@ class PlanGenerationRequest(BaseModel):
     initial_responses: Dict[str, Any] = Field(
         ..., description="Raw responses to initial questions"
     )
-    initial_questions: List[AIQuestion] = Field(
+    initial_questions: List[QuestionUnion] = Field(
         ..., description="Initial questions from frontend"
     )
     user_profile_id: Optional[int] = Field(
@@ -429,41 +477,22 @@ class AthleteTypeClassification(BaseModel):
 
 # ===== Question Content Generation Schemas =====
 
-class IntentPlanItem(BaseModel):
-    """Plan describing which intents will cover each information gap."""
-    
-    information_gap: str = Field(
-        ..., description="Critical information to gather for this user"
-    )
-    selected_intent_ids: List[str] = Field(
-        ..., description="Intent identifiers that address this information gap"
-    )
-    priority: IntentPlanPriorityLiteral = Field(
-        ..., description="Whether this gap is primary or optional for this user"
-    )
-    reasoning: str = Field(
-        ..., description="Brief explanation of why this gap and intents were selected"
-    )
-
-
 class QuestionContentItem(BaseModel):
     """Single question content item (before formatting into schema)."""
     
     question_text: str = Field(..., description="The question text to ask")
-    order: int = Field(
-        ..., description="Display order for this question (1-based, lower numbers appear first)"
-    )
 
 
 class QuestionContent(BaseModel):
     """Question content generated by LLM (intermediate format before formatting)."""
     
-    intent_plan: List[IntentPlanItem] = Field(
-        default_factory=list,
-        description="Documentation of information gaps and selected intents",
-    )
     questions_content: List[QuestionContentItem] = Field(
-        ..., description="List of question content items"
+        default_factory=list,
+        description="List of question content items (empty if information_complete is True)"
+    )
+    information_complete: bool = Field(
+        default=False,
+        description="Set to True when all essential information has been collected and no more questions are needed"
     )
 
 

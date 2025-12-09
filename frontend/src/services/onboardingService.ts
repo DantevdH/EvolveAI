@@ -43,7 +43,8 @@ export class trainingService {
   static async getInitialQuestions(
     personalInfo: PersonalInfo, 
     userProfileId?: number, 
-    jwtToken?: string
+    jwtToken?: string,
+    questionHistory?: string
   ): Promise<AIQuestionResponse> {
     try {
       console.log('📍 Onboarding Service: Generating initial questions');
@@ -57,6 +58,7 @@ export class trainingService {
         personal_info: personalInfo,
         user_profile_id: userProfileId?.toString(),
         jwt_token: jwtToken,
+        question_history: questionHistory,
       };
 
       console.log('🌐 Making request to:', `${this.BACKEND_URL}${this.BASE_URL}/initial-questions`);

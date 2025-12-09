@@ -241,7 +241,7 @@ export const OptionList: React.FC<OptionListProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    // Removed flex: 1 to prevent unbounded expansion
   },
   optionsGrid: {
     flexDirection: 'row',

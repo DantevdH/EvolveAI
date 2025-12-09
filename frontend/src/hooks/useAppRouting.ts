@@ -106,8 +106,8 @@ export const useAppRouting = (): AppRoutingState => {
     // Route to appropriate onboarding stage
     // 1) If we have questions but no responses yet → resume at initial-questions
     if (hasInitialQuestions && !hasInitialResponses) {
-      // Prevent redundant re-navigation if we're already on the target path
-      if (pathname && (pathname === '/onboarding/initial-questions')) {
+      // Prevent redundant re-navigation if we're already on the target path or in onboarding flow
+      if (pathname && (pathname === '/onboarding/initial-questions' || pathname.startsWith('/onboarding'))) {
         return {
           targetRoute: null,
           isLoading: false,

@@ -6,7 +6,7 @@ for use in AI prompts and training plan generation.
 """
 
 from typing import Dict, Any, List, Optional
-from core.training.schemas.question_schemas import AIQuestion
+from core.training.schemas.question_schemas import QuestionUnion
 
 
 class ResponseFormatter:
@@ -19,14 +19,14 @@ class ResponseFormatter:
 
     @staticmethod
     def format_responses(
-        responses: Dict[str, Any], questions: Optional[List[AIQuestion]] = None
+        responses: Dict[str, Any], questions: Optional[List[QuestionUnion]] = None
     ) -> str:
         """
         Format user responses for AI prompts in a clear, structured way.
 
         Args:
             responses: Dict of question_id -> response_value from frontend
-            questions: Optional list of AIQuestion objects for context
+            questions: Optional list of QuestionUnion objects for context
 
         Returns:
             Formatted string with Q: question_text\nA: formatted_response
@@ -61,14 +61,14 @@ class ResponseFormatter:
 
     @staticmethod
     def _format_single_response(
-        response: Any, question: Optional[AIQuestion] = None
+        response: Any, question: Optional[QuestionUnion] = None
     ) -> str:
         """
         Format a single response value based on its type and question context.
 
         Args:
             response: The response value from the frontend
-            question: Optional AIQuestion object for context
+            question: Optional QuestionUnion object for context
 
         Returns:
             Formatted response string
@@ -98,7 +98,7 @@ class ResponseFormatter:
 
     @staticmethod
     def _format_multiple_choice_response(
-        response: List[str], question: Optional[AIQuestion] = None
+        response: List[str], question: Optional[QuestionUnion] = None
     ) -> str:
         """Format multiple choice responses."""
         if len(response) == 0:
@@ -143,7 +143,7 @@ class ResponseFormatter:
 
     @staticmethod
     def _format_numeric_response(
-        response: float, question: Optional[AIQuestion] = None
+        response: float, question: Optional[QuestionUnion] = None
     ) -> str:
         """Format numeric responses (sliders, ratings) with proper context."""
         if question:

@@ -28,7 +28,6 @@ from core.training.schemas.training_schemas import (
     AIStrengthExercise,
     MainMuscleEnum,
     EquipmentEnum,
-    ModalityDecision,
 )
 from core.training.helpers.exercise_selector import ExerciseSelector
 from core.training.helpers.exercise_validator import ExerciseValidator
@@ -39,17 +38,15 @@ from core.training.helpers.models import (
 )
 from core.training.schemas.question_schemas import (
     AIQuestionResponse,
-    AIQuestionResponseWithFormatted,
     PersonalInfo,
-    AIQuestion,
+    QuestionUnion,
     QuestionOption,
-    AthleteTypeClassification,
-    QuestionContent,
     FeedbackIntentClassification,
+    MultipleChoiceQuestion,
+    DropdownQuestion,
 )
 from core.training.helpers.response_formatter import ResponseFormatter
 from core.training.helpers.prompt_generator import PromptGenerator
-from core.training.helpers.question_checklist_loader import merge_question_checklists
 from core.training.helpers.mock_data import (
     create_mock_initial_questions,
     create_mock_training_plan,
@@ -86,8 +83,6 @@ class TrainingCoach(BaseAgent):
             topic="training",  # This automatically filters documents by topic
         )
 
-        self.last_modality_rationale: Optional[str] = None
-
         # Initialize RAG tool for training-specific knowledge retrieval
         self.rag_service = RAGTool(self)
 
@@ -113,7 +108,7 @@ class TrainingCoach(BaseAgent):
             "training_knowledge_retrieval",
         ]
     
-    def _filter_valid_questions(self, questions: List[AIQuestion]) -> List[AIQuestion]:
+    def _filter_valid_questions(self, questions: List[QuestionUnion]) -> List[QuestionUnion]:
         """
         Filter questions to only include valid ones.
         Invalid questions are logged but don't break the flow.
@@ -147,63 +142,41 @@ class TrainingCoach(BaseAgent):
                     question.max_description = sanitize_string(question.max_description)
                 
                 # Check basic requirements based on type
+                # Note: With typed schemas, Pydantic enforces required fields, so we only validate values
                 is_valid = True
                 
                 if question.response_type == "slider":
-                    # SLIDER must have min, max, step, unit
-                    if not all([
-                        question.min_value is not None,
-                        question.max_value is not None,
-                        question.step is not None,
-                        question.unit is not None
-                    ]):
+                    # Validate slider has valid range (Pydantic ensures fields exist)
+                    if question.min_value >= question.max_value:
                         self.logger.warning(
-                            f"Invalid SLIDER question '{question.id}': missing required fields "
-                            f"(min_value, max_value, step, or unit). AI may have generated incomplete question."
+                            f"Invalid SLIDER question '{question.id}': min_value ({question.min_value}) must be less than max_value ({question.max_value})"
+                        )
+                        is_valid = False
+                    if question.step <= 0:
+                        self.logger.warning(
+                            f"Invalid SLIDER question '{question.id}': step must be positive, got {question.step}"
                         )
                         is_valid = False
                 
                 elif question.response_type in ["multiple_choice", "dropdown"]:
-                    # Must have options with at least 2 items
-                    if not question.options or len(question.options) < 2:
+                    # Must have at least 2 options (Pydantic ensures options and multiselect exist)
+                    if len(question.options) < 2:
                         self.logger.warning(
-                            f"Invalid {question.response_type} question '{question.id}': needs at least 2 options. "
-                            f"AI may have generated question without proper options."
-                        )
-                        is_valid = False
-                    # Must have multiselect explicitly set
-                    if question.multiselect is None:
-                        self.logger.warning(
-                            f"Invalid {question.response_type} question '{question.id}': multiselect must be explicitly set. "
-                            f"AI may have omitted this required field."
+                            f"Invalid {question.response_type} question '{question.id}': needs at least 2 options, got {len(question.options)}"
                         )
                         is_valid = False
                 
                 elif question.response_type == "rating":
-                    # RATING must have min/max values and descriptions
-                    if not all([
-                        question.min_value is not None,
-                        question.max_value is not None,
-                        question.min_description is not None,
-                        question.max_description is not None
-                    ]):
+                    # Validate rating has valid range (Pydantic ensures fields exist)
+                    if question.min_value >= question.max_value:
                         self.logger.warning(
-                            f"Invalid RATING question '{question.id}': missing required fields "
-                            f"(min/max values or descriptions). AI may have generated incomplete question."
+                            f"Invalid RATING question '{question.id}': min_value ({question.min_value}) must be less than max_value ({question.max_value})"
                         )
                         is_valid = False
                 
                 elif question.response_type in ["free_text", "conditional_boolean"]:
-                    # Must have max_length and placeholder
-                    if not all([
-                        question.max_length is not None,
-                        question.placeholder is not None
-                    ]):
-                        self.logger.warning(
-                            f"Invalid {question.response_type} question '{question.id}': missing required fields "
-                            f"(max_length or placeholder). AI may have generated incomplete question."
-                        )
-                        is_valid = False
+                    # Pydantic schema enforces max_length constraints (ge=1, le=5000), no additional validation needed
+                    pass
                 
                 if is_valid:
                     valid_questions.append(question)
@@ -223,7 +196,7 @@ class TrainingCoach(BaseAgent):
         
         return valid_questions
 
-    def _postprocess_questions(self, questions: List[AIQuestion]) -> List[AIQuestion]:
+    def _postprocess_questions(self, questions: List[QuestionUnion]) -> List[QuestionUnion]:
         """
         Post-process questions to convert multiple_choice with >4 options to dropdown.
         
@@ -238,84 +211,31 @@ class TrainingCoach(BaseAgent):
         
         for question in questions:
             # Check if it's a multiple_choice question with more than 4 options
-            if (question.response_type == "multiple_choice" and 
+            if (isinstance(question, MultipleChoiceQuestion) and 
                 question.options and 
                 len(question.options) > 4):
                 
-                # Convert to dropdown
-                question.response_type = "dropdown"
+                # Convert to dropdown by creating new DropdownQuestion instance
+                dropdown_question = DropdownQuestion(
+                    id=question.id,
+                    text=question.text,
+                    help_text=question.help_text,
+                    options=question.options,
+                    multiselect=question.multiselect,
+                )
+                postprocessed.append(dropdown_question)
                 converted_count += 1
                 self.logger.info(
                     f"Converted question '{question.id}' from multiple_choice to dropdown "
                     f"(had {len(question.options)} options)"
                 )
-            
-            postprocessed.append(question)
+            else:
+                postprocessed.append(question)
         
         if converted_count > 0:
             self.logger.info(f"Post-processed {converted_count} question(s) from multiple_choice to dropdown")
         
         return postprocessed
-
-    async def _decide_modalities(
-        self,
-        personal_info: PersonalInfo,
-        user_playbook=None,
-        formatted_initial_responses: Optional[str] = None,
-    ) -> Tuple[bool, bool, bool]:
-        """
-        Lightweight LLM call to decide whether to include bodyweight strength, equipment strength, and endurance modalities.
-        Falls back to bodyweight strength + endurance on failure.
-        """
-        self.last_modality_rationale = None
-        prompt = PromptGenerator.generate_modality_selection_prompt(
-            personal_info=personal_info,
-            onboarding_responses=formatted_initial_responses,
-            user_playbook=user_playbook,
-        )
-
-        try:
-            ai_start = time.time()
-            decision, completion = self.llm.parse_structured(
-                prompt,
-                ModalityDecision,
-                model_type="lightweight",
-            )
-            duration = time.time() - ai_start
-            await db_service.log_latency_event("modality_selection", duration, completion)
-
-            rationale = (decision.rationale or "").strip()
-            if not rationale:
-                rationale = "Model returned modalities without an explicit rationale."
-
-            self.logger.info(
-                (
-                    "Modality decision → bodyweight_strength=%s equipment_strength=%s "
-                    "endurance=%s | rationale=%s"
-                ),
-                decision.include_bodyweight_strength,
-                decision.include_equipment_strength,
-                decision.include_endurance,
-                rationale,
-            )
-            self.last_modality_rationale = rationale
-            return (
-                decision.include_bodyweight_strength,
-                decision.include_equipment_strength,
-                decision.include_endurance,
-            )
-        except Exception as exc:
-            # Log detailed error info for debugging
-            error_context = f"Model: {self.llm.lightweight_model_name}"
-            self.logger.error(
-                "Modality selection failed: %s | Context: %s | "
-                "Falling back to include both modalities.",
-                str(exc),
-                error_context,
-                exc_info=True,
-            )
-            self.last_modality_rationale = "Fallback: include bodyweight strength + endurance due to decision error"
-            return True, False, True
 
     async def _generate_future_week_outlines(
         self,
@@ -407,179 +327,93 @@ class TrainingCoach(BaseAgent):
             return self._generate_error_response(user_request)
 
     async def generate_initial_questions(
-        self, personal_info: PersonalInfo, user_profile_id: Optional[int] = None
+        self,
+        personal_info: PersonalInfo,
+        user_profile_id: Optional[int] = None,
+        question_history: Optional[str] = None
     ) -> AIQuestionResponse:
         """
-        Generate initial questions using the new 4-step flow:
-        Step 1: Athlete Type Classification
-        Step 2: Load & Merge Question Checklists
-        Step 3: Generate Question Content
-        Step 4: Format Questions
+        Generate one fully-formatted question in a single LLM call.
+
+        Combines question generation and formatting for faster response and better quality.
+        Returns AIQuestionResponse with information_complete flag for completion signaling.
         """
         try:
-            # Check if debug mode is enabled
             if settings.DEBUG:
-                initial_questions = create_mock_initial_questions()
-                return initial_questions
+                return create_mock_initial_questions()
 
-            # ===== STEP 1: Athlete Type Classification =====
-            self.logger.info("Step 1: Classifying athlete type...")
-            classification_prompt = PromptGenerator.generate_athlete_type_classification_prompt(
-                personal_info.goal_description
-            )
-            
-            ai_start = time.time()
-            classification, completion = self.llm.parse_structured(
-                classification_prompt,
-                AthleteTypeClassification,
-                model_type="lightweight",
-            )
-            classification_duration = time.time() - ai_start
-            
-            await db_service.log_latency_event(
-                "athlete_type_classification", classification_duration, completion
-            )
-            
-            athlete_type_dict = {
-                "primary_type": classification.primary_type,
-                "secondary_types": list(classification.secondary_types),
-                "confidence": classification.confidence,
-                "reasoning": classification.reasoning,
-            }
-            
-            self.logger.info(
-                f"Classified as: {athlete_type_dict['primary_type']} "
-                f"(confidence: {classification.confidence:.2f}) "
-                f"Reasoning: {classification.reasoning}"
-            )
+            self.logger.info("Generating question (single LLM call)...")
 
-            # ===== STEP 2: Load & Merge Question Themes =====
-            self.logger.info("Step 2: Loading and merging question themes...")
-            unified_checklist = merge_question_checklists(
-                primary_type=athlete_type_dict["primary_type"],
-                secondary_types=athlete_type_dict["secondary_types"],
-                confidence=classification.confidence,
+            prompt = PromptGenerator.generate_initial_question_prompt(
                 personal_info=personal_info,
+                question_history=question_history,
             )
-            self.logger.info(f"Merged themes have {len(unified_checklist)} items")
 
-            # ===== STEP 3: Generate Question Content =====
-            self.logger.info("Step 3: Generating question content...")
-            content_prompt = PromptGenerator.generate_question_content_prompt_initial(
-                personal_info=personal_info,
-                unified_checklist=unified_checklist,
-                athlete_type=athlete_type_dict,
-            )
-            
             ai_start = time.time()
-            question_content, completion = self.llm.parse_structured(
-                content_prompt, QuestionContent, model_type="lightweight"
+            response, completion = self.llm.parse_structured(
+                prompt, AIQuestionResponse, model_type="complex"
             )
-            content_duration = time.time() - ai_start
-            
-            await db_service.log_latency_event(
-                "initial_question_generation", content_duration, completion
-            )
-            
+            duration = time.time() - ai_start
 
-            
-            self.logger.info(f"Generated {len(question_content.questions_content)} question content items")
-
-            # ===== STEP 4: Format Questions =====
-            self.logger.info("Step 4: Formatting questions into schema...")
-            # Sort questions by order field, then convert to dict for prompt
-            sorted_questions = sorted(question_content.questions_content, key=lambda x: x.order)
-            content_dicts = [
-                {
-                    "question_text": item.question_text,
-                    "order": item.order,
-                }
-                for item in sorted_questions
-            ]
-            
-            formatting_prompt = PromptGenerator.generate_question_formatting_prompt(
-                question_content=content_dicts,
-                personal_info=personal_info,
-                is_initial=True,
-            )
-            
-            ai_start = time.time()
-            questions_response, completion = self.llm.parse_structured(
-                formatting_prompt, AIQuestionResponse, model_type="lightweight"
-            )
-            formatting_duration = time.time() - ai_start
-            
             await db_service.log_latency_event(
-                "initial_question_formatting", formatting_duration, completion
+                "initial_question_generation", duration, completion
             )
-            
-            # Filter out invalid questions
-            valid_questions = self._filter_valid_questions(questions_response.questions)
-            
-            if len(valid_questions) < len(questions_response.questions):
-                self.logger.warning(
-                    f"Filtered out {len(questions_response.questions) - len(valid_questions)} invalid questions"
+
+            # Handle completion signal
+            if response.information_complete or len(response.questions) == 0:
+                self.logger.info("Information collection complete — no more questions needed")
+                return AIQuestionResponse(
+                    questions=[],
+                    total_questions=0,
+                    estimated_time_minutes=0,
+                    ai_message=response.ai_message or "All information collected! Ready to generate your training plan. 🎯",
+                    information_complete=True,
                 )
-            
-            # Post-process: convert multiple_choice with >4 options to dropdown
-            postprocessed_questions = self._postprocess_questions(valid_questions)
-            
-    
-            # Sort by order field to maintain logical ordering (frontend can use this)
-            valid_questions_sorted = sorted(
-                postprocessed_questions, 
-                key=lambda q: q.order if q.order is not None else 999
-            )
-            
-            # Update response with valid questions only
-            questions_response.questions = valid_questions_sorted
-            questions_response.total_questions = len(valid_questions_sorted)
-            
-            total_duration = classification_duration + content_duration + formatting_duration
-            self.logger.info(
-                f"Successfully generated {len(valid_questions_sorted)} questions "
-                f"(total: {total_duration:.2f}s)"
-            )
 
-            return questions_response
+            # Validate and post-process
+            valid_questions = self._filter_valid_questions(response.questions)
+
+            if not valid_questions:
+                raise ValueError("No valid questions after filtering")
+
+            # Truncate to single question (one-by-one flow)
+            valid_questions = valid_questions[:1]
+
+            # Convert multiple_choice with >4 options to dropdown
+            processed_questions = self._postprocess_questions(valid_questions)
+
+            self.logger.info(f"Generated question in {duration:.2f}s: {processed_questions[0].text[:50]}...")
+
+            return AIQuestionResponse(
+                questions=processed_questions,
+                total_questions=1,
+                estimated_time_minutes=2,
+                ai_message=response.ai_message,
+                information_complete=False,
+            )
 
         except Exception as e:
-            self.logger.error(
-                f"Failed to generate initial questions: {str(e)}. "
-                f"Check AI model availability, prompt generation, or question formatting."
-            )
-            # Return a fallback response
-            fallback_response = AIQuestionResponse(
+            self.logger.error(f"Failed to generate question: {str(e)}")
+            return AIQuestionResponse(
                 questions=[
-                    AIQuestion(
+                    MultipleChoiceQuestion(
                         id="fallback_1",
                         text="What is your primary training goal?",
-                        response_type="multiple_choice",
+                        help_text="Select your main training focus",
                         options=[
-                            QuestionOption(
-                                id="goal_1", text="Build Muscle", value="build_muscle"
-                            ),
-                            QuestionOption(
-                                id="goal_2", text="Lose Weight", value="lose_weight"
-                            ),
-                            QuestionOption(
-                                id="goal_3",
-                                text="Improve Strength",
-                                value="improve_strength",
-                            ),
-                            QuestionOption(
-                                id="goal_4",
-                                text="General training",
-                                value="general_training",
-                            ),
+                            QuestionOption(id="goal_1", text="Build Muscle", value="build_muscle"),
+                            QuestionOption(id="goal_2", text="Lose Weight", value="lose_weight"),
+                            QuestionOption(id="goal_3", text="Improve Strength", value="improve_strength"),
+                            QuestionOption(id="goal_4", text="General Fitness", value="general_fitness"),
                         ],
+                        multiselect=False,
                     )
                 ],
                 total_questions=1,
                 estimated_time_minutes=2,
-                ai_message="I'm here to help you create the perfect training plan! Let's start with understanding your goals. 💪",
+                ai_message="Let's start with understanding your goals! 💪",
+                information_complete=False,
             )
-            return fallback_response
 
     # follow-up question generation removed (feature deprecated)
 
@@ -762,23 +596,16 @@ class TrainingCoach(BaseAgent):
                 if conversation_lines:
                     conversation_history_str = "\n".join(conversation_lines)
 
-            (
-                include_bodyweight_strength,
-                include_equipment_strength,
-                include_endurance,
-            ) = await self._decide_modalities(
-                personal_info, user_playbook
-            )
+            include_bodyweight_strength = True
+            include_equipment_strength = True
+            include_endurance = True
 
             # Step 2: Generate prompt for updating week (uses user_playbook instead of onboarding responses)
             self.logger.info(
-                "📝 Generating update prompt for Week %s (bodyweight_strength=%s equipment_strength=%s endurance=%s)...",
+                "📝 Generating update prompt for Week %s (default modalities)...",
                 week_number,
-                include_bodyweight_strength,
-                include_equipment_strength,
-                include_endurance,
             )
-            rationale = self.last_modality_rationale or "Default: include both modalities for balanced development."
+            rationale = "Default modalities: strength + endurance (modality selection disabled)."
             prompt = PromptGenerator.update_weekly_schedule_prompt(
                 personal_info=personal_info,
                 feedback_message=feedback_message,
@@ -938,23 +765,16 @@ class TrainingCoach(BaseAgent):
                 else None
             )
 
-            (
-                include_bodyweight_strength,
-                include_equipment_strength,
-                include_endurance,
-            ) = await self._decide_modalities(
-                personal_info, playbook
-            )
+            include_bodyweight_strength = True
+            include_equipment_strength = True
+            include_endurance = True
 
             # Step 3: Generate prompt for creating new week
             self.logger.info(
-                "📝 Generating prompt for Week %s (bodyweight_strength=%s equipment_strength=%s endurance=%s)...",
+                "📝 Generating prompt for Week %s (default modalities)...",
                 next_week_number,
-                include_bodyweight_strength,
-                include_equipment_strength,
-                include_endurance,
             )
-            rationale = self.last_modality_rationale or "Default: include both modalities for balanced development."
+            rationale = "Default modalities: strength + endurance (modality selection disabled)."
             prompt = PromptGenerator.create_new_weekly_schedule_prompt(
                 personal_info=personal_info,
                 completed_weeks_context=completed_weeks_context,
