@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any, Union, Literal
 # Create Literal types for unified schemas
 # These generate JSON Schema with inline enum constraints, forcing ALL providers to use only valid values
 QuestionTypeLiteral = Literal["multiple_choice", "dropdown", "free_text", "slider", "conditional_boolean", "rating"]
-FeedbackIntentLiteral = Literal["question", "unclear", "update_request", "satisfied", "other"]
+FeedbackIntentLiteral = Literal["question", "unclear", "update_request", "other"]
 FeedbackActionLiteral = Literal["respond_only", "update_plan", "navigate_to_main_app"]
 OperationTypeLiteral = Literal["swap_exercise", "adjust_intensity", "move_day", "add_rest_day", "adjust_volume", "add_exercise", "remove_exercise"]
 AthleteTypeLiteral = Literal["strength", "endurance", "sport_specific", "functional_fitness"]
@@ -406,7 +406,10 @@ class FeedbackIntentClassification(BaseModel):
     needs_plan_update: bool = Field(..., description="Whether a plan update is required")
     navigate_to_main_app: bool = Field(..., description="Whether to navigate to main app")
     reasoning: str = Field(..., description="Short explanation for the decision")
-    ai_message: str = Field(..., description="AI's response to the user")
+    ai_message: Optional[str] = Field(
+        default=None,
+        description="AI's response to the user (optional - generated separately for questions with RAG)"
+    )
 
 
 class FeedbackOperations(BaseModel):

@@ -1,8 +1,8 @@
 """
-Question generation prompts for onboarding.
+Question generation prompts for onboarding and RAG answer generation.
 """
 
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from app.schemas.question_schemas import PersonalInfo
 
 
@@ -145,3 +145,167 @@ def generate_initial_question_prompt(
     """
 
     return prompt
+
+
+def generate_rag_answer_prompt(
+    user_query: str,
+    context_documents: List[Dict[str, Any]],
+    current_week: Optional[Dict[str, Any]] = None,
+    playbook: Optional[Any] = None,
+    personal_info: Optional[PersonalInfo] = None,
+    conversation_history: Optional[List[Dict[str, Any]]] = None,
+) -> str:
+    """
+    Generate prompt for RAG-enhanced answer generation following best practices.
+    
+    Used when answering user questions in the chat interface. Includes:
+    - Retrieved knowledge base documents
+    - Current week of training plan
+    - User playbook with context
+    - Personal information
+    
+    Args:
+        user_query: User's question
+        context_documents: Retrieved relevant documents from knowledge base
+        current_week: Current week data from training plan
+        playbook: User's playbook with lessons and context
+        personal_info: User's personal information
+        
+    Returns:
+        Formatted prompt string following PROMPTING.md best practices
+    """
+    from app.helpers.prompts.formatting_helpers import (
+        format_current_week_readable,
+        format_playbook_lessons,
+    )
+    
+    # Prepare knowledge base context
+    knowledge_base_section = ""
+    if context_documents:
+        knowledge_parts = []
+        for i, doc in enumerate(context_documents, 1):
+            keywords = doc.get("document_keywords", [])
+            keywords_str = ", ".join(keywords) if keywords else "None"
+            knowledge_parts.append(
+                f"Document {i}: {doc.get('document_title', 'Unknown Title')}\n"
+                f"Content: {doc.get('chunk_text', 'No content')}\n"
+                f"Keywords: {keywords_str}\n"
+            )
+        knowledge_base_section = "\n".join(knowledge_parts)
+    else:
+        knowledge_base_section = "No relevant documents found in knowledge base."
+    
+    # Prepare current week section
+    current_week_section = ""
+    if current_week:
+        week_summary = format_current_week_readable(current_week)
+
+        current_week_section = (
+            f"\n## CURRENT WEEK (Training Plan Context)\n{week_summary}\n"
+            if week_summary
+            else ""
+        )
+    else:
+        current_week_section = ""
+
+    # Prepare conversation history section (most recent 10 messages)
+    conversation_section = ""
+    if conversation_history:
+        conv_lines = []
+        for msg in conversation_history[-6:]:
+            role = msg.get("role", "user").capitalize()
+            content = msg.get("content", "")
+            if content:
+                conv_lines.append(f"{role}: {content}")
+        if conv_lines:
+            conv_lines_str = "\n".join(conv_lines)
+            conversation_section = f"""
+            ## RECENT CONVERSATION (last 10)
+            {conv_lines_str}
+            """
+    
+    # Prepare playbook section
+    playbook_section = ""
+    if playbook and personal_info:
+        playbook_formatted = format_playbook_lessons(playbook, personal_info, context="training")
+        if playbook_formatted:
+            playbook_section = f"""
+                ## USER PLAYBOOK (Personalized Lessons & Context)
+                {playbook_formatted}
+            """
+    
+    # Prepare personal info section
+    personal_info_section = ""
+    if personal_info:
+        personal_info_section = f"""
+            ## USER PROFILE
+            - Name: {personal_info.username}
+            - Age: {personal_info.age}, Gender: {personal_info.gender}
+            - Experience: {personal_info.experience_level}
+            - Goal: {personal_info.goal_description}
+        """
+    
+    return f"""
+            ## PERSONA
+            You are a senior training coach with 10+ years of experience creating personalized fitness programs.
+            You are answering a user's question. Use your expertise combined with the provided knowledge base, current training week, and user's personalized playbook to provide accurate,
+            actionable guidance.
+
+            ## CONTEXT
+            The user is asking a question about their training plan. This answer will help them understand their plan,
+            make informed decisions, and stay motivated. Accuracy and relevance are critical to maintain user trust.
+            Use the provided knowledge base documents as your primary source of evidence-based information.
+
+            ## KNOWLEDGE BASE (Retrieved Documents)
+            {knowledge_base_section}
+
+            
+            {current_week_section}
+            {playbook_section}
+            {personal_info_section}
+            
+            {conversation_section}
+
+            ## USER'S QUESTION
+            "{user_query}"
+
+            ## TASK
+            Answer the user's question comprehensively using:
+            1. Knowledge base documents as primary evidence
+            2. Current week context to reference specific exercises/sessions
+            3. User's playbook to personalize advice based on their history
+            4. Your expertise to fill gaps and provide actionable guidance
+
+            ## CONSTRAINTS
+
+            **Answer Quality:**
+            - Use knowledge base documents as your primary source
+            - Reference the current week when relevant (e.g., "In your Week {current_week.get('week_number', 'X') if current_week else 'X'} schedule...")
+            - Consider user's playbook lessons when providing advice
+            - If knowledge base doesn't fully answer use your expertise to provide general guidance based on best practices
+            - Maximum 80 words - be concise but comprehensive
+            - Maintain warm, supportive, encouraging tone
+
+            **Response Format:**
+            - Be direct and actionable
+            - Use "you" and "your" for personal connection
+            - End with engagement: "Anything else you'd like to know?" or natural variation
+            - Stay focused on training plan and fitness goals
+
+            ## EXAMPLES
+
+            **Example 1: Equipment Question**
+            User: "Can I do this at home?"
+            Knowledge Base: [Document about home workout equipment]
+            Current Week: [Week with various exercises]
+            Answer: "Yes! Most exercises in your Week 1 plan can be done at home. You'll need minimal equipment like dumbbells or resistance bands. I can adjust any exercises if needed. Anything else you'd like to know?"
+
+            **Example 2: Exercise Question**
+            User: "Why running on Tuesday?"
+            Knowledge Base: [Document about recovery and training splits]
+            Current Week: [Week showing Tuesday as endurance day]
+            Answer: "Tuesday's run follows Monday's strength session, allowing active recovery while building endurance. This split optimizes recovery between intense sessions. Want to adjust the schedule?"
+
+            ## FORMAT
+            Provide a concise, helpful answer (max 40 words) that directly addresses the user's question using the provided context.
+        """

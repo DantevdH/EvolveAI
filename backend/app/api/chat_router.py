@@ -46,13 +46,13 @@ def _create_plan_response(training_plan: Any, ai_message: str, context: str = ""
     return plan_response
 
 
-async def _handle_playbook_extraction_for_satisfied(
+async def _handle_playbook_extraction_from_conversation(
     user_id: str,
     request: PlanFeedbackRequest,
     training_plan: Dict[str, Any],
     conversation_history: list,
 ) -> Optional[Dict[str, Any]]:
-    """Extract and update playbook from conversation history when user is satisfied."""
+    """Extract and update playbook from conversation history."""
     updated_playbook = None
     
     if not conversation_history or len(conversation_history) == 0:
@@ -128,8 +128,8 @@ async def chat(
     Handles:
     - Questions/Clarity: Returns AI response without plan updates
     - Plan Updates: Updates the latest week based on feedback
-    - Satisfaction: Marks plan as accepted and navigates to main app
     - Unclear: Asks for clarification
+    - Other: Handles off-topic messages
     """
     try:
         updated_playbook = None
@@ -181,49 +181,40 @@ async def chat(
         intent = classification_result.get("intent")
         action = classification_result.get("action")
         needs_plan_update = classification_result.get("needs_plan_update")
-        ai_message = classification_result.get("ai_message", "")
+        ai_message = classification_result.get("ai_message")
         
         logger.info(f"✅ Stage 1 complete: intent={intent}, confidence={classification_result.get('confidence')}, needs_plan_update={needs_plan_update}")
         
-        # Intent 1: Navigate to main app (satisfied)
-        is_navigate_intent = (
-            intent == "satisfied" or 
-            action == "navigate_to_main_app" or 
-            classification_result.get("navigate_to_main_app")
-        )
-        
-        if is_navigate_intent:
-            logger.info("✅ INTENT: Navigate to main app (user satisfied)")
+        # Intent 1: Question (with RAG)
+        if intent == "question":
+            logger.info(f"❓ INTENT: Question - generating RAG-enhanced answer")
             
-            user_id = extract_user_id_from_jwt(request.jwt_token)
+            # Get personal info and playbook for RAG context
+            personal_info = request.personal_info
+            user_playbook = None
+            if request.playbook:
+                user_playbook = UserPlaybook(**request.playbook)
             
-            if user_id:
-                await safe_db_update(
-                    "Set plan_accepted=True for satisfied user",
-                    db_service.update_user_profile,
-                    user_id=user_id,
-                    data={"plan_accepted": True},
-                    jwt_token=request.jwt_token
-                )
-                logger.info("✅ Set plan_accepted=True - user satisfied with plan")
-            
-            updated_playbook = await _handle_playbook_extraction_for_satisfied(
-                user_id, request, training_plan, conversation_history
+            # Generate RAG-enhanced answer (always includes current_week and playbook)
+            ai_message = await interview_agent.generate_rag_answer(
+                user_query=feedback_message,
+                training_plan=training_plan,
+                conversation_history=conversation_history,
+                current_week=current_week,
+                playbook=user_playbook,
+                personal_info=personal_info
             )
-            
-            ai_message = ai_message or "Amazing! You're all set. I'll take you to your main dashboard now. 🚀"
-            plan_response = _create_plan_response(training_plan, ai_message, "satisfied")
-            
+            plan_response = _create_plan_response(training_plan, ai_message, "question_rag")
             return PlanFeedbackResponse(
                 success=True,
                 ai_response=ai_message,
                 plan_updated=False,
                 updated_plan=plan_response,
-                updated_playbook=updated_playbook,
-                navigate_to_main_app=True
+                updated_playbook=None,
+                navigate_to_main_app=False
             )
         
-        # Intent 2: Respond only
+        # Intent 2: Respond only (non-question)
         is_respond_only = action == "respond_only" and not needs_plan_update
         if is_respond_only:
             logger.info(f"💬 INTENT: Respond only (no plan update)")
@@ -267,6 +258,8 @@ async def chat(
             )
         
         # Intent 5: Update plan
+        # Note: ai_message from classification is null for update_request.
+        # The update_weekly_schedule method will generate the appropriate ai_message.
         logger.info("🔁 INTENT: Update plan (Stage 2: Updating week based on feedback)")
         
         user_id = extract_user_id_from_jwt(request.jwt_token)

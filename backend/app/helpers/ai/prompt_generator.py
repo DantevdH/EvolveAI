@@ -31,7 +31,6 @@ from app.helpers.prompts.formatting_helpers import (
     format_client_information as _format_client_information,
     format_playbook_lessons as _format_playbook_lessons,
     format_onboarding_responses as _format_onboarding_responses,
-    format_current_plan_summary as _format_current_plan_summary,
     format_exercise_info as _format_exercise_info,
 )
 
@@ -222,11 +221,6 @@ class PromptGenerator:
     def format_onboarding_responses(formatted_responses: Optional[str]) -> str:
         """Format onboarding Q&A responses for inclusion in prompts."""
         return _format_onboarding_responses(formatted_responses)
-
-    @staticmethod
-    def format_current_plan_summary(current_plan: Dict[str, Any]) -> str:
-        """Create a token-optimized summary using Matrix Schema pattern for context in prompts."""
-        return _format_current_plan_summary(current_plan)
 
     @staticmethod
     def _format_exercise_info(exercises: List[Dict]) -> str:

@@ -779,48 +779,59 @@ class RAGService:
     # =========================================================================
 
     def generate_response(
-        self, user_query: str, context_documents: List[Dict[str, Any]], context: Optional[Dict[str, Any]] = None
+        self, 
+        user_query: str, 
+        context_documents: List[Dict[str, Any]], 
+        context: Optional[Dict[str, Any]] = None
     ) -> str:
         """
-        Generate a response using retrieved context.
+        Generate a response using retrieved context and best-practice prompt.
 
-        Used by InterviewAgent for answering training questions.
+        Used by InterviewAgent for answering training questions from chat interface.
 
         Args:
             user_query: User's original query
-            context_documents: Retrieved relevant documents
-            context: Additional context dictionary (optional)
+            context_documents: Retrieved relevant documents from knowledge base
+            context: Additional context dictionary with:
+                - training_plan: Full training plan (optional)
+                - current_week: Current week data (optional)
+                - playbook: User playbook with context (optional)
+                - personal_info: PersonalInfo object (optional)
 
         Returns:
             Generated response with context and citations
         """
         try:
-            context_text = self._prepare_context(context_documents)
+            from app.helpers.prompts.question_prompts import generate_rag_answer_prompt
+            
+            # Extract context components
+            current_week = context.get("current_week") if context else None
+            playbook = context.get("playbook") if context else None
+            personal_info = context.get("personal_info") if context else None
+            conversation_history = context.get("conversation_history") if context else None
+            
+            # Generate prompt using best practices
+            prompt = generate_rag_answer_prompt(
+                user_query=user_query,
+                context_documents=context_documents,
+                current_week=current_week,
+                playbook=playbook,
+                personal_info=personal_info,
+                conversation_history=conversation_history,
+            )
+            
             agent_name = self.base_agent.agent_name
-
-            prompt = f"""User Query: {user_query}
-
-            Relevant Information from Knowledge Base:
-            {context_text}
-
-            Based on the above information and your expertise as {agent_name}, provide a comprehensive, accurate response.
-
-            Guidelines:
-            1. Use the provided context as your primary source
-            2. Cite specific information from the documents
-            3. Provide actionable, practical advice
-            4. If the context doesn't fully answer the question, acknowledge this and provide general guidance
-            5. Maintain a professional, encouraging tone
-
-            Response:"""
-
-            content = self.base_agent.llm.chat_text([
-                {
-                    "role": "system",
-                    "content": f"You are {agent_name}, an expert AI. Use your specialized knowledge base to provide accurate, evidence-based responses."
-                },
-                {"role": "user", "content": prompt},
-            ])
+            
+            content = self.base_agent.llm.chat_text(
+                [
+                    {
+                        "role": "system",
+                        "content": f"You are {agent_name}, an expert training coach. Use your specialized knowledge base and the provided context to provide accurate, evidence-based responses."
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                model_type="complex",
+            )
             return content
 
         except Exception as e:
