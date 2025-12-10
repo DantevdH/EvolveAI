@@ -428,7 +428,7 @@ describe('Onboarding Integration Tests', () => {
       expect(profileUpdateCall.payload.initial_ai_message).toBeTruthy();
     });
 
-    test('2.2: Navigating to initial-questions route initializes component with questions and AI message', () => {
+    test('2.2: Navigating to initial-questions route initializes component with questions and AI message (no re-nav when already on onboarding)', () => {
       const mockQuestions = createMockQuestionsResponse().questions;
       const mockAiMessage = createMockQuestionsResponse().ai_message;
       
@@ -446,7 +446,9 @@ describe('Onboarding Integration Tests', () => {
       // Verify routing logic
       const { result } = renderHook(() => useAppRouting());
       
-      expect(result.current.targetRoute).toBe('/onboarding/initial-questions');
+      // When already on an onboarding path, routing suppresses redundant navigation
+      expect(result.current.targetRoute).toBeNull();
+      expect(result.current.routingReason).toMatch(/Initial Questions/);
       expect(profile.initial_questions).toEqual(mockQuestions);
       expect(profile.initial_ai_message).toBe(mockAiMessage);
     });
@@ -558,10 +560,11 @@ describe('Onboarding Integration Tests', () => {
       expect(dispatchCall[0].payload.initial_responses).toEqual(responses);
     });
 
-    test('3.2: After questions completion, routing hook routes to generate-plan', () => {
+    test('3.2: After questions completion, routing hook routes to generate-plan when information is complete', () => {
       const profile = createMockProfile({
         initial_questions: createMockQuestionsResponse().questions,
         initial_responses: { q1: 'answer1', q2: 'answer2' },
+        information_complete: true,
       });
       
       // Set up auth state with user, profile, but no training plan
@@ -668,7 +671,7 @@ describe('Onboarding Integration Tests', () => {
   });
 
   describe('Category 5: Resume Flows', () => {
-    test('5.1: Resuming at initial-questions route loads questions and AI message from profile', () => {
+    test('5.1: Resuming at initial-questions route loads questions and AI message from profile (no re-nav when already on onboarding)', () => {
       const mockQuestions = createMockQuestionsResponse().questions;
       const mockAiMessage = createMockQuestionsResponse().ai_message;
       
@@ -689,7 +692,8 @@ describe('Onboarding Integration Tests', () => {
       
       // Verify routing
       const { result } = renderHook(() => useAppRouting());
-      expect(result.current.targetRoute).toBe('/onboarding/initial-questions');
+      expect(result.current.targetRoute).toBeNull();
+      expect(result.current.routingReason).toMatch(/Initial Questions/);
     });
 
     test('5.2: Resuming at welcome step loads username from profile', () => {
