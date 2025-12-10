@@ -3,7 +3,7 @@ Unit tests for ExerciseValidator - Critical processing function
 """
 import pytest
 from unittest.mock import Mock, patch
-from core.training.helpers.exercise_validator import ExerciseValidator
+from app.helpers.exercise.exercise_validator import ExerciseValidator
 
 @pytest.mark.unit
 class TestExerciseValidator:

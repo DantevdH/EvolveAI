@@ -1,1 +1,0 @@
-# Training generation core logic

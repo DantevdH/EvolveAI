@@ -863,11 +863,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         payload: {
           ...authState.userProfile,
           initial_responses: initialResponsesObject,
+          information_complete: true, // Required for routing hook to navigate to /generate-plan
         },
         });
     }
     // Navigation handled by centralized routing hook (no direct push to avoid duplicate navigation)
-  }, [state.initialResponses, authState.userProfile, dispatch, router]);  // follow-up removed
+  }, [state.initialResponses, state.informationComplete, authState.userProfile, dispatch, router]);  // follow-up removed
 
   // Step 2: Initial Questions
   const handleInitialResponseChange = useCallback((questionId: string, value: any) => {

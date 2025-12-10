@@ -12,11 +12,11 @@ class TestErrorHandling:
     
     def test_validation_error_no_sensitive_data(self, client: TestClient):
         """Test that validation errors don't expose request body."""
-        # Mock the training coach and db_service to avoid initialization issues
-        with patch('core.training.training_api.get_training_coach') as mock_coach, \
-             patch('core.training.training_api.db_service') as mock_db_service:
-            mock_coach_instance = Mock()
-            mock_coach.return_value = mock_coach_instance
+        # Mock the interview agent and db_service to avoid initialization issues
+        with patch('app.api.dependencies.get_interview_agent') as mock_get_agent, \
+             patch('app.api.questions_router.db_service') as mock_db_service:
+            mock_agent_instance = Mock()
+            mock_get_agent.return_value = mock_agent_instance
             
             # Send invalid request that will trigger validation error
             response = client.post("/api/training/initial-questions", json={
@@ -38,11 +38,11 @@ class TestErrorHandling:
     
     def test_error_response_structure(self, client: TestClient):
         """Test that error responses have proper structure."""
-        # Mock the training coach and db_service to avoid initialization issues
-        with patch('core.training.training_api.get_training_coach') as mock_coach, \
-             patch('core.training.training_api.db_service') as mock_db_service:
-            mock_coach_instance = Mock()
-            mock_coach.return_value = mock_coach_instance
+        # Mock the interview agent and db_service to avoid initialization issues
+        with patch('app.api.dependencies.get_interview_agent') as mock_get_agent, \
+             patch('app.api.questions_router.db_service') as mock_db_service:
+            mock_agent_instance = Mock()
+            mock_get_agent.return_value = mock_agent_instance
             
             response = client.post("/api/training/initial-questions", json={})
         

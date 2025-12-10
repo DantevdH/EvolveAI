@@ -33,7 +33,7 @@ def _get_logger():
 # Load environment variables using centralized utility
 # This ensures test environment is respected and prevents duplicate loading
 try:
-    from core.utils.env_loader import load_environment
+    from app.utils.env_loader import load_environment
     load_environment()  # Will automatically skip in test environment
 except ImportError:
     # Fallback for cases where core.utils might not be available during import

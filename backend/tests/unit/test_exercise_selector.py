@@ -3,7 +3,7 @@ Unit tests for ExerciseSelector - Critical processing function
 """
 import pytest
 from unittest.mock import Mock, patch
-from core.training.helpers.exercise_selector import ExerciseSelector
+from app.helpers.exercise.exercise_selector import ExerciseSelector
 
 @pytest.mark.unit
 class TestExerciseSelector:
