@@ -255,9 +255,9 @@ class PromptGenerator:
             - Examples: "I have equipment" → "What equipment do you have?", "I have an injury" → "What injury/limitation should I know about?"
 
             **When to STOP (set information_complete=true):**
-            - You know: Schedule frequency + Resource access + Critical limitations (if any)
+            - You have collected all the critical information needed to generate a good plan.
             - Remaining unknowns can be reasonably defaulted based on goal + experience
-            - **You decide** how many questions are needed (typically 3-6, but you have full autonomy)
+            - **You decide** how many questions are needed (typically <8, but you have full autonomy)
             - **Stop when you're satisfied** — quality over quantity, don't over-collect
 
             # QUESTION FORMAT GUIDE

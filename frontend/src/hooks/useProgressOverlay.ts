@@ -100,12 +100,15 @@ export function useProgressOverlay() {
 
     clearIntervalRef();
 
-    if (isMountedRef.current) {
-      setState({
-        visible: true,
-        progress: 100,
-      });
+    // Early exit if unmounted to avoid unnecessary state updates
+    if (!isMountedRef.current) {
+      return result;
     }
+
+    setState({
+      visible: true,
+      progress: 100,
+    });
 
     await wait(config.completionDelayMs ?? 350);
 

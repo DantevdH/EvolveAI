@@ -334,7 +334,52 @@ async def get_initial_questions(
                     user_profile_id = existing_profile.get("data", {}).get("id")
                     logger.info(f"Found existing profile ID: {user_profile_id}")
                 else:
-                    logger.warning("No existing profile found; continuing without user_profile_id")
+                    logger.error("No existing profile found and could not create one")
+                    raise HTTPException(
+                        status_code=500,
+                        detail="Could not create or find user profile. Please try again."
+                    )
+        
+        # Load stored responses/questions/AI intro from database
+        stored_responses = {}
+        stored_questions = []
+        stored_ai_message = None
+        
+        if user_profile_id:
+            try:
+                profile_result = await db_service.get_user_profile_by_id(int(user_profile_id))
+                if profile_result.get("success"):
+                    profile_data = profile_result.get("data", {})
+                    
+                    # Load stored responses
+                    if profile_data.get("initial_responses"):
+                        stored_responses = profile_data.get("initial_responses", {})
+                        if not isinstance(stored_responses, dict):
+                            stored_responses = {}
+                        logger.info(f"Loaded {len(stored_responses)} stored responses")
+                    
+                    # Load stored questions
+                    initial_questions_data = profile_data.get("initial_questions")
+                    if initial_questions_data:
+                        if isinstance(initial_questions_data, dict):
+                            stored_questions = initial_questions_data.get("questions", [])
+                            stored_ai_message = initial_questions_data.get("ai_message")
+                        elif isinstance(initial_questions_data, list):
+                            stored_questions = initial_questions_data
+                        logger.info(f"Loaded {len(stored_questions)} stored questions")
+                    
+                    # Load AI message if not in questions data
+                    if not stored_ai_message and profile_data.get("initial_ai_message"):
+                        stored_ai_message = profile_data.get("initial_ai_message")
+            except Exception as e:
+                logger.warning(f"Failed to load stored profile data: {str(e)}", exc_info=True)
+        
+        # Merge incoming initial_responses with stored responses
+        merged_responses = dict(stored_responses)  # Start with stored responses
+        if request.initial_responses:
+            # Merge incoming responses (incoming takes precedence)
+            merged_responses.update(request.initial_responses)
+            logger.info(f"Merged {len(request.initial_responses)} incoming responses with {len(stored_responses)} stored responses")
         
         # Generate questions (with latency tracking) - one-by-one flow
         questions_response = await coach.generate_initial_questions(
@@ -343,48 +388,95 @@ async def get_initial_questions(
             question_history=request.question_history
         )
         
-        # Store questions (non-critical - log but continue)
-        serialized_questions_for_storage = []
+        # Append only new questions (filter out questions that already exist)
+        existing_question_ids = {q.get("id") for q in stored_questions if isinstance(q, dict) and q.get("id")}
+        new_questions = []
         for q in questions_response.questions:
-            sq = q.model_dump(exclude_none=False, mode='json')
-            serialized_questions_for_storage.append(sq)
+            q_dict = q.model_dump(exclude_unset=True, mode='json')
+            if q_dict.get("id") not in existing_question_ids:
+                new_questions.append(q_dict)
+                existing_question_ids.add(q_dict.get("id"))
         
-        await safe_db_update(
-            "Store initial questions",
-            db_service.update_user_profile,
-            user_id=user_id,
-            data={
-                "initial_questions": {
-                    "questions": serialized_questions_for_storage,
-                    "ai_message": questions_response.ai_message,
-                }
-            },
-            jwt_token=request.jwt_token
-        )
+        # Combine stored questions with new questions
+        all_questions = stored_questions + new_questions
         
+        # Store merged questions/responses/AI intro (non-critical - log but continue)
+        serialized_questions_for_storage = []
+        for q in all_questions:
+            if isinstance(q, dict):
+                serialized_questions_for_storage.append(q)
+            else:
+                sq = q.model_dump(exclude_unset=True, mode='json') if hasattr(q, 'model_dump') else q
+                serialized_questions_for_storage.append(sq)
+        
+        # Use AI message from response if available, otherwise keep stored one
+        ai_message_to_store = questions_response.ai_message or stored_ai_message
+
         # Check if information collection is complete
         information_complete = questions_response.information_complete
 
+        # Store merged questions/responses with retry on failure
+        store_data = {
+            "initial_questions": {
+                "questions": serialized_questions_for_storage,
+                "ai_message": ai_message_to_store,
+            },
+            "initial_responses": merged_responses,
+            "information_complete": information_complete,
+        }
+
+
+        store_result = await safe_db_update(
+            "Store merged initial questions and responses",
+            db_service.update_user_profile,
+            user_id=user_id,
+            data=store_data,
+            jwt_token=request.jwt_token
+        )
+
+        # Retry once if first attempt failed
+        if not store_result.get("success"):
+            logger.warning(f"First save attempt failed: {store_result.get('error')}. Retrying...")
+            store_result = await safe_db_update(
+                "Store merged initial questions and responses (retry)",
+                db_service.update_user_profile,
+                user_id=user_id,
+                data=store_data,
+                jwt_token=request.jwt_token
+            )
+
+            if not store_result.get("success"):
+                logger.error(f"Failed to save questions after retry: {store_result.get('error')}")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to save your responses. Please try again."
+                )
+
+        # Log completion status
         if information_complete:
             logger.info("✅ Information collection complete - ready for plan generation")
         else:
             logger.info(f"✅ Generated {questions_response.total_questions} initial questions")
         
-        # Serialize questions for response (typed schemas ensure all required fields are present)
-        serialized_questions = []
+        # Serialize new questions for response (only return newly generated questions)
+        serialized_new_questions = []
         for q in questions_response.questions:
-            sq = q.model_dump(exclude_none=False, mode='json')
-            serialized_questions.append(sq)
+            sq = q.model_dump(exclude_unset=True, mode='json')
+            serialized_new_questions.append(sq)
+        
+        # Calculate total questions count (stored + new)
+        total_questions_count = len(all_questions)
         
         return {
             "success": True,
             "data": {
-                "questions": serialized_questions,
-                "total_questions": questions_response.total_questions,
+                "questions": serialized_new_questions,  # Only new questions
+                "total_questions": total_questions_count,  # Total count including stored
                 "estimated_time_minutes": questions_response.estimated_time_minutes,
-                "ai_message": questions_response.ai_message,
+                "ai_message": ai_message_to_store,  # Merged AI message
                 "information_complete": information_complete,  # Signal to frontend that questioning is done
                 "user_profile_id": user_profile_id,  # Return profile ID for frontend state management
+                "merged_responses": merged_responses,  # Return merged responses for frontend state sync
             },
             "message": "Information collection complete" if information_complete else "Initial questions generated successfully",
         }

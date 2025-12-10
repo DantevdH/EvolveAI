@@ -37,11 +37,16 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
   const lastMessageRef = useRef<string>('');
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typeIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fullMessage = useMemo(() => {
     // If loading, return empty string to prevent default message from showing
     if (isLoading) return '';
-    if (customMessage) return customMessage;
+    if (customMessage !== undefined && customMessage !== null) {
+      // Prevent empty string messages from rendering as empty bubbles
+      return customMessage.trim() || '';
+    }
     if (aiMessage) return aiMessage;
     return `Hi ${username}! 👋\n\nI'm preparing your personalized training journey. Let's get started! 🚀`;
   }, [customMessage, aiMessage, username, isLoading]);
@@ -84,6 +89,8 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
   useEffect(() => {
     // Only reset if this is a new message
     const isNewMessage = lastMessageRef.current !== fullMessage;
+
+
     if (isNewMessage) {
       typingStartedRef.current = false;
       callbackCalledRef.current = false;
@@ -91,8 +98,18 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
       setDisplayedText('');
       setShowTypingIndicator(true);
       setTypingComplete(false);
+
+      // Clear any existing timeouts when message changes
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
+      }
+      if (typeIntervalRef.current) {
+        clearTimeout(typeIntervalRef.current);
+        typeIntervalRef.current = null;
+      }
     }
-    
+
     // If loading, don't start typing animation - just show loading dots
     if (isLoading) {
       if (isNewMessage) {
@@ -101,7 +118,7 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
       }
       return;
     }
-    
+
     // Don't restart if we've already completed this message
     if (isNewMessage && skipAnimation) {
       setDisplayedText(fullMessage);
@@ -109,26 +126,33 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
       setTypingComplete(true);
       if (!callbackCalledRef.current && onTypingComplete) {
         callbackCalledRef.current = true;
-        memoizedOnTypingComplete();
+        // Use setTimeout to avoid calling during render
+        setTimeout(() => {
+          memoizedOnTypingComplete();
+        }, 0);
       }
       return;
     }
-    
-    // Don't restart typing if we've already completed
-    if (!isNewMessage && typingComplete) {
+
+    // Don't restart typing if we've already completed OR already started
+    if (!isNewMessage && (typingComplete || typingStartedRef.current)) {
       return;
     }
-    
-    let timeoutId: ReturnType<typeof setTimeout>;
+
+    // Don't start typing again if already in progress
+    if (typingStartedRef.current) {
+      return;
+    }
+
     let currentIndex = 0;
 
     const typeText = () => {
       if (!mountedRef.current) return;
-      
+
       if (currentIndex < fullMessage.length) {
         setDisplayedText(fullMessage.slice(0, currentIndex + 1));
         currentIndex++;
-        timeoutId = setTimeout(typeText, 30);
+        typeIntervalRef.current = setTimeout(typeText, 30);
       } else {
         setShowTypingIndicator(false);
         setTypingComplete(true);
@@ -139,20 +163,26 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
       }
     };
 
-    // Only start typing if this is a new message
-    if (isNewMessage) {
-      const startTimeout = setTimeout(() => {
+    // Only start typing if this is a new message and we haven't started yet
+    if (isNewMessage && !typingStartedRef.current) {
+      typingStartedRef.current = true; // Mark as started IMMEDIATELY
+
+      typingTimeoutRef.current = setTimeout(() => {
         if (mountedRef.current) {
           typeText();
         }
       }, 500);
-
-      return () => {
-        clearTimeout(startTimeout);
-        clearTimeout(timeoutId);
-      };
     }
-  }, [fullMessage, skipAnimation, isLoading, memoizedOnTypingComplete, onTypingComplete, typingComplete]);
+
+    // Cleanup only on unmount, not on re-render
+    return () => {
+      // Only clear if component is unmounting
+      if (!mountedRef.current) {
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        if (typeIntervalRef.current) clearTimeout(typeIntervalRef.current);
+      }
+    };
+  }, [fullMessage, skipAnimation, isLoading, memoizedOnTypingComplete, onTypingComplete, typingComplete, displayedText]);
 
   return (
     <View style={styles.container}>
@@ -196,7 +226,7 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
           
           <View style={styles.messageContent}>
             {isLoading && !displayedText ? (
-              <TypingDots />
+              <TypingDots dotColor={createColorWithOpacity(colors.text, 0.85)} />
             ) : (
               <Text style={[styles.messageText, messageStyle]}>
                 {displayedText}

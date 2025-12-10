@@ -376,6 +376,11 @@ class DatabaseService:
                     "message": "No non-null fields provided for update",
                 }
 
+            # Log what we're updating
+            self.logger.info(f"Updating user profile {user_id} with fields: {list(update_data.keys())}")
+            if 'information_complete' in update_data:
+                self.logger.info(f"  ✓ information_complete value: {update_data['information_complete']}")
+
             # Update the user profile
             result = (
                 supabase_client.table("user_profiles")
@@ -384,15 +389,24 @@ class DatabaseService:
                 .execute()
             )
 
+            # Log detailed result information
+            self.logger.info(f"Update result: data={bool(result.data)}, count={len(result.data) if result.data else 0}")
+            if hasattr(result, 'error') and result.error:
+                self.logger.error(f"Supabase update error: {result.error}")
+
             if result.data and len(result.data) > 0:
                 updated = result.data[0]
             else:
+                self.logger.warning("Update returned no data, attempting fetch to verify")
                 fetch = (
                     supabase_client.table("user_profiles")
                     .select("*")
                     .eq("user_id", user_id)
                     .execute()
                 )
+                self.logger.info(f"Fetch result: data={bool(fetch.data)}, count={len(fetch.data) if fetch.data else 0}")
+                if hasattr(fetch, 'error') and fetch.error:
+                    self.logger.error(f"Supabase fetch error: {fetch.error}")
                 updated = fetch.data[0] if fetch.data else None
 
             if updated:

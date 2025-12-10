@@ -45,7 +45,8 @@ class ApiClient {
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
-    retryOn401: boolean = true
+    retryOn401: boolean = true,
+    externalSignal?: AbortSignal
   ): Promise<ApiResponse<T>> {
     try {
       const url = `${this.baseURL}${endpoint}`;
@@ -64,6 +65,17 @@ class ApiClient {
         console.log('⏰ Request timeout after', this.timeout, 'ms');
         controller.abort();
       }, this.timeout);
+
+      // If external signal provided, abort our controller when it aborts
+      if (externalSignal) {
+        if (externalSignal.aborted) {
+          clearTimeout(timeoutId);
+          throw new ApiError('Request was cancelled', 'ABORTED');
+        }
+        externalSignal.addEventListener('abort', () => {
+          controller.abort();
+        });
+      }
 
       console.log('📡 Making fetch request...');
       const response = await fetch(url, {
@@ -163,11 +175,11 @@ class ApiClient {
     });
   }
 
-  async post<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
+  async post<T>(endpoint: string, data?: any, options?: { signal?: AbortSignal }): Promise<ApiResponse<T>> {
     return this.request<T>(endpoint, {
       method: 'POST',
       body: data ? JSON.stringify(data) : undefined,
-    });
+    }, true, options?.signal);
   }
 
   async put<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {

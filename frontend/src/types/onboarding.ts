@@ -43,6 +43,7 @@ export interface AIQuestionResponse {
   ai_message?: string; // Personalized AI coach message for this phase
   user_profile_id?: number; // User profile ID (returned from backend after profile creation)
   information_complete?: boolean; // Signals no more questions are needed
+  merged_responses?: Record<string, any>; // Merged responses from backend (server-side merge)
 }
 
 export interface PersonalInfo {
@@ -118,6 +119,7 @@ export interface OnboardingState {
     text: string;
     isTyping?: boolean;
     questionId?: string;
+    skipAnimation?: boolean; // Add this line
   }>;
   questionHistory: string;
   informationComplete: boolean;
@@ -140,6 +142,7 @@ export interface InitialQuestionsRequest {
   user_profile_id?: string;
   jwt_token?: string;
   question_history?: string;
+  initial_responses?: Record<string, any>;
 }
 
 export interface PlanGenerationRequest {
@@ -262,6 +265,7 @@ export interface QuestionsStepProps extends OnboardingStepProps {
     text: string;
     isTyping?: boolean;
     questionId?: string;
+    skipAnimation?: boolean;
   }>;
   onSubmitAnswer: (question: AIQuestion, displayAnswer: string, rawValue: any) => void;
   isFetchingNext?: boolean;

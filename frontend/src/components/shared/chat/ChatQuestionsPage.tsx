@@ -54,12 +54,8 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
   const [localResponses, setLocalResponses] = useState(responses);
   const scrollRef = useRef<ScrollView | null>(null);
   
-  // Track which messages have completed typing (for consecutive animation)
-  const [completedTypingIndices, setCompletedTypingIndices] = useState<Set<number>>(new Set());
-  const completedTypingRef = useRef<Set<number>>(new Set());
-  
-  // Track which messages are ready to start typing (all previous messages have completed)
-  const [readyToStartTyping, setReadyToStartTyping] = useState<Set<number>>(new Set([0])); // First message is always ready
+  // Track which messages have completed typing (ID-based for stability)
+  const [completedTypingIds, setCompletedTypingIds] = useState<Set<string>>(new Set());
 
   // Track previous message count to detect additions vs removals
   const prevMessagesLengthRef = useRef(chatMessages.length);
@@ -82,94 +78,73 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
     }
   }, [chatMessages]);
 
-  // Create stable typing complete handler
-  const handleTypingCompleteForIndex = useCallback((index: number) => {
-    // Use ref to avoid unnecessary re-renders
-    if (!completedTypingRef.current.has(index)) {
-      completedTypingRef.current.add(index);
-      setCompletedTypingIndices(new Set(completedTypingRef.current));
-      
-      // Mark the next message as ready to start typing
-      const nextIndex = index + 1;
-      if (nextIndex < chatMessages.length) {
-        setReadyToStartTyping(prev => {
-          const newSet = new Set(prev);
-          newSet.add(nextIndex);
-          return newSet;
-        });
-      }
-      
-      // Auto-scroll to bottom when typing completes
-      setTimeout(() => {
-        if (scrollRef.current) {
-          scrollRef.current.scrollToEnd({ animated: true });
-        }
-      }, 100);
-    }
-  }, [chatMessages.length]);
+  // Store chat messages length in ref for stable callback access
+  const chatMessagesLengthRef = useRef(chatMessages.length);
+  chatMessagesLengthRef.current = chatMessages.length;
 
-  // Memoize callbacks per message index to prevent infinite loops
-  const typingCompleteCallbacks = useMemo(() => {
-    const callbacks = new Map<number, () => void>();
-    chatMessages.forEach((_, index) => {
-      callbacks.set(index, () => handleTypingCompleteForIndex(index));
+  // Create stable typing complete handler - uses message ID for stability
+  const handleTypingComplete = useCallback((messageId: string) => {
+    setCompletedTypingIds(prev => {
+      if (prev.has(messageId)) return prev;
+      const newSet = new Set(prev);
+      newSet.add(messageId);
+      return newSet;
     });
-    return callbacks;
-  }, [chatMessages.length, handleTypingCompleteForIndex]);
 
-  // Handle typing state when messages change (smart preservation for existing messages)
+    // Auto-scroll to bottom when typing completes
+    setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollToEnd({ animated: true });
+      }
+    }, 100);
+  }, []);
+
+  // Handle typing state when messages change (ID-based tracking)
   useEffect(() => {
     const prevLength = prevMessagesLengthRef.current;
     const currentLength = chatMessages.length;
 
+
+
     if (currentLength > prevLength) {
-      // New messages were added - preserve existing ready/completed state
-      // Mark all previously existing indices as ready and completed (they were already shown)
-      setReadyToStartTyping(prev => {
+      // New messages added - determine which to mark as completed
+      setCompletedTypingIds(prev => {
         const newSet = new Set(prev);
-        // Ensure all indices up to previous length are ready
-        for (let i = 0; i < prevLength; i++) {
-          newSet.add(i);
+
+        if (prevLength === 0 && currentLength > 1) {
+          // FIRST BATCH: Check if messages are from database (have skipAnimation: true)
+          // Database restored messages: mark all with skipAnimation as completed (show immediately)
+          // Fresh backend messages: DON'T mark as completed (animate sequentially)
+          chatMessages.slice(0, -1).forEach(msg => {
+            if (msg?.id && msg.skipAnimation === true) {
+              // Only mark as completed if it's a restored message (skipAnimation: true)
+              newSet.add(msg.id);
+            }
+          });
+        } else {
+          // SUBSEQUENT BATCHES: Mark all previous messages as completed
+          chatMessages.slice(0, prevLength).forEach(msg => {
+            if (msg?.id) {
+              newSet.add(msg.id);
+            }
+          });
         }
-        // Mark the first new message as ready to start its animation
-        if (prevLength < currentLength) {
-          newSet.add(prevLength);
-        }
+
         return newSet;
       });
-
-      // Mark all previous messages as completed (they don't need to re-animate)
-      setCompletedTypingIndices(prev => {
-        const newSet = new Set(prev);
-        for (let i = 0; i < prevLength; i++) {
-          newSet.add(i);
-        }
-        return newSet;
-      });
-
-      // Also update the ref
-      const updatedCompletedRef = new Set(completedTypingRef.current);
-      for (let i = 0; i < prevLength; i++) {
-        updatedCompletedRef.add(i);
-      }
-      completedTypingRef.current = updatedCompletedRef;
-
     } else if (currentLength < prevLength) {
-      // Messages were removed - clean up invalid indices
-      const validIndices = new Set<number>();
-      completedTypingRef.current.forEach(index => {
-        if (index < currentLength) {
-          validIndices.add(index);
+      // Messages removed - clean up invalid IDs
+      const validIds = new Set<string>();
+      chatMessages.forEach(msg => {
+        if (msg && msg.id && completedTypingIds.has(msg.id)) {
+          validIds.add(msg.id);
         }
       });
-      completedTypingRef.current = validIndices;
-      setCompletedTypingIndices(new Set(validIndices));
-      setReadyToStartTyping(new Set([0]));
+      setCompletedTypingIds(validIds);
     }
-    // If length is same, no changes needed
 
     prevMessagesLengthRef.current = currentLength;
-  }, [chatMessages.length]);
+  }, [chatMessages.length, chatMessages, completedTypingIds]);
 
   // Track when chat messages are stable (no more typing indicators)
   useEffect(() => {
@@ -261,13 +236,15 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
     onSubmitAnswer(activeQuestion, display, response);
   }, [activeQuestion, isCurrentQuestionValid, localResponses, formatAnswerDisplay, onSubmitAnswer]);
 
-  // Check if we're generating the first question
+  // Check if we're generating the first question (show fullscreen spinner)
   const isGeneratingFirstQuestion = questions.length === 0 && isFetchingNext;
 
-  // Check if the last message (the question) has finished typing animation
-  const lastMessageIndex = chatMessages.length - 1;
-  const lastMessageTypingComplete = lastMessageIndex >= 0 &&
-    completedTypingIndices.has(lastMessageIndex);
+  // Check if the last message has finished typing animation
+  const lastMessage = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : undefined;
+  const lastMessageTypingComplete = lastMessage ? completedTypingIds.has(lastMessage.id) : false;
+
+  // When information is complete, check if the closing message has finished typing
+  const showContinueButton = informationComplete && lastMessageTypingComplete;
 
   // Only show answer interface when:
   // 1. There's an active question
@@ -360,6 +337,18 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
               .replace(/on\w+\s*=/gi, '');
 
             if (msg.from === 'user') {
+              // Auto-mark user messages as completed (they don't animate)
+              if (!completedTypingIds.has(msg.id)) {
+                // Use setTimeout to avoid state update during render
+                setTimeout(() => {
+                  setCompletedTypingIds(prev => {
+                    const newSet = new Set(prev);
+                    newSet.add(msg.id);
+                    return newSet;
+                  });
+                }, 0);
+              }
+
               return (
                 <ChatBubble
                   key={msg.id}
@@ -372,20 +361,26 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
             }
 
             const isTypingIndicator = msg.isTyping;
-            
-            // Determine if this message is ready to start typing:
-            // - Always ready if it's a typing indicator (these are temporary)
-            // - Otherwise, ready only if all previous messages have completed
-            const isReadyToStart = isTypingIndicator || readyToStartTyping.has(index);
-            
-            // Don't render messages that aren't ready yet (they'll appear when previous ones complete)
-            if (!isReadyToStart) {
+
+            // Determine if this message should start typing:
+            // 1. Always ready if it's a typing indicator
+            // 2. Always ready if skipAnimation is true
+            // 3. If message is already in completedTypingIds, skip animation (programmatically marked as done)
+            // 4. Ready if it's the first message
+            // 5. Ready if previous message has completed typing
+            const isAlreadyCompleted = completedTypingIds.has(msg.id);
+            const shouldSkipAnimation = msg.skipAnimation === true || isTypingIndicator || isAlreadyCompleted;
+            const previousMessage = index > 0 ? chatMessages[index - 1] : null;
+            const previousCompleted = !previousMessage || completedTypingIds.has(previousMessage.id);
+            const isFirstMessage = index === 0;
+
+            const isReadyToStart = shouldSkipAnimation || isFirstMessage || previousCompleted;
+
+
+            // Don't render if not ready (but DO render if skipAnimation or typing indicator)
+            if (!isReadyToStart && !shouldSkipAnimation && !isTypingIndicator) {
               return null;
             }
-            
-            // Determine if this message should skip animation:
-            // - Skip if it's a typing indicator (show loading dots instead)
-            const shouldSkipAnimation = isTypingIndicator;
 
             return (
               <AIChatMessage
@@ -393,7 +388,7 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
                 customMessage={isTypingIndicator ? undefined : (sanitizedMessage || '')}
                 isLoading={isTypingIndicator}
                 skipAnimation={shouldSkipAnimation}
-                onTypingComplete={typingCompleteCallbacks.get(index)}
+                onTypingComplete={() => handleTypingComplete(msg.id)}
                 showHeader={false}
               />
             );
@@ -438,11 +433,8 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
         </Animated.View>
       )}
 
-      {informationComplete && (
+      {showContinueButton && (
         <View style={styles.completionContainer}>
-          <View style={styles.completionContent}>
-            <TypingDots />
-          </View>
           <View style={styles.navigationWrapper}>
             <OnboardingNavigation
               onNext={onNext}
@@ -543,10 +535,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
-  },
-  completionContent: {
-    alignItems: 'center',
-    paddingVertical: 12,
-    marginBottom: 16,
   },
 });

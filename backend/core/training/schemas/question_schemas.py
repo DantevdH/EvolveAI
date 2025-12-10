@@ -192,6 +192,9 @@ class InitialQuestionsRequest(BaseModel):
     question_history: Optional[str] = Field(
         default=None, description="Previous questions and answers for context (one-by-one flow)"
     )
+    initial_responses: Optional[Dict[str, Any]] = Field(
+        default=None, description="Current responses map to merge with stored responses server-side"
+    )
 
 
 class PlanGenerationRequest(BaseModel):

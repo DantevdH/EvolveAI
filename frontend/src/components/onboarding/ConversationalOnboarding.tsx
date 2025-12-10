@@ -35,6 +35,7 @@ type ChatEntry = {
   text: string;
   isTyping?: boolean;
   questionId?: string;
+  skipAnimation?: boolean; // Flag to skip animation for restored/history messages
 };
 
 const buildHistoryEntry = (question: string, answer: string, prev: string) => {
@@ -42,8 +43,136 @@ const buildHistoryEntry = (question: string, answer: string, prev: string) => {
   return prev ? `${prev}\n\n${entry}` : entry;
 };
 
-const introTracker = {
-  initial: false,
+/**
+ * Get rating description text for a given rating value.
+ * Only uses min_description/max_description if available, otherwise returns empty string.
+ */
+const getRatingDescription = (rating: number, question: AIQuestion): string => {
+  const minValue = question.min_value || 1;
+  const maxValue = question.max_value || 5;
+  
+  // Only use descriptions if both min and max descriptions are available
+  if (!question.min_description || !question.max_description) {
+    return '';
+  }
+  
+  // Use exact descriptions for min/max values
+  if (rating === minValue) {
+    return question.min_description;
+  }
+  if (rating === maxValue) {
+    return question.max_description;
+  }
+  
+  // For middle values, create simple interpolation
+  const totalRange = maxValue - minValue;
+  const position = (rating - minValue) / totalRange;
+  
+  // Simple interpolation between min and max descriptions
+  if (position <= 0.25) {
+    return question.min_description;
+  } else if (position <= 0.5) {
+    return `${question.min_description} to Moderate`;
+  } else if (position <= 0.75) {
+    return `Moderate to ${question.max_description}`;
+  } else {
+    return question.max_description;
+  }
+};
+
+/**
+ * Convert response value to human-readable format for storage.
+ * - Dropdown/Multiple Choice: converts option values to text
+ * - Conditional Boolean: converts object to "No" (if false) or text explanation (if true)
+ * - Slider: appends unit to numeric value (e.g., "30 minutes", "5 kg")
+ * - Rating: includes scale and description (e.g., "4/5 (Average)")
+ * - Other types: returns as-is
+ */
+const convertResponseForStorage = (question: AIQuestion, rawValue: any): any => {
+  // Handle dropdown and multiple_choice: save option text instead of value/ID
+  if (
+    (question.response_type === QuestionType.MULTIPLE_CHOICE || 
+     question.response_type === QuestionType.DROPDOWN) &&
+    question.options
+  ) {
+    if (Array.isArray(rawValue)) {
+      // Multiselect: map each value to its corresponding text
+      return rawValue.map((val: string) => {
+        const option = question.options!.find(opt => opt.value === val);
+        return option ? option.text : val; // Fallback to original value if not found
+      });
+    } else {
+      // Single select: map value to text
+      const option = question.options.find(opt => opt.value === rawValue);
+      return option ? option.text : rawValue; // Fallback to original value if not found
+    }
+  }
+  
+  // Handle conditional_boolean: save "No" if false, or the text explanation if true
+  if (question.response_type === QuestionType.CONDITIONAL_BOOLEAN) {
+    if (rawValue && typeof rawValue === 'object' && 'boolean' in rawValue) {
+      // Handle both boolean false and string "false"
+      const boolValue = rawValue.boolean;
+      const isFalse = boolValue === false || boolValue === 'false' || boolValue === 'False';
+      const isTrue = boolValue === true || boolValue === 'true' || boolValue === 'True';
+      
+      if (isFalse) {
+        return 'No';
+      } else if (isTrue) {
+        // Save the text explanation (the meaningful part when true)
+        return rawValue.text || 'Yes';
+      } else {
+        // Boolean is null/undefined - keep original structure
+        return rawValue;
+      }
+    }
+    // If it's already a string (converted), return as-is
+    if (typeof rawValue === 'string') {
+      return rawValue;
+    }
+  }
+  
+  // Handle slider: append unit to the numeric value for readability
+  if (question.response_type === QuestionType.SLIDER) {
+    if (typeof rawValue === 'number') {
+      // Handle unit (defensive: check for string or array)
+      let unit = '';
+      if (question.unit) {
+        if (typeof question.unit === 'string') {
+          unit = question.unit;
+        } else if (Array.isArray(question.unit) && (question.unit as any[]).length > 0) {
+          unit = (question.unit as any[])[0]; // Use first unit if array (defensive)
+        }
+      }
+      // Return value with unit: "30 minutes" or "5 kg"
+      return unit ? `${rawValue} ${unit}` : String(rawValue);
+    }
+    // If it's already a string (converted), return as-is
+    if (typeof rawValue === 'string') {
+      return rawValue;
+    }
+  }
+  
+  // Handle rating: include scale and description for readability
+  if (question.response_type === QuestionType.RATING) {
+    if (typeof rawValue === 'number') {
+      const minValue = question.min_value || 1;
+      const maxValue = question.max_value || 5;
+      
+      // Get description text if available
+      const description = getRatingDescription(rawValue, question);
+      
+      // Format as "4/5 (Average)" or "4/5" if no description
+      return description ? `${rawValue}/${maxValue} (${description})` : `${rawValue}/${maxValue}`;
+    }
+    // If it's already a string (converted), return as-is
+    if (typeof rawValue === 'string') {
+      return rawValue;
+    }
+  }
+  
+  // For all other types, return as-is
+  return rawValue;
 };
 
 interface ConversationalOnboardingProps {
@@ -71,7 +200,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     initialQuestionsLoading: false,
     currentInitialQuestionIndex: 0,
     initialAiMessage: undefined,
-    initialIntroShown: introTracker.initial,
+    initialIntroShown: false, // Will be managed by introTrackerRef
     chatMessages: [],
     questionHistory: '',
     informationComplete: false,
@@ -94,6 +223,19 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   // Track if we've initialized from profile (run only once per component mount)
   const hasInitializedFromProfileRef = useRef(false);
+
+  // Track if intro messages have been shown (moved inside component to avoid shared state)
+  const introTrackerRef = useRef({ initial: false });
+
+  // AbortController for cancelling in-flight requests
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Cleanup: cancel any in-flight requests on unmount
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   // Initialize state based on existing user profile when starting from specific steps
   // IMPORTANT: Only runs ONCE on mount to prevent re-initialization when profile updates
@@ -122,28 +264,103 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       
       // Initialize with cleaned and validated profile data
       setState(prev => {
-        // Rebuild chatMessages from profile data (AI message + questions)
-        const rebuiltChatMessages: ChatEntry[] = [];
+        const orderedQuestions = cleanedProfile.initial_questions || [];
+        const rawResponsesObject = (cleanedProfile.initial_responses && typeof cleanedProfile.initial_responses === 'object')
+          ? cleanedProfile.initial_responses
+          : {};
+
+        // Convert responses to human-readable format when loading from profile
+        // This handles old data that might be in the wrong format (e.g., dict for conditional boolean)
+        const responsesObject: Record<string, any> = {};
+        const questionsMap = new Map(orderedQuestions.map((q: any) => [q.id, q as AIQuestion]));
         
-        // Add AI message if present
+        Object.entries(rawResponsesObject).forEach(([questionId, answer]) => {
+          const question = questionsMap.get(questionId);
+          // Type guard: ensure question has required properties
+          if (question && 
+              typeof question === 'object' && 
+              'id' in question && 
+              'text' in question && 
+              'response_type' in question) {
+            // Convert response format for storage consistency
+            responsesObject[questionId] = convertResponseForStorage(question as AIQuestion, answer);
+          } else {
+            // Question not found or invalid, save as-is (shouldn't happen, but defensive)
+            responsesObject[questionId] = answer;
+          }
+        });
+
+        // Rebuild chatMessages from profile data (AI message + chronological Q/A)
+        const rebuiltChatMessages: ChatEntry[] = [];
+
         if (cleanedProfile.initial_ai_message) {
           rebuiltChatMessages.push({
-            id: `ai-message-${Date.now()}`,
+            id: `ai-message-restored`,
             from: 'ai',
             text: cleanedProfile.initial_ai_message,
+            skipAnimation: true,
           });
         }
-        
-        // Add all questions as chat entries
-        if (cleanedProfile.initial_questions && cleanedProfile.initial_questions.length > 0) {
-          cleanedProfile.initial_questions.forEach((q: any) => {
-            rebuiltChatMessages.push({
-              id: q.id || `question-${Date.now()}-${Math.random()}`,
-              from: 'ai',
-              text: q.text || q.question_text || '',
-              questionId: q.id,
-            });
+
+        const lastIndex = Math.max(orderedQuestions.length - 1, 0);
+
+        orderedQuestions.forEach((q: any, idx: number) => {
+          const questionId = q.id || `question-${Date.now()}-${Math.random()}`;
+          const questionText = q.text || q.question_text || '';
+
+          // Question
+          rebuiltChatMessages.push({
+            id: questionId,
+            from: 'ai',
+            text: questionText,
+            questionId: q.id,
+            // Only the last restored question animates; older history just appears
+            skipAnimation: idx === lastIndex ? false : true,
           });
+
+          // Answer (omit for the last question so it can animate/be answered again)
+          if (idx !== lastIndex && Object.prototype.hasOwnProperty.call(responsesObject, q.id)) {
+            const answer = responsesObject[q.id];
+            // Display converted answer (should be string now for conditional boolean)
+            let displayAnswer = '';
+            if (Array.isArray(answer)) {
+              displayAnswer = answer.join(', ');
+            } else if (typeof answer === 'object' && answer !== null) {
+              // This shouldn't happen after conversion, but handle defensively
+              displayAnswer = JSON.stringify(answer);
+            } else {
+              displayAnswer = String(answer);
+            }
+            rebuiltChatMessages.push({
+              id: `user-${q.id}-restored`,
+              from: 'user',
+              text: displayAnswer,
+              skipAnimation: true,
+            });
+          }
+        });
+
+        // Rebuild question history from stored Q&A (includes all answers for backend merging)
+        let rebuiltQuestionHistory = '';
+        if (responsesObject && Object.keys(responsesObject).length > 0) {
+          const historyEntries: string[] = [];
+          Object.entries(responsesObject).forEach(([questionId, answer]) => {
+            const question = questionsMap.get(questionId) as any;
+            if (question) {
+              // Display converted answer (should be string now for conditional boolean)
+              let displayAnswer = '';
+              if (Array.isArray(answer)) {
+                displayAnswer = answer.join(', ');
+              } else if (typeof answer === 'object' && answer !== null) {
+                // This shouldn't happen after conversion, but handle defensively
+                displayAnswer = JSON.stringify(answer);
+              } else {
+                displayAnswer = String(answer);
+              }
+              historyEntries.push(`Q: ${question.text || question.question_text || ''}\nA: ${displayAnswer}`);
+            }
+          });
+          rebuiltQuestionHistory = historyEntries.join('\n\n');
         }
 
         return {
@@ -166,14 +383,15 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           goalDescriptionValid: true,
           experienceLevel: cleanedProfile.experience_level,
           experienceLevelValid: true,
-          // Load questions and responses from profile
-          initialQuestions: cleanedProfile.initial_questions || [],
-          initialResponses: cleanedProfile.initial_responses ? new Map(Object.entries(cleanedProfile.initial_responses)) : new Map(),
+          // Load questions and converted responses from profile
+          initialQuestions: orderedQuestions,
+          initialResponses: new Map(Object.entries(responsesObject)),
           
           // Load AI messages from database and rebuild chatMessages
           initialAiMessage: cleanedProfile.initial_ai_message,
           chatMessages: rebuiltChatMessages,
-          initialIntroShown: introTracker.initial,
+          questionHistory: rebuiltQuestionHistory || prev.questionHistory,
+          initialIntroShown: introTrackerRef.current.initial,
         };
       });
     }
@@ -363,12 +581,21 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   // API call with error handling for initial questions
   const { execute: executeGetInitialQuestions, loading: initialQuestionsApiLoading, ErrorBannerComponent: InitialQuestionsErrorBanner } = useApiCallWithBanner(
-    async (fullPersonalInfo: PersonalInfo, userProfileId: number | undefined, jwtToken: string | undefined, questionHistory?: string) => {
-      return await trainingService.getInitialQuestions(fullPersonalInfo, userProfileId, jwtToken, questionHistory);
+    async (fullPersonalInfo: PersonalInfo, userProfileId: number | undefined, jwtToken: string | undefined, questionHistory?: string, initialResponses?: Record<string, any>, signal?: AbortSignal) => {
+      return await trainingService.getInitialQuestions(fullPersonalInfo, userProfileId, jwtToken, questionHistory, initialResponses, signal);
     },
     {
       retryCount: 3,
       onSuccess: async (response) => {
+        // Debug: Log response structure to verify data flow
+        console.log('📦 onSuccess response:', {
+          questions: response.questions,
+          questionsLength: response.questions?.length,
+          information_complete: response.information_complete,
+          ai_message: response.ai_message ? 'present' : 'missing',
+          merged_responses: Object.keys(response.merged_responses || {}).length,
+        });
+
         // Handle user profile ID updates BEFORE state update to prevent re-render issues
         if (response.user_profile_id && response.user_profile_id !== authState.userProfile?.id) {
           if (authState.userProfile) {
@@ -389,8 +616,41 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           return orderA - orderB;
         });
 
-        // Only mark complete when backend explicitly signals it or no questions are returned
-        const informationComplete = response.information_complete || sortedQuestions.length === 0;
+        // Only mark complete when backend EXPLICITLY signals it
+        // Do not infer completion from empty questions - backend should be explicit
+        const informationComplete = response.information_complete === true;
+
+        // Merge backend-returned responses into local state
+        const mergedResponses = response.merged_responses || {};
+        
+        // Rebuild question-history string from merged Q&A
+        let rebuiltQuestionHistory = '';
+        if (mergedResponses && Object.keys(mergedResponses).length > 0) {
+          const questionMap = new Map<string, AIQuestion>();
+          // Build map of all questions (existing + new)
+          [...(response.questions || []), ...(response.initial_questions || [])].forEach(q => {
+            questionMap.set(q.id, q);
+          });
+          
+          // Rebuild history from merged responses
+          const historyEntries: string[] = [];
+          Object.entries(mergedResponses).forEach(([questionId, answer]) => {
+            const question = questionMap.get(questionId);
+            if (question) {
+              // Format answer for display
+              let displayAnswer = '';
+              if (Array.isArray(answer)) {
+                displayAnswer = answer.join(', ');
+              } else if (typeof answer === 'object' && answer !== null) {
+                displayAnswer = JSON.stringify(answer);
+              } else {
+                displayAnswer = String(answer);
+              }
+              historyEntries.push(`Q: ${question.text}\nA: ${displayAnswer}`);
+            }
+          });
+          rebuiltQuestionHistory = historyEntries.join('\n\n');
+        }
 
         // Update state atomically with all question and message data
         setState(prev => {
@@ -398,7 +658,10 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           const existingMessages = prev.chatMessages.filter(m => !m.isTyping);
           const isFirstQuestion = existingMessages.length === 0;
           
-          // Build new chat messages: AI message (if first question) + questions
+          // Track existing question IDs to prevent duplicates
+          const existingQuestionIds = new Set(prev.initialQuestions.map(q => q.id));
+
+          // Build new chat messages: AI message (if first question) + new questions
           const newChatMessages: ChatEntry[] = [...existingMessages];
           
           if (informationComplete) {
@@ -420,8 +683,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
               });
             }
             
-            // Add all questions as chat entries
+            // Add only new questions as chat entries (dedup by ID)
             sortedQuestions.forEach(q => {
+              if (existingQuestionIds.has(q.id)) {
+                return;
+              }
+              existingQuestionIds.add(q.id);
               newChatMessages.push({
                 id: q.id,
                 from: 'ai',
@@ -431,15 +698,43 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             });
           }
 
-          const updatedQuestions = [...prev.initialQuestions, ...sortedQuestions];
+          // Merge responses: backend merged_responses take precedence
+          // Convert responses to human-readable format when merging
+          const updatedResponses = new Map(prev.initialResponses);
+          const allQuestionsMap = new Map<string, AIQuestion>();
+          [...prev.initialQuestions, ...sortedQuestions].forEach(q => {
+            allQuestionsMap.set(q.id, q);
+          });
+          
+          Object.entries(mergedResponses).forEach(([questionId, value]) => {
+            const question = allQuestionsMap.get(questionId);
+            if (question) {
+              // Convert response format for storage
+              const convertedValue = convertResponseForStorage(question, value);
+              updatedResponses.set(questionId, convertedValue);
+            } else {
+              // Question not found, save as-is (shouldn't happen, but defensive)
+              updatedResponses.set(questionId, value);
+            }
+          });
+
+          // Merge questions without duplicates (preserve order)
+          const updatedQuestions = [...prev.initialQuestions];
+          sortedQuestions.forEach(q => {
+            if (!updatedQuestions.find(existing => existing.id === q.id)) {
+              updatedQuestions.push(q);
+            }
+          });
           
           return {
             ...prev,
             initialQuestions: updatedQuestions,
+            initialResponses: updatedResponses,
             initialQuestionsLoading: false,
             currentInitialQuestionIndex: Math.max(updatedQuestions.length - 1, 0),
             initialAiMessage: response.ai_message ?? prev.initialAiMessage,
             informationComplete,
+            questionHistory: rebuiltQuestionHistory || prev.questionHistory,
             chatMessages: newChatMessages,
           };
         });
@@ -479,9 +774,18 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   );
 
   const fetchNextQuestion = useCallback(async (overrideHistory?: string) => {
-    if (!state.personalInfo || isFetchingQuestion || state.informationComplete) {
+    if (!state.personalInfo || state.informationComplete) {
       return;
     }
+
+    // Cancel any in-flight request to prevent race conditions
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new controller for this request
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
 
     const historyToSend = overrideHistory ?? state.questionHistory;
     setIsFetchingQuestion(true);
@@ -495,15 +799,44 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
     const jwtToken = authState.session?.access_token;
 
-    await runWithProgress('initial', async () => {
-      await executeGetInitialQuestions(
-        fullPersonalInfo,
-        authState.userProfile?.id,
-        jwtToken,
-        historyToSend
-      );
-    });
-  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.questionHistory, state.informationComplete, isFetchingQuestion, authState.session?.access_token, authState.userProfile, executeGetInitialQuestions, runWithProgress, appendChatMessages]);
+    // Convert Map to plain object for sending to backend
+    const initialResponsesObject = Object.fromEntries(state.initialResponses);
+
+    // Determine if this is the first question (show spinner) or subsequent (show only dots)
+    const isFirstQuestion = state.initialQuestions.length === 0;
+
+    try {
+      if (isFirstQuestion) {
+        // First question: show loading spinner via progress overlay
+        await runWithProgress('initial', async () => {
+          await executeGetInitialQuestions(
+            fullPersonalInfo,
+            authState.userProfile?.id,
+            jwtToken,
+            historyToSend,
+            initialResponsesObject,
+            signal
+          );
+        });
+      } else {
+        // Subsequent questions: no spinner, just three-dot animation (handled in ChatQuestionsPage)
+        await executeGetInitialQuestions(
+          fullPersonalInfo,
+          authState.userProfile?.id,
+          jwtToken,
+          historyToSend,
+          initialResponsesObject,
+          signal
+        );
+      }
+    } catch (error: any) {
+      // Ignore abort errors - they're expected when cancelling in-flight requests
+      if (error?.code === 'ABORTED' || error?.name === 'AbortError') {
+        return;
+      }
+      throw error;
+    }
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.questionHistory, state.initialResponses, state.informationComplete, state.initialQuestions.length, authState.session?.access_token, authState.userProfile, executeGetInitialQuestions, runWithProgress]);
 
   // follow-up flow removed: feature deprecated and handled outside this flow
 
@@ -551,9 +884,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   const handleSubmitAnswer = useCallback((question: AIQuestion, displayAnswer: string, rawValue: any) => {
     let nextHistory = '';
 
+    // Convert response to human-readable format for storage
+    const valueToSave = convertResponseForStorage(question, rawValue);
+
     setState(prev => {
       const newResponses = new Map(prev.initialResponses);
-      newResponses.set(question.id, rawValue);
+      newResponses.set(question.id, valueToSave); // Save converted value
       nextHistory = buildHistoryEntry(question.text, displayAnswer, prev.questionHistory);
       const newMessages = [
         ...prev.chatMessages.filter(m => !m.isTyping),
@@ -749,7 +1085,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   const lastResetStepRef = useRef<string | null>(null);
   useEffect(() => {
     if (currentStep === 'welcome' && lastResetStepRef.current !== 'welcome') {
-      introTracker.initial = false;
+      introTrackerRef.current.initial = false;
       lastResetStepRef.current = 'welcome';
       setState(prev => {
         if (!prev.initialIntroShown) {

@@ -103,13 +103,30 @@ describe('useAppRouting', () => {
     expect(result.current.targetRoute).toBe('/onboarding/initial-questions');
   });
 
-  test('questions + responses and no plan -> /generate-plan', () => {
+  test('has questions and responses but information not complete -> /onboarding/initial-questions', () => {
     setAuthState({
       ...baseState,
       user: { id: 'u1', email_confirmed_at: '2025-01-01', app_metadata: { provider: 'email' } },
       userProfile: {
         initial_questions: [{ id: 'q1' }],
         initial_responses: { q1: 'a1' },
+        information_complete: false,
+      },
+      trainingPlan: null,
+    });
+    const { result } = renderHook(() => useAppRouting());
+    expect(result.current.targetRoute).toBe('/onboarding/initial-questions');
+    expect(result.current.routingReason).toMatch(/Continue Chat/);
+  });
+
+  test('questions + responses + information complete and no plan -> /generate-plan', () => {
+    setAuthState({
+      ...baseState,
+      user: { id: 'u1', email_confirmed_at: '2025-01-01', app_metadata: { provider: 'email' } },
+      userProfile: {
+        initial_questions: [{ id: 'q1' }],
+        initial_responses: { q1: 'a1' },
+        information_complete: true,
       },
       trainingPlan: null,
     });
@@ -121,7 +138,12 @@ describe('useAppRouting', () => {
     setAuthState({
       ...baseState,
       user: { id: 'u1', email_confirmed_at: '2025-01-01', app_metadata: { provider: 'email' } },
-      userProfile: { planAccepted: false, initial_questions: [{ id: 'q1' }], initial_responses: { q1: 'a1' } },
+      userProfile: {
+        planAccepted: false,
+        initial_questions: [{ id: 'q1' }],
+        initial_responses: { q1: 'a1' },
+        information_complete: true,
+      },
       trainingPlan: { id: 1 },
     });
     const { result } = renderHook(() => useAppRouting());
@@ -133,7 +155,12 @@ describe('useAppRouting', () => {
     setAuthState({
       ...baseState,
       user: { id: 'u1', email_confirmed_at: '2025-01-01', app_metadata: { provider: 'email' } },
-      userProfile: { planAccepted: true, initial_questions: [{ id: 'q1' }], initial_responses: { q1: 'a1' } },
+      userProfile: {
+        planAccepted: true,
+        initial_questions: [{ id: 'q1' }],
+        initial_responses: { q1: 'a1' },
+        information_complete: true,
+      },
       trainingPlan: { id: 1 },
     });
     const { result } = renderHook(() => useAppRouting());
