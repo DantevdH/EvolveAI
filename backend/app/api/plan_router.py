@@ -283,13 +283,17 @@ async def generate_training_plan(
                 f"📘 (async) Curated initial playbook: {len(empty_playbook.lessons)} → {len(initial_playbook.lessons)} lessons"
             )
 
-            await safe_db_update(
-                "Store initial playbook",
-                db_service.update_user_profile,
-                user_id=user_id,
-                data={"user_playbook": initial_playbook.model_dump()},
-                jwt_token=request.jwt_token
-            )
+            # Get user_profile_id for saving playbook
+            user_profile = await db_service.get_user_profile_by_user_id(user_id)
+            if user_profile.get("success") and user_profile.get("data"):
+                user_profile_id = user_profile["data"].get("id")
+                await safe_db_update(
+                    "Store initial playbook",
+                    db_service.save_user_playbook,
+                    user_profile_id=user_profile_id,
+                    playbook_data=initial_playbook.model_dump(),
+                    jwt_token=request.jwt_token
+                )
             logger.info("✅ (async) Playbook stored successfully")
 
         async def build_initial_playbook_async():

@@ -36,9 +36,14 @@ class PlaybookService:
             analyses, existing_playbook, source_plan_id="onboarding"
         )
         # Convert UpdatedUserPlaybook to UserPlaybook
-        return self.curator_agent.update_playbook_from_curated(
+        playbook = self.curator_agent.update_playbook_from_curated(
             curated, personal_info.user_id
         )
+
+        # Enrich lessons with context from knowledge base
+        playbook = await self.curator_agent.enrich_lessons_with_context(playbook)
+
+        return playbook
 
     async def extract_and_curate_conversation_lessons(
         self,
@@ -54,9 +59,14 @@ class PlaybookService:
             analyses, existing_playbook, source_plan_id=str(accepted_training_plan.get("id", "unknown"))
         )
         # Convert UpdatedUserPlaybook to UserPlaybook
-        return self.curator_agent.update_playbook_from_curated(
+        playbook = self.curator_agent.update_playbook_from_curated(
             curated, personal_info.user_id
         )
+
+        # Enrich lessons with context from knowledge base
+        playbook = await self.curator_agent.enrich_lessons_with_context(playbook)
+
+        return playbook
 
     async def get_playbook_stats(self, user_id: str) -> Optional[PlaybookStats]:
         """

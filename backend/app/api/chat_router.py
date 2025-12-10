@@ -96,13 +96,15 @@ async def _handle_playbook_extraction_for_satisfied(
         if curated_playbook and len(curated_playbook.lessons) > 0:
             logger.info(f"📘 Extracted and curated {len(curated_playbook.lessons)} lessons")
             
-            await safe_db_update(
-                "Update playbook with conversation lessons",
-                db_service.update_user_profile,
-                user_id=user_id,
-                data={"user_playbook": curated_playbook.model_dump()},
+            # Save playbook to lessons table
+            success = await db_service.save_user_playbook(
+                user_profile_id=user_profile_id,
+                playbook_data=curated_playbook.model_dump(),
                 jwt_token=request.jwt_token
             )
+            
+            if not success:
+                logger.error("❌ Failed to save playbook to database")
             
             logger.info(f"✅ Updated playbook with {len(curated_playbook.lessons)} total lessons")
             updated_playbook = curated_playbook.model_dump()
