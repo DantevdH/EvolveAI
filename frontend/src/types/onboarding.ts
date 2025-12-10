@@ -42,6 +42,8 @@ export interface AIQuestionResponse {
   initial_questions?: AIQuestion[]; // Initial questions returned by AI
   ai_message?: string; // Personalized AI coach message for this phase
   user_profile_id?: number; // User profile ID (returned from backend after profile creation)
+  information_complete?: boolean; // Signals no more questions are needed
+  merged_responses?: Record<string, any>; // Merged responses from backend (server-side merge)
 }
 
 export interface PersonalInfo {
@@ -111,6 +113,16 @@ export interface OnboardingState {
   currentInitialQuestionIndex: number;
   initialAiMessage?: string; // AI message for initial questions
   initialIntroShown: boolean;
+  chatMessages: Array<{
+    id: string;
+    from: 'ai' | 'user';
+    text: string;
+    isTyping?: boolean;
+    questionId?: string;
+    skipAnimation?: boolean; // Add this line
+  }>;
+  questionHistory: string;
+  informationComplete: boolean;
  
  
   
@@ -129,6 +141,8 @@ export interface InitialQuestionsRequest {
   personal_info: PersonalInfo;
   user_profile_id?: string;
   jwt_token?: string;
+  question_history?: string;
+  initial_responses?: Record<string, any>;
 }
 
 export interface PlanGenerationRequest {
@@ -245,4 +259,15 @@ export interface QuestionsStepProps extends OnboardingStepProps {
   aiMessage?: string; // AI message from backend
   introAlreadyCompleted?: boolean;
   onIntroComplete?: () => void;
+  chatMessages: Array<{
+    id: string;
+    from: 'ai' | 'user';
+    text: string;
+    isTyping?: boolean;
+    questionId?: string;
+    skipAnimation?: boolean;
+  }>;
+  onSubmitAnswer: (question: AIQuestion, displayAnswer: string, rawValue: any) => void;
+  isFetchingNext?: boolean;
+  informationComplete?: boolean;
 }

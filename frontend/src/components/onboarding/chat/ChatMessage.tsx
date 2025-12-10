@@ -18,7 +18,6 @@ const TypingDots: React.FC = () => {
   const dot3 = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
-    console.log('🎯 TypingDots: Component mounted, starting animation');
     
     const createPulseAnimation = (dot: Animated.Value, delay: number) => {
       return Animated.loop(
@@ -48,11 +47,9 @@ const TypingDots: React.FC = () => {
     animation2.start();
     animation3.start();
 
-    console.log('🎯 TypingDots: All animations started');
 
     // Cleanup function
     return () => {
-      console.log('🎯 TypingDots: Component unmounting, stopping animations');
       animation1.stop();
       animation2.stop();
       animation3.stop();

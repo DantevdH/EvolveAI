@@ -5,14 +5,19 @@ from fastapi.responses import JSONResponse
 import os
 import sys
 from logging_config import get_logger
-from core.training.training_api import router as training_router
-from core.utils.env_loader import is_test_environment
+from app.api.questions_router import router as questions_router
+from app.api.plan_router import router as plan_router
+from app.api.chat_router import router as chat_router
+from app.api.week_router import router as week_router
+from app.api.insights_router import router as insights_router
+from app.api.playbook_router import router as playbook_router
+from app.utils.env_loader import is_test_environment
 from settings import settings
 
 # Load environment variables using centralized utility
 # This ensures test environment is respected and prevents duplicate loading
 try:
-    from core.utils.env_loader import load_environment
+    from app.utils.env_loader import load_environment
     load_environment()  # Will automatically skip in test environment
 except ImportError:
     # Fallback if core.utils not available (shouldn't happen in normal operation)
@@ -112,8 +117,13 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(TimeoutMiddleware)
 
-# Include training router
-app.include_router(training_router)
+# Include routers
+app.include_router(questions_router)
+app.include_router(plan_router)
+app.include_router(chat_router)
+app.include_router(week_router)
+app.include_router(insights_router)
+app.include_router(playbook_router)
 
 
 @app.get("/")

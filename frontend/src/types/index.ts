@@ -72,9 +72,12 @@ export interface UserProfile {
   // Raw questions and responses (for consistency)
   initial_questions?: AIQuestion[] | null;
   initial_responses?: Record<string, any> | null;
-  
+
   // AI messages from database
   initial_ai_message?: string | null;
+
+  // Information collection status
+  information_complete?: boolean | null;
  
   
   // User playbook

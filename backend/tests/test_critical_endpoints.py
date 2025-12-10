@@ -12,11 +12,11 @@ class TestCriticalEndpoints:
     
     def test_initial_questions_endpoint_exists(self, client: TestClient):
         """Test that initial-questions endpoint exists and accepts requests."""
-        # Mock the training coach to avoid actual AI calls
-        with patch('core.training.training_api.get_training_coach') as mock_coach, \
-             patch('core.training.training_api.db_service') as mock_db_service:
-            mock_coach_instance = Mock()
-            mock_coach.return_value = mock_coach_instance
+        # Mock the interview agent to avoid actual AI calls
+        with patch('app.api.dependencies.get_interview_agent') as mock_get_agent, \
+             patch('app.api.questions_router.db_service') as mock_db_service:
+            mock_agent_instance = Mock()
+            mock_get_agent.return_value = mock_agent_instance
             
             # Mock the response
             mock_response = {
@@ -25,7 +25,7 @@ class TestCriticalEndpoints:
                     {"id": "1", "text": "What is your primary goal?", "type": "multiple_choice"}
                 ]
             }
-            mock_coach_instance.generate_initial_questions.return_value = mock_response
+            mock_agent_instance.generate_initial_questions.return_value = mock_response
             
             # Mock db_service methods
             mock_db_service.create_user_profile.return_value = {
@@ -56,10 +56,17 @@ class TestCriticalEndpoints:
     
     def test_generate_plan_endpoint_exists(self, client: TestClient):
         """Test that generate-plan endpoint exists and accepts requests."""
-        with patch('core.training.training_api.get_training_coach') as mock_coach, \
-             patch('core.training.training_api.db_service') as mock_db_service:
-            mock_coach_instance = Mock()
-            mock_coach.return_value = mock_coach_instance
+        with patch('app.api.dependencies.get_training_agent') as mock_get_agent, \
+             patch('app.api.plan_router.db_service') as mock_db_service:
+            mock_agent_instance = Mock()
+            mock_get_agent.return_value = mock_agent_instance
+            
+            # Mock agent response
+            mock_agent_instance.generate_initial_training_plan.return_value = {
+                "success": True,
+                "training_plan": {"id": 1, "title": "Test Plan"},
+                "completion_message": "Plan generated"
+            }
             
             # Mock db_service methods
             mock_db_service.get_training_plan.return_value = {"success": False, "data": None}
@@ -69,7 +76,7 @@ class TestCriticalEndpoints:
             }
             mock_db_service.save_training_plan.return_value = {
                 "success": True,
-                "data": {"id": 1},
+                "data": {"training_plan_id": 1, "training_plan": {"id": 1}},
                 "message": "Training plan saved successfully"
             }
             
@@ -80,10 +87,14 @@ class TestCriticalEndpoints:
                     "weight": 75,
                     "height": 180,
                     "experience_level": "intermediate",
-                    "primary_goal": "strength"
+                    "primary_goal": "strength",
+                    "goal_description": "Build strength",
+                    "username": "testuser"
                 },
                 "initial_responses": {},
-                "jwt_token": "test.token"
+                "initial_questions": [{"id": "1", "text": "Test"}],
+                "jwt_token": "test.token",
+                "user_profile_id": 1
             }
             
             response = client.post("/api/training/generate-plan", json=payload)

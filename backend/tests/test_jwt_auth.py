@@ -5,7 +5,7 @@ import pytest
 import jwt
 from datetime import datetime, timedelta
 from fastapi import HTTPException
-from core.training.helpers.database_service import extract_user_id_from_jwt
+from app.services.database_service import extract_user_id_from_jwt
 from settings import settings
 
 @pytest.mark.unit

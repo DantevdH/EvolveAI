@@ -100,14 +100,15 @@ export const useAppRouting = (): AppRoutingState => {
     const initialResponsesObj = profile.initial_responses || {};
     const hasInitialQuestions = Array.isArray(initialQuestions) && initialQuestions.length > 0;
     const hasInitialResponses = typeof initialResponsesObj === 'object' && Object.keys(initialResponsesObj).length > 0;
+    const informationComplete = profile.information_complete === true;
     const hasTrainingPlan = !!state.trainingPlan;
     const isPlanAccepted = !!profile.planAccepted;
 
     // Route to appropriate onboarding stage
     // 1) If we have questions but no responses yet → resume at initial-questions
     if (hasInitialQuestions && !hasInitialResponses) {
-      // Prevent redundant re-navigation if we're already on the target path
-      if (pathname && (pathname === '/onboarding/initial-questions')) {
+      // Prevent redundant re-navigation if we're already on the target path or in onboarding flow
+      if (pathname && (pathname === '/onboarding/initial-questions' || pathname.startsWith('/onboarding'))) {
         return {
           targetRoute: null,
           isLoading: false,
@@ -124,18 +125,58 @@ export const useAppRouting = (): AppRoutingState => {
         skipLoaders: true, // Resume state, skip intro
       };
     }
-    // 2) If we don't have questions yet → handled by unified onboarding start above
 
-    
-
-    if (!hasTrainingPlan) {
-      // Only route to generate-plan when plan absence is confirmed (not during loading)
+    // 2) If we have questions and responses but information is not complete → resume at initial-questions
+    // This handles the case where the user needs to continue the chat to finish onboarding
+    if (hasInitialQuestions && hasInitialResponses && !informationComplete) {
+      // Prevent redundant re-navigation if we're already on the target path or in onboarding flow
+      if (pathname && (pathname === '/onboarding/initial-questions' || pathname.startsWith('/onboarding'))) {
+        return {
+          targetRoute: null,
+          isLoading: false,
+          hasError: false,
+          routingReason: 'Continue Chat (already here)',
+          skipLoaders: true,
+        };
+      }
       return {
-        targetRoute: '/generate-plan',
+        targetRoute: '/onboarding/initial-questions',
         isLoading: false,
         hasError: false,
-        routingReason: 'Generate Plan',
-        skipLoaders: true, // Direct action, no intro needed
+        routingReason: 'Continue Chat',
+        skipLoaders: true, // Resume state, skip intro
+      };
+    }
+
+    // 3) Only proceed to plan generation if information is complete
+    if (!hasTrainingPlan) {
+      // Only route to generate-plan if information collection is complete
+      if (informationComplete && hasInitialQuestions && hasInitialResponses) {
+        return {
+          targetRoute: '/generate-plan',
+          isLoading: false,
+          hasError: false,
+          routingReason: 'Generate Plan',
+          skipLoaders: true, // Direct action, no intro needed
+        };
+      }
+
+      // If plan doesn't exist but information isn't complete, stay in onboarding
+      if (pathname && (pathname === '/onboarding/initial-questions' || pathname.startsWith('/onboarding'))) {
+        return {
+          targetRoute: null,
+          isLoading: false,
+          hasError: false,
+          routingReason: 'Complete Information First (already here)',
+          skipLoaders: true,
+        };
+      }
+      return {
+        targetRoute: '/onboarding/initial-questions',
+        isLoading: false,
+        hasError: false,
+        routingReason: 'Complete Information First',
+        skipLoaders: true,
       };
     }
 

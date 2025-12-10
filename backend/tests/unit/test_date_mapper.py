@@ -4,7 +4,7 @@ Unit tests for date_mapper utility function.
 
 import pytest
 from datetime import date, timedelta
-from core.training.helpers.date_mapper import map_daily_training_dates
+from app.helpers.utils.date_mapper import map_daily_training_dates
 
 
 def create_mock_training_plan(weekly_schedules_data: list) -> dict:

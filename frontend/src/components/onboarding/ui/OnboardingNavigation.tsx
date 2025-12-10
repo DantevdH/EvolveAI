@@ -73,8 +73,8 @@ export const OnboardingNavigation: React.FC<OnboardingNavigationProps> = ({
 const styles = StyleSheet.create({
   singleContainer: {
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 40,
+    marginTop: 12,
+    marginBottom: 16,
   },
   singleContainerRight: {
     alignItems: 'flex-end',

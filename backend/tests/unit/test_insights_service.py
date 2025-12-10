@@ -6,7 +6,7 @@ Tests training frequency, volume progress, and training intensity calculations.
 import pytest
 from typing import Optional
 from datetime import date, timedelta, datetime
-from core.training.helpers.insights_service import InsightsService
+from app.services.insights_service import InsightsService
 
 
 def create_mock_training_plan(

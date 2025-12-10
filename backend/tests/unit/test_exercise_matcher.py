@@ -3,7 +3,7 @@ Unit tests for ExerciseMatcher - Critical processing function
 """
 import pytest
 from unittest.mock import Mock, patch
-from core.training.helpers.exercise_matcher import ExerciseMatcher
+from app.helpers.exercise.exercise_matcher import ExerciseMatcher
 
 @pytest.mark.unit
 class TestExerciseMatcher:

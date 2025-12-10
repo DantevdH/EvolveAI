@@ -41,9 +41,12 @@ export class trainingService {
    * Get initial questions based on personal info
    */
   static async getInitialQuestions(
-    personalInfo: PersonalInfo, 
-    userProfileId?: number, 
-    jwtToken?: string
+    personalInfo: PersonalInfo,
+    userProfileId?: number,
+    jwtToken?: string,
+    questionHistory?: string,
+    initialResponses?: Record<string, any>,
+    signal?: AbortSignal
   ): Promise<AIQuestionResponse> {
     try {
       console.log('📍 Onboarding Service: Generating initial questions');
@@ -51,19 +54,24 @@ export class trainingService {
         personalInfo,
         userProfileId,
         hasJwtToken: !!jwtToken,
+        hasQuestionHistory: !!questionHistory,
+        responsesCount: initialResponses ? Object.keys(initialResponses).length : 0,
       });
-      
+
       const request: InitialQuestionsRequest = {
         personal_info: personalInfo,
         user_profile_id: userProfileId?.toString(),
         jwt_token: jwtToken,
+        question_history: questionHistory,
+        initial_responses: initialResponses,
       };
 
       console.log('🌐 Making request to:', `${this.BACKEND_URL}${this.BASE_URL}/initial-questions`);
 
       const response = await apiClient.post<OnboardingApiResponse<AIQuestionResponse>>(
         `${this.BASE_URL}/initial-questions`,
-        request
+        request,
+        { signal }
       );
 
       // Validate response format

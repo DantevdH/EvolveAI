@@ -55,7 +55,7 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
   const sectionSpacing = isVerySmallScreen ? 8 : isSmallScreen ? 10 : 12; // Reduced spacing
   const cardPadding = screenWidth < 375 ? 16 : 20;
   
-  const heroLogoSize = isVerySmallScreen ? 100 : isSmallScreen ? 116 : 136;
+  const heroLogoSize = isVerySmallScreen ? 160 : isSmallScreen ? 180 : 200;
   const featureCardPadding = isVerySmallScreen ? 8 : 10;
   const heroSpacing = sectionSpacing;
 
@@ -66,7 +66,7 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
     >
       <OnboardingCard
-        title="Ready to Relievr?"
+        title="Ready to Evolve?"
         subtitle="Your personalized training journey starts here"
         scrollable={false}
       >
@@ -96,9 +96,6 @@ export const WelcomeStep: React.FC<WelcomeStepProps> = ({
                   resizeMode="contain"
                 />
               </View>
-              <Text style={styles.heroTagline} numberOfLines={1} adjustsFontSizeToFit>
-                The smart way to lift the weight off your shoulders.
-              </Text>
             </View>
             
             {/* Gender Section - Above username */}

@@ -10,7 +10,7 @@ export const ONBOARDING_PROGRESS_CONFIG: Record<OnboardingPhase, PhaseProgressCo
     durationMs: 1000,
   },
   initial: {
-    durationMs: 11000,
+    durationMs: 5000,
   },
   // follow-up phase removed
   plan: {
