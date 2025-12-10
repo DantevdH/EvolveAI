@@ -22,6 +22,7 @@ from app.helpers.exercise.exercise_selector import ExerciseSelector
 from app.helpers.exercise.exercise_validator import ExerciseValidator
 from app.services.database_service import db_service
 from app.helpers.ai.prompt_generator import PromptGenerator
+from app.helpers.prompts.formatting_helpers import format_current_week_readable
 from app.helpers.utils.mock_data import create_mock_training_plan
 from app.helpers.ai.llm_client import LLMClient
 
@@ -163,7 +164,7 @@ class TrainingAgent(BaseAgent):
     ) -> Dict[str, Any]:
         """Update an existing week based on user feedback (returns updated week only)."""
         try:
-            week_summary = PromptGenerator.format_current_plan_summary({"weekly_schedules": [current_week]})
+            week_readable = format_current_week_readable(current_week)
 
             conversation_history_str = None
             if conversation_history and len(conversation_history) > 0:
@@ -186,7 +187,7 @@ class TrainingAgent(BaseAgent):
                 personal_info=personal_info,
                 feedback_message=feedback_message,
                 week_number=week_number,
-                current_week_summary=week_summary,
+                current_week_summary=week_readable,
                 user_playbook=user_playbook,
                 include_bodyweight_strength=include_bodyweight_strength,
                 include_equipment_strength=include_equipment_strength,
@@ -283,9 +284,7 @@ class TrainingAgent(BaseAgent):
             self.logger.info("Calculated next_week_number: %s from %s existing weeks", next_week_number, len(existing_weekly_schedules))
 
             completed_weeks = existing_weekly_schedules
-            completed_weeks_context = PromptGenerator.format_current_plan_summary(
-                {"weekly_schedules": completed_weeks}
-            )
+            most_recent_week_readable = format_current_week_readable(completed_weeks[-1])
 
             active_lessons = playbook.get_active_lessons(min_confidence=0.3) if playbook else []
             playbook_lessons_dict = (
@@ -312,7 +311,7 @@ class TrainingAgent(BaseAgent):
             rationale = "Default modalities: strength + endurance (modality selection disabled)."
             prompt = PromptGenerator.create_new_weekly_schedule_prompt(
                 personal_info=personal_info,
-                completed_weeks_context=completed_weeks_context,
+                completed_weeks_context=most_recent_week_readable,
                 progress_summary="",
                 playbook_lessons=playbook_lessons_dict,
                 include_bodyweight_strength=include_bodyweight_strength,
@@ -394,9 +393,12 @@ class TrainingAgent(BaseAgent):
             )
             start_week_number = last_week_number + 1
 
-            completed_summary = PromptGenerator.format_current_plan_summary(
-                {"weekly_schedules": weekly_schedules}
-            )
+            completed_readables = [
+                format_current_week_readable(week)
+                for week in weekly_schedules
+                if format_current_week_readable(week)
+            ]
+            completed_summary = "\n\n".join(completed_readables)
 
             prompt = PromptGenerator.generate_future_week_outline_prompt(
                 personal_info=personal_info,

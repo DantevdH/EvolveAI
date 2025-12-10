@@ -25,7 +25,6 @@ from app.agents.base_agent import BaseAgent
 from app.services.rag_service import RAGService
 from app.helpers.ai.llm_client import LLMClient
 from app.services.database_service import db_service
-from settings import settings
 
 
 class Curator(BaseAgent):
@@ -235,8 +234,8 @@ class Curator(BaseAgent):
                 - Include created_at, last_used_at (current timestamp if newly used)
                 - Include source_plan_id if provided
                 - **Set requires_context field**: Determine if this lesson can be backed by documentation/knowledge base
-                  - If lesson involves training methodologies, best practices, or general principles that can be found in knowledge base → set `requires_context="context"`
-                  - If lesson is user-specific preference/constraint that cannot be backed by documentation → set `requires_context="not_found"`
+                  - If lesson involves training methodologies, best practices, or general principles that can be found in knowledge base → set `requires_context=True`
+                  - If lesson is user-specific preference/constraint that cannot be backed by documentation → set `requires_context=False`
                 - Set total_lessons to the count of final lessons
                 - Provide reasoning explaining what was added, merged, removed, and why
 
@@ -365,7 +364,7 @@ class Curator(BaseAgent):
         """
         Enrich playbook lessons with validated context from knowledge base.
         
-        This method runs AFTER curation and processes lessons with requires_context="context"
+        This method runs AFTER curation and processes lessons with requires_context=True
         to retrieve and validate relevant context from the knowledge base.
         
         Args:
@@ -375,12 +374,6 @@ class Curator(BaseAgent):
         Returns:
             UserPlaybook with context field populated for lessons that require it
         """
-        if not settings.PLAYBOOK_CONTEXT_MATCHING_ENABLED:
-            self.logger.info(
-                "Playbook context enrichment disabled via configuration flag. Skipping knowledge base matching."
-            )
-            return playbook
-
         # Use self.rag_service if no rag_service provided
         if not rag_service:
             rag_service = self.rag_service
@@ -395,7 +388,7 @@ class Curator(BaseAgent):
             # Filter lessons that require context
             lessons_requiring_context = [
                 lesson for lesson in playbook.lessons 
-                if lesson.requires_context == "context"
+                if lesson.requires_context is True
             ]
             
             if not lessons_requiring_context:
@@ -446,16 +439,18 @@ class Curator(BaseAgent):
             # Return playbook unchanged on error
             return playbook
 
-    def mark_lessons_as_applied(
-        self, playbook: UserPlaybook, applied_lesson_ids: List[str]
+    async def mark_lessons_as_applied(
+        self, playbook: UserPlaybook, applied_lesson_ids: List[str], user_profile_id: Optional[int] = None
     ) -> UserPlaybook:
         """
         Mark lessons as having been applied during plan generation.
         Increments times_applied counter and updates last_used_at.
+        Also persists updates to database.
 
         Args:
             playbook: User's playbook
             applied_lesson_ids: IDs of lessons that were used in plan generation
+            user_profile_id: Optional user profile ID for database persistence
 
         Returns:
             Updated UserPlaybook
@@ -467,18 +462,32 @@ class Curator(BaseAgent):
                 self.logger.info(
                     f"Lesson {lesson.id} applied (total: {lesson.times_applied}x)"
                 )
+                
+                # Persist to database if user_profile_id provided
+                if user_profile_id:
+                    try:
+                        await db_service.update_lesson_usage(
+                            lesson_id=lesson.id,
+                            user_profile_id=user_profile_id,
+                            times_applied=lesson.times_applied,
+                            last_used_at=lesson.last_used_at,
+                        )
+                    except Exception as e:
+                        self.logger.error(f"Error persisting lesson usage for {lesson.id}: {e}")
 
         return playbook
 
-    def update_lesson_effectiveness(
-        self, lesson: PlaybookLesson, was_helpful: bool
+    async def update_lesson_effectiveness(
+        self, lesson: PlaybookLesson, was_helpful: bool, user_profile_id: Optional[int] = None
     ) -> PlaybookLesson:
         """
         Update a lesson's effectiveness counters based on outcome.
+        Also persists updates to database.
 
         Args:
             lesson: The lesson to update
             was_helpful: True if the lesson led to good outcomes, False otherwise
+            user_profile_id: Optional user profile ID for database persistence
 
         Returns:
             Updated PlaybookLesson
@@ -496,6 +505,19 @@ class Curator(BaseAgent):
             lesson.confidence = (lesson.confidence * 0.3) + (success_rate * 0.7)
 
         lesson.last_used_at = datetime.utcnow().isoformat()
+        
+        # Persist to database if user_profile_id provided
+        if user_profile_id:
+            try:
+                await db_service.update_lesson_effectiveness(
+                    lesson_id=lesson.id,
+                    user_profile_id=user_profile_id,
+                    helpful_count=lesson.helpful_count,
+                    harmful_count=lesson.harmful_count,
+                    confidence=lesson.confidence,
+                )
+            except Exception as e:
+                self.logger.error(f"Error persisting lesson effectiveness for {lesson.id}: {e}")
 
         return lesson
 

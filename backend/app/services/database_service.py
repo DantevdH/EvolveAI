@@ -648,11 +648,11 @@ class DatabaseService:
                 "updated_at": datetime.utcnow().isoformat(),
             }
 
-            # Note: user_playbook is stored in user_profiles, not training_plans
+            # Note: user_playbook lessons are stored in lessons table, not training_plans
             # Plans reference the user's playbook via user_profile_id FK
             if user_playbook:
                 self.logger.info(
-                    f"📘 User has playbook with {len(user_playbook.get('lessons', []))} lessons (stored in user_profiles)"
+                    f"📘 User has playbook with {len(user_playbook.get('lessons', []))} lessons (stored in lessons table)"
                 )
 
             # Insert the training plan
@@ -1418,7 +1418,7 @@ class DatabaseService:
         self, user_profile_id: int, jwt_token: Optional[str] = None
     ):
         """
-        Load a user's playbook from their profile.
+        Load a user's playbook from the lessons table.
 
         Args:
             user_profile_id: The user profile identifier
@@ -1428,7 +1428,7 @@ class DatabaseService:
             UserPlaybook object or empty playbook if not found
         """
         try:
-            from app.schemas.playbook_schemas import UserPlaybook
+            from app.schemas.playbook_schemas import UserPlaybook, PlaybookLesson
 
             # Use authenticated client if JWT token is provided
             if jwt_token:
@@ -1437,32 +1437,60 @@ class DatabaseService:
                 # Use service role key for server-side operations
                 supabase_client = self._create_supabase_client(use_service_role=True)
 
-            # Get user_playbook from user_profiles table
+            # Get all lessons from lessons table for this user
             result = (
-                supabase_client.table("user_profiles")
-                .select("user_playbook")
-                .eq("id", user_profile_id)
+                supabase_client.table("lessons")
+                .select("*")
+                .eq("user_profile_id", user_profile_id)
+                .order("created_at")
                 .execute()
             )
 
             if result.data and len(result.data) > 0:
-                playbook_data = result.data[0].get("user_playbook")
+                # Convert database rows to PlaybookLesson objects
+                lessons = []
+                for row in result.data:
+                    # Convert requires_context from boolean to match schema
+                    lesson_data = {
+                        "id": row.get("lesson_id"),
+                        "text": row.get("text"),
+                        "tags": row.get("tags", []),
+                        "positive": row.get("positive", True),
+                        "confidence": row.get("confidence", 0.5),
+                        "requires_context": row.get("requires_context", False),
+                        "context": row.get("context"),
+                        "helpful_count": row.get("helpful_count", 0),
+                        "harmful_count": row.get("harmful_count", 0),
+                        "times_applied": row.get("times_applied", 0),
+                        "last_used_at": row.get("last_used_at"),
+                        "source_plan_id": row.get("source_plan_id"),
+                        "created_at": row.get("created_at"),
+                    }
+                    lessons.append(PlaybookLesson(**lesson_data))
 
-                if playbook_data:
-                    # Parse JSON if it's a string
-                    if isinstance(playbook_data, str):
-                        playbook_data = json.loads(playbook_data)
+                # Get last_updated from most recent lesson's updated_at
+                # Sort by updated_at descending to get most recent
+                sorted_data = sorted(result.data, key=lambda x: x.get("updated_at", ""), reverse=True)
+                last_updated = (
+                    sorted_data[0].get("updated_at")
+                    if sorted_data and sorted_data[0].get("updated_at")
+                    else datetime.utcnow().isoformat()
+                )
 
-                    # Create UserPlaybook object
-                    playbook = UserPlaybook(**playbook_data)
-                    self.logger.info(
-                        f"Loaded playbook for user_profile {user_profile_id} with {len(playbook.lessons)} lessons"
-                    )
-                    return playbook
+                playbook = UserPlaybook(
+                    user_id=str(user_profile_id),
+                    lessons=lessons,
+                    total_lessons=len(lessons),
+                    last_updated=last_updated,
+                )
+                self.logger.info(
+                    f"Loaded playbook for user_profile {user_profile_id} with {len(playbook.lessons)} lessons"
+                )
+                return playbook
 
-            # No playbook found - create new empty one
+            # No lessons found - create new empty playbook
             self.logger.info(
-                f"No playbook found for user_profile {user_profile_id}, creating new one"
+                f"No lessons found for user_profile {user_profile_id}, creating new empty playbook"
             )
             return UserPlaybook(
                 user_id=str(user_profile_id), lessons=[], total_lessons=0
@@ -1480,19 +1508,22 @@ class DatabaseService:
         user_profile_id: int,
         playbook_data: Dict[str, Any],
         jwt_token: Optional[str] = None,
-    ) -> bool:
+    ) -> Dict[str, Any]:
         """
-        Save a user's playbook to their profile.
+        Save a user's playbook to the lessons table.
+        Performs upsert operations: inserts new lessons, updates existing ones, deletes removed ones.
 
         Args:
-            user_profile_id: The user profile ID to update
+            user_profile_id: The user profile ID
             playbook_data: The UserPlaybook data as dictionary
             jwt_token: Optional JWT token for authentication
 
         Returns:
-            True if successful, False otherwise
+            Dict with success status
         """
         try:
+            from app.schemas.playbook_schemas import UserPlaybook, PlaybookLesson
+
             # Use authenticated client if JWT token is provided
             if jwt_token:
                 supabase_client = self._get_authenticated_client(jwt_token)
@@ -1500,33 +1531,328 @@ class DatabaseService:
                 # Use service role key for server-side operations
                 supabase_client = self._create_supabase_client(use_service_role=True)
 
-            # Convert playbook to JSON if not already a string
+            # Parse playbook data if needed
             if isinstance(playbook_data, dict):
-                playbook_json = json.dumps(playbook_data)
+                if "lessons" in playbook_data:
+                    lessons_data = playbook_data["lessons"]
+                else:
+                    lessons_data = []
             else:
-                playbook_json = playbook_data
+                # Assume it's a UserPlaybook object
+                lessons_data = playbook_data.lessons if hasattr(playbook_data, "lessons") else []
 
-            # Update the user_profiles table with playbook
-            result = (
-                supabase_client.table("user_profiles")
-                .update({"user_playbook": playbook_json})
-                .eq("id", user_profile_id)
+            # Get existing lesson IDs from database
+            existing_result = (
+                supabase_client.table("lessons")
+                .select("lesson_id")
+                .eq("user_profile_id", user_profile_id)
+                .execute()
+            )
+            existing_lesson_ids = {row["lesson_id"] for row in (existing_result.data or [])}
+
+            # Process each lesson: insert or update
+            new_lesson_ids = set()
+            for lesson_data in lessons_data:
+                # Handle both dict and PlaybookLesson object
+                if isinstance(lesson_data, dict):
+                    lesson = PlaybookLesson(**lesson_data)
+                else:
+                    lesson = lesson_data
+
+                new_lesson_ids.add(lesson.id)
+
+                # Prepare lesson data for database
+                # Use current time if created_at not set
+                created_at = lesson.created_at if lesson.created_at else datetime.utcnow().isoformat()
+                
+                lesson_row = {
+                    "lesson_id": lesson.id,
+                    "user_profile_id": user_profile_id,
+                    "text": lesson.text,
+                    "tags": lesson.tags,
+                    "positive": lesson.positive,
+                    "confidence": lesson.confidence,
+                    "requires_context": lesson.requires_context,
+                    "context": lesson.context,
+                    "helpful_count": lesson.helpful_count,
+                    "harmful_count": lesson.harmful_count,
+                    "times_applied": lesson.times_applied,
+                    "last_used_at": lesson.last_used_at,
+                    "source_plan_id": lesson.source_plan_id,
+                    "created_at": created_at,
+                    "updated_at": datetime.utcnow().isoformat(),
+                }
+
+                # Upsert lesson (insert or update on conflict)
+                # Check if lesson exists
+                existing = (
+                    supabase_client.table("lessons")
+                    .select("id")
+                    .eq("lesson_id", lesson.id)
+                    .eq("user_profile_id", user_profile_id)
+                    .execute()
+                )
+                
+                if existing.data and len(existing.data) > 0:
+                    # Update existing lesson
+                    supabase_client.table("lessons").update(lesson_row).eq(
+                        "lesson_id", lesson.id
+                    ).eq("user_profile_id", user_profile_id).execute()
+                else:
+                    # Insert new lesson
+                    supabase_client.table("lessons").insert(lesson_row).execute()
+
+            # Delete lessons that are no longer in the playbook
+            lessons_to_delete = existing_lesson_ids - new_lesson_ids
+            if lessons_to_delete:
+                for lesson_id in lessons_to_delete:
+                    supabase_client.table("lessons").delete().eq(
+                        "lesson_id", lesson_id
+                    ).eq("user_profile_id", user_profile_id).execute()
+
+            lessons_count = len(lessons_data)
+            self.logger.info(
+                f"Saved playbook with {lessons_count} lessons to user_profile {user_profile_id} "
+                f"(inserted/updated: {len(new_lesson_ids)}, deleted: {len(lessons_to_delete)})"
+            )
+
+            return {"success": True}
+
+        except Exception as e:
+            self.logger.error(f"Error saving user playbook: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
+    async def upsert_lesson(
+        self,
+        lesson: Any,
+        user_profile_id: int,
+        jwt_token: Optional[str] = None,
+    ) -> bool:
+        """
+        Insert or update a single lesson in the lessons table.
+
+        Args:
+            lesson: PlaybookLesson object or dict
+            user_profile_id: The user profile ID
+            jwt_token: Optional JWT token for authentication
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            from app.schemas.playbook_schemas import PlaybookLesson
+
+            # Use authenticated client if JWT token is provided
+            if jwt_token:
+                supabase_client = self._get_authenticated_client(jwt_token)
+            else:
+                supabase_client = self._create_supabase_client(use_service_role=True)
+
+            # Convert to PlaybookLesson if needed
+            if isinstance(lesson, dict):
+                lesson_obj = PlaybookLesson(**lesson)
+            else:
+                lesson_obj = lesson
+
+            # Use current time if created_at not set
+            created_at = lesson_obj.created_at if lesson_obj.created_at else datetime.utcnow().isoformat()
+
+            lesson_row = {
+                "lesson_id": lesson_obj.id,
+                "user_profile_id": user_profile_id,
+                "text": lesson_obj.text,
+                "tags": lesson_obj.tags,
+                "positive": lesson_obj.positive,
+                "confidence": lesson_obj.confidence,
+                "requires_context": lesson_obj.requires_context,
+                "context": lesson_obj.context,
+                "helpful_count": lesson_obj.helpful_count,
+                "harmful_count": lesson_obj.harmful_count,
+                "times_applied": lesson_obj.times_applied,
+                "last_used_at": lesson_obj.last_used_at,
+                "source_plan_id": lesson_obj.source_plan_id,
+                "created_at": created_at,
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+
+            # Check if lesson exists
+            existing = (
+                supabase_client.table("lessons")
+                .select("id")
+                .eq("lesson_id", lesson_obj.id)
+                .eq("user_profile_id", user_profile_id)
                 .execute()
             )
 
-            lessons_count = (
-                playbook_data.get("total_lessons", 0)
-                if isinstance(playbook_data, dict)
-                else 0
-            )
-            self.logger.info(
-                f"Saved playbook with {lessons_count} lessons to user_profile {user_profile_id}"
-            )
+            if existing.data and len(existing.data) > 0:
+                # Update existing lesson
+                supabase_client.table("lessons").update(lesson_row).eq(
+                    "lesson_id", lesson_obj.id
+                ).eq("user_profile_id", user_profile_id).execute()
+            else:
+                # Insert new lesson
+                supabase_client.table("lessons").insert(lesson_row).execute()
 
             return True
 
         except Exception as e:
-            self.logger.error(f"Error saving user playbook: {e}")
+            self.logger.error(f"Error upserting lesson: {e}")
+            return False
+
+    async def update_lesson_context(
+        self,
+        lesson_id: str,
+        user_profile_id: int,
+        context: str,
+        jwt_token: Optional[str] = None,
+    ) -> bool:
+        """
+        Update only the context field of a lesson.
+
+        Args:
+            lesson_id: The lesson ID
+            user_profile_id: The user profile ID
+            context: The context string to set
+            jwt_token: Optional JWT token for authentication
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if jwt_token:
+                supabase_client = self._get_authenticated_client(jwt_token)
+            else:
+                supabase_client = self._create_supabase_client(use_service_role=True)
+
+            supabase_client.table("lessons").update({
+                "context": context,
+                "updated_at": datetime.utcnow().isoformat(),
+            }).eq("lesson_id", lesson_id).eq(
+                "user_profile_id", user_profile_id
+            ).execute()
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error updating lesson context: {e}")
+            return False
+
+    async def update_lesson_usage(
+        self,
+        lesson_id: str,
+        user_profile_id: int,
+        times_applied: int,
+        last_used_at: str,
+        jwt_token: Optional[str] = None,
+    ) -> bool:
+        """
+        Update usage tracking fields of a lesson.
+
+        Args:
+            lesson_id: The lesson ID
+            user_profile_id: The user profile ID
+            times_applied: New times_applied count
+            last_used_at: ISO timestamp string
+            jwt_token: Optional JWT token for authentication
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if jwt_token:
+                supabase_client = self._get_authenticated_client(jwt_token)
+            else:
+                supabase_client = self._create_supabase_client(use_service_role=True)
+
+            supabase_client.table("lessons").update({
+                "times_applied": times_applied,
+                "last_used_at": last_used_at,
+                "updated_at": datetime.utcnow().isoformat(),
+            }).eq("lesson_id", lesson_id).eq(
+                "user_profile_id", user_profile_id
+            ).execute()
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error updating lesson usage: {e}")
+            return False
+
+    async def update_lesson_effectiveness(
+        self,
+        lesson_id: str,
+        user_profile_id: int,
+        helpful_count: int,
+        harmful_count: int,
+        confidence: float,
+        jwt_token: Optional[str] = None,
+    ) -> bool:
+        """
+        Update effectiveness counters of a lesson.
+
+        Args:
+            lesson_id: The lesson ID
+            user_profile_id: The user profile ID
+            helpful_count: New helpful_count
+            harmful_count: New harmful_count
+            confidence: New confidence value
+            jwt_token: Optional JWT token for authentication
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if jwt_token:
+                supabase_client = self._get_authenticated_client(jwt_token)
+            else:
+                supabase_client = self._create_supabase_client(use_service_role=True)
+
+            supabase_client.table("lessons").update({
+                "helpful_count": helpful_count,
+                "harmful_count": harmful_count,
+                "confidence": confidence,
+                "updated_at": datetime.utcnow().isoformat(),
+            }).eq("lesson_id", lesson_id).eq(
+                "user_profile_id", user_profile_id
+            ).execute()
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error updating lesson effectiveness: {e}")
+            return False
+
+    async def delete_lesson(
+        self,
+        lesson_id: str,
+        user_profile_id: int,
+        jwt_token: Optional[str] = None,
+    ) -> bool:
+        """
+        Delete a lesson from the lessons table.
+
+        Args:
+            lesson_id: The lesson ID
+            user_profile_id: The user profile ID
+            jwt_token: Optional JWT token for authentication
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if jwt_token:
+                supabase_client = self._get_authenticated_client(jwt_token)
+            else:
+                supabase_client = self._create_supabase_client(use_service_role=True)
+
+            supabase_client.table("lessons").delete().eq(
+                "lesson_id", lesson_id
+            ).eq("user_profile_id", user_profile_id).execute()
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error deleting lesson: {e}")
             return False
 
     async def get_insights_summary_cache(

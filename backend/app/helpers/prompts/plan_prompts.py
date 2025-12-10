@@ -245,11 +245,6 @@ def create_new_weekly_schedule_prompt(
     **USER PROGRESS SUMMARY:**
     {progress_summary}
     
-    **IMPORTANT:** Use this context to:
-    • Progressively adjust volume/intensity based on what they've completed
-    • Incorporate lessons learned from their training history (playbook)
-    • Maintain consistency while introducing appropriate variation
-    • Respect their constraints and preferences (from playbook)
     """
     
     ai_message_section = f"""

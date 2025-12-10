@@ -118,11 +118,6 @@ class Settings:
         """Whether to fallback to free tier when premium fails"""
         return os.getenv("FALLBACK_TO_FREE", "true").lower() == "true"
     
-    @property
-    def PLAYBOOK_CONTEXT_MATCHING_ENABLED(self) -> bool:
-        """Whether playbook context matching is enabled"""
-        return os.getenv("PLAYBOOK_CONTEXT_MATCHING_ENABLED", "false").lower() == "true"
-
     # Development Configuration
     @property
     def DEBUG(self) -> bool:

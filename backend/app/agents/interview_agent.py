@@ -314,6 +314,102 @@ class InterviewAgent(BaseAgent):
                 "ai_message": "I'm having trouble understanding your feedback. Could you please be more specific?",
             }
 
+    async def generate_rag_answer(
+        self,
+        user_query: str,
+        training_plan: Dict[str, Any] = None,
+        conversation_history: List[Dict[str, str]] = None,
+        current_week: Dict[str, Any] = None,
+        playbook: Any = None,
+        personal_info: PersonalInfo = None,
+    ) -> str:
+        """
+        Generate an answer to a user question using RAG (Retrieval-Augmented Generation).
+        
+        This method retrieves relevant context from the knowledge base and generates
+        a comprehensive answer. Used for question intents after fast classification.
+        Always includes current week and playbook context when available.
+        
+        Args:
+            user_query: The user's question
+            training_plan: Optional training plan context
+            conversation_history: Optional conversation history for context
+            current_week: Current week data from training plan (required for chat interface)
+            playbook: User's playbook with lessons and context (required for chat interface)
+            personal_info: User's personal information (required for chat interface)
+            
+        Returns:
+            Generated answer string with RAG context
+        """
+        try:
+            self.logger.info(f"🔍 Generating RAG answer for question: {user_query[:50]}...")
+            
+            # Retrieve relevant documents from knowledge base
+            relevant_docs = self.rag_service.search_knowledge_base(
+                query=user_query,
+                max_results=5,
+                metadata_filters=None
+            )
+            
+            if not relevant_docs:
+                self.logger.warning("No relevant documents found in knowledge base")
+                # Fallback response without RAG
+                return self._generate_fallback_response(user_query)
+            
+            self.logger.info(f"📚 Retrieved {len(relevant_docs)} relevant documents")
+            
+            # Build additional context (always include current_week and playbook for chat interface)
+            context = {}
+            if current_week:
+                context["current_week"] = current_week
+            if playbook:
+                context["playbook"] = playbook
+            if personal_info:
+                context["personal_info"] = personal_info
+            if training_plan:
+                context["training_plan"] = training_plan
+            if conversation_history:
+                context["conversation_history"] = conversation_history
+            
+            # Generate response using RAG with best-practice prompt
+            response = self.rag_service.generate_response(
+                user_query=user_query,
+                context_documents=relevant_docs,
+                context=context
+            )
+            
+            # Format response (keep it concise, max 40 words as per constraints)
+            # The RAG service already generates a comprehensive response, but we'll ensure it's concise
+            formatted_response = self._format_concise_response(response, user_query)
+            
+            self.logger.info("✅ RAG answer generated successfully")
+            return formatted_response
+            
+        except Exception as e:
+            self.logger.error(f"Error generating RAG answer: {str(e)}", exc_info=True)
+            return self._generate_error_response(user_query)
+    
+    def _format_concise_response(self, response: str, user_query: str) -> str:
+        """
+        Format RAG response to be concise (max ~40 words) while maintaining helpfulness.
+        """
+        # Split into sentences
+        sentences = response.split('. ')
+        
+        # Take first 2-3 sentences (usually covers the answer)
+        if len(sentences) > 3:
+            concise = '. '.join(sentences[:3])
+            if not concise.endswith('.'):
+                concise += '.'
+        else:
+            concise = response
+        
+        # Ensure it ends with engagement
+        if not any(phrase in concise.lower() for phrase in ['?', 'ready', 'adjust', 'help', 'anything']):
+            concise += " Anything else you'd like to know?"
+        
+        return concise
+
     # ------------------------------------------------------------------ #
     # Formatting helpers
     # ------------------------------------------------------------------ #

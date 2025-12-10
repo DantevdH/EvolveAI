@@ -46,7 +46,7 @@ export interface PlaybookLesson {
   created_at: string;
   last_used_at?: string | null;
   source_plan_id?: string | null;
-  requires_context?: string | null; // 'context' or 'not_found' - whether lesson requires knowledge base context
+  requires_context?: boolean; // Whether lesson requires knowledge base context
   context?: string | null; // Validated context from knowledge base, or 'context not found'
 }
 

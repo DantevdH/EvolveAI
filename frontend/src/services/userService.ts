@@ -227,22 +227,53 @@ export class UserService {
       if (user_profiles && user_profiles.length > 0) {
         const rawProfile = user_profiles[0];
         
-        // Parse playbook if it exists
+        // Load playbook from lessons table
         let playbook = null;
-        if (rawProfile.user_playbook) {
-          try {
-            const playbookData = typeof rawProfile.user_playbook === 'string' 
-              ? JSON.parse(rawProfile.user_playbook) 
-              : rawProfile.user_playbook;
+        try {
+          const { data: lessons, error: lessonsError } = await supabase
+            .from('lessons')
+            .select('*')
+            .eq('user_profile_id', rawProfile.id)
+            .order('created_at', { ascending: true });
+
+          if (lessonsError) {
+            console.warn('Failed to load lessons:', lessonsError);
+          } else if (lessons && lessons.length > 0) {
+            // Convert database lessons to PlaybookLesson format
+            const playbookLessons = lessons.map((lesson: any) => ({
+              id: lesson.lesson_id,
+              text: lesson.text,
+              tags: lesson.tags || [],
+              helpful_count: lesson.helpful_count || 0,
+              harmful_count: lesson.harmful_count || 0,
+              times_applied: lesson.times_applied || 0,
+              confidence: lesson.confidence || 0.5,
+              positive: lesson.positive !== undefined ? lesson.positive : true,
+              created_at: lesson.created_at,
+              last_used_at: lesson.last_used_at,
+              source_plan_id: lesson.source_plan_id,
+              requires_context: lesson.requires_context || false,
+              context: lesson.context,
+            }));
+
+            // Get last_updated from most recent lesson's updated_at
+            const sortedLessons = [...lessons].sort((a: any, b: any) => {
+              const aTime = a.updated_at || a.created_at || '';
+              const bTime = b.updated_at || b.created_at || '';
+              return bTime.localeCompare(aTime);
+            });
+            const last_updated = sortedLessons[0]?.updated_at || sortedLessons[0]?.created_at || new Date().toISOString();
+
             playbook = {
-              user_id: playbookData.user_id || String(rawProfile.id),
-              lessons: playbookData.lessons || [],
-              total_lessons: playbookData.total_lessons || (playbookData.lessons?.length || 0),
-              last_updated: playbookData.last_updated || playbookData.lastUpdated || new Date().toISOString(),
+              user_id: String(rawProfile.id),
+              lessons: playbookLessons,
+              total_lessons: playbookLessons.length,
+              last_updated: last_updated,
             };
-          } catch (error) {
-            // Playbook parsing failed, continue without it
           }
+        } catch (error) {
+          console.warn('Error loading playbook from lessons table:', error);
+          // Continue without playbook if loading fails
         }
         
         // Map database fields (snake_case) to frontend interface (camelCase)
@@ -262,6 +293,8 @@ export class UserService {
           // Raw questions and responses (for consistency)
           initial_questions: convertToAIQuestions(rawProfile.initial_questions),
           initial_responses: rawProfile.initial_responses || null,
+          // Onboarding completion flag
+          information_complete: rawProfile.information_complete === true,
           
           // AI messages from database
           initial_ai_message: extractAIMessage(rawProfile.initial_questions),
@@ -313,6 +346,7 @@ export class UserService {
       if (updates.height !== undefined) updateData.height = updates.height;
       if (updates.heightUnit !== undefined) updateData.height_unit = updates.heightUnit;
       if (updates.gender !== undefined) updateData.gender = updates.gender;
+      if (updates.information_complete !== undefined) updateData.information_complete = updates.information_complete;
       if (updates.planAccepted !== undefined) updateData.plan_accepted = updates.planAccepted;
 
       const { data, error } = await supabase

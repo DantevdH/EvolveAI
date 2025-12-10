@@ -126,6 +126,22 @@ app.include_router(insights_router)
 app.include_router(playbook_router)
 
 
+# Startup event: Pre-load models and initialize services
+@app.on_event("startup")
+async def startup_event():
+    """Initialize services and pre-load models at application startup."""
+    logger.info("🚀 Starting EvolveAI backend services...")
+    
+    # Pre-load the RAG re-ranker model
+    try:
+        from app.services.rag_service import ReRanker
+        ReRanker.preload()
+    except Exception as e:
+        logger.warning(f"⚠️  Failed to pre-load re-ranker model: {e}. Will use lazy loading.")
+    
+    logger.info("✓ Startup initialization complete")
+
+
 @app.get("/")
 async def root():
     """Health check endpoint."""

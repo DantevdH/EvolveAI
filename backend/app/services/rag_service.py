@@ -1,17 +1,16 @@
 """
-RAG Tool for Advanced Document Retrieval
+RAG Service for Advanced Document Retrieval
 
-This tool provides sophisticated RAG capabilities including:
-- Multi-stage filtering (metadata + vector search)
-- Hybrid search (semantic + keyword)
-- Re-ranking for better relevance
-- Context augmentation
+This service provides production-grade RAG capabilities including:
+- Two-stage retrieval (cosine similarity → re-ranker)
+- Hybrid search (semantic + metadata filtering)
+- zerank-1-small re-ranker for state-of-the-art precision
+- Context validation with LLM
 - Embedding generation (OpenAI/Gemini)
 """
 
 import os
-import re
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional
 
 import openai
 
@@ -40,26 +39,208 @@ except ImportError:
         )
 
 
+# =============================================================================
+# Re-Ranker Class (Lightweight FlagEmbedding model)
+# =============================================================================
+
+class ReRanker:
+    """
+    Lazy-loaded cross-encoder reranker for production-quality results.
+
+    Default model: BAAI/bge-reranker-v2-m3
+    - Lightweight; good quality vs. resource usage
+    - Multilingual capable; friendlier to CPU / modest GPUs than prior model
+    - Loads via sentence-transformers CrossEncoder
+
+    Security Notes:
+    - trust_remote_code=False for this model (standard HF code)
+    - For production: Pre-download models during deployment (see scripts/download_models.py)
+    - Consider: Using a private model registry for maximum security
+    - Model is cached after first download
+    """
+
+    _model = None
+    _available = None
+    _logger = get_logger(__name__)
+    MODEL_NAME = "BAAI/bge-reranker-base"
+
+    @classmethod
+    def is_available(cls) -> bool:
+        """Check if re-ranker can be loaded."""
+        if cls._available is None:
+            try:
+                from sentence_transformers import CrossEncoder  # noqa: F401
+                cls._available = True
+                cls._logger.info(f"{cls.MODEL_NAME} reranker is available")
+            except ImportError:
+                cls._available = False
+                cls._logger.warning(
+                    "sentence-transformers not installed. Re-ranking disabled. "
+                    "Install with: pip install sentence-transformers"
+                )
+        return cls._available
+
+    @classmethod
+    def _get_device(cls):
+        """Use explicit override or default to CPU (safer for lightweight testing)."""
+        env_device = os.getenv("RERANK_DEVICE")
+        if env_device:
+            return env_device
+        # Default to CPU to mirror the minimal test script and avoid GPU OOMs
+        return "cpu"
+
+    @classmethod
+    def get_model(cls):
+        """Lazy load the re-ranker model."""
+        if cls._model is None and cls.is_available():
+            try:
+                from sentence_transformers import CrossEncoder
+                cls._logger.info(f"Loading {cls.MODEL_NAME} model (this may take a few seconds)...")
+                
+                # Get the appropriate device
+                device = cls._get_device()
+                cls._logger.debug(f"Using device: {device}")
+                
+                # Initialize CrossEncoder with explicit device to avoid device_map issues
+                # By explicitly setting device, we prevent the library from trying to use
+                # device_map which requires accelerate. The device parameter is sufficient.
+                cls._model = CrossEncoder(
+                    cls.MODEL_NAME,
+                    trust_remote_code=False,
+                    device=device,
+                )
+                cls._logger.info(f"{cls.MODEL_NAME} model loaded successfully")
+            except Exception as e:
+                # If device parameter causes issues, try without it as fallback
+                if "device" in str(e).lower() or "device_map" in str(e).lower():
+                    cls._logger.warning(f"Device specification failed: {e}. Trying without explicit device...")
+                    try:
+                        cls._model = CrossEncoder(
+                            cls.MODEL_NAME,
+                            trust_remote_code=False
+                        )
+                        cls._logger.info(f"{cls.MODEL_NAME} model loaded successfully (without explicit device)")
+                    except Exception as e2:
+                        cls._logger.error(f"Failed to load re-ranker model: {e2}")
+                        cls._available = False
+                else:
+                    cls._logger.error(f"Failed to load re-ranker model: {e}")
+                    cls._available = False
+        return cls._model
+
+    @classmethod
+    def preload(cls):
+        """Pre-load the model at application startup."""
+        if cls.is_available():
+            cls._logger.info(f"Pre-loading {cls.MODEL_NAME} re-ranker model at startup...")
+            model = cls.get_model()
+            if model is not None:
+                cls._logger.info("✓ Re-ranker model pre-loaded successfully")
+            else:
+                cls._logger.warning("⚠ Re-ranker model pre-loading failed, will use lazy loading")
+        else:
+            cls._logger.info("Re-ranker not available, skipping pre-load")
+
+    @classmethod
+    def rerank(
+        cls,
+        query: str,
+        documents: List[Dict[str, Any]],
+        top_k: int = 5,
+        text_key: str = "chunk_text"
+    ) -> List[Dict[str, Any]]:
+        """
+        Re-rank documents using FlagEmbedding lightweight reranker.
+
+        Args:
+            query: Search query
+            documents: List of document dicts with chunk_text
+            top_k: Number of top results to return
+            text_key: Key containing text to score
+
+        Returns:
+            Top-k documents sorted by reranker score
+        """
+        if not documents:
+            return []
+
+        model = cls.get_model()
+        if model is None:
+            # Fallback: return documents as-is (already sorted by cosine similarity)
+            cls._logger.debug("Re-ranker unavailable, using cosine similarity ranking")
+            return documents[:top_k]
+
+        try:
+            # Create query-document pairs
+            pairs = [(query, doc.get(text_key, "")) for doc in documents]
+
+            # Predict similarity scores with CrossEncoder (compute_score not available)
+            scores = model.predict(pairs)
+
+            # Normalize scores to a flat python list to avoid numpy scalar/shape issues
+            try:
+                import numpy as np
+
+                scores = np.asarray(scores).reshape(-1).tolist()
+            except Exception:
+                if not isinstance(scores, (list, tuple)):
+                    scores = [scores]
+
+            # Add reranker scores to documents
+            for doc, score in zip(documents, scores):
+                doc["rerank_score"] = float(score)
+
+            # Sort by reranker score and return top-k
+            sorted_docs = sorted(
+                documents,
+                key=lambda x: x.get("rerank_score", 0),
+                reverse=True
+            )
+
+            cls._logger.debug(
+                f"Re-ranked {len(documents)} documents. "
+                f"Top score: {sorted_docs[0].get('rerank_score', 0):.3f}"
+            )
+            return sorted_docs[:top_k]
+
+        except Exception as e:
+            cls._logger.error(f"Re-ranking failed: {e}. Falling back to cosine similarity.")
+            return documents[:top_k]
+
+
+# =============================================================================
+# RAG Service Class
+# =============================================================================
+
 class RAGService:
-    """Advanced RAG service for document retrieval and context augmentation."""
+    """
+    Advanced RAG service for document retrieval and context augmentation.
+
+    Implements a two-stage retrieval pipeline:
+    1. Cosine similarity search → top-20 candidates (high recall)
+    2. zerank-1-small re-ranker → top-5 results (high precision)
+    """
+
+    # Configuration constants
+    CANDIDATE_POOL_SIZE = 20  # Number of candidates for re-ranking
 
     def __init__(self, base_agent: BaseAgent):
         """
-        Initialize RAG tool with a base agent.
+        Initialize RAG service with a base agent.
 
         Args:
-            base_agent: The specialist agent using this tool
+            base_agent: The specialist agent using this service
         """
         self.base_agent = base_agent
         self.logger = get_logger(__name__)
         self._init_embedding_clients()
-    
+
     def _init_embedding_clients(self):
         """Initialize embedding clients based on provider."""
-        # Determine provider from model name (use Settings for unified configuration)
+        # Determine provider from model name
         model_name = settings.LLM_MODEL_COMPLEX
         self.use_gemini = model_name.lower().startswith("gemini")
-        
+
         # Get embedding model from env var (default based on provider)
         if self.use_gemini:
             embedding_model = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
@@ -70,24 +251,21 @@ class RAGService:
                 self.embedding_model = embedding_model
         else:
             self.embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-        
+
         # Initialize embedding clients based on provider
-        # Use settings (which reads from environment dynamically)
         api_key = settings.LLM_API_KEY
         if not api_key:
-            # In test environment, allow missing API key (tests should mock this)
             if is_test_environment():
                 self.logger.warning(
                     "LLM_API_KEY not found in test environment. "
-                    "Tests should mock RAGTool or set test API key."
+                    "Tests should mock RAGService or set test API key."
                 )
-                # Set dummy clients to None - tests should mock these
                 self.openai_client = None
                 self.gemini_client = None
                 return
             else:
                 raise ValueError("LLM_API_KEY not found in environment variables")
-        
+
         if self.use_gemini:
             from google import genai  # type: ignore
             self.gemini_client = genai.Client(api_key=api_key)
@@ -95,77 +273,103 @@ class RAGService:
         else:
             self.openai_client = openai.OpenAI(api_key=api_key)
             self.gemini_client = None
-    
+
+    # =========================================================================
+    # Embedding Generation
+    # =========================================================================
+
     def generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding for text using OpenAI or Gemini based on provider."""
+        """
+        Generate embedding for text using OpenAI or Gemini.
+
+        Args:
+            text: Text to embed
+
+        Returns:
+            List of floats representing the embedding vector
+        """
         try:
             if self.use_gemini:
-                if self.gemini_client is None:
-                    return []
-                # Use gemini-embedding-001 with 1536 dimensions
-                try:
-                    from google.genai import types
-                    response = self.gemini_client.models.embed_content(
-                        model=self.embedding_model,
-                        contents=[{"role": "user", "parts": [{"text": text}]}],
-                        config=types.EmbedContentConfig(output_dimensionality=1536)
-                    )
-                except (AttributeError, TypeError, ImportError):
-                    # Fallback to dict config
-                    response = self.gemini_client.models.embed_content(
-                        model=self.embedding_model,
-                        contents=[{"role": "user", "parts": [{"text": text}]}],
-                        config={"output_dimensionality": 1536}
-                    )
-                
-                # Extract embedding from response
-                embedding = None
-                if hasattr(response, "embeddings") and response.embeddings:
-                    first_emb = response.embeddings[0]
-                    if hasattr(first_emb, "values"):
-                        embedding = list(first_emb.values)
-                    elif isinstance(first_emb, (list, tuple)):
-                        embedding = list(first_emb)
-                
-                if not embedding and hasattr(response, "embedding") and response.embedding:
-                    emb = response.embedding
-                    if hasattr(emb, "values"):
-                        embedding = list(emb.values)
-                    elif isinstance(emb, (list, tuple)):
-                        embedding = list(emb)
-                
-                return embedding if embedding else []
+                return self._generate_gemini_embedding(text)
             else:
-                # Use OpenAI embeddings
-                if self.openai_client is None:
-                    return []
-                response = self.openai_client.embeddings.create(
-                    model=self.embedding_model, input=text
-                )
-                return response.data[0].embedding
+                return self._generate_openai_embedding(text)
         except Exception as e:
             self.logger.error(f"Error generating embedding: {e}")
             return []
 
+    def _generate_gemini_embedding(self, text: str) -> List[float]:
+        """Generate embedding using Gemini."""
+        if self.gemini_client is None:
+            return []
+
+        try:
+            from google.genai import types
+            response = self.gemini_client.models.embed_content(
+                model=self.embedding_model,
+                contents=[{"role": "user", "parts": [{"text": text}]}],
+                config=types.EmbedContentConfig(output_dimensionality=1536)
+            )
+        except (AttributeError, TypeError, ImportError):
+            # Fallback to dict config
+            response = self.gemini_client.models.embed_content(
+                model=self.embedding_model,
+                contents=[{"role": "user", "parts": [{"text": text}]}],
+                config={"output_dimensionality": 1536}
+            )
+
+        # Extract embedding from response
+        embedding = None
+        if hasattr(response, "embeddings") and response.embeddings:
+            first_emb = response.embeddings[0]
+            if hasattr(first_emb, "values"):
+                embedding = list(first_emb.values)
+            elif isinstance(first_emb, (list, tuple)):
+                embedding = list(first_emb)
+
+        if not embedding and hasattr(response, "embedding") and response.embedding:
+            emb = response.embedding
+            if hasattr(emb, "values"):
+                embedding = list(emb.values)
+            elif isinstance(emb, (list, tuple)):
+                embedding = list(emb)
+
+        return embedding if embedding else []
+
+    def _generate_openai_embedding(self, text: str) -> List[float]:
+        """Generate embedding using OpenAI."""
+        if self.openai_client is None:
+            return []
+        response = self.openai_client.embeddings.create(
+            model=self.embedding_model, input=text
+        )
+        return response.data[0].embedding
+
+    # =========================================================================
+    # Vector Search (Stage 1: High Recall)
+    # =========================================================================
+
     def search_knowledge_base(
         self,
         query: str,
-        max_results: int = 5,
+        max_results: int = 20,
         metadata_filters: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Search the knowledge base using RAG with metadata filtering.
+        Search knowledge base using cosine similarity.
+
+        This is Stage 1 of the two-stage retrieval pipeline.
+        Returns top candidates for re-ranking.
 
         Args:
             query: User's search query
-            max_results: Maximum number of results to return
-            metadata_filters: Optional metadata filters (e.g., {"difficulty_level": "beginner"})
+            max_results: Maximum number of results to return (default: 20 for re-ranking)
+            metadata_filters: Optional metadata filters (currently unused, reserved for future)
 
         Returns:
-            List of relevant documents with their content and metadata
+            List of relevant documents sorted by cosine similarity
         """
         try:
-            # Step 1: Generate query embedding
+            # Generate query embedding
             query_embedding = self.generate_embedding(query)
             if not query_embedding:
                 self.logger.error("Failed to generate query embedding")
@@ -173,170 +377,131 @@ class RAGService:
 
             self.logger.debug(f"Query embedding generated: {len(query_embedding)} dimensions")
 
-            # Step 2: Get document embeddings
-            embeddings_query = self.base_agent.supabase.table("document_embeddings").select(
-                "id, chunk_text, chunk_index, embedding, document_id"
-            )
+            # Preferred: perform vector similarity directly in the database (fast + indexed)
+            try:
+                rpc_payload = {
+                    "query_embedding": query_embedding,
+                    "match_count": max_results,
+                    # must match SQL signature: match_document_chunks(query_embedding, match_count, p_topic)
+                    "p_topic": self.base_agent.topic,
+                }
+                rpc_response = (
+                    self.base_agent.supabase.rpc("match_document_chunks", rpc_payload).execute()
+                )
+                if rpc_response.data:
+                    self.logger.debug(
+                        f"Vector search RPC returned {len(rpc_response.data)} rows (limit {max_results})"
+                    )
+                    return [
+                        {
+                            "chunk_text": row.get("chunk_text", ""),
+                            "chunk_index": row.get("chunk_index"),
+                            "document_title": row.get("document_title"),
+                            "document_keywords": row.get("document_keywords", []),
+                            "relevance_score": float(row.get("similarity", 0.0)),
+                            "document_id": row.get("document_id"),
+                        }
+                        for row in rpc_response.data
+                    ]
+            except Exception as rpc_error:
+                self.logger.warning(
+                    f"Vector search RPC failed ({rpc_error}), falling back to client-side search"
+                )
 
-            # Step 3: Get documents filtered by topic only
+            # Fallback: client-side cosine similarity (may be slower)
             docs_query = (
                 self.base_agent.supabase.table("documents")
                 .select("id, title, content, topic, keywords")
                 .eq("topic", self.base_agent.topic)
             )
 
-            # Execute documents query
             docs_response = docs_query.execute()
             if not docs_response.data:
                 self.logger.warning(
-                    f"No documents found for topic '{self.base_agent.topic}' with filters: {metadata_filters}"
+                    f"No documents found for topic '{self.base_agent.topic}'"
                 )
                 return []
 
-            # Get document IDs that match our criteria
             matching_doc_ids = [doc["id"] for doc in docs_response.data]
 
-            # Step 4: Get embeddings for matching documents
-            embeddings_response = embeddings_query.in_(
-                "document_id", matching_doc_ids
-            ).execute()
+            # Get embeddings for matching documents (apply a hard cap to reduce load)
+            embeddings_response = (
+                self.base_agent.supabase.table("document_embeddings")
+                .select("id, chunk_text, chunk_index, embedding, document_id")
+                .in_("document_id", matching_doc_ids)
+                .limit(max_results * 50)  # cap to avoid timeouts in fallback path
+                .execute()
+            )
+
             if not embeddings_response.data:
                 self.logger.warning("No embeddings found for matching documents")
                 return []
 
-            # Step 5: Calculate similarity scores and rank results
+            # Calculate similarity scores
             results = []
-            self.logger.debug(f"Processing {len(embeddings_response.data)} embeddings...")
-
             for embedding_data in embeddings_response.data:
-                if "embedding" in embedding_data and embedding_data["embedding"]:
-                    # Parse string embedding back to vector
-                    embedding = embedding_data["embedding"]
-                    if isinstance(embedding, str):
-                        try:
-                            import json
-                            embedding_vector = json.loads(embedding)
-                            if not isinstance(embedding_vector, list):
-                                self.logger.warning(
-                                    f"Parsed embedding is not a list: {type(embedding_vector)}"
-                                )
-                                continue
-                        except (json.JSONDecodeError, ValueError) as e:
-                            self.logger.warning(f"Failed to parse embedding string: {e}")
-                            continue
-                    else:
-                        embedding_vector = embedding
+                if not embedding_data.get("embedding"):
+                    continue
 
-                    # Debug: Check vector dimensions
-                    if len(embedding_vector) == 0:
-                        self.logger.warning(
-                            f"Empty embedding vector for document {embedding_data['document_id']}"
-                        )
-                        continue
+                # Parse embedding
+                embedding_vector = self._parse_embedding(embedding_data["embedding"])
+                if not embedding_vector:
+                    continue
 
-                    # Calculate cosine similarity
-                    similarity = self._cosine_similarity(
-                        query_embedding, embedding_vector
-                    )
+                # Calculate cosine similarity
+                similarity = self._cosine_similarity(query_embedding, embedding_vector)
 
-                    # Debug similarity calculation
-                    if similarity == 0.0:
-                        self.logger.debug(
-                            f"Zero similarity for document {embedding_data['document_id']} - query_dim: {len(query_embedding)}, doc_dim: {len(embedding_vector)}"
-                        )
-
-                    # Get document info
-                    doc_info = next(
-                        (
-                            doc
-                            for doc in docs_response.data
-                            if doc["id"] == embedding_data["document_id"]
-                        ),
-                        None,
-                    )
-
-                    if doc_info:
-                        results.append(
-                            {
-                                "chunk_text": embedding_data["chunk_text"],
-                                "chunk_index": embedding_data["chunk_index"],
-                                "document_title": doc_info["title"],
-                                "document_keywords": doc_info.get(
-                                    "keywords", []
-                                ),
-                                "relevance_score": similarity,
-                                "document_id": embedding_data["document_id"],
-                            }
-                        )
-                else:
-                    self.logger.warning("Skipping embedding_data without valid embedding")
-
-            # Step 6: Apply cutoff score with smart fallback
-            CUTOFF_SCORE = 0.5  # Minimum acceptable similarity score
-
-            # Filter by cutoff score
-            high_quality_results = [
-                r for r in results if r["relevance_score"] >= CUTOFF_SCORE
-            ]
-
-            if high_quality_results:
-                # We have good quality results above cutoff
-                self.logger.debug(
-                    f"Found {len(high_quality_results)} high-quality results (≥{CUTOFF_SCORE})"
+                # Get document info
+                doc_info = next(
+                    (doc for doc in docs_response.data
+                     if doc["id"] == embedding_data["document_id"]),
+                    None,
                 )
-                # Return all high-quality results (up to max_results or 10, whichever is higher)
-                max_high_quality = max(max_results, 10)
-                final_results = high_quality_results[:max_high_quality]
-                if len(high_quality_results) > max_results:
-                    self.logger.debug(
-                        f"Returning {len(final_results)} high-quality results (exceeded requested {max_results})"
-                    )
-            else:
-                # All results below cutoff, use top 5 with "poor" quality
-                self.logger.warning(
-                    f"All results below cutoff ({CUTOFF_SCORE}), using top 5 with poor quality"
-                )
-                final_results = results[:5]
-                # Mark all as poor quality
-                for result in final_results:
-                    result["quality_level"] = "poor"
-                    result["weight"] = 0.0
 
-            # Sort final results by relevance score
-            final_results.sort(key=lambda x: x["relevance_score"], reverse=True)
+                if doc_info:
+                    results.append({
+                        "chunk_text": embedding_data["chunk_text"],
+                        "chunk_index": embedding_data["chunk_index"],
+                        "document_title": doc_info["title"],
+                        "document_keywords": doc_info.get("keywords", []),
+                        "relevance_score": similarity,
+                        "document_id": embedding_data["document_id"],
+                    })
 
-            self.logger.debug(f"Returning {len(final_results)} documents")
-            return final_results
+            # Sort by relevance score
+            results.sort(key=lambda x: x["relevance_score"], reverse=True)
+
+            # Return top results (no cosine cutoff)
+            return results[:max_results]
 
         except Exception as e:
-            error_msg = str(e)
-            if "timed out" in error_msg.lower():
-                self.logger.error(
-                    f"Database query timed out while searching knowledge base. "
-                    f"This may indicate slow database performance or network issues. "
-                    f"Error: {error_msg}"
-                )
-            else:
-                self.logger.error(f"Error searching knowledge base: {error_msg}")
+            self.logger.error(f"Error searching knowledge base: {e}")
             return []
+
+    def _parse_embedding(self, embedding: Any) -> List[float]:
+        """Parse embedding from database (may be string or list)."""
+        if isinstance(embedding, str):
+            try:
+                import json
+                parsed = json.loads(embedding)
+                return parsed if isinstance(parsed, list) else []
+            except (json.JSONDecodeError, ValueError):
+                return []
+        return embedding if isinstance(embedding, list) else []
 
     @staticmethod
     def _cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
-        """Calculate cosine similarity between two vectors using scikit-learn."""
+        """Calculate cosine similarity between two vectors."""
         try:
             from sklearn.metrics.pairwise import cosine_similarity
             import numpy as np
 
-            # Convert to numpy arrays and reshape for sklearn
             vec1_array = np.array(vec1).reshape(1, -1)
             vec2_array = np.array(vec2).reshape(1, -1)
-
-            # Calculate cosine similarity
-            similarity = cosine_similarity(vec1_array, vec2_array)[0][0]
-            return float(similarity)
+            return float(cosine_similarity(vec1_array, vec2_array)[0][0])
 
         except ImportError:
-            # Fallback calculation if sklearn not available
+            # Fallback calculation
             if not vec1 or not vec2 or len(vec1) != len(vec2):
                 return 0.0
 
@@ -346,12 +511,63 @@ class RAGService:
 
             if norm_a == 0 or norm_b == 0:
                 return 0.0
-
             return dot_product / (norm_a * norm_b)
 
-        except Exception as e:
-            # Silently handle errors to avoid cluttering debug output
+        except Exception:
             return 0.0
+
+    # =========================================================================
+    # Hybrid Search with Re-Ranking (Two-Stage Pipeline)
+    # =========================================================================
+
+    def perform_hybrid_search(
+        self, user_query: str, max_results: int = 5
+    ) -> List[Dict[str, Any]]:
+        """
+        Two-stage retrieval: cosine similarity → zerank-1-small re-ranker.
+
+        Stage 1: Get top-20 candidates via cosine similarity (high recall)
+        Stage 2: Re-rank with zerank-1-small to get top-5 (high precision)
+
+        Args:
+            user_query: User's search query
+            max_results: Maximum number of final results (default: 5)
+
+        Returns:
+            List of top documents after re-ranking
+        """
+        # Step 1: Extract metadata filters from query
+        metadata_filters = self.extract_metadata_filters(user_query)
+        self.logger.debug(f"Extracted metadata filters: {metadata_filters}")
+
+        # Step 2: Get top-20 candidates via cosine similarity
+        candidates = self.search_knowledge_base(
+            query=user_query,
+            max_results=self.CANDIDATE_POOL_SIZE,
+            metadata_filters=metadata_filters
+        )
+
+        # Fallback to broader search if too few results
+        if len(candidates) < 3:
+            self.logger.debug(f"Only {len(candidates)} candidates, trying broader search")
+            broader_results = self.search_knowledge_base(
+                query=user_query,
+                max_results=self.CANDIDATE_POOL_SIZE,
+                metadata_filters=None
+            )
+            # Merge and deduplicate
+            seen_ids = {c.get("document_id") for c in candidates}
+            for result in broader_results:
+                if result.get("document_id") not in seen_ids:
+                    candidates.append(result)
+                    seen_ids.add(result.get("document_id"))
+
+        # Step 3: Re-rank with zerank-1-small
+        if len(candidates) > max_results:
+            self.logger.debug(f"Re-ranking {len(candidates)} candidates to top-{max_results}")
+            candidates = ReRanker.rerank(user_query, candidates, top_k=max_results)
+
+        return candidates[:max_results]
 
     def extract_metadata_filters(self, user_query: str) -> Dict[str, Any]:
         """
@@ -369,12 +585,7 @@ class RAGService:
         # Difficulty level detection
         difficulty_patterns = {
             "beginner": ["beginner", "new", "starting", "first time", "never done"],
-            "intermediate": [
-                "intermediate",
-                "some experience",
-                "moderate",
-                "progressed",
-            ],
+            "intermediate": ["intermediate", "some experience", "moderate", "progressed"],
             "advanced": ["advanced", "experienced", "expert", "pro", "seasoned"],
         }
 
@@ -385,16 +596,7 @@ class RAGService:
 
         # Body part detection
         body_part_patterns = {
-            "legs": [
-                "legs",
-                "leg",
-                "quad",
-                "hamstring",
-                "calf",
-                "glute",
-                "squat",
-                "deadlift",
-            ],
+            "legs": ["legs", "leg", "quad", "hamstring", "calf", "glute", "squat", "deadlift"],
             "chest": ["chest", "pec", "bench", "push-up", "dumbbell press"],
             "back": ["back", "lat", "row", "pull-up", "deadlift"],
             "shoulders": ["shoulder", "deltoid", "press", "lateral raise"],
@@ -410,13 +612,7 @@ class RAGService:
 
         # Sport type detection
         sport_patterns = {
-            "strength_training": [
-                "strength",
-                "power",
-                "muscle",
-                "hypertrophy",
-                "bodybuilding",
-            ],
+            "strength_training": ["strength", "power", "muscle", "hypertrophy", "bodybuilding"],
             "endurance": ["endurance", "cardio", "aerobic", "stamina", "running"],
             "flexibility": ["flexibility", "mobility", "stretching", "yoga", "pilates"],
             "sports": ["sport", "athletic", "performance", "competition"],
@@ -467,222 +663,180 @@ class RAGService:
 
         return filters
 
-    def perform_hybrid_search(
-        self, user_query: str, max_results: int = 8
-    ) -> List[Dict[str, Any]]:
-        """
-        Perform hybrid search combining metadata filtering and vector similarity.
+    # =========================================================================
+    # Context Validation (for Playbook Enrichment)
+    # =========================================================================
 
-        Args:
-            user_query: User's search query
-            max_results: Maximum number of results to return
-
-        Returns:
-            List of relevant documents with relevance scores
-        """
-        # Step 1: Extract metadata filters
-        metadata_filters = self.extract_metadata_filters(user_query)
-        self.logger.debug(f"Extracted metadata filters: {metadata_filters}")
-
-        # Step 2: Perform filtered vector search
-        filtered_results = self.search_knowledge_base(
-            query=user_query, max_results=max_results, metadata_filters=metadata_filters
-        )
-
-        # Step 3: If filtered search returns few results, try broader search
-        if len(filtered_results) < 3:
-            self.logger.debug(
-                f"Filtered search returned only {len(filtered_results)} results, trying broader search..."
-            )
-            broader_results = self.search_knowledge_base(
-                query=user_query,
-                max_results=max_results,
-                metadata_filters=None,  # No filters
-            )
-
-            # Combine and deduplicate results
-            all_results = filtered_results + broader_results
-            seen_docs = set()
-            unique_results = []
-
-            for result in all_results:
-                doc_id = result.get("document_title", "")
-                if doc_id not in seen_docs:
-                    seen_docs.add(doc_id)
-                    unique_results.append(result)
-
-            results = unique_results[:max_results]
-        else:
-            results = filtered_results
-
-        # Step 4: Re-rank results for better relevance
-        ranked_results = self._re_rank_results(user_query, results)
-
-        return ranked_results[:max_results]
-
-    def _re_rank_results(
-        self, user_query: str, results: List[Dict[str, Any]]
-    ) -> List[Dict[str, Any]]:
-        """
-        Re-rank results using a simple scoring algorithm.
-
-        Args:
-            user_query: Original user query
-            results: List of search results
-
-        Returns:
-            Re-ranked results
-        """
-        if not results:
-            return results
-
-        # Simple re-ranking based on multiple factors
-        for result in results:
-            score = 0.0
-
-            # Base relevance score
-            score += result.get("relevance_score", 0.0) * 0.6
-
-            # Query term matching bonus
-            query_terms = set(user_query.lower().split())
-            content_terms = set(result.get("chunk_text", "").lower().split())
-            term_overlap = len(query_terms.intersection(content_terms))
-            score += min(term_overlap * 0.1, 0.3)  # Cap at 0.3
-
-            # Metadata relevance bonus
-            metadata = result.get("document_metadata", {})
-            if metadata:
-                # Check if metadata matches user intent
-                if "difficulty_level" in metadata and "beginner" in user_query.lower():
-                    if metadata["difficulty_level"] == "beginner":
-                        score += 0.2
-
-                if "body_part" in metadata and any(
-                    part in user_query.lower() for part in ["leg", "chest", "back"]
-                ):
-                    score += 0.1
-
-            result["final_score"] = score
-
-        # Sort by final score
-        return sorted(results, key=lambda x: x.get("final_score", 0), reverse=True)
-
-    def augment_context(self, user_query: str, max_context_length: int = 2000) -> str:
-        """
-        Augment user query with relevant context from knowledge base.
-
-        Args:
-            user_query: User's original query
-            max_context_length: Maximum length of context to include
-
-        Returns:
-            Augmented query with relevant context
-        """
-        # Get relevant documents
-        relevant_docs = self.perform_hybrid_search(user_query, max_results=3)
-
-        if not relevant_docs:
-            return user_query
-
-        # Build context string
-        context_parts = []
-        current_length = 0
-
-        for doc in relevant_docs:
-            doc_context = f"Context: {doc.get('chunk_text', '')[:500]}..."
-
-            if current_length + len(doc_context) > max_context_length:
-                break
-
-            context_parts.append(doc_context)
-            current_length += len(doc_context)
-
-        if context_parts:
-            return f"{user_query}\n\nRelevant Information:\n" + "\n\n".join(
-                context_parts
-            )
-
-        return user_query
-
-    def get_search_insights(self, user_query: str) -> Dict[str, Any]:
-        """
-        Get insights about the search process and results.
-
-        Args:
-            user_query: User's search query
-
-        Returns:
-            Dictionary with search insights
-        """
-        metadata_filters = self.extract_metadata_filters(user_query)
-        search_results = self.perform_hybrid_search(user_query, max_results=5)
-
-        return {
-            "query": user_query,
-            "extracted_filters": metadata_filters,
-            "results_count": len(search_results),
-            "top_results": [
-                {
-                    "title": result.get("document_title", "Unknown"),
-                    "relevance_score": result.get("relevance_score", 0.0),
-                    "final_score": result.get("final_score", 0.0),
-                }
-                for result in search_results[:3]
-            ],
-            "search_strategy": (
-                "hybrid_metadata_vector" if metadata_filters else "vector_only"
-            ),
-        }
-
-    def generate_response(
-        self, user_query: str, context_documents: List[Dict[str, Any]], context: Optional[Dict[str, Any]] = None
+    def validate_and_retrieve_context(
+        self, lesson_text: str, max_sentences: int = 10
     ) -> str:
         """
-        Generate a response using the agent's knowledge and retrieved context.
+        Retrieve and validate context for a playbook lesson.
+
+        Uses two-stage retrieval (cosine + re-ranker) then LLM validation.
+
+        Args:
+            lesson_text: The playbook lesson text
+            max_sentences: Maximum sentences in context (default: 10)
+
+        Returns:
+            Validated context or "context not found"
+        """
+        try:
+            # Stage 1: Retrieve top candidates via hybrid search
+            relevant_docs = self.perform_hybrid_search(
+                user_query=lesson_text, max_results=3
+            )
+
+            if not relevant_docs:
+                return "context not found"
+
+            # Stage 2: LLM validation and rewriting
+            context_chunks = [
+                doc.get("chunk_text", "")
+                for doc in relevant_docs
+                if doc.get("chunk_text")
+            ]
+
+            if not context_chunks:
+                return "context not found"
+
+            combined_context = "\n\n".join(context_chunks)
+
+            # Validate and refine with LLM
+            validated_context = self._validate_context_with_llm(
+                lesson_text, combined_context, max_sentences
+            )
+
+            return validated_context
+
+        except Exception as e:
+            self.logger.warning(f"Error validating context: {e}")
+            return "context not found"
+
+    def _validate_context_with_llm(
+        self, lesson_text: str, combined_context: str, max_sentences: int
+    ) -> str:
+        """
+        Use LLM to validate and refine retrieved context.
+
+        Args:
+            lesson_text: The playbook lesson
+            combined_context: Combined context from retrieval
+            max_sentences: Maximum sentences to return
+
+        Returns:
+            Validated/refined context or "context not found"
+        """
+        validation_prompt = f"""
+        You are an expert training coach who turns knowledge-base evidence into a cohesive, directive mini-brief that an AI coach will use to build a training plan.
+
+        Goal: Decide if the retrieved context truly helps apply the playbook lesson. If useful, return a short story-like coaching note (not bullets) that explains how to incorporate the context into a plan; if not, return exactly "context not found".
+
+        Inputs:
+        - Playbook lesson (user-specific preference, constraint, or goal)
+        - Retrieved context (candidate evidence/best practices)
+
+        Steps:
+        1) Relevance: If the retrieved context does not clearly support the playbook lesson, return "context not found".
+        2) If relevant, write at most {max_sentences} sentences that:
+           - Read as a connected narrative (no bullets) that flows from goal/constraint to specific actions
+           - Start with action-oriented guidance and link elements to each other (e.g., how volume ties to recovery, how exercise choices align with constraints, how progression adjusts intensity/frequency)
+           - Are specific about volume, intensity, frequency, exercise selection, progression, recovery, and safety modifications where applicable
+           - Tie guidance back to the playbook lesson without restating it verbatim
+           - Remain evidence-grounded with no filler or disclaimers
+        3) Do not invent new assumptions. Keep sentences concise and directive while maintaining cohesion.
+
+        Playbook Lesson:
+        {lesson_text}
+
+        Retrieved Context:
+        {combined_context}
+
+        Response:"""
+
+        validated_context = self.base_agent.llm.chat_text([
+            {
+                "role": "system",
+                "content": "You are an expert training coach. Output a concise, narrative coaching note (no bullets) that links actions together and guides plan construction; omit filler."
+            },
+            {"role": "user", "content": validation_prompt}
+        ]).strip()
+
+        # Check if validation returned "context not found"
+        if validated_context.lower() == "context not found":
+            return "context not found"
+
+        # Limit to max_sentences
+        sentences = validated_context.split('. ')
+        if len(sentences) > max_sentences:
+            validated_context = '. '.join(sentences[:max_sentences]) + '.'
+
+        return validated_context
+
+    # =========================================================================
+    # Response Generation (Used by InterviewAgent)
+    # =========================================================================
+
+    def generate_response(
+        self, 
+        user_query: str, 
+        context_documents: List[Dict[str, Any]], 
+        context: Optional[Dict[str, Any]] = None
+    ) -> str:
+        """
+        Generate a response using retrieved context and best-practice prompt.
+
+        Used by InterviewAgent for answering training questions from chat interface.
 
         Args:
             user_query: User's original query
-            context_documents: Retrieved relevant documents
-            context: Additional context dictionary (optional)
+            context_documents: Retrieved relevant documents from knowledge base
+            context: Additional context dictionary with:
+                - training_plan: Full training plan (optional)
+                - current_week: Current week data (optional)
+                - playbook: User playbook with context (optional)
+                - personal_info: PersonalInfo object (optional)
 
         Returns:
             Generated response with context and citations
         """
         try:
-            # Prepare context for the LLM
-            context_text = self._prepare_context(context_documents)
-
-            # Create the prompt
+            from app.helpers.prompts.question_prompts import generate_rag_answer_prompt
+            
+            # Extract context components
+            current_week = context.get("current_week") if context else None
+            playbook = context.get("playbook") if context else None
+            personal_info = context.get("personal_info") if context else None
+            conversation_history = context.get("conversation_history") if context else None
+            
+            # Generate prompt using best practices
+            prompt = generate_rag_answer_prompt(
+                user_query=user_query,
+                context_documents=context_documents,
+                current_week=current_week,
+                playbook=playbook,
+                personal_info=personal_info,
+                conversation_history=conversation_history,
+            )
+            
             agent_name = self.base_agent.agent_name
-            prompt = f"""User Query: {user_query}
-
-Relevant Information from Knowledge Base:
-{context_text}
-
-Based on the above information and your expertise as {agent_name}, provide a comprehensive, accurate response.
-
-Guidelines:
-1. Use the provided context as your primary source
-2. Cite specific information from the documents
-3. Provide actionable, practical advice
-4. If the context doesn't fully answer the question, acknowledge this and provide general guidance
-5. Maintain a professional, encouraging tone
-
-Response:"""
-
-            # Generate response using unified LLM
-            content = self.base_agent.llm.chat_text([
-                {
-                    "role": "system",
-                    "content": f"You are {agent_name}, an expert AI. Use your specialized knowledge base to provide accurate, evidence-based responses. Always cite your sources."
-                },
-                {"role": "user", "content": prompt},
-            ])
+            
+            content = self.base_agent.llm.chat_text(
+                [
+                    {
+                        "role": "system",
+                        "content": f"You are {agent_name}, an expert training coach. Use your specialized knowledge base and the provided context to provide accurate, evidence-based responses."
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                model_type="complex",
+            )
             return content
 
         except Exception as e:
             self.logger.error(f"Error generating response: {e}")
-            return f"I apologize, but I encountered an error while processing your request. Please try again or contact support if the issue persists."
+            return "I apologize, but I encountered an error. Please try again."
 
     def _prepare_context(self, documents: List[Dict[str, Any]]) -> str:
         """Prepare context documents for the LLM prompt."""
@@ -695,141 +849,11 @@ Response:"""
             keywords_str = ", ".join(keywords) if keywords else "None"
             context_parts.append(
                 f"""
-Document {i}: {doc.get('document_title', 'Unknown Title')}
-Content: {doc.get('chunk_text', 'No content')}
-Keywords: {keywords_str}
----"""
+                    Document {i}: {doc.get('document_title', 'Unknown Title')}
+                    Content: {doc.get('chunk_text', 'No content')}
+                    Keywords: {keywords_str}
+                    ---
+                """
             )
 
         return "\n".join(context_parts)
-
-    def validate_and_retrieve_context(
-        self, lesson_text: str, max_sentences: int = 10
-    ) -> str:
-        """
-        Retrieve and validate context for a playbook lesson.
-        
-        This method performs a two-stage process:
-        1. Retrieve context from knowledge base using RAG
-        2. Validate if retrieved context is relevant to the lesson
-        
-        Args:
-            lesson_text: The playbook lesson text
-            max_sentences: Maximum number of sentences to include in context (default: 10)
-            
-        Returns:
-            Validated context text (max 10 sentences) or "context not found" if not relevant
-        """
-        try:
-            # Stage 1: Retrieve context via RAG
-            relevant_docs = self.perform_hybrid_search(
-                user_query=lesson_text, max_results=3
-            )
-            
-            if not relevant_docs:
-                return "context not found"
-            
-            # Check if top result has very high confidence (skip LLM rewriting for high-confidence matches)
-            # Uses final_score (re-ranked score) which combines relevance_score + term matching + metadata
-            top_result = relevant_docs[0]
-            top_score = top_result.get("final_score", top_result.get("relevance_score", 0.0))
-            
-            # High confidence threshold: if match is very strong, skip LLM rewriting
-            HIGH_CONFIDENCE_THRESHOLD = 0.85
-            
-            if top_score >= HIGH_CONFIDENCE_THRESHOLD:
-                # High confidence match - skip LLM rewriting, use top result directly
-                top_chunk = top_result.get("chunk_text", "")
-                if not top_chunk:
-                    return "context not found"
-                
-                # Truncate to max_sentences (simple sentence splitting)
-                sentences = top_chunk.split('. ')
-                if len(sentences) > max_sentences:
-                    top_chunk = '. '.join(sentences[:max_sentences]) + '.'
-                
-                return top_chunk
-            
-            # Lower confidence - proceed with LLM rewriting/refinement
-            # Combine retrieved context chunks
-            context_chunks = []
-            for doc in relevant_docs:
-                chunk_text = doc.get("chunk_text", "")
-                if chunk_text:
-                    context_chunks.append(chunk_text)
-            
-            if not context_chunks:
-                return "context not found"
-            
-            # Combine all chunks into single context string
-            combined_context = "\n\n".join(context_chunks)
-            
-            # Stage 2: Rewrite/refine context and check relevance using LLM
-            # The LLM rewrites/refines the context to be more relevant AND checks if it's relevant at all
-            validation_prompt = f"""
-                You are an expert training coach preparing context from a knowledge base to augment a personalized playbook lesson. This context will be used when generating training plans to help the AI coach create better, evidence-based programs.
-
-                **What We're Doing:**
-                We have a playbook lesson (a personalized insight about a user's training preferences, constraints, or goals). We've retrieved some context from our knowledge base that might contain relevant best practices, training methodologies, or principles. Your job is to:
-                1. Validate if this context is truly relevant to the lesson
-                2. If relevant: Rewrite/refine it to be concise, actionable, and directly applicable to training plan generation
-                3. If not relevant: Return "context not found"
-
-                **How This Will Be Used:**
-                This validated context will be included in prompts when generating training plans. The AI coach will use it alongside the playbook lesson to:
-                - Understand best practices related to the user's goals/preferences
-                - Apply evidence-based training principles
-                - Create more effective and scientifically sound training programs
-                - Avoid common mistakes and follow proven methodologies
-
-                **Playbook Lesson:**
-                {lesson_text}
-
-                **Retrieved Context from Knowledge Base:**
-                {combined_context}
-
-                **Your Task:**
-                1. **Relevance Check**: Is this context relevant to the playbook lesson? Does it provide useful best practices, training principles, or methodologies that would help create a better training plan?
-
-                2. **If Relevant**: Rewrite/refine the context to be:
-                - **Actionable**: Focus on specific, applicable training principles and best practices
-                - **Concise**: Maximum {max_sentences} sentences - be selective and prioritize the most important information
-                - **Directly Applicable**: Focus on information that directly helps with training plan design (volume, intensity, frequency, exercise selection, progression, recovery, etc.)
-                - **Evidence-Based**: Emphasize proven methodologies and principles
-                - **Plan-Focused**: Information should help the AI coach make better decisions when creating training plans
-
-                3. **If NOT Relevant**: If the context doesn't relate to the lesson or won't help with training plan generation, return exactly: "context not found"
-
-                **Example Good Context:**
-                - "Hypertrophy training requires 3-5 sets per exercise, 6-12 reps per set, with 60-90 seconds rest. Progressive overload through volume or intensity increases is essential. Training each muscle group 2-3 times per week maximizes muscle growth."
-
-                **Example Bad Context (too vague/general):**
-                - "Exercise is good for health. People should train regularly."
-
-                **Response:**
-            """
-
-            # Use LLM to validate
-            validated_context = self.base_agent.llm.chat_text([
-                {
-                    "role": "system",
-                    "content": "You are an expert training coach specializing in translating knowledge base content into actionable, evidence-based training principles for training plan generation. You understand how to refine technical information into concise, practical guidance that helps create effective training programs."
-                },
-                {"role": "user", "content": validation_prompt}
-            ]).strip()
-            
-            # Check if validation returned "context not found"
-            if validated_context.lower() == "context not found":
-                return "context not found"
-            
-            # Limit to max_sentences
-            sentences = validated_context.split('. ')
-            if len(sentences) > max_sentences:
-                validated_context = '. '.join(sentences[:max_sentences]) + '.'
-            
-            return validated_context
-            
-        except Exception as e:
-            # Log error but return "context not found" to not break the flow
-            self.logger.warning(f"Error validating context for lesson: {e}")
-            return "context not found"
