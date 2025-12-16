@@ -27,6 +27,8 @@ import { QuestionRenderer } from '@/src/components/onboarding/questions';
 import { OnboardingNavigation } from '@/src/components/onboarding/ui';
 import { QuestionsStepProps, QuestionType } from '@/src/types/onboarding';
 import { validateQuestionResponse } from '@/src/utils/validation';
+import { PROGRESS_CONFIG } from '@/src/constants/progressConfig';
+import { InlineProgressIndicator } from '@/src/components/shared/InlineProgressIndicator';
 
 interface ChatQuestionsPageProps extends QuestionsStepProps {
   onClose?: () => void;
@@ -45,6 +47,9 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
   onSubmitAnswer,
   isFetchingNext = false,
   informationComplete = false,
+  isGeneratingPlan = false,
+  planGenerationError = null,
+  planGenerationProgress = 0,
   onClose,
   showHeader = true,
 }) => {
@@ -66,6 +71,10 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
   // Animation state for answer interface fade-in
   const [answerInterfaceVisible, setAnswerInterfaceVisible] = useState(false);
   const answerFadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Chat progress status text state
+  const [chatStatusText, setChatStatusText] = useState<string | null>(null);
+  const chatRequestStartTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
     setLocalResponses(responses);
@@ -159,6 +168,49 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
     }
   }, [chatMessages, isFetchingNext]);
 
+  // Time-based chat status text using PROGRESS_CONFIG.chat.stagedLabels
+  // Don't show status text when generating plan (show circular progress instead)
+  useEffect(() => {
+    if (!isFetchingNext || isGeneratingPlan) {
+      setChatStatusText(null);
+      chatRequestStartTimeRef.current = null;
+      return;
+    }
+
+    const chatConfig = PROGRESS_CONFIG.chat;
+    const stagedLabels = chatConfig.stagedLabels || {};
+    chatRequestStartTimeRef.current = chatRequestStartTimeRef.current ?? Date.now();
+
+    const updateStatus = () => {
+      if (!chatRequestStartTimeRef.current) return;
+      const elapsed = Date.now() - chatRequestStartTimeRef.current;
+
+      // Find the label with the highest threshold <= elapsed
+      const thresholds = Object.keys(stagedLabels)
+        .map(key => parseInt(key, 10))
+        .filter(ms => !Number.isNaN(ms))
+        .sort((a, b) => a - b);
+
+      let activeLabel: string | null = null;
+      for (const threshold of thresholds) {
+        if (elapsed >= threshold) {
+          activeLabel = stagedLabels[threshold] || activeLabel;
+        } else {
+          break;
+        }
+      }
+
+      setChatStatusText(activeLabel);
+    };
+
+    updateStatus();
+    const intervalId = setInterval(updateStatus, 500);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [isFetchingNext, isGeneratingPlan]);
+
   const activeResponse = activeQuestion ? localResponses.get(activeQuestion.id) : undefined;
 
   const handleResponseChange = useCallback((value: any) => {
@@ -244,7 +296,8 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
   const lastMessageTypingComplete = lastMessage ? completedTypingIds.has(lastMessage.id) : false;
 
   // When information is complete, check if the closing message has finished typing
-  const showContinueButton = informationComplete && lastMessageTypingComplete;
+  // Hide continue button when generating plan
+  const showContinueButton = informationComplete && lastMessageTypingComplete && !isGeneratingPlan;
 
   // Only show answer interface when:
   // 1. There's an active question
@@ -317,6 +370,11 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
       )}
 
       <View style={styles.contentWrapper}>
+        {chatStatusText && (
+          <View style={styles.statusBar}>
+            <Text style={styles.statusText}>{chatStatusText}</Text>
+          </View>
+        )}
         {/* Messages - Scrollable */}
         <ScrollView
           ref={scrollRef}
@@ -393,12 +451,20 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
               />
             );
           })}
-          {isFetchingNext && questions.length > 0 && (
+          {isFetchingNext && questions.length > 0 && !isGeneratingPlan && (
             <AIChatMessage
               key="typing-inline"
               isLoading={true}
               showHeader={false}
             />
+          )}
+          {isGeneratingPlan && (
+            <InlineProgressIndicator progress={planGenerationProgress} />
+          )}
+          {planGenerationError && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{planGenerationError}</Text>
+            </View>
           )}
         </ScrollView>
       </View>
@@ -504,6 +570,15 @@ const styles = StyleSheet.create({
   contentWrapper: {
     flex: 1,
   },
+  statusBar: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    color: colors.tertiary,
+  },
   messagesContainer: {
     flex: 1,
   },
@@ -535,5 +610,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
+  },
+  errorContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: createColorWithOpacity('#e74c3c', 0.1),
+    borderRadius: 8,
+    marginHorizontal: 16,
+    marginTop: 8,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#e74c3c',
+    textAlign: 'center',
   },
 });

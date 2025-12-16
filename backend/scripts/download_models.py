@@ -1,7 +1,7 @@
 """
 Pre-download ML models for production deployment.
 
-This script downloads the zerank-1-small model during the build/deployment
+This script downloads the Jina reranker model during the build/deployment
 phase to avoid cold-start delays and ensure models are available offline.
 
 Usage:
@@ -25,21 +25,22 @@ logger = get_logger(__name__)
 
 
 def download_reranker_model():
-    """Download the zerank-1-small re-ranker model."""
+    """Download the Jina reranker v1-tiny-en model."""
     try:
         from sentence_transformers import CrossEncoder
 
-        logger.info("Downloading zerank-1-small model...")
+        logger.info("Downloading Jina reranker v1-tiny-en model...")
         logger.info(f"Cache directory: {os.getenv('HF_HOME', '~/.cache/huggingface')}")
 
         # Download and cache the model
         model = CrossEncoder(
-            'zeroentropy/zerank-1-small',
-            trust_remote_code=True
+            'jinaai/jina-reranker-v1-tiny-en',
+            trust_remote_code=False
         )
 
-        logger.info("✓ zerank-1-small model downloaded successfully")
+        logger.info("✓ Jina reranker v1-tiny-en model downloaded successfully")
         logger.info(f"  Model type: {type(model)}")
+        logger.info(f"  Model size: ~33M parameters (very lightweight)")
 
         # Test the model works
         test_query = "What is strength training?"

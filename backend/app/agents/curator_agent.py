@@ -20,6 +20,8 @@ from app.schemas.playbook_schemas import (
     UserPlaybook,
     ReflectorAnalysis,
     UpdatedUserPlaybook,
+    StructuredPlaybookUpdate,
+    PlaybookOperation,
 )
 from app.agents.base_agent import BaseAgent
 from app.services.rag_service import RAGService
@@ -79,7 +81,8 @@ class Curator(BaseAgent):
         analyses: List[ReflectorAnalysis],
         existing_playbook: UserPlaybook,
         source_plan_id: Optional[str] = None,
-    ) -> UpdatedUserPlaybook:
+        use_structured_operations: bool = False,
+    ) -> StructuredPlaybookUpdate | UpdatedUserPlaybook:
         """
         Process multiple new lessons using a single LLM call.
         
@@ -99,11 +102,28 @@ class Curator(BaseAgent):
             # Handle empty analyses list
             if not analyses or len(analyses) == 0:
                 self.logger.warning("No analyses provided - returning existing playbook unchanged")
-                return UpdatedUserPlaybook(
-                    lessons=existing_playbook.lessons,
-                    total_lessons=existing_playbook.total_lessons,
-                    reasoning="No new lessons to process"
-                )
+                if use_structured_operations:
+                    # Return KEEP operations for all existing lessons
+                    keep_operations = [
+                        PlaybookOperation(
+                            operation="KEEP",
+                            lesson_id=lesson.id,
+                            lesson=lesson,
+                            reasoning="No new lessons to process - keeping existing lesson"
+                        )
+                        for lesson in existing_playbook.lessons
+                    ]
+                    return StructuredPlaybookUpdate(
+                        operations=keep_operations,
+                        total_lessons=existing_playbook.total_lessons,
+                        reasoning="No new lessons to process"
+                    )
+                else:
+                    return UpdatedUserPlaybook(
+                        lessons=existing_playbook.lessons,
+                        total_lessons=existing_playbook.total_lessons,
+                        reasoning="No new lessons to process"
+                    )
             
             self.logger.info(f"Processing batch of {len(analyses)} lessons with single LLM call")
 
@@ -157,7 +177,8 @@ class Curator(BaseAgent):
                 🎯 **CURRENT STEP:** Curate Playbook (Deduplication & Integration)
 
                 **YOUR ROLE IN THE ACE FRAMEWORK:**
-                You are the Curator - the guardian of the user's institutional memory. Your playbook is the knowledge base that guides the TrainingCoach to create personalized training plans. These lessons represent long-term, persistent insights about the user's constraints, preferences, and proven patterns - not temporary or daily changes.
+                You are the Curator - the guardian of the user's institutional memory. Your playbook is the knowledge base that guides the TrainingCoach to create personalized training plans. 
+                These lessons represent long-term, persistent insights about the user's constraints, preferences, and proven patterns - not temporary or daily changes.
                 
                 **THE PLAYBOOK'S PURPOSE:**
                 - **Institutional Memory:** Captures what works and what doesn't for this specific user over time
@@ -172,10 +193,14 @@ class Curator(BaseAgent):
                 {proposed_lessons_text}
 
                 **YOUR PRIMARY TASK:**
-                Analyze each proposed lesson against ALL existing lessons and decide:
-                1. **MERGE** - If it's a duplicate or very similar to an existing lesson
-                2. **REPLACE** - If it contradicts an existing lesson (user evolution/change in long-term circumstances)
-                3. **ADD** - If it's unique and adds new long-term value
+                Analyze each proposed lesson against ALL existing lessons and decide on operations:
+                1. **KEEP** - Existing lesson unchanged (preserve all metadata: helpful_count, harmful_count, times_applied, last_used_at, context)
+                2. **ADJUST** - Existing lesson modified (update text/tags/confidence, preserve ID and usage stats, may need new RAG)
+                3. **REMOVE** - Delete existing lesson (user evolution or contradiction)
+                4. **ADD** - New lesson (generate new ID, needs RAG if requires_context=True)
+                
+                For each existing lesson, decide: KEEP (unchanged) or REMOVE (contradicted/outdated).
+                For each proposed lesson, decide: ADJUST (merge into existing) or ADD (new unique lesson).
                 
                 **CRITICAL FILTER: LONG-TERM LESSONS ONLY**
                 - Focus on persistent patterns, not temporary states
@@ -185,38 +210,40 @@ class Curator(BaseAgent):
                 - If a proposed lesson seems temporary or situation-specific, it may not belong in the playbook
 
                 ═══════════════════════════════════════════════════════════════════════════════
-                DECISION FRAMEWORK: MERGE, REPLACE, OR ADD?
+                DECISION FRAMEWORK: KEEP, ADJUST, REMOVE, OR ADD?
                 ═══════════════════════════════════════════════════════════════════════════════
 
-                **MERGE:**
-                Merge the proposed lesson into an existing lesson if they are exactly the same OR if they are related and should be combined into a single enhanced lesson.
-                
-                **How to Merge:**
-                - **Preserve existing lesson ID** - Keep the existing lesson's ID (NEVER change existing IDs)
-                - **Keep or refine text** - Keep or refine the existing lesson's text to incorporate both perspectives (use existing text OR combine for clarity)
-                - **Combine all tags** - Combine tags from both lessons (merge tags from both lessons, remove duplicates)
-                - **Update confidence** - Use the higher confidence value for exact duplicates, or weighted average (existing * 0.6 + proposed * 0.4) for related lessons (use: max(existing, proposed) OR weighted average)
-                - **Increment counters** - Add proposed lesson's helpful_count or harmful_count to existing lesson's counters (add proposed lesson's helpful_count/harmful_count to existing)
-                - **Update timestamps** - Update last_used_at to current timestamp (set last_used_at to current timestamp)
+                **KEEP:**
+                Keep an existing lesson unchanged if it's still valid and no proposed lesson relates to it.
+                - **Operation:** KEEP
+                - **Preserve ALL metadata:** helpful_count, harmful_count, times_applied, last_used_at, context (all unchanged)
+                - **Include full lesson:** Return the existing lesson exactly as-is
+                - **No RAG needed:** Context already exists, no re-enrichment needed
 
-                **REPLACE:**
-                Replace an existing lesson if the proposed lesson contradicts it (opposite guidance) or if the user's long-term situation has changed (equipment, injuries, preferences, availability) and the new lesson reflects current reality while the old lesson is outdated. Only replace if the change represents a persistent shift, not a temporary variation.
-                
-                **How to Replace:**
-                - REMOVE the contradicted existing lesson entirely (delete it from the playbook)
-                - ADD the new lesson with a new ID (generate new ID for the replacement lesson)
-                - Keep the new lesson's values as-is (use proposed confidence, counters, tags as-is)
-                - Document reasoning (explain why replacement occurred in reasoning field - emphasize it's a long-term change)
-                - This reflects user evolution/change in long-term circumstances
+                **ADJUST:**
+                Adjust an existing lesson if a proposed lesson is similar/related and should be merged into it.
+                - **Operation:** ADJUST
+                - **Preserve lesson ID:** Keep the existing lesson's ID (NEVER change existing IDs)
+                - **Update fields:** Refine text, combine tags, update confidence (weighted average: existing * 0.6 + proposed * 0.4)
+                - **Preserve usage stats:** Keep helpful_count, harmful_count, times_applied from existing (don't reset)
+                - **Update timestamp:** Set last_used_at to current timestamp
+                - **RAG may be needed:** If requires_context=True, re-run RAG (context may need update)
+                - **Include full adjusted lesson:** Return complete lesson with all fields
+
+                **REMOVE:**
+                Remove an existing lesson if it's contradicted by a proposed lesson or is outdated.
+                - **Operation:** REMOVE
+                - **Lesson ID required:** Must specify which existing lesson to remove
+                - **Lesson field:** Set to None (no lesson data needed for removal)
+                - **Reasoning:** Explain why lesson is being removed (contradiction, user evolution, etc.)
 
                 **ADD:**
-                Add the proposed lesson as a new lesson if it is completely unique, represents a long-term insight, and adds new actionable value not covered by any existing lesson (no overlap or relation to existing lessons).
-                
-                **How to Add:**
-                - **Verify long-term value** - Ensure the lesson represents a persistent pattern or constraint, not a temporary state
-                - **Generate new ID** - Format: "lesson_{{random_hex}}" (8-character hex)
-                - **Keep proposed lesson** - Keep proposed lesson as-is with all original values (use as-is with all original values)
-                - **Preserve all existing lessons** - Preserve all existing lessons unchanged (don't modify existing lessons)
+                Add a proposed lesson as new if it's completely unique and adds new long-term value.
+                - **Operation:** ADD
+                - **Generate new ID:** Format: "lesson_{{random_hex}}" (8-character hex)
+                - **Include full lesson:** Return complete lesson with all fields from proposed
+                - **Set requires_context:** Determine if lesson needs knowledge base context
+                - **RAG needed:** If requires_context=True, will run RAG enrichment
                 
                 **QUALITY CHECK:**
                 Before adding, verify the lesson is:
@@ -225,19 +252,30 @@ class Curator(BaseAgent):
                 - Valuable (adds unique insight not already captured)
                 - If the playbook exceeds {self.MAX_PLAYBOOK_SIZE} lessons, prioritize lessons with higher confidence and proven usefulness
 
-                **OUTPUT REQUIREMENTS:**
-                - Return ALL lessons (existing + new, after deduplication)
-                - Each lesson must:
-                - Have a unique ID (preserve existing IDs, generate new for truly new lessons)
+                **OUTPUT REQUIREMENTS (STRUCTURED OPERATIONS):**
+                - Return a list of operations (one per lesson in final playbook)
+                - For each existing lesson: Output KEEP (if unchanged) or REMOVE (if contradicted/outdated)
+                - For each proposed lesson: Output ADJUST (if merging into existing) or ADD (if new unique)
+                - Each operation must include:
+                  - **operation:** KEEP, ADJUST, REMOVE, or ADD
+                  - **lesson_id:** Existing ID for KEEP/ADJUST/REMOVE, new generated ID for ADD
+                  - **lesson:** Full lesson data for KEEP/ADJUST/ADD, None for REMOVE
+                  - **reasoning:** Why this operation was chosen
+                - For KEEP operations: Include existing lesson exactly as-is (preserve all metadata)
+                - For ADJUST operations: Include adjusted lesson with updated fields
+                - For ADD operations: Include new lesson with generated ID
+                - For REMOVE operations: lesson field is None
+                - Set total_lessons to count after all operations
+                - Provide overall reasoning explaining all changes
+                
+                **LESSON FIELD REQUIREMENTS:**
                 - Text must start with "The user..."
                 - Include tags, confidence (0.0-1.0), positive (bool), helpful_count, harmful_count
-                - Include created_at, last_used_at (current timestamp if newly used)
+                - Include created_at, last_used_at (current timestamp if newly used/adjusted)
                 - Include source_plan_id if provided
                 - **Set requires_context field**: Determine if this lesson can be backed by documentation/knowledge base
-                  - If lesson involves training methodologies, best practices, or general principles that can be found in knowledge base → set `requires_context=True`
-                  - If lesson is user-specific preference/constraint that cannot be backed by documentation → set `requires_context=False`
-                - Set total_lessons to the count of final lessons
-                - Provide reasoning explaining what was added, merged, removed, and why
+                  - If lesson involves training methodologies, best practices, or general principles → set `requires_context=True`
+                  - If lesson is user-specific preference/constraint → set `requires_context=False`
 
                 **CRITICAL RULES:**
                 - **Preserve existing lesson IDs** - NEVER change existing IDs when merging/updating
@@ -257,7 +295,10 @@ class Curator(BaseAgent):
 
             # Call LLM with schema (returns validated Pydantic model or dict)
             ai_start = time.time()
-            updated_playbook_result, completion = self.llm.parse_structured(prompt, UpdatedUserPlaybook, model_type="lightweight")
+            if use_structured_operations:
+                updated_playbook_result, completion = self.llm.parse_structured(prompt, StructuredPlaybookUpdate, model_type="complex")
+            else:
+                updated_playbook_result, completion = self.llm.parse_structured(prompt, UpdatedUserPlaybook, model_type="lightweight")
             ai_duration = time.time() - ai_start
             
             # Track latency
@@ -267,70 +308,171 @@ class Curator(BaseAgent):
             if updated_playbook_result is None:
                 raise ValueError("LLM returned None - unable to parse playbook")
             
-            if isinstance(updated_playbook_result, UpdatedUserPlaybook):
-                updated_playbook = updated_playbook_result
-            elif isinstance(updated_playbook_result, dict):
-                # Convert dict to UpdatedUserPlaybook if needed
-                updated_playbook = UpdatedUserPlaybook(**updated_playbook_result)
-            else:
-                # Fallback: try to validate as Pydantic model
-                updated_playbook = UpdatedUserPlaybook.model_validate(updated_playbook_result)
-            
-            # Generate proper IDs for new lessons (those that don't match existing IDs)
-            # Filter out None/empty IDs when building existing_ids set
-            existing_ids = {lesson.id for lesson in existing_playbook.lessons if lesson.id}
-            
-            # Ensure all lessons have valid IDs
-            if not updated_playbook.lessons:
-                self.logger.warning("LLM returned empty lessons list - using existing playbook")
-                updated_playbook.lessons = existing_playbook.lessons
-                updated_playbook.total_lessons = len(existing_playbook.lessons)
-            else:
-                for lesson in updated_playbook.lessons:
-                    # Safety check: ensure lesson has a valid ID (not None, not empty)
-                    if not lesson.id or not str(lesson.id).strip():
-                        lesson.id = f"lesson_{uuid.uuid4().hex[:8]}"
-                    # If lesson has a temporary ID or ID doesn't exist in existing playbook, generate new one
-                    elif str(lesson.id).startswith("new_") or lesson.id not in existing_ids:
-                        lesson.id = f"lesson_{uuid.uuid4().hex[:8]}"
+            if use_structured_operations:
+                # Handle StructuredPlaybookUpdate
+                if isinstance(updated_playbook_result, StructuredPlaybookUpdate):
+                    structured_update = updated_playbook_result
+                elif isinstance(updated_playbook_result, dict):
+                    structured_update = StructuredPlaybookUpdate(**updated_playbook_result)
+                else:
+                    structured_update = StructuredPlaybookUpdate.model_validate(updated_playbook_result)
                 
-                # Update total_lessons to match actual lesson count after ID generation
-                updated_playbook.total_lessons = len(updated_playbook.lessons)
-            
-            # Clean up playbook if too large
-            if len(updated_playbook.lessons) > self.MAX_PLAYBOOK_SIZE:
+                # Validate and fix operations
+                existing_ids = {lesson.id for lesson in existing_playbook.lessons if lesson.id}
+                validated_operations = []
+                used_ids = set(existing_ids)  # Track all IDs used so far (existing + new)
+                
+                for op in structured_update.operations:
+                    # Ensure lesson_id is valid
+                    if not op.lesson_id or not str(op.lesson_id).strip():
+                        if op.operation == "ADD":
+                            op.lesson_id = f"lesson_{uuid.uuid4().hex[:8]}"
+                        else:
+                            self.logger.warning(f"Invalid lesson_id for {op.operation} operation, skipping")
+                            continue
+                    
+                    # For ADD operations, generate ID if needed
+                    if op.operation == "ADD":
+                        # Regenerate ID if it's a placeholder, exists in playbook, or is a duplicate
+                        if op.lesson_id.startswith("new_") or op.lesson_id in used_ids:
+                            # Generate new unique ID
+                            while True:
+                                new_id = f"lesson_{uuid.uuid4().hex[:8]}"
+                                if new_id not in used_ids:
+                                    op.lesson_id = new_id
+                                    break
+                        # Ensure lesson is provided
+                        if not op.lesson:
+                            self.logger.warning(f"ADD operation missing lesson data, skipping")
+                            continue
+                        # Ensure lesson has correct ID
+                        op.lesson.id = op.lesson_id
+                        # Track this ID to prevent duplicates
+                        used_ids.add(op.lesson_id)
+                    
+                    # For KEEP/ADJUST operations, ensure lesson is provided and ID matches
+                    if op.operation in ["KEEP", "ADJUST"]:
+                        if not op.lesson:
+                            self.logger.warning(f"{op.operation} operation missing lesson data, skipping")
+                            continue
+                        if op.lesson.id != op.lesson_id:
+                            op.lesson.id = op.lesson_id
+                    
+                    # For REMOVE operations, ensure lesson_id exists
+                    if op.operation == "REMOVE":
+                        if op.lesson_id not in existing_ids:
+                            self.logger.warning(f"REMOVE operation for non-existent lesson_id {op.lesson_id}, skipping")
+                            continue
+                    
+                    validated_operations.append(op)
+                
+                # Check playbook size limit
+                final_lesson_count = len([op for op in validated_operations if op.operation != "REMOVE"])
+                if final_lesson_count > self.MAX_PLAYBOOK_SIZE:
+                    self.logger.info(
+                        f"Playbook exceeds max size ({final_lesson_count} > {self.MAX_PLAYBOOK_SIZE}), cleaning up..."
+                    )
+                    # Prioritize KEEP and ADJUST operations, then ADD by confidence
+                    keep_adjust_ops = [op for op in validated_operations if op.operation in ["KEEP", "ADJUST"]]
+                    add_ops = sorted(
+                        [op for op in validated_operations if op.operation == "ADD"],
+                        key=lambda x: x.lesson.confidence if x.lesson else 0.0,
+                        reverse=True
+                    )
+                    remove_ops = [op for op in validated_operations if op.operation == "REMOVE"]
+                    
+                    # Keep all KEEP/ADJUST, then top ADD operations
+                    slots_remaining = self.MAX_PLAYBOOK_SIZE - len(keep_adjust_ops)
+                    validated_operations = keep_adjust_ops + add_ops[:slots_remaining] + remove_ops
+                    final_lesson_count = len([op for op in validated_operations if op.operation != "REMOVE"])
+                
+                structured_update.operations = validated_operations
+                structured_update.total_lessons = final_lesson_count
+                
                 self.logger.info(
-                    f"Playbook exceeds max size ({len(updated_playbook.lessons)} > {self.MAX_PLAYBOOK_SIZE}), cleaning up..."
+                    f"✅ Structured playbook update: {len(existing_playbook.lessons)} existing → "
+                    f"{final_lesson_count} final ({len(proposed_lessons)} proposed, "
+                    f"{len([op for op in validated_operations if op.operation == 'KEEP'])} KEEP, "
+                    f"{len([op for op in validated_operations if op.operation == 'ADJUST'])} ADJUST, "
+                    f"{len([op for op in validated_operations if op.operation == 'REMOVE'])} REMOVE, "
+                    f"{len([op for op in validated_operations if op.operation == 'ADD'])} ADD)"
                 )
-                cleaned_lessons = self._cleanup_lessons(updated_playbook.lessons)
-                updated_playbook = UpdatedUserPlaybook(
-                    lessons=cleaned_lessons,
-                    total_lessons=len(cleaned_lessons),
-                    reasoning=f"{updated_playbook.reasoning} (Cleaned up to max size: {self.MAX_PLAYBOOK_SIZE})"
+                
+                return structured_update
+            else:
+                # Handle UpdatedUserPlaybook (legacy)
+                if isinstance(updated_playbook_result, UpdatedUserPlaybook):
+                    updated_playbook = updated_playbook_result
+                elif isinstance(updated_playbook_result, dict):
+                    updated_playbook = UpdatedUserPlaybook(**updated_playbook_result)
+                else:
+                    updated_playbook = UpdatedUserPlaybook.model_validate(updated_playbook_result)
+                
+                # Generate proper IDs for new lessons
+                existing_ids = {lesson.id for lesson in existing_playbook.lessons if lesson.id}
+                
+                if not updated_playbook.lessons:
+                    self.logger.warning("LLM returned empty lessons list - using existing playbook")
+                    updated_playbook.lessons = existing_playbook.lessons
+                    updated_playbook.total_lessons = len(existing_playbook.lessons)
+                else:
+                    for lesson in updated_playbook.lessons:
+                        if not lesson.id or not str(lesson.id).strip():
+                            lesson.id = f"lesson_{uuid.uuid4().hex[:8]}"
+                        elif str(lesson.id).startswith("new_") or lesson.id not in existing_ids:
+                            lesson.id = f"lesson_{uuid.uuid4().hex[:8]}"
+                    
+                    updated_playbook.total_lessons = len(updated_playbook.lessons)
+                
+                # Clean up playbook if too large
+                if len(updated_playbook.lessons) > self.MAX_PLAYBOOK_SIZE:
+                    self.logger.info(
+                        f"Playbook exceeds max size ({len(updated_playbook.lessons)} > {self.MAX_PLAYBOOK_SIZE}), cleaning up..."
+                    )
+                    cleaned_lessons = self._cleanup_lessons(updated_playbook.lessons)
+                    updated_playbook = UpdatedUserPlaybook(
+                        lessons=cleaned_lessons,
+                        total_lessons=len(cleaned_lessons),
+                        reasoning=f"{updated_playbook.reasoning} (Cleaned up to max size: {self.MAX_PLAYBOOK_SIZE})"
+                    )
+                
+                if updated_playbook.total_lessons != len(updated_playbook.lessons):
+                    self.logger.warning(
+                        f"total_lessons mismatch: {updated_playbook.total_lessons} != {len(updated_playbook.lessons)}. Correcting..."
+                    )
+                    updated_playbook.total_lessons = len(updated_playbook.lessons)
+                
+                self.logger.info(
+                    f"✅ Curated playbook: {len(existing_playbook.lessons)} existing → "
+                    f"{len(updated_playbook.lessons)} final ({len(proposed_lessons)} proposed)"
                 )
-            
-            # Ensure total_lessons matches actual lesson count (safety check)
-            if updated_playbook.total_lessons != len(updated_playbook.lessons):
-                self.logger.warning(
-                    f"total_lessons mismatch: {updated_playbook.total_lessons} != {len(updated_playbook.lessons)}. Correcting..."
-                )
-                updated_playbook.total_lessons = len(updated_playbook.lessons)
-            
-            self.logger.info(
-                f"✅ Curated playbook: {len(existing_playbook.lessons)} existing → "
-                f"{len(updated_playbook.lessons)} final ({len(proposed_lessons)} proposed)"
-            )
-            
-            return updated_playbook
+                
+                return updated_playbook
 
         except Exception as e:
             self.logger.error(f"Error in batch processing: {e}", exc_info=True)
             # Fallback: return existing playbook unchanged
-            return UpdatedUserPlaybook(
-                lessons=existing_playbook.lessons,
-                total_lessons=existing_playbook.total_lessons,
-                reasoning=f"Error during curation, returning existing playbook: {str(e)}"
-            )
+            if use_structured_operations:
+                keep_operations = [
+                    PlaybookOperation(
+                        operation="KEEP",
+                        lesson_id=lesson.id,
+                        lesson=lesson,
+                        reasoning=f"Error during curation, keeping existing lesson: {str(e)}"
+                    )
+                    for lesson in existing_playbook.lessons
+                ]
+                return StructuredPlaybookUpdate(
+                    operations=keep_operations,
+                    total_lessons=existing_playbook.total_lessons,
+                    reasoning=f"Error during curation, returning existing playbook: {str(e)}"
+                )
+            else:
+                return UpdatedUserPlaybook(
+                    lessons=existing_playbook.lessons,
+                    total_lessons=existing_playbook.total_lessons,
+                    reasoning=f"Error during curation, returning existing playbook: {str(e)}"
+                )
 
     def update_playbook_from_curated(
         self,

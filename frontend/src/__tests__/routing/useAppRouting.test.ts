@@ -119,7 +119,7 @@ describe('useAppRouting', () => {
     expect(result.current.routingReason).toMatch(/Continue Chat/);
   });
 
-  test('questions + responses + information complete and no plan -> /generate-plan', () => {
+  test('questions + responses + information complete and no plan -> /onboarding/initial-questions (in-chat generation)', () => {
     setAuthState({
       ...baseState,
       user: { id: 'u1', email_confirmed_at: '2025-01-01', app_metadata: { provider: 'email' } },
@@ -131,7 +131,8 @@ describe('useAppRouting', () => {
       trainingPlan: null,
     });
     const { result } = renderHook(() => useAppRouting());
-    expect(result.current.targetRoute).toBe('/generate-plan');
+    expect(result.current.targetRoute).toBe('/onboarding/initial-questions');
+    expect(result.current.routingReason).toMatch(/Generate Plan in Chat/);
   });
 
   test('has plan and not accepted -> /(tabs) Plan Review', () => {

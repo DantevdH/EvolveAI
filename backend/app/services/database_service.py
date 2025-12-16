@@ -1622,6 +1622,212 @@ class DatabaseService:
             self.logger.error(f"Error saving user playbook: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
 
+    async def save_playbook_operations(
+        self,
+        user_profile_id: int,
+        operations: List[Any],
+        jwt_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Save playbook using structured operations (KEEP/ADJUST/REMOVE/ADD).
+        
+        KEEP: No DB operation (lesson already exists, metadata preserved)
+        ADJUST: UPDATE lesson in DB
+        REMOVE: DELETE lesson from DB
+        ADD: INSERT new lesson in DB
+        
+        Args:
+            user_profile_id: The user profile ID
+            operations: List of PlaybookOperation objects
+            jwt_token: Optional JWT token for authentication
+            
+        Returns:
+            Dict with success status and operation counts
+        """
+        try:
+            from app.schemas.playbook_schemas import PlaybookOperation, PlaybookLesson
+            
+            # Use authenticated client if JWT token is provided
+            if jwt_token:
+                supabase_client = self._get_authenticated_client(jwt_token)
+            else:
+                supabase_client = self._create_supabase_client(use_service_role=True)
+            
+            # Convert operations to PlaybookOperation if needed
+            validated_operations = []
+            for op in operations:
+                if isinstance(op, dict):
+                    validated_operations.append(PlaybookOperation(**op))
+                else:
+                    validated_operations.append(op)
+            
+            # Track operation counts and failures
+            keep_count = 0
+            adjust_count = 0
+            adjust_failed = 0
+            remove_count = 0
+            remove_failed = 0
+            add_count = 0
+            add_failed = 0
+            failed_operations = []
+            
+            # Process each operation with individual error handling
+            for op in validated_operations:
+                try:
+                    if op.operation == "KEEP":
+                        # No DB operation needed - lesson already exists with all metadata
+                        keep_count += 1
+                        continue
+                    
+                    elif op.operation == "ADJUST":
+                        # UPDATE existing lesson
+                        if not op.lesson:
+                            self.logger.warning(f"ADJUST operation {op.lesson_id} missing lesson data, skipping")
+                            adjust_failed += 1
+                            failed_operations.append({"operation": "ADJUST", "lesson_id": op.lesson_id, "reason": "missing lesson data"})
+                            continue
+                        
+                        lesson = op.lesson if isinstance(op.lesson, PlaybookLesson) else PlaybookLesson(**op.lesson)
+                        
+                        lesson_row = {
+                            "lesson_id": lesson.id,
+                            "user_profile_id": user_profile_id,
+                            "text": lesson.text,
+                            "tags": lesson.tags,
+                            "positive": lesson.positive,
+                            "confidence": lesson.confidence,
+                            "requires_context": lesson.requires_context,
+                            "context": lesson.context,
+                            "helpful_count": lesson.helpful_count,
+                            "harmful_count": lesson.harmful_count,
+                            "times_applied": lesson.times_applied,
+                            "last_used_at": lesson.last_used_at,
+                            "source_plan_id": lesson.source_plan_id,
+                            "updated_at": datetime.utcnow().isoformat(),
+                        }
+                        
+                        # Update existing lesson
+                        result = supabase_client.table("lessons").update(lesson_row).eq(
+                            "lesson_id", lesson.id
+                        ).eq("user_profile_id", user_profile_id).execute()
+                        
+                        if result.data:
+                            adjust_count += 1
+                        else:
+                            adjust_failed += 1
+                            failed_operations.append({"operation": "ADJUST", "lesson_id": op.lesson_id, "reason": "update returned no data"})
+                            self.logger.warning(f"ADJUST operation {op.lesson_id} failed: update returned no data")
+                    
+                    elif op.operation == "REMOVE":
+                        # DELETE lesson from DB
+                        result = supabase_client.table("lessons").delete().eq(
+                            "lesson_id", op.lesson_id
+                        ).eq("user_profile_id", user_profile_id).execute()
+                        
+                        # Check if deletion was successful (result.data contains deleted rows)
+                        if result.data and len(result.data) > 0:
+                            remove_count += 1
+                        else:
+                            remove_failed += 1
+                            failed_operations.append({"operation": "REMOVE", "lesson_id": op.lesson_id, "reason": "no rows deleted"})
+                            self.logger.warning(f"REMOVE operation {op.lesson_id} failed: no rows deleted (lesson may not exist)")
+                    
+                    elif op.operation == "ADD":
+                        # INSERT new lesson
+                        if not op.lesson:
+                            self.logger.warning(f"ADD operation {op.lesson_id} missing lesson data, skipping")
+                            add_failed += 1
+                            failed_operations.append({"operation": "ADD", "lesson_id": op.lesson_id, "reason": "missing lesson data"})
+                            continue
+                        
+                        lesson = op.lesson if isinstance(op.lesson, PlaybookLesson) else PlaybookLesson(**op.lesson)
+                        
+                        created_at = lesson.created_at if lesson.created_at else datetime.utcnow().isoformat()
+                        
+                        lesson_row = {
+                            "lesson_id": lesson.id,
+                            "user_profile_id": user_profile_id,
+                            "text": lesson.text,
+                            "tags": lesson.tags,
+                            "positive": lesson.positive,
+                            "confidence": lesson.confidence,
+                            "requires_context": lesson.requires_context,
+                            "context": lesson.context,
+                            "helpful_count": lesson.helpful_count,
+                            "harmful_count": lesson.harmful_count,
+                            "times_applied": lesson.times_applied,
+                            "last_used_at": lesson.last_used_at,
+                            "source_plan_id": lesson.source_plan_id,
+                            "created_at": created_at,
+                            "updated_at": datetime.utcnow().isoformat(),
+                        }
+                        
+                        # Insert new lesson
+                        result = supabase_client.table("lessons").insert(lesson_row).execute()
+                        
+                        if result.data and len(result.data) > 0:
+                            add_count += 1
+                        else:
+                            add_failed += 1
+                            failed_operations.append({"operation": "ADD", "lesson_id": op.lesson_id, "reason": "insert returned no data"})
+                            self.logger.warning(f"ADD operation {op.lesson_id} failed: insert returned no data")
+                            
+                except Exception as op_error:
+                    # Log individual operation failure but continue processing others
+                    operation_type = op.operation if hasattr(op, 'operation') else 'UNKNOWN'
+                    lesson_id = op.lesson_id if hasattr(op, 'lesson_id') else 'UNKNOWN'
+                    self.logger.error(
+                        f"Failed to execute {operation_type} operation for lesson {lesson_id}: {op_error}",
+                        exc_info=True
+                    )
+                    failed_operations.append({"operation": operation_type, "lesson_id": lesson_id, "reason": str(op_error)})
+                    
+                    # Track failure by operation type
+                    if operation_type == "ADJUST":
+                        adjust_failed += 1
+                    elif operation_type == "REMOVE":
+                        remove_failed += 1
+                    elif operation_type == "ADD":
+                        add_failed += 1
+            
+            # Determine overall success status
+            total_failed = adjust_failed + remove_failed + add_failed
+            total_successful = keep_count + adjust_count + remove_count + add_count
+            all_operations_successful = total_failed == 0
+            
+            # Log summary
+            if all_operations_successful:
+                self.logger.info(
+                    f"✅ Saved all playbook operations for user_profile {user_profile_id}: "
+                    f"{keep_count} KEEP, {adjust_count} ADJUST, {remove_count} REMOVE, {add_count} ADD"
+                )
+            else:
+                self.logger.warning(
+                    f"⚠️ Partial success saving playbook operations for user_profile {user_profile_id}: "
+                    f"{keep_count} KEEP, {adjust_count} ADJUST ({adjust_failed} failed), "
+                    f"{remove_count} REMOVE ({remove_failed} failed), {add_count} ADD ({add_failed} failed). "
+                    f"Total: {total_successful} successful, {total_failed} failed"
+                )
+            
+            return {
+                "success": all_operations_successful,
+                "partial_success": total_successful > 0 and not all_operations_successful,
+                "operations": {
+                    "keep": keep_count,
+                    "adjust": adjust_count,
+                    "adjust_failed": adjust_failed,
+                    "remove": remove_count,
+                    "remove_failed": remove_failed,
+                    "add": add_count,
+                    "add_failed": add_failed,
+                },
+                "failed_operations": failed_operations if failed_operations else None,
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error saving playbook operations: {e}", exc_info=True)
+            return {"success": False, "error": str(e)}
+
     async def upsert_lesson(
         self,
         lesson: Any,

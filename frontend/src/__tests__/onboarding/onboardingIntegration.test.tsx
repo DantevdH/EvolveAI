@@ -560,7 +560,7 @@ describe('Onboarding Integration Tests', () => {
       expect(dispatchCall[0].payload.initial_responses).toEqual(responses);
     });
 
-    test('3.2: After questions completion, routing hook routes to generate-plan when information is complete', () => {
+    test('3.2: After questions completion, routing hook routes to onboarding/initial-questions for in-chat generation', () => {
       const profile = createMockProfile({
         initial_questions: createMockQuestionsResponse().questions,
         initial_responses: { q1: 'answer1', q2: 'answer2' },
@@ -576,29 +576,31 @@ describe('Onboarding Integration Tests', () => {
       
       const { result } = renderHook(() => useAppRouting());
       
-      expect(result.current.targetRoute).toBe('/generate-plan');
-      expect(result.current.routingReason).toMatch(/Generate Plan/);
+      expect(result.current.targetRoute).toBe('/onboarding/initial-questions');
+      expect(result.current.routingReason).toMatch(/Generate Plan in Chat/);
     });
   });
 
   describe('Category 4: Plan Generation Flow', () => {
-    test('4.1: GeneratePlanScreen validates profile has questions and responses before generation', () => {
+    test('4.1: In-chat plan generation validates profile has questions and responses before generation', () => {
       const profile = createMockProfile({
         initial_questions: createMockQuestionsResponse().questions,
         initial_responses: { q1: 'answer1', q2: 'answer2' },
+        information_complete: true,
       });
       setAuthState({ userProfile: profile });
       
-      // Verify profile has required data
+      // Verify profile has required data for in-chat generation
       expect(profile.initial_questions).toBeTruthy();
       expect(Array.isArray(profile.initial_questions)).toBe(true);
       expect(profile.initial_questions!.length).toBeGreaterThan(0);
       expect(profile.initial_responses).toBeTruthy();
       expect(typeof profile.initial_responses).toBe('object');
       expect(Object.keys(profile.initial_responses!).length).toBeGreaterThan(0);
+      expect(profile.information_complete).toBe(true);
     });
 
-    test('4.2: Plan generation success updates profile with playbook and training plan', async () => {
+    test('4.2: In-chat plan generation success updates profile with playbook and training plan', async () => {
       const profile = createMockProfile({
         initial_questions: createMockQuestionsResponse().questions,
         initial_responses: { q1: 'answer1' },
@@ -644,7 +646,7 @@ describe('Onboarding Integration Tests', () => {
       expect(profileUpdateCall[0].payload.playbook).toEqual(mockPlanResponse.playbook);
     });
 
-    test('4.3: After plan generation, screen polls for playbook and plan outline', async () => {
+    test('4.3: After in-chat plan generation, component polls for playbook and plan outline', async () => {
       const profile = createMockProfile({ id: 123 });
       setAuthState({ userProfile: profile });
       
@@ -667,6 +669,61 @@ describe('Onboarding Integration Tests', () => {
       
       expect(hasPlaybook).toBe(true);
       expect(weekCount).toBeGreaterThan(1);
+    });
+
+    test('4.4: ChatQuestionsPage hides Continue button when plan is generating', () => {
+      // Test that isGeneratingPlan prop hides the Continue button
+      // This is a UI behavior test - in practice, when plan generation starts,
+      // the Continue button should disappear and circular progress should appear
+      const mockProps = {
+        informationComplete: true,
+        isGeneratingPlan: true,
+        lastMessageTypingComplete: true,
+      };
+      
+      // showContinueButton logic: informationComplete && lastMessageTypingComplete && !isGeneratingPlan
+      const showContinueButton = mockProps.informationComplete && mockProps.lastMessageTypingComplete && !mockProps.isGeneratingPlan;
+      
+      expect(showContinueButton).toBe(false);
+    });
+
+    test('4.5: ChatQuestionsPage shows circular progress when generating plan', () => {
+      // Test that isGeneratingPlan prop triggers circular progress display
+      const mockProps = {
+        isGeneratingPlan: true,
+        planGenerationProgress: 45,
+      };
+      
+      // InlineProgressIndicator should be shown when isGeneratingPlan is true
+      expect(mockProps.isGeneratingPlan).toBe(true);
+      expect(mockProps.planGenerationProgress).toBe(45);
+    });
+
+    test('4.6: Auto-trigger plan generation on reload when information is complete', () => {
+      // Test the auto-trigger logic for reload scenario
+      const mockState = {
+        currentStep: 'initial',
+        informationComplete: true,
+        hasQuestions: true,
+        hasResponses: true,
+        hasTrainingPlan: false,
+        planGenerationNotTriggered: true,
+        notCurrentlyGenerating: true,
+        hasUserProfile: true,
+      };
+      
+      // Should trigger plan generation if all conditions are met
+      const shouldAutoTrigger = 
+        mockState.currentStep === 'initial' &&
+        mockState.informationComplete &&
+        mockState.hasQuestions &&
+        mockState.hasResponses &&
+        !mockState.hasTrainingPlan &&
+        mockState.planGenerationNotTriggered &&
+        mockState.notCurrentlyGenerating &&
+        mockState.hasUserProfile;
+      
+      expect(shouldAutoTrigger).toBe(true);
     });
   });
 

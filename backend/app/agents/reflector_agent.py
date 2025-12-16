@@ -160,19 +160,9 @@ class Reflector(BaseAgent):
                 ✓ Focus on extracting DIFFERENT aspects of the user (schedule, equipment, constraints, preferences, etc.)
                 ✓ Each lesson should cover a UNIQUE dimension of the user's profile
                 
-                **WHAT TO EXTRACT (DISTINCT LESSONS):**
-                • One lesson about schedule/availability (e.g., "can train Monday/Wednesday/Friday")
-                • One lesson about equipment constraints (e.g., "limited to dumbbells only")
-                • One lesson about physical limitations (e.g., "avoids overhead pressing due to shoulder")
-                • One lesson about preferences (e.g., "prefers strength over endurance")
-                • One lesson about experience level (e.g., "beginner - focus on fundamentals")
-                • Each lesson should cover a DIFFERENT aspect - avoid overlap
+                {self._get_what_to_extract_guidance(context="initial")}
                 
-                **WHAT NOT TO EXTRACT (OVERLAPS/DUPLICATES):**
-                ✗ Multiple lessons that say the same thing in different ways
-                ✗ Lessons that significantly overlap in meaning
-                ✗ Redundant lessons about the same constraint/preference
-                ✗ Lessons that could be combined into one comprehensive lesson
+                {self._get_what_not_to_extract_guidance(context="initial")}
                 
                 **DUPLICATE AVOIDANCE:**
                 Before extracting each lesson, ask yourself:
@@ -286,23 +276,9 @@ class Reflector(BaseAgent):
                 ✓ If a lesson is similar/duplicate of existing lesson → DO NOT EXTRACT IT
                 ✓ Focus on insights that COMPLEMENT or EXTEND existing knowledge, not repeat it
                 
-                **WHAT TO EXTRACT (UNIQUE INSIGHTS ONLY):**
-                • **New** preferences mentioned during conversation (not in onboarding or existing playbook)
-                • **Novel** clarifications or elaborations that add new context
-                • **Unique** questions that revealed important new context
-                • **Distinct** feedback patterns or preferences shown through conversation style
-                • **Additional** training philosophy or approach preferences not yet captured
-                • **New** constraints or limitations mentioned for the first time
+                {self._get_what_to_extract_guidance(context="conversation")}
                 
-                **WHAT NOT TO EXTRACT (DUPLICATES/IRRELEVANT/TEMPORARY):**
-                ✗ Lessons already covered in existing playbook (even if slightly different wording)
-                ✗ Generic compliments ("I like it", "Looks good")
-                ✗ Temporary preferences or mood-based statements (daily fluctuations)
-                ✗ One-off questions without actionable insights
-                ✗ Lessons that are essentially the same as existing lessons (different wording, same meaning)
-                ✗ Lessons that overlap significantly with existing playbook content
-                ✗ Temporary states or situation-specific insights that won't persist
-                ✗ Daily fluctuations, one-time events, or context-dependent preferences
+                {self._get_what_not_to_extract_guidance(context="conversation")}
                 
                 **DUPLICATE DETECTION:**
                 Before extracting a lesson, ask yourself:
@@ -386,9 +362,97 @@ class Reflector(BaseAgent):
         
         return "\n".join(formatted)
     
+    def _get_what_to_extract_guidance(self, context: str = "initial") -> str:
+        """
+        Get unified guidance on what to extract based on context.
+        
+        Args:
+            context: Either "initial" (onboarding) or "conversation" (conversation history)
+        
+        Returns:
+            String containing guidance on what to extract
+        """
+        base_items = """• Schedule/availability (e.g., "The user can train Monday/Wednesday/Friday")
+                • Equipment constraints (e.g., "The user is limited to dumbbells only")
+                • Physical limitations (e.g., "The user avoids overhead pressing due to shoulder")
+                • Preferences (e.g., "The user prefers strength over endurance")
+                • Experience level (e.g., "The user is a beginner")
+                • Goals, desires, interests
+                • Experiences, pain points, challenges
+                • Capabilities, resources, or limitations"""
+        
+        if context == "conversation":
+            return f"""
+                **WHAT TO EXTRACT (UNIQUE INSIGHTS ONLY):**
+                Extract ONLY what the USER EXPRESSED, HAS, or WANTS - capture user state, not system actions:
+                {base_items}
+                • **New** preferences, clarifications, or elaborations that add new context
+                • **Novel** insights revealed through questions or conversation patterns"""
+        else:  # initial/onboarding
+            return f"""
+                **WHAT TO EXTRACT (DISTINCT LESSONS):**
+                Extract ONLY what the USER EXPRESSED, HAS, or WANTS - capture user state, not system actions:
+                {base_items}
+                • Each lesson should cover a DIFFERENT aspect (schedule, equipment, constraints, preferences, etc.)"""
+    
+    def _get_what_not_to_extract_guidance(self, context: str = "initial") -> str:
+        """
+        Get unified guidance on what NOT to extract based on context.
+        
+        Args:
+            context: Either "initial" (onboarding) or "conversation" (conversation history)
+        
+        Returns:
+            String containing guidance on what not to extract
+        """
+        system_actions_warning = """✗ **CRITICAL - NEVER EXTRACT SYSTEM ACTIONS:**
+                • What was PROVIDED, RECOMMENDED, GUIDED, or SUGGESTED to the user
+                • Actions TAKEN by the AI, system, or coach
+                • Training methods, advice, or instructions that were GIVEN to the user
+                • Any phrasing like "was provided with", "was given", "was recommended", "was instructed"
+                
+                ✗ **TEMPORARY/IRRELEVANT:**
+                • Temporary preferences, mood-based statements, or daily fluctuations
+                • One-time events or context-dependent preferences
+                • Generic compliments without actionable insights"""
+        
+        if context == "conversation":
+            return f"""
+                **WHAT NOT TO EXTRACT:**
+                ✗ **DUPLICATES:** Lessons already in existing playbook (even if different wording)
+                ✗ **OVERLAPS:** Lessons that are essentially the same as existing ones
+                ✗ **TEMPORARY:** Situation-specific insights that won't persist
+                
+                {system_actions_warning}"""
+        else:  # initial/onboarding
+            return f"""
+                **WHAT NOT TO EXTRACT:**
+                ✗ **OVERLAPS:** Multiple lessons saying the same thing, redundant lessons, or lessons that could be combined
+                
+                {system_actions_warning}"""
+    
+    def _get_lesson_capture_guidance(self) -> str:
+        """
+        Get concise guidance on what to capture vs what NOT to capture in lessons.
+        
+        Returns:
+            String containing the critical guidance on capturing user state vs system actions
+        """
+        return """
+                ✓ **What to Capture:** ONLY what the USER EXPRESSED, HAS, or WANTS:
+                  • What the user SAID/EXPRESSED (goals, constraints, preferences, limitations)
+                  • What the user HAS (equipment, injuries, schedule availability)
+                  • What the user EXPERIENCED or REPORTED (pain, fatigue, enjoyment)
+                  • Example: "The user expressed interest in building bigger muscles."
+                
+                ✓ **NEVER Capture:** System actions (what was PROVIDED, RECOMMENDED, GUIDED, or SUGGESTED)
+                  • Example (WRONG): "The user was provided with guidance on consistent high-volume training..."
+                
+                ✓ **Format:** Write lessons in third person starting with "The user..." focusing on their state."""
+    
     def _get_shared_lesson_extraction_sections(self) -> str:
         """
-        Get shared lesson extraction prompt sections (categories, formatting, quality, confidence, output).
+        Get shared lesson extraction prompt sections (formatting, quality, confidence, output).
         
         This is used by both extract_initial_lessons and extract_lessons_from_conversation_history
         to avoid duplication.
@@ -396,89 +460,18 @@ class Reflector(BaseAgent):
         Returns:
             String containing the shared prompt sections
         """
-        return """
-                **LESSON CATEGORIES & EXAMPLES:**
-                
-                **1. Physical Constraints** (priority: critical | positive: false)
-                • Injuries, pain, medical limitations requiring accommodation across all training types
-                • Strength example: "The user avoids overhead pressing movements due to shoulder injury recovery."
-                • Endurance example: "The user avoids high-impact activities (running, jumping) due to chronic knee pain."
-                • Sport example: "The user cannot perform contact drills due to concussion protocol."
-                • Tags: injury_prevention, limitations, safety
-                
-                **2. Equipment & Resources** (priority: high | positive: true/false)
-                • Available/unavailable equipment and training environments
-                • Strength example: "The user is limited to dumbbells (5-20kg) and bodyweight exercises only."
-                • Endurance example: "The user has no pool access available - use running/cycling for cardio work."
-                • Sport athlete example: "The user has an existing sport training schedule - provide supplemental strength/conditioning work only."
-                • Mixed example: "The user has full gym access plus outdoor running routes available."
-                • Tags: equipment, resources, environment, supplemental_training
-                
-                **3. Schedule & Recovery** (priority: high | positive: true)
-                • Training availability, session duration, timing preferences, and recovery patterns
-                • Schedule example: "The user can train Monday/Wednesday/Friday only, 45 minutes maximum per session."
-                • Timing example: "The user prefers early morning sessions (6-7 AM) before work."
-                • Frequency example: "The user is available 4-5 days per week for training."
-                • Recovery example: "The user needs at least one full rest day per week and prefers Sunday."
-                • Recovery example: "The user enjoys active recovery days with light mobility work or walking."
-                • Recovery example: "The user requires 48 hours between intense strength sessions for optimal recovery."
-                • Tags: schedule, timing, frequency, availability, recovery, rest, active_recovery, rest_days
-                
-                **4. Experience-Based Guidelines** (priority: medium | positive: true)
-                • Skill level, training history, appropriate progressions
-                • Beginner example: "The user is a beginner and should prioritize fundamental movement patterns and technique."
-                • Intermediate example: "The user is an intermediate athlete ready for structured periodization and moderate volume."
-                • Advanced example: "The user is an advanced competitor and can handle high frequency and complex programming."
-                • Tags: experience_level, progression, beginner/intermediate/advanced
-                
-                **5. Goal-Specific Context** (priority: high | positive: true)
-                • Specific requirements for their athletic goal or sport
-                • Endurance example: "The user is preparing for a marathon and needs progressive distance with 10% weekly increases."
-                • Strength example: "The user has a powerlifting focus and needs emphasis on main lifts with appropriate accessories."
-                • Sport athlete example: "The user is a football player with Mon/Wed/Fri practice and Saturday games - schedule strength work Tue/Thu/Sun only."
-                • Sport athlete example: "The user is a cyclist with an existing training plan and needs supplemental core/upper body strength 2x/week."
-                • Mixed example: "The user has a general fitness goal and needs balance between strength, endurance, and mobility work."
-                • Tags: goal_specific, sport_specific, training_focus, supplemental_training
-                
-                **6. Training Load & Progression** (priority: medium | positive: true)
-                • Preferences for intensity, volume, and how training should progress over time
-                • Intensity example: "The user prefers moderate-intensity steady-state cardio over high-intensity intervals."
-                • Intensity example: "The user enjoys high-intensity training sessions (RPE 8-9) 2-3x per week."
-                • Intensity example: "The user prefers conservative intensity (RPE 6-7) with focus on form and consistency."
-                • Volume example: "The user prefers minimal effective dose - quality over quantity approach."
-                • Volume example: "The user thrives on higher training volumes and can handle 5-6 sessions per week."
-                • Volume example: "The user prefers fewer, longer sessions over many short sessions."
-                • Progression example: "The user prefers conservative, gradual progression and avoids aggressive increases."
-                • Progression example: "The user responds well to linear progression with structured overload."
-                • Progression example: "The user enjoys varied progression with periodized intensity and volume changes."
-                • Tags: intensity, volume, progression, rpe, training_intensity, training_volume, periodization, training_load
-                
-                **7. Preferences & Exercise Selection** (priority: medium | positive: true)
-                • Training style preferences, enjoyment factors, and exercise/movement pattern preferences
-                • Style example: "The user prefers varied sessions to prevent boredom - rotate activities and formats weekly."
-                • Modality example: "The user enjoys strength training more than endurance work - emphasize accordingly."
-                • Format example: "The user prefers structured workouts over open-ended training."
-                • Exercise example: "The user prefers free weights over machines for strength training."
-                • Exercise example: "The user avoids specific exercises (e.g., deadlifts) due to form concerns."
-                • Exercise example: "The user enjoys compound movements - prioritize multi-joint exercises."
-                • Exercise example: "The user prefers bodyweight exercises when equipment is unavailable."
-                • Tags: preferences, motivation, variety, training_style, exercise_selection, movement_patterns, compound_isolation
-                
+        return f"""
                 **FORMATTING REQUIREMENTS:**
-                ✓ Each lesson must be **specific** and **actionable** (not generic advice like "eat healthy")
-                ✓ **CRITICAL - Lesson Text Format:** Always write lessons in third person starting with "The user...":
-                  • ✅ CORRECT: "The user avoids overhead pressing movements due to shoulder injury recovery."
-                  • ✅ CORRECT: "The user prefers compound movements for upper body strength development."
-                  • ✅ CORRECT: "The user can train Monday/Wednesday/Friday only, 45 minutes maximum per session."
-                  • ❌ WRONG: "Avoid overhead pressing movements..."
-                  • ❌ WRONG: "Focus on compound movements..."
-                  • ❌ WRONG: "Train Monday/Wednesday/Friday only..."
-                ✓ Reference **specific constraints** or insights mentioned
+                ✓ Each lesson must be **specific** and **actionable** (not generic advice)
+                ✓ Always write lessons in third person starting with "The user..."
+                ✓ Reference **specific constraints** or insights mentioned BY THE USER
                 ✓ Mark **physical constraints/warnings/limitations** as positive=false
                 ✓ Mark **preferences/capabilities/guidelines/strengths** as positive=true
                 ✓ Assign appropriate **priority levels**: critical, high, medium, low
-                ✓ Add **relevant tags**: 2-4 tags per lesson from the categories shown above
+                ✓ Add **relevant tags**: 2-4 tags per lesson
                 ✓ Keep lessons **concise**: 1-2 sentences maximum
+                
+                {self._get_lesson_capture_guidance()}
                 
                 **QUALITY STANDARDS (LONG-TERM FOCUS):**
                 ✓ Focus on **unchanging constraints** (injuries, equipment, schedule, etc.) - these persist over time
@@ -492,7 +485,7 @@ class Reflector(BaseAgent):
                 **CONFIDENCE ASSIGNMENT:**
                 Assign confidence based on how clearly and explicitly the preference/constraint was stated:
                 
-                **0.9-1.0 (Highest Confidence - Towards 1):** User made an extremely clear, definitive statement with multiple reinforcements leaving no room for interpretation.
+                **0.9-1.0 (Highest Confidence):** User made an extremely clear, definitive statement with multiple reinforcements leaving no room for interpretation.
                 
                 **0.8-0.9 (Very High Confidence):** User explicitly stated a critical constraint or limitation with clear, direct language and minimal ambiguity.
                 

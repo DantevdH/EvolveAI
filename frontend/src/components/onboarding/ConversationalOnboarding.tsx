@@ -18,6 +18,8 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useProgressOverlay } from '../../hooks/useProgressOverlay';
 import { supabase } from '../../config/supabase';
+import { useBackgroundDataPolling } from '../../hooks/useBackgroundDataPolling';
+import { POLLING_CONFIG } from '../../constants';
 import {
   cleanUserProfileForResume,
   isValidFormattedResponse,
@@ -26,7 +28,7 @@ import {
   validateGoalDescription,
   validateExperienceLevel,
 } from '../../utils/validation';
-import { logStep, logData, logError, logNavigation } from '../../utils/logger';
+import { logStep, logData, logError, logNavigation, logWarn } from '../../utils/logger';
 import { useApiCallWithBanner } from '../../hooks/useApiCallWithBanner';
 
 type ChatEntry = {
@@ -184,7 +186,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   onError,
   startFromStep = 'welcome',
 }) => {
-  const { state: authState, dispatch, refreshUserProfile } = useAuth();
+  const { state: authState, dispatch, refreshUserProfile, refreshTrainingPlan, setTrainingPlan, setExercises, setPollingPlan } = useAuth();
   const router = useRouter();
   const [state, setState] = useState<OnboardingState>({
     username: '',
@@ -211,6 +213,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   const { progressState, runWithProgress } = useProgressOverlay();
   const [overlayTitle, setOverlayTitle] = useState<string>('Loading…');
   const [isFetchingQuestion, setIsFetchingQuestion] = useState(false);
+
+  // Plan generation state
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [planGenerationError, setPlanGenerationError] = useState<string | null>(null);
+  const [shouldStartPolling, setShouldStartPolling] = useState(false);
+  const planGenerationTriggeredRef = useRef(false);
 
   // Add retry state for error recovery
   const [retryCount, setRetryCount] = useState(0);
@@ -587,14 +595,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     {
       retryCount: 3,
       onSuccess: async (response) => {
-        // Debug: Log response structure to verify data flow
-        console.log('📦 onSuccess response:', {
-          questions: response.questions,
-          questionsLength: response.questions?.length,
-          information_complete: response.information_complete,
-          ai_message: response.ai_message ? 'present' : 'missing',
-          merged_responses: Object.keys(response.merged_responses || {}).length,
-        });
+        // Log response structure to verify data flow
+        logData('Initial questions response', 'success');
 
         // Handle user profile ID updates BEFORE state update to prevent re-render issues
         if (response.user_profile_id && response.user_profile_id !== authState.userProfile?.id) {
@@ -853,22 +855,246 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   // Follow-up flow removed; no effect required.
 
-  // Simple step progression functions
-  const handleInitialQuestionsComplete = useCallback(() => {
-    // Save initial responses to user profile context and navigate to plan generation.
-    const initialResponsesObject = Object.fromEntries(state.initialResponses);
-    if (authState.userProfile) {
-      dispatch({
-        type: 'SET_USER_PROFILE',
-        payload: {
-          ...authState.userProfile,
-          initial_responses: initialResponsesObject,
-          information_complete: true, // Required for routing hook to navigate to /generate-plan
-        },
-        });
+  // Plan generation API call
+  const { execute: executeGeneratePlan, ErrorBannerComponent: PlanGenerationErrorBanner } = useApiCallWithBanner(
+    async (personalInfo: any, initialResponses: Record<string, any>, initialQuestions: any[], userProfileId: number, jwtToken: string) => {
+      return await trainingService.generateTrainingPlan(
+        personalInfo,
+        initialResponses,
+        initialQuestions,
+        userProfileId,
+        jwtToken
+      );
+    },
+    {
+      retryCount: 3,
+      onSuccess: async (response) => {
+        if (response.success && response.data) {
+          const { transformTrainingPlan } = await import('../../utils/trainingPlanTransformer');
+          const transformedPlan = transformTrainingPlan(response.data);
+
+          // Update playbook if provided
+          if (response.playbook && authState.userProfile) {
+            dispatch({
+              type: 'SET_USER_PROFILE',
+              payload: {
+                ...authState.userProfile,
+                playbook: response.playbook,
+              },
+            });
+          }
+
+          // Set training plan and exercises
+          setTrainingPlan(transformedPlan);
+
+          if (response.metadata?.exercises) {
+            setExercises(response.metadata.exercises);
+          }
+
+          logData('Plan generation', 'success');
+          
+          // Poll for playbook + plan outline to be ready (background jobs)
+          setShouldStartPolling(true);
+          
+          // Set generating to false
+          setIsGeneratingPlan(false);
+          setPlanGenerationError(null);
+          
+          // Navigation to tabs is handled automatically by the routing system
+          // when state.trainingPlan is set above via setTrainingPlan()
+        } else {
+          throw new Error(response.message || 'Failed to generate training plan');
+        }
+      },
+      onError: (error) => {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to generate training plan';
+        setPlanGenerationError(errorMessage);
+        setIsGeneratingPlan(false);
+        planGenerationTriggeredRef.current = false; // Allow retry
+        logError('Plan generation failed', error);
+      },
     }
-    // Navigation handled by centralized routing hook (no direct push to avoid duplicate navigation)
-  }, [state.initialResponses, state.informationComplete, authState.userProfile, dispatch, router]);  // follow-up removed
+  );
+
+  // Memoize callbacks for polling
+  const handlePollingUpdate = useCallback(async (data: { updatedPlaybook?: any; updatedPlan?: any }) => {
+    if (data.updatedPlaybook || data.updatedPlan) {
+      await Promise.all([refreshUserProfile(), refreshTrainingPlan()]);
+    }
+  }, [refreshUserProfile, refreshTrainingPlan]);
+
+  const handlePollingTimeout = useCallback(async () => {
+    logWarn('Polling timeout - refreshing data anyway');
+    try {
+      await Promise.all([refreshUserProfile(), refreshTrainingPlan()]);
+    } catch (refreshError) {
+      logError('Error refreshing data after polling timeout', refreshError);
+    }
+  }, [refreshUserProfile, refreshTrainingPlan]);
+
+  // Use unified polling hook for onboarding scenario (playbook + plan weeks)
+  const { isPolling, startPolling } = useBackgroundDataPolling(
+    authState.user?.id,
+    authState.userProfile?.id,
+    {
+      pollPlaybook: true,
+      pollPlanWeeks: true,
+      initialPlaybookCount: () => {
+        return authState.userProfile?.playbook?.total_lessons || 
+               authState.userProfile?.playbook?.lessons?.length || 0;
+      },
+      timeout: POLLING_CONFIG.TIMEOUT,
+      interval: POLLING_CONFIG.INTERVAL,
+      onUpdate: handlePollingUpdate,
+      onTimeout: handlePollingTimeout,
+    }
+  );
+
+  // Sync polling state with auth context
+  useEffect(() => {
+    setPollingPlan(isPolling);
+  }, [isPolling, setPollingPlan]);
+
+  // Start polling when flag is set (after plan generation)
+  useEffect(() => {
+    if (shouldStartPolling) {
+      startPolling();
+      setShouldStartPolling(false);
+    }
+  }, [shouldStartPolling, startPolling]);
+
+  // Simple step progression functions
+  const handleInitialQuestionsComplete = useCallback(async () => {
+    // Prevent duplicate requests
+    if (planGenerationTriggeredRef.current) {
+      return;
+    }
+
+    try {
+      // Save initial responses to user profile context
+      const initialResponsesObject = Object.fromEntries(state.initialResponses);
+      if (authState.userProfile) {
+        dispatch({
+          type: 'SET_USER_PROFILE',
+          payload: {
+            ...authState.userProfile,
+            initial_responses: initialResponsesObject,
+            information_complete: true,
+          },
+        });
+      }
+
+      // Validation
+      if (!authState.userProfile) {
+        throw new Error('User profile not found. Please complete onboarding first.');
+      }
+
+      if (!authState.userProfile.initial_questions || !Array.isArray(authState.userProfile.initial_questions) || authState.userProfile.initial_questions.length === 0) {
+        throw new Error('Initial questions missing. Please complete onboarding first.');
+      }
+
+      if (!initialResponsesObject || Object.keys(initialResponsesObject).length === 0) {
+        throw new Error('Initial responses are empty. Please complete onboarding first.');
+      }
+
+      if (!authState.userProfile.id) {
+        throw new Error('User profile ID missing. Please complete onboarding first.');
+      }
+
+      const jwtToken = authState.session?.access_token;
+      if (!jwtToken) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          throw new Error('Authentication token missing. Please log in again.');
+        }
+      }
+
+      // Validate personal info fields
+      const requiredFields = ['username', 'age', 'weight', 'height', 'gender', 'goalDescription', 'experienceLevel'];
+      const missingFields = requiredFields.filter(field => {
+        const value = authState.userProfile![field as keyof typeof authState.userProfile];
+        return value === null || value === undefined || value === '';
+      });
+      
+      if (missingFields.length > 0) {
+        throw new Error(`Missing required profile information: ${missingFields.join(', ')}. Please complete onboarding first.`);
+      }
+
+      // Set generating state
+      setIsGeneratingPlan(true);
+      setPlanGenerationError(null);
+      planGenerationTriggeredRef.current = true;
+
+      // Build personal info from profile
+      const measurementSystem: 'imperial' | 'metric' =
+        authState.userProfile.weightUnit === 'kg' ? 'metric' : 'imperial';
+
+      const personalInfo = {
+        username: authState.userProfile.username,
+        age: authState.userProfile.age,
+        weight: authState.userProfile.weight,
+        height: authState.userProfile.height,
+        weight_unit: authState.userProfile.weightUnit,
+        height_unit: authState.userProfile.heightUnit,
+        measurement_system: measurementSystem,
+        gender: authState.userProfile.gender,
+        goal_description: authState.userProfile.goalDescription,
+        experience_level: authState.userProfile.experienceLevel,
+      };
+
+      // Generate plan with progress
+      await runWithProgress('plan', async () => {
+        await executeGeneratePlan(
+          personalInfo,
+          initialResponsesObject,
+          authState.userProfile!.initial_questions || [],
+          authState.userProfile!.id,
+          jwtToken || authState.session?.access_token!
+        );
+      });
+    } catch (err) {
+      // This catch is for validation errors before API call
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate training plan';
+      setPlanGenerationError(errorMessage);
+      setIsGeneratingPlan(false);
+      planGenerationTriggeredRef.current = false;
+      logError('Plan generation validation error', err);
+    }
+  }, [state.initialResponses, authState.userProfile, authState.session, dispatch, executeGeneratePlan, runWithProgress, refreshUserProfile, refreshTrainingPlan]);
+
+  // Auto-trigger plan generation if information is complete but no plan exists (e.g., after reload)
+  useEffect(() => {
+    // Only auto-trigger if:
+    // 1. We're on the initial questions step
+    // 2. Information is complete
+    // 3. We have questions and responses
+    // 4. No training plan exists
+    // 5. Plan generation hasn't been triggered yet
+    // 6. We're not currently generating
+    if (
+      currentStep === 'initial' &&
+      state.informationComplete &&
+      state.initialQuestions.length > 0 &&
+      state.initialResponses.size > 0 &&
+      !authState.trainingPlan &&
+      !planGenerationTriggeredRef.current &&
+      !isGeneratingPlan &&
+      authState.userProfile
+    ) {
+      // Auto-trigger plan generation
+      planGenerationTriggeredRef.current = true;
+      handleInitialQuestionsComplete();
+    }
+  }, [
+    currentStep,
+    state.informationComplete,
+    state.initialQuestions.length,
+    state.initialResponses.size,
+    authState.trainingPlan,
+    isGeneratingPlan,
+    authState.userProfile,
+    handleInitialQuestionsComplete,
+  ]);
 
   // Step 2: Initial Questions
   const handleInitialResponseChange = useCallback((questionId: string, value: any) => {
@@ -1073,6 +1299,9 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             onSubmitAnswer={handleSubmitAnswer}
             isFetchingNext={isFetchingQuestion || initialQuestionsApiLoading}
             informationComplete={state.informationComplete}
+            isGeneratingPlan={isGeneratingPlan}
+            planGenerationError={planGenerationError}
+            planGenerationProgress={progressState.progress}
           />
         );
       
@@ -1106,11 +1335,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     <View style={styles.container}>
       <OnboardingBackground />
       <ProgressOverlay
-        visible={progressState.visible}
+        visible={progressState.visible && !isGeneratingPlan}
         progress={progressState.progress}
         title={overlayTitle}
       />
       <InitialQuestionsErrorBanner />
+      <PlanGenerationErrorBanner />
       {renderCurrentStep()}
     </View>
   );

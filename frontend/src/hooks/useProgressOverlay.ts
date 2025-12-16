@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ONBOARDING_PROGRESS_CONFIG, OnboardingPhase, PhaseProgressConfig } from '../constants/onboardingProgress';
+import { PROGRESS_CONFIG, type ProgressPhase, type PhaseProgressConfig } from '../constants/progressConfig';
 
 type IntervalHandle = ReturnType<typeof setInterval>;
 
@@ -40,8 +40,8 @@ export function useProgressOverlay() {
     }
   }, []);
 
-  const runWithProgress = useCallback(async <T,>(phase: OnboardingPhase, task: () => Promise<T>): Promise<T> => {
-    const config: PhaseProgressConfig | undefined = ONBOARDING_PROGRESS_CONFIG[phase];
+  const runWithProgress = useCallback(async <T,>(phase: ProgressPhase, task: () => Promise<T>): Promise<T> => {
+    const config: PhaseProgressConfig | undefined = PROGRESS_CONFIG[phase];
     if (!config) {
       return task();
     }
@@ -125,4 +125,4 @@ export function useProgressOverlay() {
   };
 }
 
-export type { OnboardingPhase, PhaseProgressConfig } from '../constants/onboardingProgress';
+export type { ProgressPhase, PhaseProgressConfig } from '../constants/progressConfig';

@@ -12,14 +12,17 @@ import { useAuth } from '../context/AuthContext';
 import { ProgressOverlay } from '../components/onboarding/ui';
 import { useProgressOverlay } from '../hooks/useProgressOverlay';
 import { trainingService } from '../services/onboardingService';
-import { logError, logData, logWarn } from '../utils/logger';
+import { logError, logData, logWarn, logInfo } from '../utils/logger';
 import { useApiCallWithBanner } from '../hooks/useApiCallWithBanner';
+import { useBackgroundDataPolling } from '../hooks/useBackgroundDataPolling';
+import { POLLING_CONFIG } from '../constants';
 
 export const GeneratePlanScreen: React.FC = () => {
   const { state: authState, refreshUserProfile, refreshTrainingPlan, setTrainingPlan, setExercises, setPollingPlan, dispatch } = useAuth();
   const { progressState, runWithProgress } = useProgressOverlay();
   const [error, setError] = useState<string | null>(null);
   const generationTriggeredRef = useRef(false);
+  const [shouldStartPolling, setShouldStartPolling] = useState(false);
 
   // API call with error handling for plan generation
   const { execute: executeGeneratePlan, loading: planGenerationLoading, ErrorBannerComponent: PlanGenerationErrorBanner } = useApiCallWithBanner(
@@ -60,7 +63,8 @@ export const GeneratePlanScreen: React.FC = () => {
           logData('Plan generation', 'success');
           
           // Poll for playbook + plan outline to be ready (background jobs)
-          await pollForBackgroundData();
+          // Trigger polling after plan generation completes
+          setShouldStartPolling(true);
           
           // Navigation to tabs is handled automatically by the routing system in index.tsx
           // when state.trainingPlan is set above via setTrainingPlan()
@@ -77,64 +81,54 @@ export const GeneratePlanScreen: React.FC = () => {
     }
   );
 
-  const pollForBackgroundData = useCallback(async () => {
-    const userId = authState.user?.id;
-    const userProfileId = authState.userProfile?.id;
-    
-    if (!userId || !userProfileId) {
-      logWarn('Cannot poll for background data: missing user ID or profile ID');
-      return;
+  // Memoize callbacks to prevent infinite loops
+  const handlePollingUpdate = useCallback(async (data: { updatedPlaybook?: any; updatedPlan?: any }) => {
+    if (data.updatedPlaybook || data.updatedPlan) {
+      await Promise.all([refreshUserProfile(), refreshTrainingPlan()]);
     }
+  }, [refreshUserProfile, refreshTrainingPlan]);
 
-    // Set polling flag to true
-    setPollingPlan(true);
-    logData('Polling for background data', 'start');
-    
-    const { UserService } = await import('../services/userService');
-    const { TrainingService } = await import('../services/trainingService');
-    
-    const MAX_ATTEMPTS = 12; // 60s max at 5s intervals
-    const POLL_INTERVAL = 5000; // 5 seconds
-    
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      try {
-        const [profileData, planData] = await Promise.all([
-          UserService.getUserProfile(userId),
-          TrainingService.getTrainingPlan(userProfileId),
-        ]);
-        
-        const hasPlaybook = (profileData.data?.playbook?.lessons?.length || 0) > 0;
-        const weekCount = planData.data?.weeklySchedules?.length || 0;
-        
-        if (hasPlaybook && weekCount > 1) {
-          logData('Background data ready', `playbook + ${weekCount} weeks`);
-          await Promise.all([refreshUserProfile(), refreshTrainingPlan()]);
-          setPollingPlan(false);
-          return;
-        }
-        
-        logData('Polling background data', `attempt ${attempt + 1}/${MAX_ATTEMPTS}: playbook=${hasPlaybook}, weeks=${weekCount}`);
-        
-        if (attempt < MAX_ATTEMPTS - 1) {
-          await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
-        }
-      } catch (pollError) {
-        logError('Polling error', pollError);
-        // Continue polling on error, but log it
-        if (attempt < MAX_ATTEMPTS - 1) {
-          await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
-        }
-      }
-    }
-    
-    logWarn('Polling timeout after 60s - refreshing data anyway');
+  const handlePollingTimeout = useCallback(async () => {
+    logWarn('Polling timeout - refreshing data anyway');
     try {
       await Promise.all([refreshUserProfile(), refreshTrainingPlan()]);
     } catch (refreshError) {
       logError('Error refreshing data after polling timeout', refreshError);
     }
-    setPollingPlan(false);
-  }, [authState.user?.id, authState.userProfile?.id, refreshUserProfile, refreshTrainingPlan, setPollingPlan]);
+  }, [refreshUserProfile, refreshTrainingPlan]);
+
+  // Use unified polling hook for onboarding scenario (playbook + plan weeks)
+  // Use functions to capture initial values when polling starts (not at component mount)
+  const { isPolling, startPolling } = useBackgroundDataPolling(
+    authState.user?.id,
+    authState.userProfile?.id,
+    {
+      pollPlaybook: true,
+      pollPlanWeeks: true,
+      initialPlaybookCount: () => {
+        // Capture current playbook count when polling starts
+        return authState.userProfile?.playbook?.total_lessons || 
+               authState.userProfile?.playbook?.lessons?.length || 0;
+      },
+      timeout: POLLING_CONFIG.TIMEOUT,
+      interval: POLLING_CONFIG.INTERVAL,
+      onUpdate: handlePollingUpdate,
+      onTimeout: handlePollingTimeout,
+    }
+  );
+
+  // Sync polling state with auth context
+  useEffect(() => {
+    setPollingPlan(isPolling);
+  }, [isPolling, setPollingPlan]);
+
+  // Start polling when flag is set (after plan generation)
+  useEffect(() => {
+    if (shouldStartPolling) {
+      startPolling();
+      setShouldStartPolling(false);
+    }
+  }, [shouldStartPolling, startPolling]);
 
   const startGeneration = useCallback(async () => {
     // Prevent duplicate requests
@@ -231,17 +225,17 @@ export const GeneratePlanScreen: React.FC = () => {
       setError(errorMessage);
       generationTriggeredRef.current = false;
     }
-  }, [authState.userProfile, authState.session, dispatch, pollForBackgroundData, runWithProgress, setExercises, setTrainingPlan, executeGeneratePlan]);
+  }, [authState.userProfile, authState.session, dispatch, runWithProgress, setExercises, setTrainingPlan, executeGeneratePlan]);
 
   useEffect(() => {
     // Avoid triggering generation while a plan is being fetched or already exists
     if (authState.trainingPlanLoading) {
-      logData('Plan generation', 'skipped - plan loading');
+      logInfo('Plan generation skipped - plan loading');
       return;
     }
     
     if (authState.trainingPlan) {
-      logData('Plan generation', 'skipped - plan exists');
+      logInfo('Plan generation skipped - plan exists');
       // Navigation to tabs is handled automatically by the routing system in index.tsx
       // when state.trainingPlan exists
       return;
