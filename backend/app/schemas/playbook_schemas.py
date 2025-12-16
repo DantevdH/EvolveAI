@@ -15,6 +15,7 @@ from datetime import datetime
 # Create Literal types for unified schemas
 # These generate JSON Schema with inline enum constraints, forcing ALL providers to use only valid values
 OutcomeTypeLiteral = Literal["completion", "feedback", "heart_rate", "rating", "injury", "energy", "progress"]
+PlaybookOperationTypeLiteral = Literal["KEEP", "ADJUST", "REMOVE", "ADD"]
 
 
 class PlaybookLesson(BaseModel):
@@ -298,4 +299,55 @@ class UpdatedUserPlaybook(BaseModel):
     reasoning: str = Field(
         ...,
         description="Brief explanation of what changes were made (what was added, merged, removed, and why)"
+    )
+
+
+# ===== Structured Playbook Operations Schema =====
+
+class PlaybookOperation(BaseModel):
+    """
+    A single operation to perform on a playbook lesson.
+    
+    Used for explicit KEEP/ADJUST/REMOVE/ADD operations to avoid
+    unnecessary RAG enrichment and preserve metadata.
+    """
+    
+    operation: PlaybookOperationTypeLiteral = Field(
+        ...,
+        description="Operation type: KEEP (no change), ADJUST (modify), REMOVE (delete), ADD (insert)"
+    )
+    lesson_id: str = Field(
+        ...,
+        description="Lesson ID - required for KEEP/ADJUST/REMOVE (existing lesson), generated for ADD (new lesson)"
+    )
+    lesson: Optional[PlaybookLesson] = Field(
+        None,
+        description="Full lesson data for KEEP/ADJUST/ADD operations. None for REMOVE operations."
+    )
+    reasoning: str = Field(
+        ...,
+        description="Explanation of why this operation was chosen"
+    )
+
+
+class StructuredPlaybookUpdate(BaseModel):
+    """
+    Structured playbook update with explicit operations.
+    
+    The LLM analyzes all new lessons against existing playbook and returns
+    explicit operations (KEEP/ADJUST/REMOVE/ADD) for each lesson, allowing
+    efficient processing and metadata preservation.
+    """
+    
+    operations: List[PlaybookOperation] = Field(
+        ...,
+        description="List of operations to perform on the playbook"
+    )
+    total_lessons: int = Field(
+        ...,
+        description="Total number of lessons after all operations are applied"
+    )
+    reasoning: str = Field(
+        ...,
+        description="Overall explanation of what changes were made and why"
     )

@@ -4,12 +4,12 @@ Chat router - handles training chat/feedback with intent classification and plan
 
 import copy
 import logging
-from typing import Dict, Any, Optional
-from fastapi import APIRouter, HTTPException, Depends
+from typing import Dict, Any, Optional, List
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 
 from app.api.dependencies import get_training_agent, get_interview_agent
 from app.agents.training_agent import TrainingAgent
-from app.schemas.question_schemas import PlanFeedbackRequest, PlanFeedbackResponse
+from app.schemas.question_schemas import PlanFeedbackRequest, PlanFeedbackResponse, PersonalInfo
 from app.schemas.playbook_schemas import UserPlaybook
 from app.services.database_service import db_service, extract_user_id_from_jwt
 from app.helpers.utils.date_mapper import map_daily_training_dates
@@ -46,80 +46,91 @@ def _create_plan_response(training_plan: Any, ai_message: str, context: str = ""
     return plan_response
 
 
-async def _handle_playbook_extraction_from_conversation(
+async def _handle_playbook_extraction_from_conversation_async(
     user_id: str,
-    request: PlanFeedbackRequest,
+    user_profile_id: int,
+    jwt_token: str,
+    conversation_history: List[Dict[str, str]],
     training_plan: Dict[str, Any],
-    conversation_history: list,
-) -> Optional[Dict[str, Any]]:
-    """Extract and update playbook from conversation history."""
-    updated_playbook = None
+    personal_info: PersonalInfo,
+) -> None:
+    """
+    Extract and update playbook from conversation history (async background task).
     
+    This function runs in the background after plan updates and does not return values.
+    It loads the current playbook from DB, extracts/curates lessons using structured operations,
+    enriches ADJUST/ADD operations with RAG, and saves operations to DB.
+    """
     if not conversation_history or len(conversation_history) == 0:
         logger.info("📘 No conversation history provided - skipping lesson extraction")
-        return updated_playbook
+        return
     
     try:
-        logger.info(f"📘 Extracting lessons from conversation history ({len(conversation_history)} messages)")
+        logger.info(f"📘 [Background] Extracting lessons from conversation history ({len(conversation_history)} messages)")
         
-        try:
-            user_profile_id = int(request.user_profile_id) if request.user_profile_id is not None else None
-        except Exception:
-            user_profile_id = None
+        # 1. Load current playbook from DB (source of truth, not request.playbook which may be stale)
+        existing_playbook = await db_service.load_user_playbook(user_profile_id, jwt_token)
+        if not existing_playbook:
+            existing_playbook = UserPlaybook(user_id=user_id, lessons=[], total_lessons=0)
+            logger.info("📘 [Background] No existing playbook found, starting fresh")
+        else:
+            logger.info(f"📘 [Background] Loaded existing playbook with {len(existing_playbook.lessons)} lessons")
         
-        if not user_profile_id:
-            logger.error("❌ Missing user_profile_id in request")
-            return updated_playbook
-        
-        if not request.personal_info:
-            logger.error("❌ Missing personal_info in request")
-            return updated_playbook
-        
-        personal_info = request.personal_info
-        
-        if not request.playbook:
-            logger.error("❌ Missing playbook in request")
-            return updated_playbook
-        
-        existing_playbook = UserPlaybook(**request.playbook)
-        
+        # 2. Extract and curate (returns structured operations: KEEP/ADJUST/REMOVE/ADD)
         from app.api.dependencies import get_playbook_service
         playbook_service = get_playbook_service()
         
-        curated_playbook = await playbook_service.extract_and_curate_conversation_lessons(
+        structured_update = await playbook_service.extract_and_curate_conversation_lessons(
             conversation_history=conversation_history,
             personal_info=personal_info,
             accepted_training_plan=training_plan,
             existing_playbook=existing_playbook,
         )
         
-        if curated_playbook and len(curated_playbook.lessons) > 0:
-            logger.info(f"📘 Extracted and curated {len(curated_playbook.lessons)} lessons")
-            
-            # Save playbook to lessons table
-            success = await db_service.save_user_playbook(
-                user_profile_id=user_profile_id,
-                playbook_data=curated_playbook.model_dump(),
-                jwt_token=request.jwt_token
+        if not structured_update or not structured_update.operations:
+            logger.info("📘 [Background] No operations generated from conversation history")
+            return
+        
+        logger.info(
+            f"📘 [Background] Generated {len(structured_update.operations)} operations: "
+            f"{len([op for op in structured_update.operations if op.operation == 'KEEP'])} KEEP, "
+            f"{len([op for op in structured_update.operations if op.operation == 'ADJUST'])} ADJUST, "
+            f"{len([op for op in structured_update.operations if op.operation == 'REMOVE'])} REMOVE, "
+            f"{len([op for op in structured_update.operations if op.operation == 'ADD'])} ADD"
+        )
+        
+        # 3. Run RAG enrichment only for ADJUST and ADD lessons
+        enriched_operations = await playbook_service.enrich_operations_with_context(
+            structured_update.operations,
+            rag_service=playbook_service.curator_agent.rag_service
+        )
+        
+        # 4. Save operations to DB (KEEP: no-op, ADJUST: update, REMOVE: delete, ADD: insert)
+        save_result = await db_service.save_playbook_operations(
+            user_profile_id=user_profile_id,
+            operations=enriched_operations,
+            jwt_token=jwt_token
+        )
+        
+        if save_result.get("success"):
+            ops = save_result.get("operations", {})
+            logger.info(
+                f"✅ [Background] Saved playbook operations: "
+                f"{ops.get('keep', 0)} KEEP, {ops.get('adjust', 0)} ADJUST, "
+                f"{ops.get('remove', 0)} REMOVE, {ops.get('add', 0)} ADD"
             )
-            
-            if not success:
-                logger.error("❌ Failed to save playbook to database")
-            
-            logger.info(f"✅ Updated playbook with {len(curated_playbook.lessons)} total lessons")
-            updated_playbook = curated_playbook.model_dump()
         else:
-            logger.info("📘 No lessons extracted from conversation history")
+            logger.error(f"❌ [Background] Failed to save playbook operations: {save_result.get('error')}")
             
     except Exception as e:
-        logger.error(f"❌ Error extracting lessons: {e}", exc_info=True)
-    
-    return updated_playbook
+        logger.error(f"❌ [Background] Error extracting lessons: {e}", exc_info=True)
+        # Don't raise - background tasks should not crash the application
 
 
 @router.post("/chat", response_model=PlanFeedbackResponse)
 async def chat(
     request: PlanFeedbackRequest,
+    background_tasks: BackgroundTasks,
     agent: TrainingAgent = Depends(get_training_agent)
 ):
     """
@@ -346,6 +357,19 @@ async def chat(
                 enriched_plan['ai_message'] = ai_message
             except Exception:
                 pass
+
+        # Trigger async playbook extraction in background
+        if conversation_history and len(conversation_history) > 0:
+            background_tasks.add_task(
+                _handle_playbook_extraction_from_conversation_async,
+                user_id=user_id,
+                user_profile_id=user_profile_id,
+                jwt_token=request.jwt_token,
+                conversation_history=conversation_history,
+                training_plan=enriched_plan,
+                personal_info=personal_info,
+            )
+            logger.info("📘 Triggered async playbook extraction from conversation")
 
         return PlanFeedbackResponse(
             success=True,

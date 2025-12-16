@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, createColorWithOpacity } from '@/src/constants/colors';
+import { POLLING_CONFIG } from '@/src/constants';
 import { ChatMessage as ChatBubble } from '@/src/components/shared/chat/ChatMessage';
 import { AIChatMessage } from '@/src/components/shared/chat/AIChatMessage';
 import { useAuth } from '@/src/context/AuthContext';
@@ -37,6 +38,8 @@ import { TrainingPlan } from '@/src/types/training';
 import { useApiCallWithBanner } from '@/src/hooks/useApiCallWithBanner';
 import { logger } from '@/src/utils/logger';
 import { ErrorBoundary } from '@/src/components/ErrorBoundary';
+import { useBackgroundDataPolling } from '@/src/hooks/useBackgroundDataPolling';
+import { PROGRESS_CONFIG } from '@/src/constants/progressConfig';
 
 interface ChatMessageType {
   id: string;
@@ -70,6 +73,99 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [hasLoadedHistory, setHasLoadedHistory] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  const [shouldStartPolling, setShouldStartPolling] = useState(false);
+  const initialPlaybookCountRef = useRef<number | null>(null);
+  const [chatStatusText, setChatStatusText] = useState<string | null>(null);
+  const chatRequestStartTimeRef = useRef<number | null>(null);
+  
+  // Unified polling hook for chat scenario (playbook only)
+  // Use functions to capture initial values when polling starts (not at component mount)
+  const { startPolling } = useBackgroundDataPolling(
+    state.user?.id,
+    state.userProfile?.id,
+    {
+      pollPlaybook: true,
+      pollPlanWeeks: false,
+      initialPlaybookCount: () => {
+        // Use captured ref value if available, otherwise fall back to current state
+        // This ensures we capture the count at the exact moment before polling starts
+        if (initialPlaybookCountRef.current !== null) {
+          return initialPlaybookCountRef.current;
+        }
+        return state.userProfile?.playbook?.total_lessons || 
+               state.userProfile?.playbook?.lessons?.length || 0;
+      },
+      initialLastUpdated: () => {
+        // Capture current last_updated timestamp when polling starts
+        return state.userProfile?.playbook?.last_updated;
+      },
+      timeout: POLLING_CONFIG.TIMEOUT,
+      interval: POLLING_CONFIG.INTERVAL,
+      onUpdate: async (data) => {
+        if (data.updatedPlaybook) {
+          await refreshUserProfile();
+          logger.info('Playbook updated from background extraction');
+        }
+      },
+      onTimeout: () => {
+        // Silent timeout - extraction may take longer, that's okay
+        logger.info('Playbook polling timeout - extraction may still be in progress');
+      },
+    }
+  );
+
+  // Time-based chat status text using PROGRESS_CONFIG.chat.stagedLabels
+  useEffect(() => {
+    if (!isLoading) {
+      setChatStatusText(null);
+      chatRequestStartTimeRef.current = null;
+      return;
+    }
+
+    const chatConfig = PROGRESS_CONFIG.chat;
+    const stagedLabels = chatConfig.stagedLabels || {};
+    chatRequestStartTimeRef.current = chatRequestStartTimeRef.current ?? Date.now();
+
+    const updateStatus = () => {
+      if (!chatRequestStartTimeRef.current) return;
+      const elapsed = Date.now() - chatRequestStartTimeRef.current;
+
+      // Find the label with the highest threshold <= elapsed
+      const thresholds = Object.keys(stagedLabels)
+        .map(key => parseInt(key, 10))
+        .filter(ms => !Number.isNaN(ms))
+        .sort((a, b) => a - b);
+
+      let activeLabel: string | null = null;
+      for (const threshold of thresholds) {
+        if (elapsed >= threshold) {
+          activeLabel = stagedLabels[threshold] || activeLabel;
+        } else {
+          break;
+        }
+      }
+
+      setChatStatusText(activeLabel);
+    };
+
+    updateStatus();
+    const intervalId = setInterval(updateStatus, 500);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [isLoading]);
+  
+  // Start polling when flag is set (after plan update)
+  useEffect(() => {
+    if (shouldStartPolling) {
+      // Reset ref to null after use so subsequent polls use current state
+      const capturedCount = initialPlaybookCountRef.current;
+      initialPlaybookCountRef.current = null;
+      startPolling();
+      setShouldStartPolling(false);
+    }
+  }, [shouldStartPolling, startPolling]);
 
   const isPlanReview = useMemo(
     () => mode === 'plan-review' && !!state.trainingPlan && !state.userProfile?.planAccepted,
@@ -348,6 +444,17 @@ const ChatModal: React.FC<ChatModalProps> = ({
             },
           });
         }
+        
+        // Start polling for playbook updates (async extraction happens in background)
+        // Capture initial playbook count synchronously before starting poll to avoid race condition
+        if (data.plan_updated && state.userProfile?.playbook) {
+          // Capture initial count at this exact moment to avoid race condition
+          // where playbook might update between setting flag and starting poll
+          initialPlaybookCountRef.current = 
+            state.userProfile.playbook.total_lessons || 
+            state.userProfile.playbook.lessons?.length || 0;
+          setShouldStartPolling(true);
+        }
       }
 
       const messageToShow =
@@ -413,8 +520,11 @@ const ChatModal: React.FC<ChatModalProps> = ({
 
     // Both plan-review and general modes use the same chat endpoint
     // The backend intelligently classifies intent and responds accordingly
-    await handlePlanFeedback(userMessage);
-    setIsLoading(false);
+    try {
+      await handlePlanFeedback(userMessage);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const exampleQuestions = [
@@ -475,6 +585,11 @@ const ChatModal: React.FC<ChatModalProps> = ({
             </View>
 
             <View style={styles.contentWrapper}>
+              {chatStatusText && (
+                <View style={styles.statusBar}>
+                  <Text style={styles.statusText}>{chatStatusText}</Text>
+                </View>
+              )}
               {/* Messages and Example Questions - Scrollable together */}
               <ScrollView
                 ref={scrollViewRef}
@@ -624,6 +739,15 @@ const styles = StyleSheet.create({
   },
   contentWrapper: {
     flex: 1,
+  },
+  statusBar: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    color: colors.tertiary,
   },
   header: {
     flexDirection: 'row',

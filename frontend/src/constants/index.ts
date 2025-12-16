@@ -53,3 +53,9 @@ export const SCREEN_CONFIG = {
 export const CHAT_CONFIG = {
   HISTORY_EXPIRATION_MS: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
 } as const;
+
+// Background Data Polling Configuration
+export const POLLING_CONFIG = {
+  TIMEOUT: 60000, // 60 seconds - maximum time to poll before giving up
+  INTERVAL: 5000, // 5 seconds - time between polling attempts
+} as const;
