@@ -368,6 +368,11 @@ class RAGService:
         Returns:
             List of relevant documents sorted by cosine similarity
         """
+        # Check if Supabase client is available
+        if not self.base_agent.supabase:
+            self.logger.warning("Supabase client not available - RAG search disabled")
+            return []
+        
         try:
             # Generate query embedding
             query_embedding = self.generate_embedding(query)

@@ -10,11 +10,14 @@ This class provides the foundation for all specialist agents with:
 
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
+import logging
 from supabase import create_client, Client
 
 from app.helpers.ai.llm_client import LLMClient
 from app.utils.env_loader import is_test_environment
 from settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 class BaseAgent(ABC):
@@ -48,13 +51,26 @@ class BaseAgent(ABC):
         if is_test_env:
             # In test environment, don't create client
             self.supabase: Optional[Client] = None
+            logger.debug("Test environment: Supabase client not initialized (will use mocks)")
         else:
             # Only create client in non-test environments
             supabase_url = settings.SUPABASE_URL
             supabase_key = settings.SUPABASE_ANON_KEY
-            if not supabase_url or not supabase_key:
-                raise ValueError("Supabase credentials not found in environment variables")
-            self.supabase: Client = create_client(supabase_url, supabase_key)
+            
+            # Gracefully handle missing credentials - allow app to start in degraded mode
+            if supabase_url and supabase_key:
+                try:
+                    self.supabase: Client = create_client(supabase_url, supabase_key)
+                    logger.info("Supabase client initialized successfully for agent")
+                except Exception as e:
+                    # Don't raise - allow app to start in degraded mode
+                    logger.warning(f"Failed to initialize Supabase client for agent: {e}")
+                    logger.warning("Agent running in degraded mode - RAG features will be unavailable")
+                    self.supabase: Optional[Client] = None
+            else:
+                logger.warning("Supabase credentials missing for agent - running in degraded mode")
+                logger.warning("RAG features will be unavailable, but agent can still function")
+                self.supabase: Optional[Client] = None
 
     @abstractmethod
     def process_request(self, user_request: str) -> str:

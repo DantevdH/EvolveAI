@@ -134,6 +134,17 @@ class Settings:
     def PORT(self) -> int:
         """Server port number"""
         return int(os.getenv("PORT", "8000"))
+    
+    @property
+    def IS_LOCAL_DEV(self) -> bool:
+        """Detect if running against local Supabase"""
+        supabase_url = self.SUPABASE_URL
+        return (
+            "127.0.0.1" in supabase_url 
+            or "localhost" in supabase_url
+            or supabase_url.startswith("http://127.0.0.1")
+            or supabase_url.startswith("http://localhost")
+        )
 
     @classmethod
     def validate(cls) -> bool:

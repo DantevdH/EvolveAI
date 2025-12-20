@@ -163,13 +163,21 @@ class DatabaseService:
                 
                 # Only create client if we have valid credentials
                 if supabase_url and supabase_key:
-                    self.supabase = create_client(supabase_url, supabase_key)
-                    self.logger.debug("Supabase client initialized successfully")
+                    try:
+                        self.supabase = create_client(supabase_url, supabase_key)
+                        self.logger.info("Supabase client initialized successfully")
+                    except Exception as e:
+                        # Don't raise - allow app to start in degraded mode
+                        self.logger.warning(f"Failed to initialize Supabase client: {e}")
+                        self.logger.warning("Running in degraded mode - database operations will fail gracefully")
+                        self.supabase = None
                 else:
-                    self.logger.warning("Supabase credentials missing - client not initialized")
+                    self.logger.warning("Supabase credentials missing - running in degraded mode")
             except Exception as e:
-                self.logger.error(f"Failed to initialize Supabase client: {e}")
-                raise
+                # Catch any unexpected errors during initialization
+                self.logger.warning(f"Unexpected error during Supabase initialization: {e}")
+                self.logger.warning("Running in degraded mode - database operations will fail gracefully")
+                self.supabase = None
     
     def _ensure_client_available(self) -> Client:
         """
