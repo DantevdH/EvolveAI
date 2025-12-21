@@ -22,9 +22,18 @@ supabase stop
 
 ## Local Credentials (Automatic)
 
-The `start.sh` script automatically extracts credentials from `supabase status` and exports them as environment variables. **No manual `.env` updates needed!**
+The `start.sh` script automatically extracts credentials from `supabase status --output json` and:
+1. Exports them as backend environment variables (`SUPABASE_*`)
+2. **Creates `frontend/.env` with `EXPO_PUBLIC_*` variables**
 
-Your `.env` file should contain **ONLY production/remote credentials**:
+**No manual `.env` updates needed!**
+
+**IMPORTANT:** 
+- The script extracts actual JWT tokens (`ANON_KEY`, `SERVICE_ROLE_KEY`), NOT identifiers (`PUBLISHABLE_KEY`, `SECRET_KEY`)
+- Frontend needs `frontend/.env` because Expo embeds `EXPO_PUBLIC_*` at build time
+- Metro bundler must restart to pick up new credentials
+
+Your root `.env` file should contain **ONLY production/remote credentials**:
 
 ```env
 # .env - Production/Remote values only
@@ -40,12 +49,12 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=<production-key>
 ```
 
 **How it works:**
-- `start.sh` automatically runs `supabase status` and extracts credentials
-- Credentials are exported as environment variables (session-only, doesn't modify `.env`)
-- Backend auto-detects local Supabase and uses these credentials
-- Frontend reads from environment variables set by Expo
+- `start.sh` runs `supabase status --output json` and parses credentials
+- Backend: Credentials exported as environment variables (runtime, session-only)
+- Frontend: Credentials written to `frontend/.env` (build time, auto-generated)
+- Metro bundler reads `frontend/.env` and embeds `EXPO_PUBLIC_*` variables
 
-**Note:** Keys change on restart, but `start.sh` handles this automatically.
+**Note:** Keys change on Supabase restart, but `start.sh` handles this automatically by regenerating both backend exports and `frontend/.env`.
 
 ## Access Points
 
@@ -61,6 +70,21 @@ Local Supabase is automatically seeded with test users when you run `supabase db
 - **Password:** testpass123
 
 Use these credentials to login during local development. Social login (OAuth) buttons are automatically hidden in local dev mode.
+
+## Local AI Model (Re-ranker)
+
+For optimal performance and to avoid VPN/SSL issues, the re-ranker model is **automatically detected** in local dev mode:
+
+**Standard location:** `backend/models/jina-reranker-v1-tiny-en`
+
+**Download the model once:**
+python backend/scripts/download_reranker_local.py
+**How it works:**
+- Local dev mode detected → checks `backend/models/jina-reranker-v1-tiny-en`
+- Model found → uses local copy (fast, no network)
+- Model not found → warns and attempts Hugging Face download (may fail due to VPN)
+
+**Best practice:** Download once, reuse forever. No `.env` configuration needed.
 
 ## Sync Schema from Production (VPN Workaround)
 

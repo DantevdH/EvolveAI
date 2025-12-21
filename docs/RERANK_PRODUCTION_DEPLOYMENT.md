@@ -252,6 +252,62 @@ After deployment:
 
 ---
 
+## Local Model Setup (VPN-Blocked Environments)
+
+If your VPN blocks access to Hugging Face, you can download the model locally and use it offline.
+
+### Step 1: Download Model Locally
+
+**Option A: Using the dedicated local download script (Recommended)**
+
+```bash
+# Download to default location (backend/models/jina-reranker-v1-tiny-en)
+python backend/scripts/download_reranker_local.py
+
+# Or specify a custom location
+python backend/scripts/download_reranker_local.py --output-dir ./my-models/jina-reranker
+```
+
+**Option B: Using the standard download script with environment variable**
+
+```bash
+RERANK_LOCAL_DIR=./backend/models/jina-reranker-v1-tiny-en python backend/scripts/download_models.py
+```
+
+**Note:** Run these scripts when your VPN is **off** or from a machine with Hugging Face access. The model will be saved to your local directory.
+
+### Step 2: Configure Environment Variable
+
+Add to your `.env` file:
+
+```bash
+RERANK_MODEL_PATH=./backend/models/jina-reranker-v1-tiny-en
+```
+
+Use an absolute path or a path relative to your project root. The path should point to the directory containing the model files.
+
+### Step 3: Restart Application
+
+Restart your application. The reranker will now load from the local directory instead of trying to download from Hugging Face.
+
+### Verification
+
+Check your application logs. You should see:
+```
+Using local model path: /path/to/backend/models/jina-reranker-v1-tiny-en
+Loading reranker model from local directory: /path/to/backend/models/jina-reranker-v1-tiny-en
+Local reranker model loaded successfully from: /path/to/backend/models/jina-reranker-v1-tiny-en
+```
+
+### Important Notes
+
+- **For Render/Production:** Do **NOT** set `RERANK_MODEL_PATH` in production. Let it download from Hugging Face during build (as configured in Render build commands).
+- **Model Size:** The local model directory will be ~150-200MB.
+- **Git Ignore:** The `backend/models/` directory is automatically ignored by git (see `.gitignore`).
+- **Path Format:** Use forward slashes (`/`) in paths, even on Windows. The path will be automatically resolved.
+
+---
+
 ## Model Pre-download Script
 
 Run this before deployment to pre-download the model:

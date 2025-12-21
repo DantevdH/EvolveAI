@@ -10,6 +10,14 @@ import logging
 from typing import Optional
 from pathlib import Path
 
+# Import default model configuration (source of truth)
+from app.config.model_config import (
+    DEFAULT_LLM_MODEL_COMPLEX,
+    DEFAULT_LLM_MODEL_LIGHTWEIGHT,
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_TEMPERATURE,
+)
+
 # Lazy logger initialization to avoid import order issues
 _logger = None
 
@@ -68,18 +76,23 @@ class Settings:
     
     @property
     def LLM_MODEL_COMPLEX(self) -> str:
-        """Complex model name for advanced tasks"""
-        return os.getenv("LLM_MODEL_COMPLEX", "gemini-2.5-flash")
+        """Complex model name for advanced tasks (from model_config.py, not .env)"""
+        return DEFAULT_LLM_MODEL_COMPLEX
     
     @property
     def LLM_MODEL_LIGHTWEIGHT(self) -> str:
-        """Lightweight model name for simple tasks"""
-        return os.getenv("LLM_MODEL_LIGHTWEIGHT", "gemini-2.5-flash-lite")
+        """Lightweight model name for simple tasks (from model_config.py, not .env)"""
+        return DEFAULT_LLM_MODEL_LIGHTWEIGHT
     
     @property
     def TEMPERATURE(self) -> float:
-        """Temperature setting for LLM generation"""
-        return float(os.getenv("TEMPERATURE", "0.7"))
+        """Temperature setting for LLM generation (from model_config.py, not .env)"""
+        return DEFAULT_TEMPERATURE
+    
+    @property
+    def EMBEDDING_MODEL(self) -> str:
+        """Embedding model name (from model_config.py, not .env)"""
+        return DEFAULT_EMBEDDING_MODEL
 
     # Supabase Configuration
     @property

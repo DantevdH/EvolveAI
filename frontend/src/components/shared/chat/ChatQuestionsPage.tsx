@@ -168,6 +168,35 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
     }
   }, [chatMessages, isFetchingNext]);
 
+  // Continuous scrolling while messages are typing
+  useEffect(() => {
+    // Check if there are any messages currently typing
+    // A message is typing if it exists in chatMessages but NOT in completedTypingIds
+    // and it's not a user message (user messages don't animate)
+    const hasActiveTyping = chatMessages.some(msg => 
+      msg && 
+      msg.id && 
+      msg.from !== 'user' && 
+      !completedTypingIds.has(msg.id)
+    );
+
+    if (!hasActiveTyping) {
+      return; // No typing messages, no need to scroll
+    }
+
+    // Set up interval to continuously scroll while typing
+    const scrollInterval = setInterval(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollToEnd({ animated: true });
+      }
+    }, 100); // Scroll every 100ms while typing
+
+    // Cleanup interval when typing completes or component unmounts
+    return () => {
+      clearInterval(scrollInterval);
+    };
+  }, [chatMessages, completedTypingIds]);
+
   // Time-based chat status text using PROGRESS_CONFIG.chat.stagedLabels
   // Don't show status text when generating plan (show circular progress instead)
   useEffect(() => {

@@ -741,18 +741,9 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           };
         });
 
-        // Update profile context only if information is complete
-        // For ongoing questions, profile will be updated when user submits answers
-        if (informationComplete && authState.userProfile) {
-          dispatch({
-            type: 'SET_USER_PROFILE',
-            payload: {
-              ...authState.userProfile,
-              initial_questions: [...(authState.userProfile.initial_questions || []), ...sortedQuestions],
-              initial_ai_message: response.ai_message,
-            },
-          });
-        }
+        // Don't update profile context here when information is complete
+        // Profile will be updated only when user explicitly clicks Continue button
+        // This prevents triggering routing logic that causes page reload
 
         setRetryStep(null);
         setOverlayTitle('Loading…');
@@ -891,6 +882,25 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             setExercises(response.metadata.exercises);
           }
 
+          // Update profile context with information_complete=true and responses
+          // This is safe to do AFTER plan generation succeeds - backend has already set it
+          // This ensures routing logic can properly detect completion and navigate
+          if (authState.userProfile) {
+            const initialResponsesObject = Object.fromEntries(state.initialResponses);
+            dispatch({
+              type: 'SET_USER_PROFILE',
+              payload: {
+                ...authState.userProfile,
+                initial_responses: initialResponsesObject,
+                information_complete: true, // Backend has set this, update context to match
+                initial_questions: state.initialQuestions.length > 0 
+                  ? state.initialQuestions 
+                  : authState.userProfile.initial_questions || [],
+                initial_ai_message: state.initialAiMessage || authState.userProfile.initial_ai_message,
+              },
+            });
+          }
+
           logData('Plan generation', 'success');
           
           // Poll for playbook + plan outline to be ready (background jobs)
@@ -899,9 +909,11 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           // Set generating to false
           setIsGeneratingPlan(false);
           setPlanGenerationError(null);
+          setOverlayTitle('Loading…');
           
           // Navigation to tabs is handled automatically by the routing system
           // when state.trainingPlan is set above via setTrainingPlan()
+          // Profile context update above ensures routing detects information_complete=true
         } else {
           throw new Error(response.message || 'Failed to generate training plan');
         }
@@ -911,6 +923,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         setPlanGenerationError(errorMessage);
         setIsGeneratingPlan(false);
         planGenerationTriggeredRef.current = false; // Allow retry
+        setOverlayTitle('Loading…');
         logError('Plan generation failed', error);
       },
     }
@@ -971,25 +984,30 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     }
 
     try {
-      // Save initial responses to user profile context
+      // FIRST: Set local state to show progress bar immediately
+      setIsGeneratingPlan(true);
+      setPlanGenerationError(null);
+      planGenerationTriggeredRef.current = true;
+      
+      // Ensure informationComplete is set locally (though it should already be from backend)
+      setState(prev => ({
+        ...prev,
+        informationComplete: true,
+      }));
+
+      // DON'T update profile context here - it causes reload/rerender issues
+      // The backend will set information_complete=true when plan is generated
+      // Only update local component state above
+
+      // Save initial responses for API call
       const initialResponsesObject = Object.fromEntries(state.initialResponses);
-      if (authState.userProfile) {
-        dispatch({
-          type: 'SET_USER_PROFILE',
-          payload: {
-            ...authState.userProfile,
-            initial_responses: initialResponsesObject,
-            information_complete: true,
-          },
-        });
-      }
 
       // Validation
       if (!authState.userProfile) {
         throw new Error('User profile not found. Please complete onboarding first.');
       }
 
-      if (!authState.userProfile.initial_questions || !Array.isArray(authState.userProfile.initial_questions) || authState.userProfile.initial_questions.length === 0) {
+      if (!state.initialQuestions || state.initialQuestions.length === 0) {
         throw new Error('Initial questions missing. Please complete onboarding first.');
       }
 
@@ -1020,11 +1038,6 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         throw new Error(`Missing required profile information: ${missingFields.join(', ')}. Please complete onboarding first.`);
       }
 
-      // Set generating state
-      setIsGeneratingPlan(true);
-      setPlanGenerationError(null);
-      planGenerationTriggeredRef.current = true;
-
       // Build personal info from profile
       const measurementSystem: 'imperial' | 'metric' =
         authState.userProfile.weightUnit === 'kg' ? 'metric' : 'imperial';
@@ -1042,12 +1055,12 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
         experience_level: authState.userProfile.experienceLevel,
       };
 
-      // Generate plan with progress
+      // Generate plan with progress (this will update progressState.progress for the inline indicator)
       await runWithProgress('plan', async () => {
         await executeGeneratePlan(
           personalInfo,
           initialResponsesObject,
-          authState.userProfile!.initial_questions || [],
+          state.initialQuestions,
           authState.userProfile!.id,
           jwtToken || authState.session?.access_token!
         );
@@ -1060,41 +1073,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       planGenerationTriggeredRef.current = false;
       logError('Plan generation validation error', err);
     }
-  }, [state.initialResponses, authState.userProfile, authState.session, dispatch, executeGeneratePlan, runWithProgress, refreshUserProfile, refreshTrainingPlan]);
-
-  // Auto-trigger plan generation if information is complete but no plan exists (e.g., after reload)
-  useEffect(() => {
-    // Only auto-trigger if:
-    // 1. We're on the initial questions step
-    // 2. Information is complete
-    // 3. We have questions and responses
-    // 4. No training plan exists
-    // 5. Plan generation hasn't been triggered yet
-    // 6. We're not currently generating
-    if (
-      currentStep === 'initial' &&
-      state.informationComplete &&
-      state.initialQuestions.length > 0 &&
-      state.initialResponses.size > 0 &&
-      !authState.trainingPlan &&
-      !planGenerationTriggeredRef.current &&
-      !isGeneratingPlan &&
-      authState.userProfile
-    ) {
-      // Auto-trigger plan generation
-      planGenerationTriggeredRef.current = true;
-      handleInitialQuestionsComplete();
-    }
-  }, [
-    currentStep,
-    state.informationComplete,
-    state.initialQuestions.length,
-    state.initialResponses.size,
-    authState.trainingPlan,
-    isGeneratingPlan,
-    authState.userProfile,
-    handleInitialQuestionsComplete,
-  ]);
+  }, [state.initialResponses, state.initialQuestions, authState.userProfile, authState.session, executeGeneratePlan, runWithProgress]);
 
   // Step 2: Initial Questions
   const handleInitialResponseChange = useCallback((questionId: string, value: any) => {
