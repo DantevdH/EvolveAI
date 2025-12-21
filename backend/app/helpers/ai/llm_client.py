@@ -23,8 +23,8 @@ class LLMClient:
     
     Uses Settings for configuration:
       - LLM_API_KEY (works for all providers)
-      - LLM_MODEL_COMPLEX (e.g., gemini-2.5-flash)
-      - LLM_MODEL_LIGHTWEIGHT (e.g., gemini-2.5-flash-lite)
+      - LLM_MODEL_COMPLEX (e.g., gpt-4o, gemini-2.5-flash)
+      - LLM_MODEL_LIGHTWEIGHT (e.g., gpt-4o-mini, gemini-2.5-flash-lite)
       - TEMPERATURE (applies to both models)
     
     Uses settings (which reads from environment dynamically) for all configuration.

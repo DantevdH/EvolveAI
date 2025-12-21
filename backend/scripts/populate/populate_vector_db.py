@@ -75,15 +75,17 @@ class PDFVectorDBPopulator:
         model_name = settings.LLM_MODEL_COMPLEX
         self.use_gemini = model_name.lower().startswith("gemini")
         
-        # Get embedding model from env var (default based on provider)
-        # Note: EMBEDDING_MODEL is not in Settings, so keep os.getenv() for this
+        # Get embedding model from settings (which uses model_config.py as source of truth)
+        embedding_model = settings.EMBEDDING_MODEL
+        
+        # Ensure model name has "models/" prefix for Gemini if not present
         if self.use_gemini:
-            self.embedding_model = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
-            # Ensure model name has "models/" prefix if not present
-            if not self.embedding_model.startswith("models/"):
-                self.embedding_model = f"models/{self.embedding_model}"
+            if not embedding_model.startswith("models/"):
+                self.embedding_model = f"models/{embedding_model}"
+            else:
+                self.embedding_model = embedding_model
         else:
-            self.embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+            self.embedding_model = embedding_model
         
         # Get API key - use settings
         api_key = settings.LLM_API_KEY

@@ -8,6 +8,7 @@ import { IconSymbol } from '@/components/ui/IconSymbol';
 import { supabase } from '@/src/config/supabase';
 import { validateLoginForm } from '@/src/utils/validation';
 import { logger } from '@/src/utils/logger';
+import { IS_LOCAL_DEV } from '@/src/config/env';
 import { colors, secondary, createColorWithOpacity } from '../../constants/colors';
 
 // Complete auth session if needed (recommended by Expo)
@@ -250,41 +251,54 @@ export const LoginScreen: React.FC = () => {
               
               <View style={styles.spacer} />
               
-              {/* Social Login Buttons */}
-              <View style={styles.socialSection}>
-                <SocialLoginButton
-                  iconName="apple.logo"
-                  text="Sign In with Apple"
-                  onPress={handleAppleLogin}
-                  disabled={state.isLoading}
-                  isSystemIcon={true}
-                  testID="apple-signin-button"
-                />
-                
-                <SocialLoginButton
-                  imageSource={require('../../../assets/images/google-logo.webp')}
-                  text="Sign In with Google"
-                  onPress={handleGoogleLogin}
-                  disabled={state.isLoading}
-                  testID="google-signin-button"
-                />
-                
-                {/* Facebook login commented out for now */}
-                {/* <SocialLoginButton
-                  iconName="person.2"
-                  text="Sign In with Facebook"
-                  onPress={handleFacebookLogin}
-                  disabled={state.isLoading}
-                  testID="facebook-signin-button"
-                /> */}
-              </View>
+              {/* Social Login Buttons - Hidden in local dev */}
+              {!IS_LOCAL_DEV && (
+                <>
+                  <View style={styles.socialSection}>
+                    <SocialLoginButton
+                      iconName="apple.logo"
+                      text="Sign In with Apple"
+                      onPress={handleAppleLogin}
+                      disabled={state.isLoading}
+                      isSystemIcon={true}
+                      testID="apple-signin-button"
+                    />
+                    
+                    <SocialLoginButton
+                      imageSource={require('../../../assets/images/google-logo.webp')}
+                      text="Sign In with Google"
+                      onPress={handleGoogleLogin}
+                      disabled={state.isLoading}
+                      testID="google-signin-button"
+                    />
+                    
+                    {/* Facebook login commented out for now */}
+                    {/* <SocialLoginButton
+                      iconName="person.2"
+                      text="Sign In with Facebook"
+                      onPress={handleFacebookLogin}
+                      disabled={state.isLoading}
+                      testID="facebook-signin-button"
+                    /> */}
+                  </View>
+                  
+                  {/* Separator */}
+                  <View style={styles.separator}>
+                    <View style={styles.separatorLine} />
+                    <Text style={styles.separatorText}>OR</Text>
+                    <View style={styles.separatorLine} />
+                  </View>
+                </>
+              )}
               
-              {/* Separator */}
-              <View style={styles.separator}>
-                <View style={styles.separatorLine} />
-                <Text style={styles.separatorText}>OR</Text>
-                <View style={styles.separatorLine} />
-              </View>
+              {/* Local Dev Info */}
+              {IS_LOCAL_DEV && (
+                <View style={styles.devNoteContainer}>
+                  <Text style={styles.devNoteText}>
+                    💡 Local dev: Use dev@test.com / testpass123 to login
+                  </Text>
+                </View>
+              )}
               
               {/* Email & Password Fields */}
               <View style={styles.formSection}>
@@ -591,5 +605,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.primary,
     fontWeight: '600',
+  },
+  
+  // Local Dev Note
+  devNoteContainer: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  devNoteText: {
+    fontSize: 14,
+    color: colors.text,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

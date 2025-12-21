@@ -270,4 +270,7 @@ export interface QuestionsStepProps extends OnboardingStepProps {
   onSubmitAnswer: (question: AIQuestion, displayAnswer: string, rawValue: any) => void;
   isFetchingNext?: boolean;
   informationComplete?: boolean;
+  isGeneratingPlan?: boolean;
+  planGenerationError?: string | null;
+  planGenerationProgress?: number;
 }

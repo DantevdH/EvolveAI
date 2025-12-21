@@ -150,14 +150,28 @@ export const useAppRouting = (): AppRoutingState => {
 
     // 3) Only proceed to plan generation if information is complete
     if (!hasTrainingPlan) {
-      // Only route to generate-plan if information collection is complete
+      // If information is complete but no plan exists, route to onboarding questions
+      // The chat interface will auto-trigger plan generation
+      // This handles the case where user reloads after completing questions but before plan generation
       if (informationComplete && hasInitialQuestions && hasInitialResponses) {
+        // Check if already on onboarding questions page
+        const isOnOnboardingQuestions = pathname === '/onboarding/initial-questions';
+        if (isOnOnboardingQuestions) {
+          return {
+            targetRoute: null,
+            isLoading: false,
+            hasError: false,
+            routingReason: 'Generating Plan in Chat (already here)',
+            skipLoaders: true,
+          };
+        }
+        // Route to onboarding questions where plan generation will auto-trigger
         return {
-          targetRoute: '/generate-plan',
+          targetRoute: '/onboarding/initial-questions',
           isLoading: false,
           hasError: false,
-          routingReason: 'Generate Plan',
-          skipLoaders: true, // Direct action, no intro needed
+          routingReason: 'Generate Plan in Chat',
+          skipLoaders: true,
         };
       }
 

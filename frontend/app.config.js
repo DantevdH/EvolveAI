@@ -1,24 +1,38 @@
-const { readFileSync } = require('fs');
+const { readFileSync, existsSync } = require('fs');
 const { join } = require('path');
 
-// Load .env from root directory (parent of frontend/)
-const rootEnvPath = join(__dirname, '..', '.env');
+// Only load .env files in local development, not in production
+// In production (Render, Vercel, etc.), use system environment variables only
+const isProduction = process.env.NODE_ENV === 'production' || 
+                     process.env.RENDER !== undefined ||
+                     process.env.VERCEL !== undefined ||
+                     process.env.RAILWAY_ENVIRONMENT !== undefined;
+
 let rootEnvVars = {};
 
-try {
-  const envContent = readFileSync(rootEnvPath, 'utf8');
-  envContent.split('\n').forEach(line => {
-    const trimmedLine = line.trim();
-    if (trimmedLine && !trimmedLine.startsWith('#')) {
-      const [key, ...valueParts] = trimmedLine.split('=');
-      if (key && valueParts.length > 0) {
-        const value = valueParts.join('=').trim().replace(/^["']|["']$/g, '');
-        rootEnvVars[key.trim()] = value;
+// Only load .env files if NOT in production
+if (!isProduction) {
+  // Simple: just load .env from root directory for local development
+  const rootEnvPath = join(__dirname, '..', '.env');
+  
+  try {
+    const envContent = readFileSync(rootEnvPath, 'utf8');
+    envContent.split('\n').forEach(line => {
+      const trimmedLine = line.trim();
+      if (trimmedLine && !trimmedLine.startsWith('#')) {
+        const [key, ...valueParts] = trimmedLine.split('=');
+        if (key && valueParts.length > 0) {
+          const value = valueParts.join('=').trim().replace(/^["']|["']$/g, '');
+          rootEnvVars[key.trim()] = value;
+        }
       }
+    });
+  } catch (error) {
+    // Silently ignore - in production we don't want .env files anyway
+    if (!isProduction) {
+      console.warn(`Could not read ${rootEnvPath}:`, error.message);
     }
-  });
-} catch (error) {
-  console.warn('Could not read root .env file:', error.message);
+  }
 }
 
 // Merge root env vars with process.env

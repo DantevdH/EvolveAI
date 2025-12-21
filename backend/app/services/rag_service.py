@@ -4,7 +4,7 @@ RAG Service for Advanced Document Retrieval
 This service provides production-grade RAG capabilities including:
 - Two-stage retrieval (cosine similarity → re-ranker)
 - Hybrid search (semantic + metadata filtering)
-- zerank-1-small re-ranker for state-of-the-art precision
+- Jina reranker (v1-tiny-en) for fast, lightweight precision
 - Context validation with LLM
 - Embedding generation (OpenAI/Gemini)
 """
@@ -47,9 +47,11 @@ class ReRanker:
     """
     Lazy-loaded cross-encoder reranker for production-quality results.
 
-    Default model: BAAI/bge-reranker-v2-m3
-    - Lightweight; good quality vs. resource usage
-    - Multilingual capable; friendlier to CPU / modest GPUs than prior model
+    Default model: jinaai/jina-reranker-v1-tiny-en
+    - Very lightweight: Only 33M parameters (vs 278M for bge-reranker-base)
+    - Fast inference: ~248ms latency (10x faster than bge-reranker-base)
+    - Handles sequences up to 8,192 tokens
+    - Optimized for CPU deployment with knowledge distillation
     - Loads via sentence-transformers CrossEncoder
 
     Security Notes:
@@ -57,12 +59,36 @@ class ReRanker:
     - For production: Pre-download models during deployment (see scripts/download_models.py)
     - Consider: Using a private model registry for maximum security
     - Model is cached after first download
+
+    Local Model Loading:
+    - In development, loads from backend/models/jina-reranker-v1-tiny-en/ if available
+    - This avoids SSL issues with HuggingFace in corporate environments
     """
 
     _model = None
     _available = None
     _logger = get_logger(__name__)
-    MODEL_NAME = "BAAI/bge-reranker-base"
+    MODEL_NAME = "jinaai/jina-reranker-v1-tiny-en"
+    LOCAL_MODEL_DIR = "jina-reranker-v1-tiny-en"
+
+    @classmethod
+    def _get_local_model_path(cls) -> str | None:
+        """Get local model path if available (for development/corporate environments)."""
+        # Try to find local model relative to this file or backend root
+        from pathlib import Path
+
+        # This file is in backend/app/services/
+        current_file = Path(__file__).resolve()
+        backend_dir = current_file.parent.parent.parent  # Go up to backend/
+
+        local_model_path = backend_dir / "models" / cls.LOCAL_MODEL_DIR
+
+        # Check if model files exist locally
+        if local_model_path.exists() and (local_model_path / "config.json").exists():
+            cls._logger.info(f"Found local model at: {local_model_path}")
+            return str(local_model_path)
+
+        return None
 
     @classmethod
     def is_available(cls) -> bool:
@@ -95,31 +121,37 @@ class ReRanker:
         if cls._model is None and cls.is_available():
             try:
                 from sentence_transformers import CrossEncoder
-                cls._logger.info(f"Loading {cls.MODEL_NAME} model (this may take a few seconds)...")
-                
+
+                # Try local model first (avoids HuggingFace SSL issues in corporate envs)
+                local_path = cls._get_local_model_path()
+                model_source = local_path if local_path else cls.MODEL_NAME
+
+                cls._logger.info(f"Loading model from: {model_source} (this may take a few seconds)...")
+
                 # Get the appropriate device
                 device = cls._get_device()
                 cls._logger.debug(f"Using device: {device}")
-                
+
                 # Initialize CrossEncoder with explicit device to avoid device_map issues
                 # By explicitly setting device, we prevent the library from trying to use
                 # device_map which requires accelerate. The device parameter is sufficient.
                 cls._model = CrossEncoder(
-                    cls.MODEL_NAME,
+                    model_source,
                     trust_remote_code=False,
                     device=device,
                 )
-                cls._logger.info(f"{cls.MODEL_NAME} model loaded successfully")
+                cls._logger.info(f"Model loaded successfully from: {model_source}")
             except Exception as e:
                 # If device parameter causes issues, try without it as fallback
                 if "device" in str(e).lower() or "device_map" in str(e).lower():
                     cls._logger.warning(f"Device specification failed: {e}. Trying without explicit device...")
                     try:
+                        model_source = cls._get_local_model_path() or cls.MODEL_NAME
                         cls._model = CrossEncoder(
-                            cls.MODEL_NAME,
+                            model_source,
                             trust_remote_code=False
                         )
-                        cls._logger.info(f"{cls.MODEL_NAME} model loaded successfully (without explicit device)")
+                        cls._logger.info(f"Model loaded successfully (without explicit device)")
                     except Exception as e2:
                         cls._logger.error(f"Failed to load re-ranker model: {e2}")
                         cls._available = False
@@ -150,7 +182,7 @@ class ReRanker:
         text_key: str = "chunk_text"
     ) -> List[Dict[str, Any]]:
         """
-        Re-rank documents using FlagEmbedding lightweight reranker.
+        Re-rank documents using Jina lightweight reranker.
 
         Args:
             query: Search query
@@ -218,7 +250,7 @@ class RAGService:
 
     Implements a two-stage retrieval pipeline:
     1. Cosine similarity search → top-20 candidates (high recall)
-    2. zerank-1-small re-ranker → top-5 results (high precision)
+    2. Jina reranker → top-5 results (high precision)
     """
 
     # Configuration constants
@@ -241,16 +273,17 @@ class RAGService:
         model_name = settings.LLM_MODEL_COMPLEX
         self.use_gemini = model_name.lower().startswith("gemini")
 
-        # Get embedding model from env var (default based on provider)
+        # Get embedding model from settings (which uses model_config.py as source of truth)
+        embedding_model = settings.EMBEDDING_MODEL
+        
+        # Ensure model name has "models/" prefix for Gemini if not present
         if self.use_gemini:
-            embedding_model = os.getenv("EMBEDDING_MODEL", "gemini-embedding-001")
-            # Ensure model name has "models/" prefix if not present
             if not embedding_model.startswith("models/"):
                 self.embedding_model = f"models/{embedding_model}"
             else:
                 self.embedding_model = embedding_model
         else:
-            self.embedding_model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+            self.embedding_model = embedding_model
 
         # Initialize embedding clients based on provider
         api_key = settings.LLM_API_KEY
@@ -368,6 +401,11 @@ class RAGService:
         Returns:
             List of relevant documents sorted by cosine similarity
         """
+        # Check if Supabase client is available
+        if not self.base_agent.supabase:
+            self.logger.warning("Supabase client not available - RAG search disabled")
+            return []
+        
         try:
             # Generate query embedding
             query_embedding = self.generate_embedding(query)
@@ -524,10 +562,10 @@ class RAGService:
         self, user_query: str, max_results: int = 5
     ) -> List[Dict[str, Any]]:
         """
-        Two-stage retrieval: cosine similarity → zerank-1-small re-ranker.
+        Two-stage retrieval: cosine similarity → Jina reranker.
 
         Stage 1: Get top-20 candidates via cosine similarity (high recall)
-        Stage 2: Re-rank with zerank-1-small to get top-5 (high precision)
+        Stage 2: Re-rank with Jina reranker to get top-5 (high precision)
 
         Args:
             user_query: User's search query
@@ -562,7 +600,7 @@ class RAGService:
                     candidates.append(result)
                     seen_ids.add(result.get("document_id"))
 
-        # Step 3: Re-rank with zerank-1-small
+        # Step 3: Re-rank with Jina reranker
         if len(candidates) > max_results:
             self.logger.debug(f"Re-ranking {len(candidates)} candidates to top-{max_results}")
             candidates = ReRanker.rerank(user_query, candidates, top_k=max_results)

@@ -6,6 +6,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useAuth } from '@/src/context/AuthContext';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { validateSignupForm } from '@/src/utils/validation';
+import { IS_LOCAL_DEV } from '@/src/config/env';
 import { colors, secondary, createColorWithOpacity } from '../../constants/colors';
 
 // Complete auth session if needed (recommended by Expo)
@@ -221,41 +222,54 @@ export const SignupScreen: React.FC = () => {
               
               <View style={styles.spacer} />
               
-              {/* Social Signup Buttons */}
-              <View style={styles.socialSection}>
-                <SocialLoginButton
-                  iconName="apple.logo"
-                  text="Sign Up with Apple"
-                  onPress={handleAppleSignup}
-                  disabled={state.isLoading}
-                  isSystemIcon={true}
-                  testID="apple-signup-button"
-                />
-                
-                <SocialLoginButton
-                  imageSource={require('../../../assets/images/google-logo.webp')}
-                  text="Sign Up with Google"
-                  onPress={handleGoogleSignup}
-                  disabled={state.isLoading}
-                  testID="google-signup-button"
-                />
-                
-                {/* Facebook signup commented out for now */}
-                {/* <SocialLoginButton
-                  iconName="person.2"
-                  text="Sign Up with Facebook"
-                  onPress={handleFacebookSignup}
-                  disabled={state.isLoading}
-                  testID="facebook-signup-button"
-                /> */}
-              </View>
+              {/* Social Signup Buttons - Hidden in local dev */}
+              {!IS_LOCAL_DEV && (
+                <>
+                  <View style={styles.socialSection}>
+                    <SocialLoginButton
+                      iconName="apple.logo"
+                      text="Sign Up with Apple"
+                      onPress={handleAppleSignup}
+                      disabled={state.isLoading}
+                      isSystemIcon={true}
+                      testID="apple-signup-button"
+                    />
+                    
+                    <SocialLoginButton
+                      imageSource={require('../../../assets/images/google-logo.webp')}
+                      text="Sign Up with Google"
+                      onPress={handleGoogleSignup}
+                      disabled={state.isLoading}
+                      testID="google-signup-button"
+                    />
+                    
+                    {/* Facebook signup commented out for now */}
+                    {/* <SocialLoginButton
+                      iconName="person.2"
+                      text="Sign Up with Facebook"
+                      onPress={handleFacebookSignup}
+                      disabled={state.isLoading}
+                      testID="facebook-signup-button"
+                    /> */}
+                  </View>
+                  
+                  {/* Separator */}
+                  <View style={styles.separator}>
+                    <View style={styles.separatorLine} />
+                    <Text style={styles.separatorText}>OR</Text>
+                    <View style={styles.separatorLine} />
+                  </View>
+                </>
+              )}
               
-              {/* Separator */}
-              <View style={styles.separator}>
-                <View style={styles.separatorLine} />
-                <Text style={styles.separatorText}>OR</Text>
-                <View style={styles.separatorLine} />
-              </View>
+              {/* Local Dev Info */}
+              {IS_LOCAL_DEV && (
+                <View style={styles.devNoteContainer}>
+                  <Text style={styles.devNoteText}>
+                    💡 Local dev: Use dev@test.com / testpass123 to login
+                  </Text>
+                </View>
+              )}
               
               {/* Signup Form */}
               <View style={styles.formSection}>
@@ -558,5 +572,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.primary,
     fontWeight: '600',
+  },
+  
+  // Local Dev Note
+  devNoteContainer: {
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  devNoteText: {
+    fontSize: 14,
+    color: colors.text,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

@@ -4,7 +4,7 @@
  */
 
 import { WeekModalData } from './types';
-import { ONBOARDING_PROGRESS_CONFIG } from '../../../constants/onboardingProgress';
+import { PROGRESS_CONFIG } from '../../../constants/progressConfig';
 
 export interface WeekDetailModalState {
   isGenerating: boolean;
@@ -51,7 +51,7 @@ export function calculateGenerationProgress(
  * @returns Duration in milliseconds
  */
 export function getProgressBarDuration(): number {
-  const config = ONBOARDING_PROGRESS_CONFIG.plan;
+  const config = PROGRESS_CONFIG.plan;
   return config?.durationMs || 20000; // Fallback to 20 seconds
 }
 

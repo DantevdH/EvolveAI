@@ -768,16 +768,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   // Refresh user profile
-  const refreshUserProfile = async (): Promise<void> => {
+  const refreshUserProfile = useCallback(async (): Promise<void> => {
     if (state.user) {
       await loadUserProfile(state.user.id);
     }
-  };
+  }, [state.user, loadUserProfile]);
 
   // Clear error
-  const clearError = () => {
+  const clearError = useCallback(() => {
     dispatch({ type: 'SET_ERROR', payload: null });
-  };
+  }, []);
 
   // Check auth state
   const checkAuthState = async (): Promise<void> => {
@@ -801,7 +801,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // This has been replaced by GeneratePlanScreen.handleGeneratePlan() which uses the backend flow
 
   // Refresh training plan
-  const refreshTrainingPlan = async (): Promise<void> => {
+  const refreshTrainingPlan = useCallback(async (): Promise<void> => {
     try {
       if (!state.userProfile) {
         return;
@@ -844,13 +844,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       dispatch({ type: 'SET_WORKOUT_PLAN_LOADING', payload: false });
       throw error;
     }
-  };
+  }, [state.userProfile]);
 
   // Set training plan directly (for use after generation)
-  const setTrainingPlan = (trainingPlan: TrainingPlan): void => {
+  const setTrainingPlan = useCallback((trainingPlan: TrainingPlan): void => {
     logger.info('Training plan set');
     dispatch({ type: 'SET_WORKOUT_PLAN', payload: trainingPlan });
-  };
+  }, []);
 
   // Load all exercises at startup (one-time DB call)
   const loadAllExercises = useCallback(async (): Promise<void> => {
@@ -882,21 +882,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []); // Don't depend on state.exercises to avoid infinite loops
 
   // Set exercises directly (for use after plan generation)
-  const setExercises = (exercises: any[]): void => {
+  const setExercises = useCallback((exercises: any[]): void => {
     logger.info('Exercises set');
     dispatch({ type: 'SET_EXERCISES', payload: exercises });
-  };
+  }, []);
 
   // Clear exercises
-  const clearExercises = (): void => {
+  const clearExercises = useCallback((): void => {
     logger.info('Exercises cleared');
     dispatch({ type: 'SET_EXERCISES', payload: null });
-  };
+  }, []);
 
   // Set polling plan flag
-  const setPollingPlan = (isPolling: boolean): void => {
+  const setPollingPlan = useCallback((isPolling: boolean): void => {
     dispatch({ type: 'SET_POLLING_PLAN', payload: isPolling });
-  };
+  }, []);
 
   // Load insights summary from database (direct read, no API call)
   const loadInsightsSummary = useCallback(async (userProfileId?: number): Promise<void> => {
@@ -941,9 +941,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [state.userProfile?.id]);
 
   // Set insights summary directly (for use after workout completion)
-  const setInsightsSummary = (insightsSummary: InsightsSummaryData | null): void => {
+  const setInsightsSummary = useCallback((insightsSummary: InsightsSummaryData | null): void => {
     dispatch({ type: 'SET_INSIGHTS_SUMMARY', payload: insightsSummary });
-  };
+  }, []);
 
   const contextValue: AuthContextType = {
     state,

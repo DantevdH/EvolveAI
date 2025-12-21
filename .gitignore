@@ -175,12 +175,19 @@ target/
 
 # Environments
 .env
+.env.production
+.env.staging
 .venv
 env/
 venv/
 ENV/
 env.bak/
 venv.bak/
+# Keep .env.template and .env.example files (they're safe to commit)
+!.env.template
+!.env.example
+!**/.env.template
+!**/.env.example
 
 # End of https://www.toptal.com/developers/gitignore/api/swift,xcode,python,django
 
@@ -222,5 +229,5 @@ buck-out/
 # Specific files that need to be ignored
 *.pdf
 *.xlsx
-*.csv# Auto-generated frontend .env (synced from root .env)
+*.csv
 frontend/.env
