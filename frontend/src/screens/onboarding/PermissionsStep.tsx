@@ -42,7 +42,8 @@ export const PermissionsStep: React.FC<PermissionsStepProps> = ({
     requestHealth,
     requestLocation,
     requestBackgroundLocation,
-    openSettings,
+    openHealthSettings,
+    openLocationSettings,
     saveStatus,
     refreshStatus,
   } = usePermissions(permissionsStatus);
@@ -156,7 +157,7 @@ export const PermissionsStep: React.FC<PermissionsStepProps> = ({
               iconColor={colors.primary}
               status={getHealthStatus()}
               onRequest={handleHealthRequest}
-              onOpenSettings={openSettings}
+              onOpenSettings={openHealthSettings}
               disabled={isHealthLoading}
             />
 
@@ -168,7 +169,7 @@ export const PermissionsStep: React.FC<PermissionsStepProps> = ({
               iconColor={colors.tertiary}
               status={getLocationStatus()}
               onRequest={handleLocationRequest}
-              onOpenSettings={openSettings}
+              onOpenSettings={openLocationSettings}
               disabled={isLocationLoading}
             />
           </View>

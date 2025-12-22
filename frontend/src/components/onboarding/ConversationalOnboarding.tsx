@@ -187,7 +187,7 @@ interface ConversationalOnboardingProps {
 
 export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> = ({
   onError,
-  startFromStep = 'permissions',
+  startFromStep = 'welcome',
 }) => {
   const { state: authState, dispatch, refreshUserProfile, refreshTrainingPlan, setTrainingPlan, setExercises, setPollingPlan } = useAuth();
   const router = useRouter();
@@ -232,8 +232,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   const [retryStep, setRetryStep] = useState<string | null>(null);
   const MAX_RETRIES = 3;
 
-  // Determine starting step - either from prop or default to permissions
-  const initialStep = startFromStep || 'permissions';
+  // Determine starting step - either from prop or default to welcome
+  const initialStep = startFromStep || 'welcome';
   const [currentStep, setCurrentStep] = useState<'permissions' | 'welcome' | 'personal' | 'goal' | 'experience' | 'initial'>(initialStep);
 
   // Track if we've initialized from profile (run only once per component mount)
@@ -272,8 +272,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }
       
       // Set the correct current step based on startFromStep
-      if (startFromStep === 'initial' || startFromStep === 'followup') {
-        // 'followup' maps to 'initial' since follow-up feature is removed
+      if (startFromStep === 'initial') {
         setCurrentStep('initial');
       }
       
@@ -1220,7 +1219,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     setRetryCount(0);
     setRetryStep(null);
     setState(prev => ({ ...prev, error: null }));
-    setCurrentStep('permissions');
+    setCurrentStep('welcome');
   }, []);
 
   const renderCurrentStep = () => {

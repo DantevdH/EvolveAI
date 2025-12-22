@@ -31,6 +31,8 @@ interface UsePermissionsReturn {
   requestLocation: () => Promise<PermissionResult>;
   requestBackgroundLocation: () => Promise<PermissionResult>;
   openSettings: () => Promise<void>;
+  openHealthSettings: () => Promise<void>;
+  openLocationSettings: () => Promise<void>;
   refreshStatus: () => Promise<void>;
   skipPermissions: () => void;
 
@@ -275,6 +277,20 @@ export function usePermissions(
   }, []);
 
   /**
+   * Open Health app/settings directly
+   */
+  const openHealthSettings = useCallback(async () => {
+    await PermissionsService.openHealthSettings();
+  }, []);
+
+  /**
+   * Open Location settings directly
+   */
+  const openLocationSettings = useCallback(async () => {
+    await PermissionsService.openLocationSettings();
+  }, []);
+
+  /**
    * Mark permissions as skipped
    */
   const skipPermissions = useCallback(() => {
@@ -314,6 +330,8 @@ export function usePermissions(
     requestLocation,
     requestBackgroundLocation,
     openSettings,
+    openHealthSettings,
+    openLocationSettings,
     refreshStatus,
     skipPermissions,
     saveStatus,

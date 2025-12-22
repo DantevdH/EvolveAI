@@ -262,6 +262,55 @@ export class PermissionsService {
   // ==================== HEALTH PERMISSIONS ====================
 
   /**
+   * Silently verify if HealthKit permissions are granted
+   * Calls initHealthKit - if permissions were previously granted, it succeeds without showing a dialog
+   * This is the most reliable way to check HealthKit permission status on iOS
+   */
+  private static async verifyHealthKitPermissions(): Promise<boolean> {
+    if (Platform.OS !== 'ios' || !this.isHealthKitAvailable()) {
+      return false;
+    }
+
+    try {
+      let healthKitModule: any = AppleHealthKit;
+      if ((AppleHealthKit as any).default) {
+        healthKitModule = (AppleHealthKit as any).default;
+      }
+
+      if (typeof healthKitModule.initHealthKit !== 'function') {
+        return false;
+      }
+
+      const permissions: HealthKitPermissions = {
+        permissions: {
+          read: HEALTH_READ_PERMISSIONS.map(
+            perm => AppleHealthKit.Constants.Permissions[perm]
+          ),
+          write: [],
+        },
+      };
+
+      // Attempt to initialize - if already authorized, this succeeds silently
+      await this.withHealthKitCallback<void>(
+        (callback) => {
+          healthKitModule.initHealthKit(permissions, (error: any) => {
+            if (error) {
+              callback(new Error(typeof error === 'string' ? error : JSON.stringify(error)));
+            } else {
+              callback(null);
+            }
+          });
+        },
+        'initHealthKit'
+      );
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Check if Health data is available on this device
    * HealthKit on iOS (works on simulators iOS 15+), Health Connect on Android
    */
@@ -352,7 +401,6 @@ export class PermissionsService {
 
         try {
           // If HealthKit was successfully initialized in this session, it's granted
-          // This is more reliable than getAuthStatus due to iOS privacy protections
           if (healthKitInitialized) {
             const status: HealthPermissionStatus = {
               available: true,
@@ -363,43 +411,24 @@ export class PermissionsService {
             return status;
           }
 
-          // Try getAuthStatus as a secondary check
-          let healthKitModule: any = AppleHealthKit;
-          if ((AppleHealthKit as any).default) {
-            healthKitModule = (AppleHealthKit as any).default;
-          }
-
-          const hasGetAuthStatus = typeof healthKitModule.getAuthStatus === 'function';
-          let isGranted = false;
-
-          if (hasGetAuthStatus) {
-            const permissions: HealthKitPermissions = {
-              permissions: {
-                read: HEALTH_READ_PERMISSIONS.map(
-                  perm => AppleHealthKit.Constants.Permissions[perm]
-                ),
-                write: [],
-              },
+          // Try to silently initialize HealthKit to verify permissions
+          // If permissions were previously granted, initHealthKit succeeds without showing a dialog
+          const silentCheckResult = await this.verifyHealthKitPermissions();
+          if (silentCheckResult) {
+            healthKitInitialized = true;
+            const status: HealthPermissionStatus = {
+              available: true,
+              granted: true,
+              canRequest: true,
             };
-
-            try {
-              const result = await this.withHealthKitCallback<HealthKitAuthStatus>(
-                (callback) => {
-                  healthKitModule.getAuthStatus(permissions, callback);
-                },
-                'getAuthStatus'
-              );
-              // Status values: 0 = not determined, 1 = sharing denied, 2 = sharing authorized
-              isGranted = result && Object.values(result).some((status: number) => status === 2);
-            } catch {
-              // getAuthStatus can be unreliable, default to not granted
-              isGranted = false;
-            }
+            this.permissionCache.health = { status, timestamp: Date.now() };
+            return status;
           }
 
+          // If silent check failed, permissions are not granted
           const status: HealthPermissionStatus = {
             available: true,
-            granted: isGranted,
+            granted: false,
             canRequest: true,
           };
 
@@ -878,6 +907,67 @@ export class PermissionsService {
       await Linking.openSettings();
     } catch (error) {
       logger.error('Error opening settings', error);
+    }
+  }
+
+  /**
+   * Open Health app/settings directly
+   * iOS: Opens Apple Health app to the Sources tab where users can manage app permissions
+   * Android: Opens Health Connect app
+   */
+  static async openHealthSettings(): Promise<void> {
+    try {
+      if (Platform.OS === 'ios') {
+        // Open Apple Health app directly - users manage permissions in Health > Sources
+        const healthUrl = 'x-apple-health://';
+        const canOpen = await Linking.canOpenURL(healthUrl);
+        if (canOpen) {
+          await Linking.openURL(healthUrl);
+        } else {
+          // Fallback to general app settings
+          await Linking.openSettings();
+        }
+      } else if (Platform.OS === 'android') {
+        // Try to open Health Connect app directly
+        const healthConnectUrl = 'market://details?id=com.google.android.apps.healthdata';
+        try {
+          await Linking.openURL(healthConnectUrl);
+        } catch {
+          // Fallback to general app settings
+          await Linking.openSettings();
+        }
+      } else {
+        await Linking.openSettings();
+      }
+    } catch (error) {
+      logger.error('Error opening health settings', error);
+      // Fallback to general settings
+      await Linking.openSettings();
+    }
+  }
+
+  /**
+   * Open Location settings directly
+   * iOS: Opens app-specific settings page (Settings > EvolveAI)
+   * Android: Opens app-specific settings page
+   */
+  static async openLocationSettings(): Promise<void> {
+    try {
+      if (Platform.OS === 'ios') {
+        // 'app-settings:' opens directly to the app's settings page in iOS Settings
+        await Linking.openURL('app-settings:');
+      } else {
+        // Android: openSettings opens app-specific settings
+        await Linking.openSettings();
+      }
+    } catch (error) {
+      logger.error('Error opening location settings', error);
+      // Fallback to general settings
+      try {
+        await Linking.openSettings();
+      } catch {
+        // Silent fail - nothing more we can do
+      }
     }
   }
 
