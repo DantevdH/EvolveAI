@@ -7,10 +7,17 @@
     "icon": "./assets/images/evolve-logo.png",
     "scheme": "frontendexpo2",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.frontendexpo2"
+      "bundleIdentifier": "com.anonymous.frontendexpo2",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "EvolveAI needs your location to track workouts with GPS.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "EvolveAI needs background location to continue tracking during workouts.",
+        "NSLocationAlwaysUsageDescription": "EvolveAI needs background location to continue tracking during workouts.",
+        "NSHealthShareUsageDescription": "EvolveAI reads your workout and heart rate data to provide personalized training insights.",
+        "NSHealthUpdateUsageDescription": "EvolveAI writes completed workouts to your Health data."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +25,14 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.frontendexpo2"
+      "package": "com.anonymous.frontendexpo2",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "ACTIVITY_RECOGNITION",
+        "health"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -37,7 +51,17 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "EvolveAI needs your location to track workouts with GPS.",
+          "locationAlwaysPermission": "EvolveAI needs background location to continue tracking during workouts.",
+          "locationWhenInUsePermission": "EvolveAI needs your location to track workouts.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isIosBackgroundLocationEnabled": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

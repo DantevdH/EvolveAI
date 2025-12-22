@@ -9,4 +9,6 @@ export { OnboardingBackground } from './OnboardingBackground';
 export { OnboardingButton } from './OnboardingButton';
 export { ProgressIndicator } from './ProgressIndicator';
 export { ProgressOverlay } from './ProgressOverlay';
+export { PermissionCard } from './PermissionCard';
+export type { PermissionStatus } from './PermissionCard';
 

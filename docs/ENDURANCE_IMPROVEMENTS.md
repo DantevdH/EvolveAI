@@ -66,94 +66,54 @@ Transform the basic text display into rich, visually appealing cards similar to 
    - Better text color contrast (primary color for names, muted for secondary info)
    - Consistent spacing between elements (8-12px gaps)
 
-#### 2. Endurance Analytics Integration
+#### 2. Onboarding Permissions Step (Foundation)
 **Complexity: Low | Impact: High**
 
-Include endurance sessions in the existing analytics pipeline (currently skipped in `insightsAnalyticsService.ts`). Calculate weekly volume trends, consistency metrics, and performance scores for endurance activities. This leverages existing analytics infrastructure and provides immediate value to endurance athletes. Only requires modifying the extraction logic to include endurance sessions alongside strength exercises.
+Add a permissions step early in the onboarding flow (Step 3) to request Health/Google Fit and location tracking permissions. This ensures all permissions are granted upfront, eliminating the need for permission requests later when users want to track workouts. This creates a smoother user experience and sets the foundation for live tracking features.
 
 **Implementation Details:**
 
-**UI Approach: Combined View with Filter Toggle** (Recommended)
-- **Default view**: Show combined analytics (strength + endurance) for unified training load insights
-- **Filter toggle**: Add segmented control or toggle buttons at top of InsightsContent: "All" | "Strength" | "Endurance"
-- **Benefits**: 
-  - Most users do both modalities - unified view shows overall progress better
-  - Less navigation needed, more intuitive
-  - Can show combined metrics (total weekly volume, overall consistency)
-  - Filter allows focused view when needed
-- **Alternative (not recommended)**: Separate tabs would require more navigation and lose the unified training picture
+**Onboarding Flow Integration:**
+- Insert as Step 0 in the onboarding sequence (before Personal Info)
+- Auto-detect platform (iOS → HealthKit, Android → Google Fit)
+- Request permissions in a user-friendly, explanatory way
 
-**Backend Changes:**
-1. **Frontend Service (`insightsAnalyticsService.ts`)**:
-   - Modify `extractCompletedExercisesFromLocalPlan()`:
-     - Remove the skip logic for endurance sessions (line 58-61)
-     - Extract endurance session data: sportType, trainingVolume, unit, heartRateZone, completedAt
-     - Convert endurance volume to standardized units (minutes or equivalent volume metric)
+**Permissions to Request:**
+1. **Health/Google Fit Access**:
+   - iOS: Request HealthKit read permissions for workout data
+   - Android: Request Google Fit read permissions for workout data
+   - Explain: "To import your workouts from your watch or other fitness apps"
+   - Request specific data types: workouts, heart rate, distance, duration, route data
 
-2. Create `extractCompletedEnduranceSessions()` function:
-   - Similar structure to strength exercise extraction
-   - Extract: sport_type, training_volume, unit, heart_rate_zone, completed_at
-   - Calculate endurance-specific metrics: weekly distance/time, zone distribution, sport type breakdown
+2. **Location Tracking**:
+   - Request foreground location permission
+   - Request background location permission (for workout tracking)
+   - Explain: "To track your route and distance during workouts"
+   - iOS: Request "When In Use" and "Always" location permissions
+   - Android: Request fine location and background location permissions
 
-3. **Backend Service (`insights_service.py`)**:
-   - Update `_calculate_week_volume()` to include endurance sessions:
-     - Calculate strength volume (existing logic: weight × reps × sets)
-     - Add endurance volume: convert to minutes (or standardized metric)
-     - Return combined total or separate metrics
-   - Update `extract_volume_progress()` to handle both modalities:
-     - Check if strength exercises exist
-     - Check if endurance sessions exist
-     - Generate description based on available data (strength-only, endurance-only, or combined)
+**UX Flow:**
+1. Show permission request screen with clear explanations
+2. Explain benefits: "This allows us to track your workouts automatically"
+3. Show platform-specific permission dialogs
+4. Handle permission denial gracefully (show benefits of enabling, allow skip with reminder)
+5. Store permission status in user profile for later reference
 
-4. Update analytics calculations:
-   - **Weekly Volume Trends**: Include endurance volume (convert to common unit or show separately)
-   - **Consistency Metrics**: Track endurance session frequency alongside strength training
-   - **Performance Scores**: Calculate endurance-specific scores (volume progression, zone adherence, sport variety)
-   - **Heart Rate Zone Analytics**: If HR data available, calculate time-in-zone metrics, average/max HR, and zone distribution across sessions
+**Implementation:**
+- Create `PermissionsStep.tsx` component
+- Integrate into `ConversationalOnboarding.tsx` flow
+- Use platform detection (`react-native-device-info` or `expo-device`)
+- Health permissions: `react-native-health` (iOS) or `react-native-google-fit` (Android)
+- Location permissions: `expo-location` or `@react-native-community/geolocation`
+- Store permission status in database (user_profile table or separate permissions table)
 
-**Frontend Changes:**
+**Benefits:**
+- Permissions granted upfront = no interruptions during workouts
+- Better user experience (one-time setup vs. multiple requests)
+- Foundation for live tracking features
+- Users understand why permissions are needed from the start
 
-**UI Layout Order (Top to Bottom):**
-1. **AI Insights Card (Always on Top)**:
-   - Keep AI insights card at the top of InsightsContent (before filter)
-   - AI message adapts to available data: includes strength OR endurance (whichever is present)
-   - If neither strength nor endurance data exists, exclude from prompt (show empty state or generic message)
-   - Message dynamically mentions "strength training", "endurance training", or "training" based on available data
-
-2. **Filter Toggle/Dropdown (Below AI Insights)**:
-   - Add segmented control or dropdown: "All" | "Strength" | "Endurance"
-   - Position: Below AI insights card, above all other charts/cards
-   - Filter data based on selected view
-   - Update all charts/cards below to respect filter
-   - Default: "All" (shows combined data)
-
-3. Update chart components:
-   - `VolumeTrendChart`: Show combined volume or separate by modality
-   - Add endurance-specific visualizations: zone distribution, sport type breakdown
-   - **Progress Charts**: Create line/bar charts showing weekly endurance volume trends, distance/time progression, and heart rate zone distribution over time
-   - Reuse existing charting libraries (`react-native-chart-kit` or similar)
-   - Visual progress tracking is crucial for endurance athletes and provides immediate motivation
-   - **Heart Rate Zone Analytics**: If users have actual heart rate data (from live tracking or Health import), calculate time-in-zone metrics, average HR, max HR, and HR zone distribution across sessions
-   - Visualize zone distribution with pie charts and show trends over time
-   - Provides valuable training load insights similar to TrainingPeaks' TSS (Training Stress Score)
-
-4. Update metrics display:
-   - Show combined totals when "All" selected
-   - Show modality-specific metrics when filtered
-   - Add endurance-specific KPIs: weekly endurance volume, average zone, most common sport
-   - Add HR metrics when available: average HR, max HR, zone distribution
-
-**Backend AI Prompt Changes:**
-1. Update `generate_insights_summary_prompt()` in `backend/app/helpers/prompts/insights_prompts.py`:
-   - Check if strength exercises exist in training plan
-   - Check if endurance sessions exist in training plan
-   - Conditionally include sections:
-     - If strength exists: Include volume_progress, weak_points, top_exercises (strength-focused)
-     - If endurance exists: Include endurance volume, zone distribution, sport type breakdown
-     - If both exist: Include combined metrics
-     - If neither exists: Return minimal prompt or skip AI generation
-   - Update prompt to mention "strength training" or "endurance training" or "training" based on what's available
-   - Keep non-technical, friendly language rules
+**Note**: This step must be completed before users can use live tracking (#3) or Health import features. If permissions are denied, show helpful messaging about how to enable them later in settings.
 
 #### 3. Live Endurance Session Tracking (Strava-like Experience)
 **Complexity: Medium | Impact: Very High**
@@ -208,7 +168,7 @@ Transform endurance sessions into a live workout tracking experience similar to 
    - Real-time updates: time, distance, pace, current HR (if available)
    - Map view showing current route (if GPS available)
    - Large Start/Pause/Resume/Stop buttons
-   - **Note**: Permissions already granted during onboarding (Phase 0), so no permission requests needed here
+   - **Note**: Permissions already granted during onboarding (#2), so no permission requests needed here
    - GPS accuracy indicators
 
 2. **Session Card Enhancement**:
@@ -217,7 +177,7 @@ Transform endurance sessions into a live workout tracking experience similar to 
    - Display route preview (small map thumbnail) if route data exists
 
 3. **Health Import Flow**:
-   - **Note**: Permissions already granted during onboarding (Phase 0), so no permission requests needed here
+   - **Note**: Permissions already granted during onboarding (#2), so no permission requests needed here
    - Workout picker modal with preview cards
    - Auto-match by time proximity
    - Import confirmation with data preview
@@ -228,7 +188,7 @@ Transform endurance sessions into a live workout tracking experience similar to 
 - Track data source for analytics (live vs imported)
 
 **Technical Requirements:**
-- **Permissions** (handled in Phase 0 - onboarding):
+- **Permissions** (handled in #2 - onboarding):
   - Location permissions (foreground and background)
   - Health/Google Fit read permissions
   - Platform auto-detection (iOS → HealthKit, Android → Google Fit)
@@ -244,56 +204,122 @@ Transform endurance sessions into a live workout tracking experience similar to 
 - Works seamlessly with Apple Watch and other devices
 - Route visualization adds motivation and context
 
-#### 3.5. Onboarding Permissions Step (Foundation)
+#### 4. Endurance Analytics Integration
 **Complexity: Low | Impact: High**
 
-Add a permissions step early in the onboarding flow (Step 3) to request Health/Google Fit and location tracking permissions. This ensures all permissions are granted upfront, eliminating the need for permission requests later when users want to track workouts. This creates a smoother user experience and sets the foundation for live tracking features.
+Include endurance sessions in the existing analytics pipeline (currently skipped in `insightsAnalyticsService.ts`). Calculate weekly volume trends, consistency metrics, and performance scores for endurance activities. This leverages existing analytics infrastructure and provides immediate value to endurance athletes. Uses the rich data captured from live tracking (#3) to provide meaningful insights.
 
 **Implementation Details:**
 
-**Onboarding Flow Integration:**
-- Insert as Step 0 in the onboarding sequence (before Personal Info)
-- Auto-detect platform (iOS → HealthKit, Android → Google Fit)
-- Request permissions in a user-friendly, explanatory way
+**UI Approach: Combined View with Filter Toggle** (Recommended)
+- **Default view**: Show combined analytics (strength + endurance) for unified training load insights
+- **Filter toggle**: Add segmented control or toggle buttons at top of InsightsContent: "All" | "Strength" | "Endurance"
+- **Benefits**: 
+  - Most users do both modalities - unified view shows overall progress better
+  - Less navigation needed, more intuitive
+  - Can show combined metrics (total weekly volume, overall consistency)
+  - Filter allows focused view when needed
+- **Alternative (not recommended)**: Separate tabs would require more navigation and lose the unified training picture
 
-**Permissions to Request:**
-1. **Health/Google Fit Access**:
-   - iOS: Request HealthKit read permissions for workout data
-   - Android: Request Google Fit read permissions for workout data
-   - Explain: "To import your workouts from your watch or other fitness apps"
-   - Request specific data types: workouts, heart rate, distance, duration, route data
+**Backend Changes:**
+1. **Frontend Service (`insightsAnalyticsService.ts`)**:
+   - Modify `extractCompletedExercisesFromLocalPlan()`:
+     - Remove the skip logic for endurance sessions (line 58-61)
+     - Extract endurance session data: sportType, trainingVolume, unit, heartRateZone, completedAt
+     - **Priority**: Extract `actualDistance` and `actualTime` when available (from database schema populated by live tracking #3), fallback to `trainingVolume` if not set
+     - Convert endurance volume to standardized units (minutes or equivalent volume metric)
+     - Pass both distance and time arrays to chart components for clustered bar display
 
-2. **Location Tracking**:
-   - Request foreground location permission
-   - Request background location permission (for workout tracking)
-   - Explain: "To track your route and distance during workouts"
-   - iOS: Request "When In Use" and "Always" location permissions
-   - Android: Request fine location and background location permissions
+2. Create `extractCompletedEnduranceSessions()` function:
+   - Similar structure to strength exercise extraction
+   - Extract: sport_type, training_volume, unit, heart_rate_zone, completed_at
+   - **Priority**: Extract `actual_distance` and `actual_time` when available (from live tracking #3 or manual entry), fallback to `training_volume` if not set
+   - Calculate endurance-specific metrics: weekly distance/time, zone distribution, sport type breakdown
+   - Group by week for chart data: aggregate distance and time separately for clustered bar chart
 
-**UX Flow:**
-1. Show permission request screen with clear explanations
-2. Explain benefits: "This allows us to track your workouts automatically"
-3. Show platform-specific permission dialogs
-4. Handle permission denial gracefully (show benefits of enabling, allow skip with reminder)
-5. Store permission status in user profile for later reference
+3. **Backend Service (`insights_service.py`)**:
+   - Update `_calculate_week_volume()` to include endurance sessions:
+     - Calculate strength volume (existing logic: weight × reps × sets)
+     - Add endurance volume: convert to minutes (or standardized metric)
+     - Return combined total or separate metrics
+   - Update `extract_volume_progress()` to handle both modalities:
+     - Check if strength exercises exist
+     - Check if endurance sessions exist
+     - Generate description based on available data (strength-only, endurance-only, or combined)
 
-**Implementation:**
-- Create `PermissionsStep.tsx` component
-- Integrate into `ConversationalOnboarding.tsx` flow
-- Use platform detection (`react-native-device-info` or `expo-device`)
-- Health permissions: `react-native-health` (iOS) or `react-native-google-fit` (Android)
-- Location permissions: `expo-location` or `@react-native-community/geolocation`
-- Store permission status in database (user_profile table or separate permissions table)
+4. Update analytics calculations:
+   - **Weekly Volume Trends**: Include endurance volume (convert to common unit or show separately)
+   - **Consistency Metrics**: Track endurance session frequency alongside strength training
+   - **Performance Scores**: Calculate endurance-specific scores (volume progression, zone adherence, sport variety)
+   - **Heart Rate Zone Analytics**: If HR data available (from live tracking #3), calculate time-in-zone metrics, average/max HR, and zone distribution across sessions
 
-**Benefits:**
-- Permissions granted upfront = no interruptions during workouts
-- Better user experience (one-time setup vs. multiple requests)
-- Foundation for live tracking features
-- Users understand why permissions are needed from the start
+**Frontend Changes:**
 
-**Note**: This step must be completed before users can use live tracking (#3) or Health import features. If permissions are denied, show helpful messaging about how to enable them later in settings.
+**UI Layout Order (Top to Bottom):**
+1. **AI Insights Card (Always on Top)**:
+   - Keep AI insights card at the top of InsightsContent (before filter)
+   - AI message adapts to available data: includes strength OR endurance (whichever is present)
+   - If neither strength nor endurance data exists, exclude from prompt (show empty state or generic message)
+   - Message dynamically mentions "strength training", "endurance training", or "training" based on available data
 
-#### 4. Sport-Specific Visual Enhancements
+2. **Filter Toggle/Dropdown (Below AI Insights)**:
+   - Add segmented control or dropdown: "All" | "Strength" | "Endurance"
+   - Position: Below AI insights card, above all other charts/cards
+   - Filter data based on selected view
+   - Update all charts/cards below to respect filter
+   - Default: "All" (shows combined data)
+
+3. Update chart components:
+   - **VolumeTrendChart Enhancement**: Extend existing `VolumeTrendChart` component to support endurance data
+   - **Clustered Bar Chart for Endurance Volume**:
+     - **Chart Type**: Clustered bar chart with dual y-axes (recommended approach)
+     - **Display Logic**:
+       - When both `actual_distance` and `actual_time` exist: Show two bars per week (clustered)
+         - Distance bar: Left y-axis (km/miles) - primary metric for outdoor activities
+         - Time bar: Right y-axis (minutes) - secondary metric
+         - Use distinct colors (e.g., distance = blue, time = green)
+         - Clear axis labels: "Distance (km)" on left, "Duration (min)" on right
+       - When only distance exists: Show single distance bar (single y-axis)
+       - When only time exists: Show single time bar (single y-axis) - handles gym cycle case
+       - When neither exists: Fall back to `training_volume` with unit display
+     - **Benefits**:
+       - Handles all scenarios: outdoor activities (distance + time), indoor activities (time only), live tracking (both)
+       - Shows most relevant metric prominently (distance for outdoor, time for indoor)
+       - Space-efficient: one chart that adapts to available data
+       - Consistent with existing bar chart style in codebase
+     - **Implementation**:
+       - Extend `VolumeTrendChart` props to accept optional `distance` and `time` arrays
+       - Render two bars per week when both metrics exist (clustered, side-by-side)
+       - Add left y-axis (distance) and right y-axis (time) when both present
+       - Use distinct colors for each metric with legend
+       - Maintain existing period filter functionality
+   - Add endurance-specific visualizations: zone distribution, sport type breakdown
+   - **Progress Charts**: Create line/bar charts showing weekly endurance volume trends, distance/time progression, and heart rate zone distribution over time
+   - Reuse existing charting libraries (`react-native-chart-kit` or similar)
+   - Visual progress tracking is crucial for endurance athletes and provides immediate motivation
+   - **Heart Rate Zone Analytics**: If users have actual heart rate data (from live tracking #3 or Health import), calculate time-in-zone metrics, average HR, max HR, and HR zone distribution across sessions
+   - Visualize zone distribution with pie charts and show trends over time
+   - Provides valuable training load insights similar to TrainingPeaks' TSS (Training Stress Score)
+
+4. Update metrics display:
+   - Show combined totals when "All" selected
+   - Show modality-specific metrics when filtered
+   - Add endurance-specific KPIs: weekly endurance volume, average zone, most common sport
+   - Add HR metrics when available: average HR, max HR, zone distribution
+
+**Backend AI Prompt Changes:**
+1. Update `generate_insights_summary_prompt()` in `backend/app/helpers/prompts/insights_prompts.py`:
+   - Check if strength exercises exist in training plan
+   - Check if endurance sessions exist in training plan
+   - Conditionally include sections:
+     - If strength exists: Include volume_progress, weak_points, top_exercises (strength-focused)
+     - If endurance exists: Include endurance volume, zone distribution, sport type breakdown
+     - If both exist: Include combined metrics
+     - If neither exists: Return minimal prompt or skip AI generation
+   - Update prompt to mention "strength training" or "endurance training" or "training" based on what's available
+   - Keep non-technical, friendly language rules
+
+#### 5. Sport-Specific Visual Enhancements
 **Complexity: Low | Impact: Medium-High**
 
 Add sport-specific visual elements and display metrics in contextually relevant formats for each sport type. These small UI improvements make the app feel purpose-built for each sport type. Requires only frontend component enhancements.
@@ -325,7 +351,7 @@ Add sport-specific visual elements and display metrics in contextually relevant 
 
 ### 🟡 Tier 2: Medium Complexity, High Impact
 
-#### 5. Multi-Session Workouts (Intervals)
+#### 6. Multi-Session Workouts (Intervals)
 **Complexity: Medium | Impact: Medium-High**
 
 Support interval workouts by allowing multiple endurance sessions within a single training day (e.g., "5min warm-up + 4x 1km intervals + 5min cool-down"). Each interval can have different zones, paces, or distances. This is essential for serious endurance training and currently requires manual session creation. Requires UI for interval builder and backend logic for session grouping.
@@ -378,23 +404,22 @@ Use historical data to predict race times, estimate fitness levels, and model pe
 
 ## Implementation Recommendations
 
-### Phase 0 (Onboarding Permissions - 1 week)
-**FOUNDATION**: Add permissions step to onboarding flow (Step 3):
+### Phase 1 (Quick Wins - 2-4 weeks)
+Focus on Tier 1 improvements (#1, #5) to immediately improve the endurance experience with minimal effort:
+- Enhanced display cards (#1)
+- Visual enhancements (#5)
+
+### Phase 1.5 (Onboarding Permissions - Foundation - 1 week)
+**FOUNDATION**: Add permissions step to onboarding flow (#2):
 - Request Health/Google Fit permissions (Apple Health on iOS, Google Fit on Android)
 - Request location tracking permissions (for GPS-based workout tracking)
 - Auto-detect platform and request appropriate permissions
 - Store permission status for later use
 - This step must be completed before users can use live tracking features
 
-### Phase 1 (Quick Wins - 2-4 weeks)
-Focus on Tier 1 improvements (#1-4) to immediately improve the endurance experience with minimal effort:
-- Enhanced display cards
-- Analytics integration (includes progress charts)
-- Visual enhancements
-
-### Phase 1.5 (Live Tracking - Priority - 4-6 weeks)
+### Phase 2 (Live Tracking - Priority - 4-6 weeks)
 **HIGH PRIORITY**: Implement live endurance session tracking (#3) with Health/Google Fit import option:
-- **Note**: Permissions already granted in Phase 0 (onboarding), so no permission requests needed here
+- **Note**: Permissions already granted in Phase 1.5 (#2), so no permission requests needed here
 - **Live Tracking**:
   - Full-screen workout tracking screen (Strava-like)
   - GPS tracking for distance, time, and route
@@ -411,18 +436,24 @@ Focus on Tier 1 improvements (#1-4) to immediately improve the endurance experie
   - Show picker if multiple workouts exist
   - Store data source (live_tracking vs healthkit/google_fit)
 
-### Phase 2 (Foundation - 1-2 months)
-Implement Tier 2 improvements (#5) to build core endurance functionality:
+### Phase 2.5 (Analytics Integration - 2-3 weeks)
+**AFTER LIVE TRACKING**: Implement endurance analytics integration (#4) using the rich data captured from live tracking:
+- Analytics integration (includes progress charts with clustered bar charts)
+- Combined strength + endurance analytics view with filter toggle
+- Heart rate zone analytics using actual HR data from live tracking
+
+### Phase 3 (Foundation - 1-2 months)
+Implement Tier 2 improvements (#6) to build core endurance functionality:
 - Interval workouts
 
-### Phase 3 (Additional Integrations - 2-3 months)
+### Phase 4 (Additional Integrations - 2-3 months)
 Add remaining Tier 3 integrations (#11, #13-17) based on user demand:
-- **Note**: Live tracking (#3) and Health/Google Fit import moved to Phase 1.5 (priority)
+- **Note**: Live tracking (#3) and Health/Google Fit import moved to Phase 2 (priority)
 - **Secondary**: Strava (free tier, evaluate rate limits)
 - **Deferred**: Watch manufacturer APIs (require paid accounts - users can sync via Health/Google Fit instead)
 - Manual GPS route import (no API costs)
 
-### Phase 4 (Advanced Features - 3-6 months)
+### Phase 5 (Advanced Features - 3-6 months)
 Evaluate Tier 4 features (#18-20) based on strategic priorities and user feedback.
 
 ---
@@ -445,7 +476,7 @@ Evaluate Tier 4 features (#18-20) based on strategic priorities and user feedbac
 
 ### Health/Google Fit Integration Details
 
-**Prerequisites**: Permissions already granted during onboarding (Phase 0 - Step 3), so no permission requests needed here.
+**Prerequisites**: Permissions already granted during onboarding (#2), so no permission requests needed here.
 
 **Workflow** (Alternative to Live Tracking):
 1. User taps "Import from Health" button on planned endurance session card
@@ -503,11 +534,11 @@ Evaluate Tier 4 features (#18-20) based on strategic priorities and user feedbac
 - Map library: `react-native-maps` (free, open-source) or `@rnmapbox/maps` (free tier available)
 - Charts: `react-native-chart-kit` (free) or `victory-native` (free)
 - Health APIs:
-  - `react-native-health` (iOS - free, HealthKit access) - **Required for Phase 0 (onboarding) and Phase 1.5**
-  - `react-native-google-fit` (Android - free, Google Fit access) - **Required for Phase 0 (onboarding) and Phase 1.5**
-  - Platform detection: `react-native-device-info` or `expo-device` - **Required for Phase 0 (onboarding)**
+  - `react-native-health` (iOS - free, HealthKit access) - **Required for Phase 1.5 (#2) and Phase 2**
+  - `react-native-google-fit` (Android - free, Google Fit access) - **Required for Phase 1.5 (#2) and Phase 2**
+  - Platform detection: `react-native-device-info` or `expo-device` - **Required for Phase 1.5 (#2)**
 - Location tracking:
-  - `expo-location` or `@react-native-community/geolocation` - **Required for Phase 0 (onboarding) and Phase 1.5**
+  - `expo-location` or `@react-native-community/geolocation` - **Required for Phase 1.5 (#2) and Phase 2**
 - File handling: `expo-file-system` (free) for GPX imports
 
 ### Backend Dependencies
@@ -531,20 +562,25 @@ Track these metrics to measure improvement impact:
 
 ## Conclusion
 
-The quick wins in Tier 1 can dramatically improve the endurance experience with minimal effort. Focus on visual polish, analytics integration, and basic metric capture first. Then prioritize live tracking with Health/Google Fit import (Phase 1.5) as it provides massive value and makes endurance tracking as engaging as strength training.
+The quick wins in Tier 1 can dramatically improve the endurance experience with minimal effort. Focus on visual polish first, then implement live tracking to capture rich data, followed by analytics integration that leverages that data.
 
 **Recommended Starting Point**: 
-1. **Phase 0 (Foundation)**: Add permissions step to onboarding (Step 3) - required before live tracking
+1. **Phase 1**: Implement improvement #1 (enhanced display cards) and #5 (visual enhancements)
+2. **Phase 1.5 (Foundation)**: Add permissions step to onboarding (#2) - required before live tracking
    - Request Health/Google Fit permissions
    - Request location tracking permissions
    - Store permission status for later use
-2. **Phase 1**: Implement improvements #1 and #2 (display cards and analytics integration) simultaneously
-3. **Phase 1.5 (Priority)**: Add live endurance session tracking with Health/Google Fit import option - this is the highest value addition
+3. **Phase 2 (Priority)**: Add live endurance session tracking (#3) with Health/Google Fit import option - this is the highest value addition
    - Live tracking eliminates manual entry completely
    - Makes endurance sessions feel as engaging as strength exercises
    - Health/Google Fit import provides alternative for users who track elsewhere
-   - **Note**: Permissions already granted in Phase 0, so no permission requests needed
-4. **Phase 2**: Build on the foundation with progression tracking, templates, and analytics
+   - **Note**: Permissions already granted in Phase 1.5 (#2), so no permission requests needed
+   - **Captures rich data** (actual_time, actual_distance, HR, pace, route) that analytics will use
+4. **Phase 2.5**: Implement endurance analytics integration (#4) using the rich data from live tracking
+   - Analytics now has real data to work with (actual_time, actual_distance, HR metrics)
+   - Clustered bar charts show meaningful trends using tracked data
+   - Heart rate zone analytics use actual HR data from live tracking
+5. **Phase 3**: Build on the foundation with progression tracking, templates, and additional features
 
 **Integration Strategy**: Live tracking + Health/Google Fit import is prioritized because:
 - **Live Tracking**: 

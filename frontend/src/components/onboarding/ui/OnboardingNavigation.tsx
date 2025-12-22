@@ -54,18 +54,22 @@ export const OnboardingNavigation: React.FC<OnboardingNavigationProps> = ({
 
   return (
     <View style={styles.dualContainer}>
-      <OnboardingButton
-        title={backTitle}
-        onPress={onBack}
-        disabled={backDisabled}
-        variant="back"
-      />
-      <OnboardingButton
-        title={nextTitle}
-        onPress={onNext}
-        disabled={nextDisabled}
-        icon={nextIcon}
-      />
+      <View style={styles.buttonWrapper}>
+        <OnboardingButton
+          title={backTitle}
+          onPress={onBack}
+          disabled={backDisabled}
+          variant="back"
+        />
+      </View>
+      <View style={styles.buttonWrapper}>
+        <OnboardingButton
+          title={nextTitle}
+          onPress={onNext}
+          disabled={nextDisabled}
+          icon={nextIcon}
+        />
+      </View>
     </View>
   );
 };
@@ -89,5 +93,8 @@ const styles = StyleSheet.create({
     marginBottom: 40,
     paddingHorizontal: 20,
     gap: 12,
+  },
+  buttonWrapper: {
+    flex: 1,
   },
 });

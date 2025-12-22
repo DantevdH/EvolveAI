@@ -53,9 +53,23 @@
     </dict>
     <key>NSFaceIDUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your Face ID biometric data.</string>
+    <key>NSHealthShareUsageDescription</key>
+    <string>EvolveAI reads your workout and heart rate data to provide personalized training insights.</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>EvolveAI writes completed workouts to your Health data.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>EvolveAI needs your location to track workouts with GPS.</string>
+    <key>NSLocationAlwaysUsageDescription</key>
+    <string>EvolveAI needs background location to continue tracking during workouts.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>EvolveAI needs your location to track workouts.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
+    </array>
+    <key>UIBackgroundModes</key>
+    <array>
+      <string>location</string>
     </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>

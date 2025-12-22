@@ -231,3 +231,5 @@ buck-out/
 *.xlsx
 *.csv
 frontend/.env
+*.webp
+*.png

@@ -56,3 +56,4 @@ echo "   EXPO_PUBLIC_SUPABASE_ANON_KEY: ${#SUPABASE_ANON_KEY} chars"
 echo ""
 echo "⚠️  IMPORTANT: You need to RESTART Metro bundler for changes to take effect!"
 echo "   Press Ctrl+C in the terminal running start.sh and run it again."
+

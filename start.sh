@@ -131,6 +131,13 @@ trap cleanup EXIT
 
 echo "Status: starting frontend (expo dev client). Next: monitor processes."
 cd "${FRONTEND_DIR}"
+
+# Boot iPhone 17 Pro simulator if it exists, otherwise use default
+echo "Status: booting iPhone 17 Pro simulator..."
+xcrun simctl boot "iPhone 17 Pro" 2>/dev/null || {
+  echo "Status: iPhone 17 Pro not found, using default simulator..."
+}
+
 npx expo start --dev-client --ios
 
 wait "${BACKEND_PID}"

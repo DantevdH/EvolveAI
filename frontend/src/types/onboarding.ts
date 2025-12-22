@@ -1,5 +1,37 @@
 // Onboarding Types for AI-Driven Flow
 
+// Permissions Status for Health and Location tracking
+export interface PermissionsStatus {
+  health: {
+    granted: boolean;
+    platform: 'ios' | 'android' | 'unknown';
+    requestedAt?: string;
+    deniedAt?: string;
+  };
+  location: {
+    foreground: boolean;
+    background: boolean;
+    requestedAt?: string;
+    deniedAt?: string;
+  };
+  skipped: boolean;
+  lastUpdated: string;
+}
+
+// Default permissions status (all denied, not skipped)
+export const defaultPermissionsStatus: PermissionsStatus = {
+  health: {
+    granted: false,
+    platform: 'unknown',
+  },
+  location: {
+    foreground: false,
+    background: false,
+  },
+  skipped: false,
+  lastUpdated: new Date().toISOString(),
+};
+
 export enum QuestionType {
   MULTIPLE_CHOICE = "multiple_choice",
   DROPDOWN = "dropdown",
@@ -90,6 +122,10 @@ export const experienceLevels: ExperienceLevel[] = [
 ];
 
 export interface OnboardingState {
+  // Step 0: Permissions (Health + Location)
+  permissionsStatus: PermissionsStatus | null;
+  permissionsSkipped: boolean;
+
   // Step 1: Username
   username: string;
   usernameValid: boolean;
@@ -227,6 +263,16 @@ export interface OnboardingStepProps {
   onBack?: () => void;
   onComplete: () => void;
   isLoading?: boolean;
+  error?: string;
+}
+
+export interface PermissionsStepProps {
+  permissionsStatus: PermissionsStatus | null;
+  onPermissionsChange: (permissions: PermissionsStatus) => void;
+  onNext: () => void;
+  onBack?: () => void;
+  onSkip: () => void;
+  isLoading: boolean;
   error?: string;
 }
 

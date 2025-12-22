@@ -1,4 +1,5 @@
 export * from './theme';
+export * from './permissions';
 
 // API Configuration
 export const API_CONFIG = {
@@ -16,6 +17,7 @@ export const STORAGE_KEYS = {
   WORKOUT_HISTORY: 'training_history',
   APP_SETTINGS: 'app_settings',
   ONBOARDING_COMPLETED: 'onboarding_completed',
+  PERMISSIONS_STATUS: 'permissions_status',
 } as const;
 
 // App Configuration

@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { OnboardingBackground, ProgressOverlay } from './ui';
+import { PermissionsStep } from '../../screens/onboarding/PermissionsStep';
 import { WelcomeStep } from '../../screens/onboarding/WelcomeStep';
 import { PersonalInfoStep } from '../../screens/onboarding/PersonalInfoStep';
 import { GoalDescriptionStep } from '../../screens/onboarding/GoalDescriptionStep';
@@ -14,6 +15,8 @@ import {
   PersonalInfo,
   AIQuestion,
   QuestionType,
+  PermissionsStatus,
+  defaultPermissionsStatus,
 } from '../../types/onboarding';
 import { useAuth } from '../../context/AuthContext';
 import { useProgressOverlay } from '../../hooks/useProgressOverlay';
@@ -179,16 +182,20 @@ const convertResponseForStorage = (question: AIQuestion, rawValue: any): any => 
 
 interface ConversationalOnboardingProps {
   onError: (error: string) => void;
-  startFromStep?: 'welcome' | 'initial';
+  startFromStep?: 'permissions' | 'welcome' | 'initial';
 }
 
 export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> = ({
   onError,
-  startFromStep = 'welcome',
+  startFromStep = 'permissions',
 }) => {
   const { state: authState, dispatch, refreshUserProfile, refreshTrainingPlan, setTrainingPlan, setExercises, setPollingPlan } = useAuth();
   const router = useRouter();
   const [state, setState] = useState<OnboardingState>({
+    // Permissions (Step 0)
+    permissionsStatus: null,
+    permissionsSkipped: false,
+    // Username/Welcome (Step 1)
     username: '',
     usernameValid: false,
     personalInfo: null,
@@ -225,9 +232,9 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   const [retryStep, setRetryStep] = useState<string | null>(null);
   const MAX_RETRIES = 3;
 
-  // Determine starting step - either from prop or default to welcome
-  const initialStep = startFromStep || 'welcome';
-  const [currentStep, setCurrentStep] = useState<'welcome' | 'personal' | 'goal' | 'experience' | 'initial'>(initialStep);
+  // Determine starting step - either from prop or default to permissions
+  const initialStep = startFromStep || 'permissions';
+  const [currentStep, setCurrentStep] = useState<'permissions' | 'welcome' | 'personal' | 'goal' | 'experience' | 'initial'>(initialStep);
 
   // Track if we've initialized from profile (run only once per component mount)
   const hasInitializedFromProfileRef = useRef(false);
@@ -486,6 +493,32 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     });
   }, []);
 
+  // Step 0: Permissions handlers
+  const handlePermissionsChange = useCallback((permissions: PermissionsStatus) => {
+    setState(prev => ({
+      ...prev,
+      permissionsStatus: permissions,
+    }));
+  }, []);
+
+  const handlePermissionsNext = useCallback(() => {
+    setCurrentStep('personal');
+  }, []);
+
+  const handlePermissionsSkip = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      permissionsSkipped: true,
+      permissionsStatus: {
+        ...defaultPermissionsStatus,
+        skipped: true,
+        lastUpdated: new Date().toISOString(),
+      },
+    }));
+    setCurrentStep('personal');
+  }, []);
+
+  // Step 1: Welcome - Username and Gender
   const handleWelcomeNext = useCallback(() => {
     if (!state.usernameValid) {
       Alert.alert('Error', 'Please enter a valid username (3-20 characters)');
@@ -515,7 +548,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       return prev;
     });
     
-    setCurrentStep('personal');
+    setCurrentStep('permissions');
   }, [state.usernameValid]);
 
   // Step 2: Personal Info
@@ -1120,11 +1153,14 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
   // Navigation handlers
   const handlePrevious = useCallback(() => {
     switch (currentStep) {
+      case 'permissions':
+        setCurrentStep('welcome');
+        break;
       case 'welcome':
-        // Can't go back from welcome
+        // Can't go back from welcome (first step)
         break;
       case 'personal':
-        setCurrentStep('welcome');
+        setCurrentStep('permissions');
         break;
       case 'goal':
         setCurrentStep('personal');
@@ -1184,7 +1220,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     setRetryCount(0);
     setRetryStep(null);
     setState(prev => ({ ...prev, error: null }));
-    setCurrentStep('welcome');
+    setCurrentStep('permissions');
   }, []);
 
   const renderCurrentStep = () => {
@@ -1203,6 +1239,19 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     }
     
     switch (currentStep) {
+      case 'permissions':
+        return (
+          <PermissionsStep
+            permissionsStatus={state.permissionsStatus}
+            onPermissionsChange={handlePermissionsChange}
+            onNext={handlePermissionsNext}
+            onBack={handlePrevious}
+            onSkip={handlePermissionsSkip}
+            isLoading={false}
+            error={state.error || undefined}
+          />
+        );
+
       case 'welcome':
         return (
           <WelcomeStep
@@ -1293,9 +1342,11 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   const lastResetStepRef = useRef<string | null>(null);
   useEffect(() => {
-    if (currentStep === 'welcome' && lastResetStepRef.current !== 'welcome') {
+    // Reset intro tracker when going back to early steps (permissions or welcome)
+    if ((currentStep === 'permissions' || currentStep === 'welcome') &&
+        lastResetStepRef.current !== 'permissions' && lastResetStepRef.current !== 'welcome') {
       introTrackerRef.current.initial = false;
-      lastResetStepRef.current = 'welcome';
+      lastResetStepRef.current = currentStep;
       setState(prev => {
         if (!prev.initialIntroShown) {
           return prev;
@@ -1305,7 +1356,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           initialIntroShown: false,
         };
       });
-    } else if (currentStep !== 'welcome') {
+    } else if (currentStep !== 'permissions' && currentStep !== 'welcome') {
       lastResetStepRef.current = currentStep;
     }
   }, [currentStep]);

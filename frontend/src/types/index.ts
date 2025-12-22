@@ -1,4 +1,8 @@
-import { AIQuestion } from './onboarding';
+import { AIQuestion, PermissionsStatus } from './onboarding';
+
+// Export permission-related types
+export * from './healthkit';
+export * from './permissions';
 
 // Navigation types
 export type RootStackParamList = {
@@ -87,6 +91,9 @@ export interface UserProfile {
   plan_outline?: PlanOutline | null;
   outline_ai_message?: string | null;
   plan_outline_feedback?: any | null;
+
+  // Permissions status (Health + Location)
+  permissions_granted?: PermissionsStatus | null;
 
   // Classification metadata
   

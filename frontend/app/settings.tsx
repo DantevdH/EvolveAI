@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
 import { AuthService } from '../src/services/authService';
 import { useNotifications } from '../src/hooks/useNotifications';
+import { usePermissions } from '../src/hooks/usePermissions';
 import { colors, createColorWithOpacity, goldenGradient } from '../src/constants/colors';
 import { validatePasswordChange } from '../src/utils/passwordValidation';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
@@ -41,6 +42,21 @@ function SettingsScreenContent() {
     scheduleTrainingReminder,
     cancelTrainingReminder,
   } = useNotifications();
+
+  // Permissions hook (Health & Location)
+  const {
+    status: permissionsStatus,
+    isLoading: permissionsLoading,
+    error: permissionsError,
+    isHealthGranted,
+    isLocationGranted,
+    isHealthAvailable,
+    requestHealth,
+    requestLocation,
+    requestBackgroundLocation,
+    openSettings: openDeviceSettings,
+    saveStatus: savePermissions,
+  } = usePermissions(state.userProfile?.permissions_granted);
 
   // Get units from userProfile with null check
   const units = state.userProfile?.weightUnit === 'lbs' ? 'imperial' : 'metric';
@@ -236,6 +252,75 @@ function SettingsScreenContent() {
     }
   };
 
+  // Health permission toggle handler
+  const handleHealthToggle = async (enabled: boolean) => {
+    try {
+      if (enabled) {
+        const result = await requestHealth();
+        if (!result.success) {
+          if (result.status === 'denied') {
+            Alert.alert(
+              'Health Permission Denied',
+              'To import workouts and heart rate data, please enable Health access in your device settings.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Open Settings', onPress: openDeviceSettings }
+              ]
+            );
+          } else if (result.error) {
+            Alert.alert('Error', result.error);
+          }
+        }
+        await savePermissions();
+      }
+      // Note: Health permissions cannot be revoked from the app - user must go to Settings
+    } catch (error) {
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to update Health permissions.'
+      );
+    }
+  };
+
+  // Location permission toggle handler
+  const handleLocationToggle = async (enabled: boolean) => {
+    try {
+      if (enabled) {
+        const result = await requestLocation();
+        if (result.success) {
+          // Also request background location for workout tracking
+          const bgResult = await requestBackgroundLocation();
+          if (!bgResult.success && bgResult.status === 'denied') {
+            Alert.alert(
+              'Background Location',
+              'For continuous workout tracking, enable "Always" location access in Settings.',
+              [
+                { text: 'OK' },
+                { text: 'Open Settings', onPress: openDeviceSettings }
+              ]
+            );
+          }
+        } else if (result.status === 'denied') {
+          Alert.alert(
+            'Location Permission Denied',
+            'To track your workouts with GPS, please enable location access in your device settings.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: openDeviceSettings }
+            ]
+          );
+        }
+        await savePermissions();
+      }
+      // Note: Location permissions cannot be revoked from the app - user must go to Settings
+    } catch (error) {
+      Alert.alert(
+        'Error',
+        error instanceof Error ? error.message : 'Failed to update location permissions.'
+      );
+    }
+  };
+
   const formatTime = (hour: number): string => {
     const period = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
@@ -411,6 +496,107 @@ function SettingsScreenContent() {
             <View style={styles.errorItem}>
               <Ionicons name="warning-outline" size={16} color={colors.error} />
               <Text style={styles.errorText}>{notificationError}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Workout Tracking Section */}
+        <View style={styles.section}>
+          <LinearGradient
+            colors={[createColorWithOpacity(colors.tertiary, 0.08), createColorWithOpacity(colors.tertiary, 0.03)]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.sectionGradient}
+          >
+            <Text style={styles.sectionTitle}>Workout Tracking</Text>
+          </LinearGradient>
+
+          {/* Health Data Permission */}
+          {isHealthAvailable && (
+            <View style={styles.settingItem}>
+              <View style={styles.settingLeft}>
+                <View style={styles.iconContainer}>
+                  <LinearGradient
+                    colors={[createColorWithOpacity(colors.primary, 0.2), createColorWithOpacity(colors.primary, 0.1)]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.iconGradient}
+                  >
+                    <Ionicons name="heart-outline" size={18} color={colors.primary} />
+                  </LinearGradient>
+                </View>
+                <View style={styles.settingTextContainer}>
+                  <Text style={styles.settingText}>Health Data</Text>
+                  <Text style={styles.settingSubtext}>Import workouts & heart rate</Text>
+                </View>
+              </View>
+              {isHealthGranted ? (
+                <View style={styles.permissionBadge}>
+                  <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+                  <Text style={styles.permissionBadgeText}>Enabled</Text>
+                </View>
+              ) : (
+                <Switch
+                  value={isHealthGranted}
+                  onValueChange={handleHealthToggle}
+                  trackColor={{ false: createColorWithOpacity(colors.muted, 0.4), true: createColorWithOpacity(colors.primary, 0.4) }}
+                  thumbColor={isHealthGranted ? colors.primary : colors.muted}
+                  disabled={permissionsLoading}
+                />
+              )}
+            </View>
+          )}
+
+          {/* Location Permission */}
+          <View style={styles.settingItem}>
+            <View style={styles.settingLeft}>
+              <View style={styles.iconContainer}>
+                <LinearGradient
+                  colors={[createColorWithOpacity(colors.tertiary, 0.2), createColorWithOpacity(colors.tertiary, 0.1)]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.iconGradient}
+                >
+                  <Ionicons name="location-outline" size={18} color={colors.tertiary} />
+                </LinearGradient>
+              </View>
+              <View style={styles.settingTextContainer}>
+                <Text style={styles.settingText}>Location Tracking</Text>
+                <Text style={styles.settingSubtext}>GPS for runs, rides & hikes</Text>
+              </View>
+            </View>
+            {isLocationGranted ? (
+              <View style={styles.permissionBadge}>
+                <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+                <Text style={styles.permissionBadgeText}>Enabled</Text>
+              </View>
+            ) : (
+              <Switch
+                value={isLocationGranted}
+                onValueChange={handleLocationToggle}
+                trackColor={{ false: createColorWithOpacity(colors.muted, 0.4), true: createColorWithOpacity(colors.tertiary, 0.4) }}
+                thumbColor={isLocationGranted ? colors.tertiary : colors.muted}
+                disabled={permissionsLoading}
+              />
+            )}
+          </View>
+
+          {/* Show "Open Settings" button if permissions were denied */}
+          {(permissionsStatus?.health?.deniedAt || permissionsStatus?.location?.deniedAt) && (
+            <TouchableOpacity
+              style={styles.openSettingsButton}
+              onPress={openDeviceSettings}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="settings-outline" size={16} color={colors.secondary} />
+              <Text style={styles.openSettingsText}>Open Device Settings</Text>
+            </TouchableOpacity>
+          )}
+
+          {permissionsError && (
+            <View style={styles.errorItem}>
+              <Ionicons name="warning-outline" size={16} color={colors.error} />
+              <Text style={styles.errorText}>{permissionsError}</Text>
             </View>
           )}
         </View>
@@ -878,6 +1064,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.error,
     flex: 1,
+  },
+  // Permission toggle styles
+  settingTextContainer: {
+    flex: 1,
+  },
+  settingSubtext: {
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 2,
+  },
+  permissionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: createColorWithOpacity(colors.success, 0.12),
+    borderRadius: 12,
+  },
+  permissionBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.success,
+  },
+  openSettingsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.08),
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: createColorWithOpacity(colors.secondary, 0.2),
+    marginTop: 4,
+  },
+  openSettingsText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.secondary,
   },
 });
 

@@ -17,3 +17,4 @@ __all__ = [
     "DEFAULT_EMBEDDING_MODEL",
     "DEFAULT_TEMPERATURE",
 ]
+
