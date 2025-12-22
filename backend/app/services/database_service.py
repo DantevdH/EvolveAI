@@ -2376,6 +2376,10 @@ class DatabaseService:
                         "updated_at": datetime.utcnow().isoformat(),
                     }
                     
+                    # Add scheduled_date if it was mapped by date_mapper
+                    if "scheduled_date" in daily_data:
+                        daily_training_record["scheduled_date"] = daily_data["scheduled_date"]
+                    
                     daily_result = (
                         supabase_client.table("daily_training")
                         .insert(daily_training_record)
@@ -2722,6 +2726,10 @@ class DatabaseService:
                     "updated_at": datetime.utcnow().isoformat(),
                 }
                 
+                # Add scheduled_date if it was mapped by date_mapper
+                if "scheduled_date" in daily_data:
+                    daily_training_record["scheduled_date"] = daily_data["scheduled_date"]
+                
                 daily_result = (
                     supabase_client.table("daily_training")
                     .insert(daily_training_record)
@@ -3026,6 +3034,10 @@ class DatabaseService:
                     "created_at": datetime.utcnow().isoformat(),
                     "updated_at": datetime.utcnow().isoformat(),
                 }
+                
+                # Add scheduled_date if it was mapped by date_mapper
+                if "scheduled_date" in daily_data:
+                    daily_training_record["scheduled_date"] = daily_data["scheduled_date"]
                 
                 daily_result = (
                     supabase_client.table("daily_training")

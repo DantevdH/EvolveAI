@@ -32,7 +32,7 @@ const ExerciseInfo: React.FC<ExerciseInfoProps> = ({
       <View style={styles.exerciseDetails}>
         {isEndurance ? (
           <Text style={styles.setsText}>
-            {enduranceSession?.trainingVolume || 'N/A'} {enduranceSession?.unit || ''} • zone {enduranceSession?.heartRateZone || 'N/A'}
+            {enduranceSession?.trainingVolume || 'N/A'} {enduranceSession?.unit || ''}
           </Text>
         ) : (
           <Text style={styles.setsText}>

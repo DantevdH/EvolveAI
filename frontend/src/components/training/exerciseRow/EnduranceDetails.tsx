@@ -1,14 +1,19 @@
 /**
  * Endurance Details Component
- * Displays endurance session details
+ * Displays endurance session details with rich card layout, sport icons, and color-coded zones
  */
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { colors } from '../../../constants/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { colors, createColorWithOpacity } from '../../../constants/colors';
+import { typography, spacing } from '../../../constants/designSystem';
+import { getSportIcon } from '../../../constants/sportIcons';
+import { getZoneBadgeStyle, getZoneLabel } from '../../../utils/heartRateZoneUtils';
 
 interface EnduranceDetailsProps {
   enduranceSession?: {
+    name?: string;
     sportType?: string;
     trainingVolume?: number;
     unit?: string;
@@ -17,30 +22,44 @@ interface EnduranceDetailsProps {
 }
 
 const EnduranceDetails: React.FC<EnduranceDetailsProps> = ({ enduranceSession }) => {
+  const sportType = enduranceSession?.sportType || '';
+  const iconName = getSportIcon(sportType);
+  const zone = enduranceSession?.heartRateZone || 1;
+  const zoneStyle = getZoneBadgeStyle(zone);
+  const zoneLabel = getZoneLabel(zone);
+  const trainingVolume = enduranceSession?.trainingVolume;
+  const unit = enduranceSession?.unit || '';
+
   return (
     <View style={styles.enduranceContainer}>
-      <View style={styles.enduranceDetails}>
-        {/* Type */}
-        <View style={styles.enduranceDetailItemVertical}>
-          <Text style={styles.enduranceDetailLabelSmall}>TYPE</Text>
-          <Text style={styles.enduranceDetailValueSmall}>
-            {enduranceSession?.sportType || 'N/A'}
-          </Text>
+      {/* Horizontal layout: Icon | Details | Zone Badge */}
+      <View style={styles.enduranceContent}>
+        {/* Sport Icon - Left */}
+        <View style={styles.iconContainer}>
+          <Ionicons 
+            name={iconName as any} 
+            size={28} 
+            color={colors.primary} 
+          />
         </View>
-        
-        {/* Volume */}
-        <View style={styles.enduranceDetailItemVertical}>
-          <Text style={styles.enduranceDetailLabelSmall}>VOLUME</Text>
-          <Text style={styles.enduranceDetailValueSmall}>
-            {enduranceSession?.trainingVolume || 'N/A'} {enduranceSession?.unit || ''}
-          </Text>
+
+        {/* Exercise Details - Center */}
+        <View style={styles.detailsContainer}>
+          {/* Training Volume */}
+          <View style={styles.volumeContainer}>
+            <Text style={styles.volumeLabel}>VOLUME</Text>
+            <Text style={styles.volumeValue}>
+              {trainingVolume !== undefined && trainingVolume !== null 
+                ? `${trainingVolume} ${unit}` 
+                : 'N/A'}
+            </Text>
+          </View>
         </View>
-        
-        {/* Heart Zone */}
-        <View style={styles.enduranceDetailItemVertical}>
-          <Text style={styles.enduranceDetailLabelSmall}>HEART ZONE</Text>
-          <Text style={styles.enduranceDetailValueSmall}>
-            Zone {enduranceSession?.heartRateZone || 'N/A'}
+
+        {/* Heart Rate Zone Badge - Right */}
+        <View style={[styles.zoneBadge, { backgroundColor: zoneStyle.backgroundColor }]}>
+          <Text style={[styles.zoneLabel, { color: zoneStyle.color }]}>
+            {zoneLabel}
           </Text>
         </View>
       </View>
@@ -50,25 +69,56 @@ const EnduranceDetails: React.FC<EnduranceDetailsProps> = ({ enduranceSession })
 
 const styles = StyleSheet.create({
   enduranceContainer: {
-    paddingVertical: 8,
-    gap: 16
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
   },
-  enduranceDetails: {
-    gap: 8
+  enduranceContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
-  enduranceDetailItemVertical: {
-    gap: 4
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: createColorWithOpacity(colors.primary, 0.1),
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  enduranceDetailLabelSmall: {
-    fontSize: 10,
-    fontWeight: '500',
+  detailsContainer: {
+    flex: 1,
+    minWidth: 0, // Allows text to shrink
+  },
+  volumeContainer: {
+    gap: 2,
+  },
+  volumeLabel: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.medium,
     color: colors.muted,
-    textTransform: 'uppercase'
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  enduranceDetailValueSmall: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.text
+  volumeValue: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.medium,
+    color: colors.text,
+  },
+  zoneBadge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 60,
+    flexShrink: 0,
+  },
+  zoneLabel: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.semibold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });
 

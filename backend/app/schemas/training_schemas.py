@@ -218,7 +218,7 @@ class EnduranceSession(BaseModel):
     """Schema for individual endurance training sessions."""
 
     id: Optional[int] = Field(default=None, description="Database ID")
-    name: str = Field(..., description="Concise name of the endurance session")
+    name: str = Field(..., description="Concise name of the endurance session with 2 words")
     sport_type: EnduranceTypeLiteral = Field(
         ..., 
         description="Endurance activity type (running, cycling, swimming, rowing, hiking, walking, elliptical, stair_climbing, jump_rope, or other)"
