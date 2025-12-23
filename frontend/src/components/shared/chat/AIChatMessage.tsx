@@ -187,25 +187,29 @@ export const AIChatMessage: React.FC<AIChatMessageProps> = ({
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.messageWrapper, { opacity: fadeAnim }]}>
-        <LinearGradient
-          colors={[createColorWithOpacity(colors.secondary, 0.35), createColorWithOpacity(colors.secondary, 0.15)]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.aiAvatar}
-        >
-          <MaterialIcons name="psychology" size={18} color={colors.primary} />
-        </LinearGradient>
+        <View style={styles.aiAvatarContainer}>
+          <LinearGradient
+            colors={[createColorWithOpacity(colors.secondary, 0.35), createColorWithOpacity(colors.secondary, 0.15)]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.aiAvatar}
+          >
+            <MaterialIcons name="psychology" size={18} color={colors.primary} />
+          </LinearGradient>
+        </View>
         <View style={styles.chatBubble}>
           {showHeader && (
             <View style={styles.chatHeader}>
-              <LinearGradient
-                colors={[createColorWithOpacity(colors.primary, 0.18), createColorWithOpacity(colors.primary, 0.08)]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.aiNameContainer}
-              >
-                <Text style={styles.aiName}>AI Coach</Text>
-              </LinearGradient>
+              <View style={styles.aiNameContainerWrapper}>
+                <LinearGradient
+                  colors={[createColorWithOpacity(colors.primary, 0.18), createColorWithOpacity(colors.primary, 0.08)]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.aiNameContainer}
+                >
+                  <Text style={styles.aiName}>AI Coach</Text>
+                </LinearGradient>
+              </View>
               <View style={styles.onlineIndicator}>
                 <Animated.View 
                   style={[
@@ -254,18 +258,24 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     marginBottom: 8,
   },
-  aiAvatar: {
+  aiAvatarContainer: {
     width: 42,
     height: 42,
     borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginRight: 10,
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.35),
     shadowColor: createColorWithOpacity(colors.primary, 0.2),
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
+    overflow: 'hidden',
+  },
+  aiAvatar: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chatBubble: {
     backgroundColor: createColorWithOpacity(colors.background, 0.95),
@@ -302,15 +312,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 8,
   },
-  aiNameContainer: {
+  aiNameContainerWrapper: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,
+    backgroundColor: createColorWithOpacity(colors.primary, 0.18),
     shadowColor: createColorWithOpacity(colors.primary, 0.2),
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+    overflow: 'hidden',
+  },
+  aiNameContainer: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
   aiName: {
     fontSize: 13,

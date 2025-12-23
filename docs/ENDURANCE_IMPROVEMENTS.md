@@ -115,6 +115,30 @@ Add a permissions step early in the onboarding flow (Step 3) to request Health/G
 
 **Note**: This step must be completed before users can use live tracking (#3) or Health import features. If permissions are denied, show helpful messaging about how to enable them later in settings.
 
+**IMPORTANT**
+Podfile.properties.json:
+
+{
+  "expo.jsEngine": "hermes",
+  "EX_DEV_CLIENT_NETWORK_INSPECTOR": "true",
+  "newArchEnabled": "false"
+}
+
+EvolveAI.entitlements:
+
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>aps-environment</key>
+    <string>development</string>
+    <key>com.apple.developer.healthkit</key>
+    <true/>
+    <key>com.apple.developer.healthkit.access</key>
+    <array/>
+  </dict>
+</plist>
+
 #### 3. Live Endurance Session Tracking (Strava-like Experience)
 **Complexity: Medium | Impact: Very High**
 

@@ -377,14 +377,16 @@ export const ChatQuestionsPage: React.FC<ChatQuestionsPageProps> = ({
       {showHeader && (
         <View style={[styles.header, { paddingTop: 18 }]}>
           <View style={styles.headerLeft}>
-            <LinearGradient
-              colors={[createColorWithOpacity(colors.secondary, 0.35), createColorWithOpacity(colors.background, 0.9)]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.headerAvatar}
-            >
-              <Ionicons name="fitness" size={20} color={colors.primary} />
-            </LinearGradient>
+            <View style={styles.headerAvatarContainer}>
+              <LinearGradient
+                colors={[createColorWithOpacity(colors.secondary, 0.35), createColorWithOpacity(colors.background, 0.9)]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.headerAvatar}
+              >
+                <Ionicons name="fitness" size={20} color={colors.primary} />
+              </LinearGradient>
+            </View>
             <View>
               <Text style={styles.headerTitle}>AI Coach</Text>
               <Text style={styles.headerSubtitle}>Online</Text>
@@ -571,17 +573,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  headerAvatar: {
+  headerAvatarContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.35),
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 4,
+    overflow: 'hidden',
+  },
+  headerAvatar: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 16,

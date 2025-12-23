@@ -70,25 +70,11 @@ export const PermissionsStep: React.FC<PermissionsStepProps> = ({
 
   // Get health permission card status
   const getHealthStatus = useCallback((): PermissionStatus => {
-    const healthStatus = !isHealthAvailable 
-      ? 'unavailable' 
-      : isHealthLoading 
-        ? 'loading' 
-        : isHealthGranted 
-          ? 'granted' 
-          : status.health.deniedAt 
-            ? 'requires_settings' 
-            : 'not_requested';
-    
-    console.log('[PermissionsStep] Health status calculation:', {
-      isHealthAvailable,
-      isHealthLoading,
-      isHealthGranted,
-      deniedAt: status.health.deniedAt,
-      result: healthStatus,
-    });
-    
-    return healthStatus;
+    if (!isHealthAvailable) return 'unavailable';
+    if (isHealthLoading) return 'loading';
+    if (isHealthGranted) return 'granted';
+    if (status.health.deniedAt) return 'requires_settings';
+    return 'not_requested';
   }, [isHealthAvailable, isHealthLoading, isHealthGranted, status.health.deniedAt]);
 
   // Get location permission card status

@@ -96,95 +96,40 @@ export class PermissionsService {
    */
   private static isHealthKitAvailable(): boolean {
     if (Platform.OS !== 'ios') {
-      console.log('[PermissionsService] isHealthKitAvailable: Not iOS platform');
       return false;
     }
 
     try {
-      console.log('[PermissionsService] Checking HealthKit module availability...');
-      console.log('[PermissionsService] AppleHealthKit exists:', !!AppleHealthKit);
-      console.log('[PermissionsService] AppleHealthKit type:', typeof AppleHealthKit);
-      
       if (!AppleHealthKit || typeof AppleHealthKit !== 'object') {
-        console.log('[PermissionsService] AppleHealthKit not available or not an object');
         return false;
       }
 
-      // Log enumerable keys (may not show all properties if functions are non-enumerable)
-      const moduleKeys = Object.keys(AppleHealthKit);
-      console.log('[PermissionsService] AppleHealthKit enumerable keys:', moduleKeys);
-      
-      // Also check for common function names directly (they may be non-enumerable)
-      const functionChecks = {
-        initHealthKit: typeof (AppleHealthKit as any).initHealthKit,
-        isAvailable: typeof (AppleHealthKit as any).isAvailable,
-        getAuthStatus: typeof (AppleHealthKit as any).getAuthStatus,
-        requestAuthorization: typeof (AppleHealthKit as any).requestAuthorization,
-        getDailyStepCountSamples: typeof (AppleHealthKit as any).getDailyStepCountSamples,
-      };
-      console.log('[PermissionsService] Function type checks:', functionChecks);
-      
-      console.log('[PermissionsService] AppleHealthKit.Constants exists:', !!AppleHealthKit.Constants);
-      
-      if (AppleHealthKit.Constants) {
-        const constantsKeys = Object.keys(AppleHealthKit.Constants);
-        console.log('[PermissionsService] Constants keys:', constantsKeys);
-        console.log('[PermissionsService] AppleHealthKit.Constants.Permissions exists:', !!AppleHealthKit.Constants.Permissions);
-      }
-
       if (!AppleHealthKit.Constants || !AppleHealthKit.Constants.Permissions) {
-        console.log('[PermissionsService] HealthKit Constants or Permissions missing');
         return false;
       }
 
       // Check if initHealthKit exists (primary API) - functions may be non-enumerable
       const hasInitHealthKit = typeof (AppleHealthKit as any).initHealthKit === 'function';
-      console.log('[PermissionsService] initHealthKit function exists:', hasInitHealthKit);
-      console.log('[PermissionsService] initHealthKit value:', (AppleHealthKit as any).initHealthKit);
       
       if (hasInitHealthKit) {
-        console.log('[PermissionsService] ✅ HealthKit module available (via initHealthKit)');
         return true;
       }
 
       // Check isAvailable as alternative (used by HealthImportService)
       const hasIsAvailable = typeof (AppleHealthKit as any).isAvailable === 'function';
-      console.log('[PermissionsService] isAvailable function exists:', hasIsAvailable);
-      console.log('[PermissionsService] isAvailable value:', (AppleHealthKit as any).isAvailable);
-      
-      // Try to actually call isAvailable to see if it works (even if typeof says it's not a function)
-      if ((AppleHealthKit as any).isAvailable) {
-        try {
-          console.log('[PermissionsService] Attempting to call isAvailable...');
-          // Don't actually call it with callback, just check if it's callable
-          const isCallable = typeof (AppleHealthKit as any).isAvailable === 'function';
-          if (isCallable) {
-            console.log('[PermissionsService] ✅ HealthKit module available (via isAvailable - callable)');
-            return true;
-          }
-        } catch (e) {
-          console.log('[PermissionsService] Error testing isAvailable:', e);
-        }
-      }
       
       if (hasIsAvailable) {
-        console.log('[PermissionsService] ✅ HealthKit module available (via isAvailable)');
         return true;
       }
 
       // Try .default export if direct access doesn't work
       const hasDefault = !!(AppleHealthKit as any).default;
-      console.log('[PermissionsService] Has .default export:', hasDefault);
       
       if (hasDefault) {
         const defaultModule = (AppleHealthKit as any).default;
-        const defaultKeys = Object.keys(defaultModule);
-        console.log('[PermissionsService] .default module enumerable keys:', defaultKeys);
         const defaultHasInit = typeof defaultModule.initHealthKit === 'function';
-        console.log('[PermissionsService] .default.initHealthKit exists:', defaultHasInit);
         
         if (defaultHasInit) {
-          console.log('[PermissionsService] ✅ HealthKit module available (via .default.initHealthKit)');
           return true;
         }
       }
@@ -192,23 +137,17 @@ export class PermissionsService {
       // Fallback: Check for older API
       const hasGetAuthStatus = typeof (AppleHealthKit as any).getAuthStatus === 'function';
       const hasRequestAuth = typeof (AppleHealthKit as any).requestAuthorization === 'function';
-      console.log('[PermissionsService] Fallback APIs - getAuthStatus:', hasGetAuthStatus, 'requestAuthorization:', hasRequestAuth);
       
       if (hasGetAuthStatus || hasRequestAuth) {
-        console.log('[PermissionsService] ✅ HealthKit module available (via fallback APIs)');
         return true;
       }
 
       // If Constants exists, assume the module is available even if functions aren't enumerable
       // HealthImportService successfully uses initHealthKit, so it should work
       // The functions might be non-enumerable or added dynamically
-      console.log('[PermissionsService] ⚠️ Functions not found via typeof check, but Constants exists');
-      console.log('[PermissionsService] ⚠️ Assuming module is available (functions may be non-enumerable)');
-      console.log('[PermissionsService] ⚠️ Will attempt to use functions directly - errors will be caught at runtime');
       // Return true if Constants exists - let the actual function calls handle errors
       return true;
     } catch (error) {
-      console.log('[PermissionsService] Exception checking HealthKit availability:', error);
       return false;
     }
   }
@@ -400,57 +339,43 @@ export class PermissionsService {
    */
   static async isHealthAvailable(): Promise<boolean> {
     try {
-      console.log('[PermissionsService] Checking Health availability - Platform:', Platform.OS);
-      
       if (Platform.OS === 'ios') {
         const healthKitAvailable = this.isHealthKitAvailable();
-        console.log('[PermissionsService] HealthKit module available:', healthKitAvailable);
         
         if (!healthKitAvailable) {
-          console.log('[PermissionsService] HealthKit module not available - returning false');
           return false;
         }
 
         // HealthKit available on iPhone and iPhone simulators (iOS 15+)
         const isSimulator = !Device.isDevice;
-        console.log('[PermissionsService] Is simulator:', isSimulator);
         
         if (isSimulator) {
-          console.log('[PermissionsService] Simulator detected - HealthKit available');
           return true;
         }
         
         // Real device - only available on iPhone (not iPad)
         const deviceType = Device.deviceType;
         const isPhone = deviceType === Device.DeviceType.PHONE;
-        console.log('[PermissionsService] Device type:', deviceType, '- Is phone:', isPhone);
-        console.log('[PermissionsService] HealthKit availability result:', isPhone);
         return isPhone;
       } else if (Platform.OS === 'android') {
         // Health Connect requires Android 9+ (API 28+)
         const androidVersion = Platform.Version;
-        console.log('[PermissionsService] Android version:', androidVersion);
         
         if (androidVersion < 28) {
-          console.log('[PermissionsService] Android version too old (< 28) - Health Connect not available');
           return false;
         }
 
         try {
           const sdkStatus = await getSdkStatus();
           const isAvailable = sdkStatus === SdkAvailabilityStatus.SDK_AVAILABLE;
-          console.log('[PermissionsService] Health Connect SDK status:', sdkStatus, '- Available:', isAvailable);
           return isAvailable;
         } catch (error) {
-          console.log('[PermissionsService] Error checking Health Connect SDK:', error);
           return false;
         }
       }
 
-      console.log('[PermissionsService] Platform not iOS or Android - Health not available');
       return false;
     } catch (error) {
-      console.log('[PermissionsService] Exception in isHealthAvailable:', error);
       return false;
     }
   }

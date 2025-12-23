@@ -92,17 +92,19 @@ const SessionRPEModal: React.FC<SessionRPEModalProps> = ({
         <View style={styles.dialog}>
           <View style={styles.header}>
             <View style={styles.iconContainer}>
-              <LinearGradient
-                colors={[
-                  createColorWithOpacity(colors.secondary, 0.35),
-                  createColorWithOpacity(colors.secondary, 0.18)
-                ]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.iconGradient}
-              >
-                <Ionicons name="fitness" size={24} color={colors.secondary} />
-              </LinearGradient>
+              <View style={styles.iconGradientContainer}>
+                <LinearGradient
+                  colors={[
+                    createColorWithOpacity(colors.secondary, 0.35),
+                    createColorWithOpacity(colors.secondary, 0.18)
+                  ]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.iconGradient}
+                >
+                  <Ionicons name="fitness" size={24} color={colors.secondary} />
+                </LinearGradient>
+              </View>
             </View>
             <Text style={styles.title}>Rate Your Session</Text>
             <Text style={styles.subtitle}>How hard was this workout?</Text>
@@ -175,17 +177,23 @@ const styles = StyleSheet.create({
   iconContainer: {
     marginBottom: 12
   },
-  iconGradient: {
+  iconGradientContainer: {
     width: 58,
     height: 58,
     borderRadius: 29,
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: createColorWithOpacity(colors.secondary, 0.35),
     shadowColor: createColorWithOpacity(colors.secondary, 0.25),
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 5,
-    elevation: 4
+    elevation: 4,
+    overflow: 'hidden',
+  },
+  iconGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
     fontSize: 22,

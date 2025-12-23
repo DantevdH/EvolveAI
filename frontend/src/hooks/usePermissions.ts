@@ -62,14 +62,11 @@ export function usePermissions(
 
   // Check health availability on mount
   useEffect(() => {
-    console.log('[usePermissions] Checking Health availability on mount...');
     PermissionsService.isHealthAvailable()
       .then((available) => {
-        console.log('[usePermissions] Health availability check result:', available);
         setIsHealthAvailable(available);
       })
-      .catch((error) => {
-        console.log('[usePermissions] Error checking Health availability:', error);
+      .catch(() => {
         setIsHealthAvailable(false);
       });
   }, []);
