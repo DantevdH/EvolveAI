@@ -51,6 +51,23 @@ export interface EnduranceSession {
   heartRateZone: number; // Target heart rate zone (1-5), required
   executionOrder: number; // Order in which to execute this session within the day's training (1-based)
   completed: boolean;
+
+  // Tracked workout data (from live GPS tracking or health import)
+  actualDuration?: number;        // Actual duration in seconds
+  actualDistance?: number;        // Actual distance in meters
+  averagePace?: number;           // Average pace in seconds per km
+  averageSpeed?: number;          // Average speed in km/h
+  averageHeartRate?: number;      // Average HR in bpm
+  maxHeartRate?: number;          // Max HR in bpm
+  minHeartRate?: number;          // Min HR in bpm
+  elevationGain?: number;         // Elevation gain in meters
+  elevationLoss?: number;         // Elevation loss in meters
+  calories?: number;              // Estimated calories burned
+  cadence?: number;               // Average cadence (steps/min or rpm)
+  dataSource?: 'manual' | 'live_tracking' | 'healthkit' | 'google_fit';
+  healthWorkoutId?: string;       // ID from HealthKit/Google Fit
+  startedAt?: Date;               // When tracking started
+  completedAt?: Date;             // When tracking finished
 }
 
 export interface TrainingExercise {
@@ -284,6 +301,10 @@ export interface DailyTrainingDetailProps {
   hideExerciseExpandButton?: boolean; // Hide the expand/collapse button
   hideExerciseInfoButton?: boolean; // Hide the info (i) button
   exerciseCompactMode?: boolean; // Reduce exercise card height/padding
+  // Live tracking props (for endurance sessions)
+  onStartTracking?: (enduranceSession: EnduranceSession) => void;  // Start GPS tracking
+  onImportFromHealth?: (enduranceSession: EnduranceSession) => void; // Import from Health
+  useMetric?: boolean;
 }
 
 export interface ExerciseRowProps {
@@ -299,6 +320,10 @@ export interface ExerciseRowProps {
   hideExpandButton?: boolean; // Hide the expand/collapse button
   hideInfoButton?: boolean; // Hide the info (i) button
   compactMode?: boolean; // Reduce card height/padding
+  // Live tracking props (for endurance sessions)
+  onStartTracking?: () => void;      // Start GPS tracking for this session
+  onImportFromHealth?: () => void;   // Import from HealthKit/Google Fit
+  useMetric?: boolean;               // User's unit preference
 }
 
 export interface SetRowProps {

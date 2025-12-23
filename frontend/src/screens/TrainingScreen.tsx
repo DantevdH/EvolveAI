@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { triggerChatAutoOpen } from '@/src/utils/chatAutoOpen';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, SafeAreaView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Alert, SafeAreaView, TouchableOpacity, Modal } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useTraining } from '../hooks/useTraining';
@@ -25,15 +25,24 @@ import { WelcomeHeader } from '../components/home/WelcomeHeader';
 import { ProgressSummary } from '../components/home/ProgressSummary';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { trainingService } from '../services/onboardingService';
+import { trainingService as enduranceTrainingService } from '../services/trainingService';
 import { reverseTransformTrainingPlan, transformUserProfileToPersonalInfo } from '../utils/trainingPlanTransformer';
 import { supabase } from '../config/supabase';
 import { useApiCallWithBanner } from '../hooks/useApiCallWithBanner';
+import { EnduranceSession } from '../types/training';
+import { TrackedWorkoutMetrics } from '../types/liveTracking';
+import { LiveTrackingScreen } from './LiveTrackingScreen';
+import { HealthImportModal } from '../components/liveTracking/HealthImportModal';
 
 const TrainingScreenContent: React.FC = () => {
   const { state: authState, refreshTrainingPlan, setTrainingPlan } = useAuth();
   const [addExerciseModalVisible, setAddExerciseModalVisible] = useState(false);
   const [removeExerciseId, setRemoveExerciseId] = useState<{ id: string; isEndurance: boolean; name: string } | null>(null);
   const [selectedWeekFromMap, setSelectedWeekFromMap] = useState<number | null>(null);
+
+  // Live tracking state
+  const [trackingSession, setTrackingSession] = useState<EnduranceSession | null>(null);
+  const [healthImportSession, setHealthImportSession] = useState<EnduranceSession | null>(null);
   
   const {
     trainingState,
@@ -202,6 +211,81 @@ const TrainingScreenContent: React.FC = () => {
 
   const handleCancelRemoveExercise = () => {
     setRemoveExerciseId(null);
+  };
+
+  // ========== Live Tracking Handlers ==========
+
+  const handleStartTracking = (enduranceSession: EnduranceSession) => {
+    setTrackingSession(enduranceSession);
+  };
+
+  const handleTrackingComplete = async (metrics: TrackedWorkoutMetrics) => {
+    if (!trackingSession) return;
+
+    try {
+      await enduranceTrainingService.updateEnduranceSessionWithTrackedData(
+        trackingSession.id,
+        metrics
+      );
+
+      // Refresh training plan to show updated data
+      await refreshTrainingPlan();
+
+      logger.info('Endurance session updated with tracking data', {
+        sessionId: trackingSession.id,
+        duration: metrics.actualDuration,
+        distance: metrics.actualDistance,
+      });
+    } catch (error) {
+      logger.error('Failed to save tracked workout', error);
+      Alert.alert(
+        'Error Saving Workout',
+        'Your workout data could not be saved. Please try again.'
+      );
+    } finally {
+      setTrackingSession(null);
+    }
+  };
+
+  const handleTrackingDismiss = () => {
+    setTrackingSession(null);
+  };
+
+  const handleImportFromHealth = (enduranceSession: EnduranceSession) => {
+    setHealthImportSession(enduranceSession);
+  };
+
+  const handleHealthImportComplete = async (metrics: TrackedWorkoutMetrics) => {
+    if (!healthImportSession) return;
+
+    try {
+      await enduranceTrainingService.updateEnduranceSessionWithTrackedData(
+        healthImportSession.id,
+        metrics
+      );
+
+      // Refresh training plan to show updated data
+      await refreshTrainingPlan();
+
+      logger.info('Endurance session updated with health import data', {
+        sessionId: healthImportSession.id,
+        duration: metrics.actualDuration,
+        distance: metrics.actualDistance,
+        dataSource: metrics.dataSource,
+      });
+    } catch (error) {
+      logger.error('Failed to save imported workout', error);
+      Alert.alert(
+        'Error Saving Workout',
+        'Your workout data could not be saved. Please try again.'
+      );
+    } finally {
+      setHealthImportSession(null);
+    }
+  };
+
+  const handleHealthImportClose = () => {
+    setHealthImportSession(null);
   };
 
   // Handle week selection from map
@@ -445,6 +529,9 @@ const TrainingScreenContent: React.FC = () => {
           onReopenTraining={reopenTraining}
           onAddExercise={handleAddExercise}
           onRemoveExercise={handleRemoveExercise}
+          onStartTracking={handleStartTracking}
+          onImportFromHealth={handleImportFromHealth}
+          useMetric={authState.userProfile?.weightUnit !== 'lbs'}
         />
 
         {/* Bottom spacing for scroll comfort */}
@@ -524,6 +611,32 @@ const TrainingScreenContent: React.FC = () => {
         confirmButtonColor={colors.primary}
         icon="trash"
       />
+
+      {/* Live Tracking Modal - Full Screen */}
+      {trackingSession && (
+        <Modal
+          visible={true}
+          animationType="slide"
+          presentationStyle="fullScreen"
+          onRequestClose={handleTrackingDismiss}
+        >
+          <LiveTrackingScreen
+            enduranceSession={trackingSession}
+            onComplete={handleTrackingComplete}
+            onDismiss={handleTrackingDismiss}
+          />
+        </Modal>
+      )}
+
+      {/* Health Import Modal */}
+      {healthImportSession && (
+        <HealthImportModal
+          visible={true}
+          enduranceSession={healthImportSession}
+          onImport={handleHealthImportComplete}
+          onClose={handleHealthImportClose}
+        />
+      )}
     </SafeAreaView>
   );
 };

@@ -14,6 +14,7 @@ import ExerciseActions from './ExerciseActions';
 import SetsHeader from './SetsHeader';
 import SetRow from './SetRow';
 import EnduranceDetails from './EnduranceDetails';
+import EnduranceTrackingActions from './EnduranceTrackingActions';
 import RemoveButton from './RemoveButton';
 import { logger } from '../../../utils/logger';
 
@@ -30,6 +31,9 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
   hideExpandButton = false,
   hideInfoButton = false,
   compactMode = false,
+  onStartTracking,
+  onImportFromHealth,
+  useMetric = true,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -127,7 +131,21 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
         {isExpanded && (
           <View style={styles.setsContainer}>
             {isEndurance ? (
-              <EnduranceDetails enduranceSession={exercise.enduranceSession} />
+              <>
+                <EnduranceDetails
+                  enduranceSession={exercise.enduranceSession}
+                  useMetric={useMetric}
+                />
+                {/* Tracking actions for endurance sessions */}
+                {exercise.enduranceSession && onStartTracking && onImportFromHealth && (
+                  <EnduranceTrackingActions
+                    enduranceSession={exercise.enduranceSession}
+                    onStartTracking={onStartTracking}
+                    onImportFromHealth={onImportFromHealth}
+                    isLocked={isLocked}
+                  />
+                )}
+              </>
             ) : (
               <>
                 <SetsHeader
@@ -136,7 +154,7 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
                   canRemoveSet={(exercise.sets?.length || 0) > 1}
                   isLocked={isLocked}
                 />
-                
+
                 {(exercise.sets || []).map((set, index) => (
                   <SetRow
                     key={set.id}

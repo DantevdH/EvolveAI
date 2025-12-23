@@ -621,8 +621,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
 
   // API call with error handling for initial questions
   const { execute: executeGetInitialQuestions, loading: initialQuestionsApiLoading, ErrorBannerComponent: InitialQuestionsErrorBanner } = useApiCallWithBanner(
-    async (fullPersonalInfo: PersonalInfo, userProfileId: number | undefined, jwtToken: string | undefined, questionHistory?: string, initialResponses?: Record<string, any>, signal?: AbortSignal) => {
-      return await trainingService.getInitialQuestions(fullPersonalInfo, userProfileId, jwtToken, questionHistory, initialResponses, signal);
+    async (fullPersonalInfo: PersonalInfo, userProfileId: number | undefined, jwtToken: string | undefined, questionHistory?: string, initialResponses?: Record<string, any>, signal?: AbortSignal, permissionsGranted?: any) => {
+      return await trainingService.getInitialQuestions(fullPersonalInfo, userProfileId, jwtToken, questionHistory, initialResponses, signal, permissionsGranted);
     },
     {
       retryCount: 3,
@@ -827,6 +827,9 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
     // Convert Map to plain object for sending to backend
     const initialResponsesObject = Object.fromEntries(state.initialResponses);
 
+    // Include permissions_granted if available (from permissions step)
+    const permissionsGranted = state.permissionsStatus || null;
+
     // Determine if this is the first question (show spinner) or subsequent (show only dots)
     const isFirstQuestion = state.initialQuestions.length === 0;
 
@@ -840,7 +843,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
             jwtToken,
             historyToSend,
             initialResponsesObject,
-            signal
+            signal,
+            permissionsGranted
           );
         });
       } else {
@@ -851,7 +855,8 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
           jwtToken,
           historyToSend,
           initialResponsesObject,
-          signal
+          signal,
+          permissionsGranted
         );
       }
     } catch (error: any) {
@@ -861,7 +866,7 @@ export const ConversationalOnboarding: React.FC<ConversationalOnboardingProps> =
       }
       throw error;
     }
-  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.questionHistory, state.initialResponses, state.informationComplete, state.initialQuestions.length, authState.session?.access_token, authState.userProfile, executeGetInitialQuestions, runWithProgress]);
+  }, [state.personalInfo, state.username, state.goalDescription, state.experienceLevel, state.questionHistory, state.initialResponses, state.informationComplete, state.initialQuestions.length, state.permissionsStatus, authState.session?.access_token, authState.userProfile, executeGetInitialQuestions, runWithProgress]);
 
   // follow-up flow removed: feature deprecated and handled outside this flow
 

@@ -21,6 +21,9 @@ export const SPORT_ICON_MAP: Record<string, string> = {
   other: 'ellipse',
 } as const;
 
+// Alias for component usage - Ionicon name lookup
+export const SPORT_ICONS: Record<string, string> = SPORT_ICON_MAP;
+
 /**
  * Default icon to use when sport type is unknown or invalid
  */

@@ -1765,6 +1765,116 @@ export class TrainingService {
 
     return modifications;
   }
+
+  // ============================================================================
+  // LIVE TRACKING - ENDURANCE SESSION UPDATES
+  // ============================================================================
+
+  /**
+   * Update an endurance session with tracked workout data
+   * Called after live GPS tracking or health app import completes
+   */
+  static async updateEnduranceSessionWithTrackedData(
+    enduranceSessionId: string,
+    trackedData: {
+      actualDuration: number;        // seconds
+      actualDistance: number;        // meters
+      averagePace?: number | null;   // seconds per km
+      averageSpeed?: number | null;  // km/h
+      averageHeartRate?: number | null;
+      maxHeartRate?: number | null;
+      minHeartRate?: number | null;
+      elevationGain?: number | null; // meters
+      elevationLoss?: number | null; // meters
+      calories?: number | null;
+      cadence?: number | null;
+      dataSource: 'live_tracking' | 'healthkit' | 'google_fit';
+      healthWorkoutId?: string | null;
+      startedAt: Date;
+      completedAt: Date;
+    }
+  ): Promise<TrainingServiceResponse<void>> {
+    try {
+      console.log('📊 Updating endurance session with tracked data:', {
+        enduranceSessionId,
+        dataSource: trackedData.dataSource,
+        duration: trackedData.actualDuration,
+        distance: trackedData.actualDistance,
+      });
+
+      const updatePayload: Record<string, any> = {
+        actual_duration: trackedData.actualDuration,
+        actual_distance: trackedData.actualDistance,
+        average_pace: trackedData.averagePace,
+        average_speed: trackedData.averageSpeed,
+        average_heart_rate: trackedData.averageHeartRate,
+        max_heart_rate: trackedData.maxHeartRate,
+        min_heart_rate: trackedData.minHeartRate,
+        elevation_gain: trackedData.elevationGain,
+        elevation_loss: trackedData.elevationLoss,
+        calories: trackedData.calories,
+        cadence: trackedData.cadence,
+        data_source: trackedData.dataSource,
+        health_workout_id: trackedData.healthWorkoutId,
+        started_at: trackedData.startedAt.toISOString(),
+        completed_at: trackedData.completedAt.toISOString(),
+        completed: true,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Remove null/undefined values to avoid overwriting with nulls
+      Object.keys(updatePayload).forEach((key) => {
+        if (updatePayload[key] === null || updatePayload[key] === undefined) {
+          delete updatePayload[key];
+        }
+      });
+
+      const { error } = await supabase
+        .from('endurance_session')
+        .update(updatePayload)
+        .eq('id', enduranceSessionId);
+
+      if (error) {
+        console.error('Error updating endurance session:', error);
+        return {
+          success: false,
+          error: error.message,
+        };
+      }
+
+      console.log('✅ Endurance session updated with tracked data');
+      return { success: true };
+    } catch (error) {
+      console.error('Error in updateEnduranceSessionWithTrackedData:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to update endurance session',
+      };
+    }
+  }
+
+  /**
+   * Check if a health workout has already been imported (for deduplication)
+   */
+  static async isHealthWorkoutImported(healthWorkoutId: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase
+        .from('endurance_session')
+        .select('id')
+        .eq('health_workout_id', healthWorkoutId)
+        .limit(1);
+
+      if (error) {
+        console.error('Error checking health workout import status:', error);
+        return false;
+      }
+
+      return data && data.length > 0;
+    } catch (error) {
+      console.error('Error in isHealthWorkoutImported:', error);
+      return false;
+    }
+  }
 }
 
 // Get historical training data for a specific exercise

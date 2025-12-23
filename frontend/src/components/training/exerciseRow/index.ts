@@ -12,5 +12,6 @@ export { default as SetsHeader } from './SetsHeader';
 export { default as SetRow } from './SetRow';
 export { default as EnduranceDetails } from './EnduranceDetails';
 export { default as RemoveButton } from './RemoveButton';
+export { EnduranceTrackingActions } from './EnduranceTrackingActions';
 export * from './types';
 

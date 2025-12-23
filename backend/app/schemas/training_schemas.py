@@ -220,7 +220,7 @@ class EnduranceSession(BaseModel):
     id: Optional[int] = Field(default=None, description="Database ID")
     name: str = Field(..., description="Concise name of the endurance session with 2 words")
     sport_type: EnduranceTypeLiteral = Field(
-        ..., 
+        ...,
         description="Endurance activity type (running, cycling, swimming, rowing, hiking, walking, elliptical, stair_climbing, jump_rope, or other)"
     )
     training_volume: float = Field(
@@ -241,6 +241,11 @@ class EnduranceSession(BaseModel):
     completed: bool = Field(
         default=False, description="Whether the session was completed"
     )
+
+    # Note: Tracked workout data fields (actual_duration, actual_distance, etc.)
+    # are stored in Supabase but not included in this schema since they're populated
+    # by the frontend during live GPS tracking or health app import, not by AI generation.
+
     created_at: Optional[datetime] = Field(
         default=None, description="Creation timestamp"
     )

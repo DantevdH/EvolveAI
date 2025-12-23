@@ -52,6 +52,19 @@ async def get_initial_questions(
         user_profile_id = request.user_profile_id
         if user_profile_id:
             logger.info(f"Using provided user_profile_id from request: {user_profile_id}")
+            # If profile exists and permissions_granted is provided, update it
+            if request.permissions_granted:
+                update_result = await _safe_db_update(
+                    "Update user profile permissions",
+                    db_service.update_user_profile,
+                    user_id=user_id,
+                    data={"permissions_granted": request.permissions_granted},
+                    jwt_token=request.jwt_token,
+                )
+                if update_result.get("success"):
+                    logger.info("Updated permissions_granted for existing profile")
+                else:
+                    logger.warning(f"Failed to update permissions_granted: {update_result.get('error')}")
         else:
             profile_data = {
                 "username": request.personal_info.username,
@@ -65,6 +78,10 @@ async def get_initial_questions(
                 "goal_description": request.personal_info.goal_description,
                 "experience_level": request.personal_info.experience_level,
             }
+            
+            # Include permissions_granted if provided
+            if request.permissions_granted:
+                profile_data["permissions_granted"] = request.permissions_granted
 
             create_result = await _safe_db_update(
                 "Create user profile",
@@ -84,6 +101,17 @@ async def get_initial_questions(
                 if existing_profile.get("success"):
                     user_profile_id = existing_profile.get("data", {}).get("id")
                     logger.info(f"Found existing profile ID: {user_profile_id}")
+                    # Update permissions if provided
+                    if request.permissions_granted:
+                        update_result = await _safe_db_update(
+                            "Update user profile permissions",
+                            db_service.update_user_profile,
+                            user_id=user_id,
+                            data={"permissions_granted": request.permissions_granted},
+                            jwt_token=request.jwt_token,
+                        )
+                        if update_result.get("success"):
+                            logger.info("Updated permissions_granted for existing profile")
                 else:
                     logger.error("No existing profile found and could not create one")
                     raise HTTPException(

@@ -16,6 +16,11 @@ import { NetworkStatus } from '@/src/components/NetworkStatus';
 import { NavigationProvider } from '@/src/navigation/NavigationProvider';
 import { colors } from '@/src/constants/colors';
 import FloatingChatButton from '@/components/FloatingChatButton';
+import { initializeBackgroundTasks } from '@/src/config/backgroundTasks';
+
+// Initialize background tasks before any component renders
+// This must be called at module level for expo-task-manager
+initializeBackgroundTasks();
 
 // Custom theme with transparent tab bar
 const CustomDarkTheme = {

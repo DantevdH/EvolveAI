@@ -3,7 +3,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Platform, StatusBar as RNStatusBar, Alert, Switch, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Platform, StatusBar as RNStatusBar, Alert, Switch, TextInput, ActivityIndicator, AppState, AppStateStatus } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,6 +12,7 @@ import { useAuth } from '../src/context/AuthContext';
 import { AuthService } from '../src/services/authService';
 import { useNotifications } from '../src/hooks/useNotifications';
 import { usePermissions } from '../src/hooks/usePermissions';
+import { PermissionsService } from '../src/services/PermissionsService';
 import { colors, createColorWithOpacity, goldenGradient } from '../src/constants/colors';
 import { validatePasswordChange } from '../src/utils/passwordValidation';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
@@ -55,6 +56,9 @@ function SettingsScreenContent() {
     requestLocation,
     requestBackgroundLocation,
     openSettings: openDeviceSettings,
+    openHealthSettings,
+    openLocationSettings,
+    refreshStatus,
     saveStatus: savePermissions,
   } = usePermissions(state.userProfile?.permissions_granted);
 
@@ -79,6 +83,21 @@ function SettingsScreenContent() {
       // This prevents showing "No training scheduled for today" when user disables notifications
     }
   }, [notificationsEnabled]);
+
+  // Refresh permission status when app comes back from Settings
+  // This ensures we show the actual system state after user changes permissions
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        // App came to foreground - refresh permissions to get latest system state
+        refreshStatus();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [refreshStatus]);
 
   const handleBackPress = () => {
     router.back();
@@ -264,16 +283,24 @@ function SettingsScreenContent() {
               'To import workouts and heart rate data, please enable Health access in your device settings.',
               [
                 { text: 'Cancel', style: 'cancel' },
-                { text: 'Open Settings', onPress: openDeviceSettings }
+                { text: 'Open Settings', onPress: openHealthSettings }
               ]
             );
           } else if (result.error) {
             Alert.alert('Error', result.error);
           }
+        } else {
+          await savePermissions();
+          // Sync to database after saving locally
+          if (state.user?.id) {
+            await PermissionsService.syncPermissionsToDatabase(state.user.id, permissionsStatus);
+          }
         }
-        await savePermissions();
+      } else {
+        // When disabling, open settings so user can revoke permission manually
+        // Health permissions cannot be revoked programmatically - user must go to Settings
+        await openHealthSettings();
       }
-      // Note: Health permissions cannot be revoked from the app - user must go to Settings
     } catch (error) {
       Alert.alert(
         'Error',
@@ -296,9 +323,14 @@ function SettingsScreenContent() {
               'For continuous workout tracking, enable "Always" location access in Settings.',
               [
                 { text: 'OK' },
-                { text: 'Open Settings', onPress: openDeviceSettings }
+                { text: 'Open Settings', onPress: openLocationSettings }
               ]
             );
+          }
+          await savePermissions();
+          // Sync to database after saving locally
+          if (state.user?.id) {
+            await PermissionsService.syncPermissionsToDatabase(state.user.id, permissionsStatus);
           }
         } else if (result.status === 'denied') {
           Alert.alert(
@@ -306,13 +338,15 @@ function SettingsScreenContent() {
             'To track your workouts with GPS, please enable location access in your device settings.',
             [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Open Settings', onPress: openDeviceSettings }
+              { text: 'Open Settings', onPress: openLocationSettings }
             ]
           );
         }
-        await savePermissions();
+      } else {
+        // When disabling, open settings so user can revoke permission manually
+        // Location permissions cannot be revoked programmatically - user must go to Settings
+        await openLocationSettings();
       }
-      // Note: Location permissions cannot be revoked from the app - user must go to Settings
     } catch (error) {
       Alert.alert(
         'Error',
@@ -503,7 +537,7 @@ function SettingsScreenContent() {
         {/* Workout Tracking Section */}
         <View style={styles.section}>
           <LinearGradient
-            colors={[createColorWithOpacity(colors.tertiary, 0.08), createColorWithOpacity(colors.tertiary, 0.03)]}
+            colors={[createColorWithOpacity(colors.secondary, 0.08), createColorWithOpacity(colors.secondary, 0.03)]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.sectionGradient}
@@ -517,33 +551,23 @@ function SettingsScreenContent() {
               <View style={styles.settingLeft}>
                 <View style={styles.iconContainer}>
                   <LinearGradient
-                    colors={[createColorWithOpacity(colors.primary, 0.2), createColorWithOpacity(colors.primary, 0.1)]}
+                    colors={[createColorWithOpacity(colors.secondary, 0.2), createColorWithOpacity(colors.secondary, 0.1)]}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
                     style={styles.iconGradient}
                   >
-                    <Ionicons name="heart-outline" size={18} color={colors.primary} />
+                    <Ionicons name="heart-outline" size={18} color={colors.secondary} />
                   </LinearGradient>
                 </View>
-                <View style={styles.settingTextContainer}>
-                  <Text style={styles.settingText}>Health Data</Text>
-                  <Text style={styles.settingSubtext}>Import workouts & heart rate</Text>
-                </View>
+                <Text style={styles.settingText}>Health Data</Text>
               </View>
-              {isHealthGranted ? (
-                <View style={styles.permissionBadge}>
-                  <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-                  <Text style={styles.permissionBadgeText}>Enabled</Text>
-                </View>
-              ) : (
-                <Switch
-                  value={isHealthGranted}
-                  onValueChange={handleHealthToggle}
-                  trackColor={{ false: createColorWithOpacity(colors.muted, 0.4), true: createColorWithOpacity(colors.primary, 0.4) }}
-                  thumbColor={isHealthGranted ? colors.primary : colors.muted}
-                  disabled={permissionsLoading}
-                />
-              )}
+              <Switch
+                value={isHealthGranted}
+                onValueChange={handleHealthToggle}
+                trackColor={{ false: createColorWithOpacity(colors.muted, 0.4), true: createColorWithOpacity(colors.secondary, 0.4) }}
+                thumbColor={isHealthGranted ? colors.secondary : colors.muted}
+                disabled={permissionsLoading}
+              />
             </View>
           )}
 
@@ -552,33 +576,23 @@ function SettingsScreenContent() {
             <View style={styles.settingLeft}>
               <View style={styles.iconContainer}>
                 <LinearGradient
-                  colors={[createColorWithOpacity(colors.tertiary, 0.2), createColorWithOpacity(colors.tertiary, 0.1)]}
+                  colors={[createColorWithOpacity(colors.secondary, 0.2), createColorWithOpacity(colors.secondary, 0.1)]}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={styles.iconGradient}
                 >
-                  <Ionicons name="location-outline" size={18} color={colors.tertiary} />
+                  <Ionicons name="location-outline" size={18} color={colors.secondary} />
                 </LinearGradient>
               </View>
-              <View style={styles.settingTextContainer}>
-                <Text style={styles.settingText}>Location Tracking</Text>
-                <Text style={styles.settingSubtext}>GPS for runs, rides & hikes</Text>
-              </View>
+              <Text style={styles.settingText}>Location Tracking</Text>
             </View>
-            {isLocationGranted ? (
-              <View style={styles.permissionBadge}>
-                <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-                <Text style={styles.permissionBadgeText}>Enabled</Text>
-              </View>
-            ) : (
-              <Switch
-                value={isLocationGranted}
-                onValueChange={handleLocationToggle}
-                trackColor={{ false: createColorWithOpacity(colors.muted, 0.4), true: createColorWithOpacity(colors.tertiary, 0.4) }}
-                thumbColor={isLocationGranted ? colors.tertiary : colors.muted}
-                disabled={permissionsLoading}
-              />
-            )}
+            <Switch
+              value={isLocationGranted}
+              onValueChange={handleLocationToggle}
+              trackColor={{ false: createColorWithOpacity(colors.muted, 0.4), true: createColorWithOpacity(colors.secondary, 0.4) }}
+              thumbColor={isLocationGranted ? colors.secondary : colors.muted}
+              disabled={permissionsLoading}
+            />
           </View>
 
           {/* Show "Open Settings" button if permissions were denied */}
@@ -897,6 +911,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
+    flexShrink: 1,
+    marginRight: 12,
   },
   iconContainer: {
     width: 32,
@@ -1068,6 +1085,8 @@ const styles = StyleSheet.create({
   // Permission toggle styles
   settingTextContainer: {
     flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
   },
   settingSubtext: {
     fontSize: 12,

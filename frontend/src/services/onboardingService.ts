@@ -46,7 +46,8 @@ export class trainingService {
     jwtToken?: string,
     questionHistory?: string,
     initialResponses?: Record<string, any>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    permissionsGranted?: any
   ): Promise<AIQuestionResponse> {
     try {
       console.log('📍 Onboarding Service: Generating initial questions');
@@ -56,6 +57,7 @@ export class trainingService {
         hasJwtToken: !!jwtToken,
         hasQuestionHistory: !!questionHistory,
         responsesCount: initialResponses ? Object.keys(initialResponses).length : 0,
+        hasPermissions: !!permissionsGranted,
       });
 
       const request: InitialQuestionsRequest = {
@@ -64,6 +66,7 @@ export class trainingService {
         jwt_token: jwtToken,
         question_history: questionHistory,
         initial_responses: initialResponses,
+        permissions_granted: permissionsGranted || undefined,
       };
 
       console.log('🌐 Making request to:', `${this.BACKEND_URL}${this.BASE_URL}/initial-questions`);

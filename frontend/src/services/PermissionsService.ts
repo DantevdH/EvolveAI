@@ -32,6 +32,7 @@ import { storage } from '../utils/storage';
 import { STORAGE_KEYS } from '../constants';
 import { PermissionsStatus, defaultPermissionsStatus } from '../types/onboarding';
 import { logger } from '../utils/logger';
+import { UserService } from './userService';
 import { isHealthKitModule, type HealthKitPermissions, type HealthKitAuthStatus } from '../types/healthkit';
 import { PermissionError, PermissionErrorCode } from '../types/permissions';
 import {
@@ -875,7 +876,7 @@ export class PermissionsService {
 
   /**
    * Sync permissions status to database
-   * Called after onboarding or when permissions change
+   * Called after onboarding or when permissions change in settings
    */
   static async syncPermissionsToDatabase(
     userId: string | undefined,
@@ -887,10 +888,20 @@ export class PermissionsService {
     }
 
     try {
-      // TODO: Implement API call to update user_profiles.permissions_granted
-      // This will be done through the existing user profile update service
-      logger.info('Would sync permissions to database', { userId });
-      return true;
+      const result = await UserService.updateUserProfile(userId, {
+        permissions_granted: status,
+      });
+
+      if (result.success) {
+        logger.info('Successfully synced permissions to database', { userId });
+        return true;
+      } else {
+        logger.error('Failed to sync permissions to database', { 
+          userId, 
+          error: result.error 
+        });
+        return false;
+      }
     } catch (error) {
       logger.error('Error syncing permissions to database', error);
       return false;

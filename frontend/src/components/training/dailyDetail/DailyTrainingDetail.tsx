@@ -31,6 +31,9 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
   hideExerciseExpandButton = false,
   hideExerciseInfoButton = false,
   exerciseCompactMode = false,
+  onStartTracking,
+  onImportFromHealth,
+  useMetric = true,
 }) => {
   // Use isEditable from dailyTraining (computed based on scheduledDate)
   const isEditable = dailyTraining?.isEditable ?? true; // Default to true for legacy plans without scheduledDate
@@ -100,7 +103,7 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
                   exercise={exercise}
                   exerciseNumber={index + 1}
                   onToggle={() => onExerciseToggle(exercise.id)}
-                  onSetUpdate={(setIndex, reps, weight) => 
+                  onSetUpdate={(setIndex, reps, weight) =>
                     onSetUpdate(exercise.id, setIndex, reps, weight)
                   }
                   onShowDetail={() => {
@@ -118,6 +121,16 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
                   hideExpandButton={hideExerciseExpandButton}
                   hideInfoButton={hideExerciseInfoButton}
                   compactMode={exerciseCompactMode}
+                  // Tracking props for endurance sessions
+                  onStartTracking={isEndurance && exercise.enduranceSession && onStartTracking
+                    ? () => onStartTracking(exercise.enduranceSession!)
+                    : undefined
+                  }
+                  onImportFromHealth={isEndurance && exercise.enduranceSession && onImportFromHealth
+                    ? () => onImportFromHealth(exercise.enduranceSession!)
+                    : undefined
+                  }
+                  useMetric={useMetric}
                 />
               );
             })}

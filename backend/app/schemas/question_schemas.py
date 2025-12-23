@@ -195,6 +195,9 @@ class InitialQuestionsRequest(BaseModel):
     initial_responses: Optional[Dict[str, Any]] = Field(
         default=None, description="Current responses map to merge with stored responses server-side"
     )
+    permissions_granted: Optional[Dict[str, Any]] = Field(
+        default=None, description="User permission status for health data and location access (JSONB format)"
+    )
 
 
 class PlanGenerationRequest(BaseModel):

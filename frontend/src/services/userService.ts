@@ -151,6 +151,10 @@ export class UserService {
           gender: data.gender,
           goal_description: data.goal_description,
         };
+        // Include permissions_granted if provided
+        if (data.permissions_granted !== undefined) {
+          updateData.permissions_granted = data.permissions_granted;
+        }
       } else if (stage === 'initial_questions') {
         updateData = {
           initial_questions: data.initial_questions,
@@ -305,6 +309,8 @@ export class UserService {
           // User playbook
           playbook: playbook,
           planAccepted: rawProfile.plan_accepted || false,
+          // Permissions status
+          permissions_granted: rawProfile.permissions_granted || null,
           createdAt: rawProfile.created_at ? new Date(rawProfile.created_at) : undefined,
           updatedAt: rawProfile.updated_at ? new Date(rawProfile.updated_at) : undefined,
         };
@@ -348,6 +354,7 @@ export class UserService {
       if (updates.gender !== undefined) updateData.gender = updates.gender;
       if (updates.information_complete !== undefined) updateData.information_complete = updates.information_complete;
       if (updates.planAccepted !== undefined) updateData.plan_accepted = updates.planAccepted;
+      if (updates.permissions_granted !== undefined) updateData.permissions_granted = updates.permissions_granted;
 
       const { data, error } = await supabase
         .from('user_profiles')
@@ -378,6 +385,7 @@ export class UserService {
         heightUnit: data.height_unit || 'cm',
         gender: data.gender || '',
         planAccepted: data.plan_accepted || false,
+        permissions_granted: data.permissions_granted || null,
         createdAt: data.created_at ? new Date(data.created_at) : undefined,
         updatedAt: data.updated_at ? new Date(data.updated_at) : undefined,
       };

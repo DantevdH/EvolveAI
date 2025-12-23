@@ -66,7 +66,7 @@ Transform the basic text display into rich, visually appealing cards similar to 
    - Better text color contrast (primary color for names, muted for secondary info)
    - Consistent spacing between elements (8-12px gaps)
 
-#### 2. Onboarding Permissions Step (Foundation)
+#### 2. Onboarding Permissions Step (Foundation) ✅ COMPLETE
 **Complexity: Low | Impact: High**
 
 Add a permissions step early in the onboarding flow (Step 3) to request Health/Google Fit and location tracking permissions. This ensures all permissions are granted upfront, eliminating the need for permission requests later when users want to track workouts. This creates a smoother user experience and sets the foundation for live tracking features.
@@ -118,46 +118,66 @@ Add a permissions step early in the onboarding flow (Step 3) to request Health/G
 #### 3. Live Endurance Session Tracking (Strava-like Experience)
 **Complexity: Medium | Impact: Very High**
 
-Transform endurance sessions into a live workout tracking experience similar to Strava. Users can start/stop/pause tracking directly in the app, with GPS automatically recording distance, time, and route. Heart rate is captured if a monitor is connected (watch), otherwise remains null. Alternatively, users can import completed workouts from Apple Health/Google Fit. This eliminates manual data entry and makes endurance tracking as engaging as strength training.
+Transform endurance sessions into a live workout tracking experience similar to Strava. Users can start/stop/pause tracking directly in the app, with GPS automatically recording distance, time, and route. Heart rate data is captured by reading from HealthKit/Google Fit in real-time during live tracking (if watch is actively syncing), or imported from completed workouts in Health/Google Fit. The **recommended approach** (like Strava) is to import completed workouts from Health/Google Fit, which provides the most reliable and complete heart rate data. This eliminates manual data entry and makes endurance tracking as engaging as strength training.
 
 **UX Flow:**
-1. **Start Tracking** (Primary Method):
+1. **Start Tracking** (Live Tracking Method):
    - User taps "Start" button on planned endurance session card
+   - **Pre-start checks** (best practice): Show GPS signal strength indicator, HR data availability from Health/Google Fit, battery level warning if <20%
    - Opens full-screen live tracking view (similar to Strava)
+   - **3-second countdown** (industry standard - gives user time to prepare) before auto-starting GPS
    - Automatically starts GPS tracking, timer, and distance measurement
-   - If heart rate monitor connected (watch), automatically captures HR data
-   - Shows real-time metrics: elapsed time, distance, pace, current heart rate (if available)
-   - Displays route on map (if GPS available)
+   - **Heart rate monitoring**: Reads heart rate data from HealthKit/Google Fit in real-time (every 1-2 seconds) if watch is actively tracking and syncing
+     - **Note**: HR data availability depends on watch actively syncing to Health/Google Fit during workout
+     - Apple Watch: Automatically syncs HR when workout is active on watch
+     - Other watches: May require manual workout start on watch, or may only sync after workout completes
+     - If no HR data available: Show "No heart rate data" or "Start workout on watch to see HR"
+   - Shows real-time metrics: elapsed time, distance, pace, current heart rate (if available from Health/Google Fit)
+   - **Additional metrics** (best practice): Current speed, average pace, split pace (last km/mile), calories (estimated), cadence (if available)
    - Controls: Pause, Resume, Stop/Finish
-   - On "Stop/Finish": Overwrites planned volume with actual tracked values (time, distance, route)
-   - Heart rate data: Average HR, Max HR, Zone distribution (if HR monitor connected)
+   - On "Stop/Finish": Show summary screen with key metrics before saving
+   - **Auto-pause detection** (best practice): Automatically pause when user stops moving (configurable threshold)
+   - Overwrites planned volume with actual tracked values (time, distance, route)
+   - **Post-workout HR data**: For complete HR data (zones, averages, max), user can optionally import the full workout from Health/Google Fit after live tracking completes
 
-2. **Import from Health/Google Fit** (Alternative Method):
+2. **Import from Health/Google Fit** (Recommended Method - Like Strava):
+   - **Best practice**: This is the recommended approach for heart rate data (similar to how Strava works)
+   - User tracks workout on their watch (Apple Watch, Garmin, etc.) - watch automatically saves to Health/Google Fit
    - User taps "Import from Health" button on planned endurance session
-   - Queries Apple Health/Google Fit for workouts from same day
-   - Auto-matches by time proximity (within 2-hour window of planned time)
-   - Shows picker if multiple workouts found (with time, distance, duration preview)
-   - Imports: actual time, distance, pace, average/max heart rate, elevation, route data
+   - Queries Apple Health/Google Fit for workouts from same day (extend to ±2 hours if no exact match)
+   - Shows picker with all workouts sorted by occurrence (time) - user manually selects matching workout
+   - **Workout preview cards** (best practice): Show thumbnail map, key metrics, sport type icon, duration, heart rate preview
+   - Imports: actual time, distance, pace, average/max/min heart rate, heart rate zones, elevation, route data
+   - **Smart matching** (improvement): Suggest most likely workout based on time proximity and sport type
    - Overwrites planned volume with imported values
    - Stores `data_source` = 'healthkit' or 'google_fit' for reference
+   - **Benefits**: Most reliable HR data, works with any watch that syncs to Health/Google Fit, complete zone distribution, no battery drain on phone
 
 **Key UX Improvements:**
 - **No "planned vs actual" concept**: Just like strength exercises where you overwrite planned weights, endurance sessions overwrite planned volume with tracked/imported values
 - **Live tracking feels engaging**: Full-screen workout view with real-time metrics, map, and controls
 - **Automatic data capture**: GPS handles distance/time/route, HR monitor handles heart rate (if connected)
-- **Flexible input**: Either track live in-app OR import from Health/Google Fit
+- **Flexible input**: Either track live in-app OR import from Health/Google Fit (recommended for complete HR data)
 - **Seamless integration**: Works with Apple Watch (syncs to HealthKit automatically) and most modern watches via Health/Google Fit
+- **Heart rate strategy**: Import from Health/Google Fit is recommended (like Strava) - most reliable and complete HR data. Live tracking can read HR from Health/Google Fit in real-time if watch is actively syncing, but may not always be available
+- **Error handling**: Graceful degradation if GPS signal lost, show "GPS signal lost" indicator, allow manual distance entry as fallback
 
 **Database Schema Changes:**
 - Add fields to `endurance_session` table:
   - `actual_time` (minutes, nullable) - Overwrites `training_volume` if unit was "minutes"
   - `actual_distance` (numeric, nullable) - Overwrites `training_volume` if unit was distance
   - `average_pace` (seconds per km/mile, nullable)
+  - `average_speed` (km/h or mph, nullable) - Calculated from distance/time
   - `average_heart_rate` (bpm, nullable) - Only if HR monitor connected
   - `max_heart_rate` (bpm, nullable) - Only if HR monitor connected
+  - `min_heart_rate` (bpm, nullable) - Useful for recovery analysis
+  - `heart_rate_zones` (jsonb, nullable) - Time spent in each zone: `{"zone_1": 120, "zone_2": 300, ...}` (seconds)
   - `elevation_gain` (meters/feet, nullable)
-  - `route_data` (JSONB, nullable) - GPS coordinates array for map display
+  - `elevation_loss` (meters/feet, nullable) - Standard in fitness apps
+  - `calories` (integer, nullable) - Estimated calories burned
+  - `cadence` (steps/min or strokes/min, nullable) - Running cadence or cycling cadence
   - `data_source` (text, nullable) - 'live_tracking', 'healthkit', 'google_fit' (tracks how data was captured)
+  - **Note**: GPS is used only for tracking distance, not for saving or visualizing routes
   - `health_workout_id` (text, nullable) - ID of linked workout in Health/Google Fit (if imported)
   - `tracked_at` (timestamp, nullable) - When live tracking started
   - `completed_at` (timestamp, nullable) - When tracking finished or imported
@@ -165,44 +185,77 @@ Transform endurance sessions into a live workout tracking experience similar to 
 **Frontend Implementation:**
 1. **Live Tracking Screen** (`EnduranceTrackingScreen.tsx`):
    - Full-screen workout view with large, readable metrics
+   - **Metric layout** (best practice): Primary metrics (time, distance) large and centered, secondary metrics (pace, HR) smaller below
    - Real-time updates: time, distance, pace, current HR (if available)
-   - Map view showing current route (if GPS available)
-   - Large Start/Pause/Resume/Stop buttons
+   - **Swipeable screens** (best practice): Swipe left/right to see different metric views (overview, pace, heart rate zones, map)
+   - Large Start/Pause/Resume/Stop buttons (minimum 44x44pt touch targets)
    - **Note**: Permissions already granted during onboarding (#2), so no permission requests needed here
-   - GPS accuracy indicators
+   - GPS accuracy indicators (color-coded: green = good, yellow = fair, red = poor)
+   - **Battery indicator** (best practice): Show battery level, warn if <20% before starting
+   - **Screen wake lock** (best practice): Keep screen on during active tracking
+   - **Background tracking** (best practice): Continue tracking when app is backgrounded, show notification with key metrics
+   - **Split/lap functionality** (best practice): Allow manual lap marking or auto-laps every km/mile
+   - **Map view toggle** (if route visualization added later): Show/hide map to save battery
 
 2. **Session Card Enhancement**:
    - Replace simple "Complete" button with "Start Tracking" or "Import from Health"
    - Show tracked/imported metrics if session was completed
-   - Display route preview (small map thumbnail) if route data exists
 
 3. **Health Import Flow**:
    - **Note**: Permissions already granted during onboarding (#2), so no permission requests needed here
-   - Workout picker modal with preview cards
-   - Auto-match by time proximity
+   - Workout picker modal with preview cards (workouts sorted by occurrence/time)
+   - **Filter options** (improvement): Filter by sport type, time range, distance range
+   - User manually selects matching workout
    - Import confirmation with data preview
 
 **Backend Changes:**
 - Update `EnduranceSession` schema to include new fields
-- Add route data storage (JSONB for GPS coordinates)
 - Track data source for analytics (live vs imported)
+- **Data validation**: Validate GPS accuracy, flag suspicious data (e.g., impossible speeds)
+- **Note**: GPS is used only for tracking distance, not for saving or visualizing routes
 
 **Technical Requirements:**
 - **Permissions** (handled in #2 - onboarding):
   - Location permissions (foreground and background)
   - Health/Google Fit read permissions
   - Platform auto-detection (iOS → HealthKit, Android → Google Fit)
-- React Native location library (`@react-native-community/geolocation` or `expo-location`)
-- Heart rate monitoring (via HealthKit/Google Fit if watch connected, or direct BLE if supported)
-- Map display library (`react-native-maps` or `@rnmapbox/maps`)
+- React Native location library (`@react-native-community/geolocation` or `expo-location`) - for distance tracking only
+  - **GPS optimization**: Use `distanceFilter` (5-10m) to reduce battery drain, `enableHighAccuracy: true` for better accuracy
+  - **Background location**: Use `startLocationUpdatesAsync` with `foregroundService` on Android
+- **Heart rate monitoring** (via HealthKit/Google Fit - recommended approach):
+  - **Live tracking**: Read heart rate from HealthKit/Google Fit in real-time during workout (every 1-2 seconds)
+    - iOS: Use `react-native-health` to subscribe to HealthKit heart rate samples during active workout
+    - Android: Use `react-native-google-fit` to read heart rate data in real-time
+    - **Requirement**: Watch must be actively tracking and syncing to Health/Google Fit
+    - Apple Watch: Automatically syncs when workout is active on watch
+    - Other watches: May require manual workout start, or may only sync after completion
+  - **Import method** (recommended): Import completed workouts from Health/Google Fit for complete HR data
+  - **Note**: Direct BLE connection to HR monitors is NOT recommended - complex, less reliable, unnecessary when using Health/Google Fit
+- **Battery optimization** (critical):
+  - Reduce GPS update frequency when paused
+  - Use lower accuracy mode when not actively tracking
+  - Dim screen or offer "power save mode" option
+  - Background task optimization (iOS: `beginBackgroundTask`, Android: `ForegroundService`)
+- **Error handling**:
+  - GPS signal lost: Show indicator, continue tracking with last known position
+  - HR monitor disconnected: Show warning, continue without HR
+  - App killed: Save partial session data, allow resume on restart
+- **Note**: GPS is used only for tracking distance, not for route visualization
 - Health/Google Fit integration (see improvement #12 for details)
+
+**Additional Best Practices:**
+- **Post-workout summary**: Show detailed breakdown (splits, elevation profile if available, zone distribution)
+- **Achievement system**: Celebrate milestones (first 5k, longest run, fastest pace, etc.)
+- **Offline support**: Cache workout data locally, sync when connection restored
+- **Privacy**: Clear indication of what data is stored, option to delete route data while keeping metrics
 
 **Benefits:**
 - Eliminates manual data entry completely
 - Makes endurance tracking as engaging as strength training
 - Automatic data capture reduces friction
 - Works seamlessly with Apple Watch and other devices
-- Route visualization adds motivation and context
+- GPS tracking provides accurate distance measurement
+- Industry-standard features increase user trust and engagement
 
 #### 4. Endurance Analytics Integration
 **Complexity: Low | Impact: High**
@@ -426,14 +479,12 @@ Focus on Tier 1 improvements (#1, #5) to immediately improve the endurance exper
   - Heart rate capture if monitor connected (watch)
   - Start/Pause/Resume/Stop controls
   - Real-time metrics display (time, distance, pace, HR)
-  - Map view with route visualization
-  - Background location tracking
+  - Background location tracking (for distance measurement only)
 - **Health Import** (Alternative):
   - Apple Health/Google Fit integration
   - Auto-detect platform (iOS/Android)
-  - Link workouts by time proximity
-  - Import heart rate, pace, distance, elevation, route
-  - Show picker if multiple workouts exist
+  - Show workout picker with workouts sorted by occurrence (time) - user manually selects
+  - Import heart rate, pace, distance, elevation
   - Store data source (live_tracking vs healthkit/google_fit)
 
 ### Phase 2.5 (Analytics Integration - 2-3 weeks)
@@ -482,24 +533,20 @@ Evaluate Tier 4 features (#18-20) based on strategic priorities and user feedbac
 1. User taps "Import from Health" button on planned endurance session card
 2. **Note**: Permissions already granted, so directly query Health/Google Fit
 3. System queries Health/Google Fit for workouts from same day
-4. Auto-match by time proximity (within 2-hour window of planned time)
-5. If single match: Auto-link and import with confirmation
-6. If multiple matches: Show picker with workout preview cards (time, distance, duration, sport type)
-7. If no matches: Show message "No workouts found in Health/Google Fit. Start tracking instead?"
-8. Import data: actual_time, actual_distance, average_pace, average_heart_rate, max_heart_rate, elevation_gain, route_data
-9. Store `data_source` = 'healthkit' or 'google_fit' (mutually exclusive with 'live_tracking')
-10. Overwrites planned volume with imported values (same as live tracking)
+4. Show picker with all workouts sorted by occurrence (time) - user manually selects matching workout
+5. If no workouts found: Show message "No workouts found in Health/Google Fit. Start tracking instead?"
+6. Import data: actual_time, actual_distance, average_pace, average_heart_rate, max_heart_rate, elevation_gain
+7. Store `data_source` = 'healthkit' or 'google_fit' (mutually exclusive with 'live_tracking')
+8. Overwrites planned volume with imported values (same as live tracking)
 
-**Matching Logic**:
-- Time window: ±2 hours from planned session time (configurable)
-- Sport type: Optional auto-match (running → running), but allow manual override
-- If single workout found in window: Auto-link and import with confirmation
-- If multiple workouts found: Show picker with:
+**Selection Logic**:
+- Show all workouts from same day in picker, sorted by occurrence (time)
+- Picker displays:
   - Workout time
   - Distance/duration
   - Sport type
   - Heart rate (if available)
-  - User selects which one to link
+- User manually selects which workout to link
 - If no workouts found: Show message "No workouts found in Health/Google Fit. Start tracking instead?"
 - User can always choose "Start Tracking" (live tracking) even if workouts exist in Health/Google Fit
 
@@ -517,8 +564,8 @@ Evaluate Tier 4 features (#18-20) based on strategic priorities and user feedbac
   - `average_heart_rate` (bpm, nullable) - Only if HR monitor connected or imported
   - `max_heart_rate` (bpm, nullable) - Only if HR monitor connected or imported
   - `elevation_gain` (meters/feet, nullable)
-  - `route_data` (JSONB, nullable) - GPS coordinates array for map display
   - `external_activity_id` (text, nullable) - For Strava sync (optional)
+  - **Note**: GPS is used only for tracking distance, not for saving or visualizing routes
   - `data_source` (text, nullable) - 'live_tracking', 'healthkit', 'google_fit', 'strava' - tracks how data was captured (mutually exclusive)
   - `health_workout_id` (text, nullable) - ID of linked workout in Health/Google Fit (if imported)
   - `tracked_at` (timestamp, nullable) - When live tracking started
@@ -527,19 +574,17 @@ Evaluate Tier 4 features (#18-20) based on strategic priorities and user feedbac
 ### New Tables Needed
 - `endurance_templates` - Saved session templates
 - `external_integrations` - OAuth tokens and sync status (for free integrations: HealthKit, Google Fit, Strava free tier)
-- `gps_routes` - Saved routes for reuse
 - `endurance_metrics` - Calculated metrics (TSS, CTL, etc.)
+- **Note**: GPS routes are not saved - GPS is used only for tracking distance during workouts
 
 ### Frontend Dependencies
-- Map library: `react-native-maps` (free, open-source) or `@rnmapbox/maps` (free tier available)
 - Charts: `react-native-chart-kit` (free) or `victory-native` (free)
 - Health APIs:
   - `react-native-health` (iOS - free, HealthKit access) - **Required for Phase 1.5 (#2) and Phase 2**
   - `react-native-google-fit` (Android - free, Google Fit access) - **Required for Phase 1.5 (#2) and Phase 2**
   - Platform detection: `react-native-device-info` or `expo-device` - **Required for Phase 1.5 (#2)**
 - Location tracking:
-  - `expo-location` or `@react-native-community/geolocation` - **Required for Phase 1.5 (#2) and Phase 2**
-- File handling: `expo-file-system` (free) for GPX imports
+  - `expo-location` or `@react-native-community/geolocation` - **Required for Phase 1.5 (#2) and Phase 2** (for distance tracking only, not route visualization)
 
 ### Backend Dependencies
 - Strava API client (free tier - evaluate rate limits)
@@ -585,9 +630,8 @@ The quick wins in Tier 1 can dramatically improve the endurance experience with 
 **Integration Strategy**: Live tracking + Health/Google Fit import is prioritized because:
 - **Live Tracking**: 
   - Strava-like experience makes tracking engaging
-  - Automatic GPS capture eliminates manual entry
+  - Automatic GPS capture eliminates manual entry (distance tracking only)
   - Works with or without heart rate monitor
-  - Route visualization adds motivation
 - **Health/Google Fit Import**:
   - Works with Apple Watch automatically (no separate integration needed)
   - Works with Garmin and most watches via Health/Google Fit sync

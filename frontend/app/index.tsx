@@ -1,8 +1,7 @@
-import { Redirect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/src/context/AuthContext';
 import { useAppRouting } from '@/src/hooks/useAppRouting';
 import { useEffect, useRef } from 'react';
-import { LoadingScreen } from '@/src/components/shared/LoadingScreen';
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
