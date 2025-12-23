@@ -29,12 +29,11 @@ const EnduranceDetails: React.FC<EnduranceDetailsProps> = ({
   const zoneStyle = getZoneBadgeStyle(zone);
   const zoneLabel = getZoneLabel(zone);
 
-  // Check if we have tracked data
-  const hasTrackedData = !!(
-    enduranceSession?.actualDuration ||
-    enduranceSession?.actualDistance ||
-    enduranceSession?.dataSource
-  );
+  // Check if session is completed (when completed, details are shown in EnduranceTrackingActions)
+  const isCompleted = enduranceSession?.completed || false;
+
+  // Don't show this component anymore - all info is now in EnduranceTrackingActions
+  return null;
 
   // Format duration
   const formatDuration = (seconds: number): string => {
@@ -155,27 +154,6 @@ const EnduranceDetails: React.FC<EnduranceDetailsProps> = ({
     );
   };
 
-  return (
-    <View style={styles.enduranceContainer}>
-      {/* Horizontal layout: Icon | Details | Zone Badge */}
-      <View style={styles.enduranceContent}>
-        {/* Sport Icon - Left */}
-        <View style={styles.iconContainer}>
-          <Ionicons name={iconName as any} size={28} color={colors.primary} />
-        </View>
-
-        {/* Exercise Details - Center */}
-        <View style={styles.detailsContainer}>
-          {hasTrackedData ? renderTrackedMetrics() : renderPlannedVolume()}
-        </View>
-
-        {/* Heart Rate Zone Badge - Right */}
-        <View style={[styles.zoneBadge, { backgroundColor: zoneStyle.backgroundColor }]}>
-          <Text style={[styles.zoneLabel, { color: zoneStyle.color }]}>{zoneLabel}</Text>
-        </View>
-      </View>
-    </View>
-  );
 };
 
 const styles = StyleSheet.create({

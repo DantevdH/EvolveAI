@@ -54,6 +54,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
   const {
     trackingState,
     formattedMetrics,
+    countdownSeconds,
     startCountdown,
     cancelCountdown,
     pause,
@@ -64,10 +65,9 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
   } = useLiveTracking();
 
   // Local state
-  const [countdownSeconds, setCountdownSeconds] = useState<number>(0);
   const [completedMetrics, setCompletedMetrics] = useState<TrackedWorkoutMetrics | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [hasStartedCountdown, setHasStartedCountdown] = useState(false);
 
   // ==================== LIFECYCLE ====================
 
@@ -89,6 +89,16 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
 
     return () => backHandler.remove();
   }, [trackingState.status]);
+
+  // Cleanup on unmount - cancel countdown if in progress
+  useEffect(() => {
+    return () => {
+      // If screen unmounts during countdown, cancel it to prevent orphaned timers
+      if (countdownSeconds > 0) {
+        cancelCountdown();
+      }
+    };
+  }, [countdownSeconds, cancelCountdown]);
 
   // Auto-start countdown when screen mounts
   useEffect(() => {
@@ -129,30 +139,15 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
   };
 
   const beginCountdown = () => {
-    setCountdownSeconds(3);
+    // Prevent double-start
+    if (hasStartedCountdown) return;
+    setHasStartedCountdown(true);
 
-    countdownIntervalRef.current = setInterval(() => {
-      setCountdownSeconds((prev) => {
-        if (prev <= 1) {
-          if (countdownIntervalRef.current) {
-            clearInterval(countdownIntervalRef.current);
-            countdownIntervalRef.current = null;
-          }
-          // Start actual tracking
-          startCountdown(enduranceSession.id, enduranceSession.sportType);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    // Use the hook's single source of truth for countdown
+    startCountdown(enduranceSession.id, enduranceSession.sportType);
   };
 
   const handleCancelCountdown = () => {
-    if (countdownIntervalRef.current) {
-      clearInterval(countdownIntervalRef.current);
-      countdownIntervalRef.current = null;
-    }
-    setCountdownSeconds(0);
     cancelCountdown();
     onDismiss();
   };

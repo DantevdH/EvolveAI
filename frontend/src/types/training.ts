@@ -13,6 +13,8 @@ export interface TrainingState {
   showReopenDialog: boolean;
   showRPEModal: boolean;
   pendingCompletionDailyTrainingId: string | null;
+  showReopenEnduranceDialog: boolean;
+  pendingReopenEnduranceExerciseId: string | null;
 }
 
 export interface Exercise {
@@ -242,7 +244,10 @@ export interface UseTrainingReturn {
     description?: string;
   }, dailyTrainingId: string) => Promise<void>;
   removeExercise: (exerciseId: string, isEndurance: boolean, dailyTrainingId: string) => Promise<void>;
-  
+  reopenEnduranceSession: (exerciseId: string) => void;
+  confirmReopenEnduranceSession: () => void;
+  cancelReopenEnduranceSession: () => void;
+
   // Exercise swap state
   isExerciseSwapModalVisible: boolean;
   exerciseToSwap: Exercise | null;
@@ -294,6 +299,7 @@ export interface DailyTrainingDetailProps {
   onAddExercise?: () => void;
   onAddEnduranceSession?: () => void;
   onRemoveExercise?: (exerciseId: string, isEndurance: boolean) => void;
+  onReopenEnduranceSession?: (exerciseId: string) => void; // Reopen a completed endurance session
   onToggleChange?: (isStrength: boolean) => void;
   isStrengthMode?: boolean;
   hideDayName?: boolean;
@@ -315,6 +321,7 @@ export interface ExerciseRowProps {
   onShowDetail: () => void;
   onSwapExercise?: () => void;
   onRemoveExercise?: () => void;
+  onReopenEnduranceSession?: () => void; // Reopen a completed endurance session to re-track
   isLocked?: boolean;
   hideCompletionButton?: boolean; // Hide the completion star button
   hideExpandButton?: boolean; // Hide the expand/collapse button

@@ -1968,9 +1968,37 @@ function extractExerciseHistoryFromLocalPlan(
 
   // Sort by date (most recent first)
   history.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-  
+
   return history;
 }
+
+// Export singleton instance for use with instance methods
+// This wraps the static TrainingService class to provide an instance-like API
+export const trainingService = {
+  updateEnduranceSessionWithTrackedData: TrainingService.updateEnduranceSessionWithTrackedData.bind(TrainingService),
+  isHealthWorkoutImported: TrainingService.isHealthWorkoutImported.bind(TrainingService),
+  getTrainingPlan: TrainingService.getTrainingPlan.bind(TrainingService),
+  deleteTrainingPlan: TrainingService.deleteTrainingPlan.bind(TrainingService),
+  updateSetDetails: TrainingService.updateSetDetails.bind(TrainingService),
+  saveTemporaryExercise: TrainingService.saveTemporaryExercise.bind(TrainingService),
+  updateExerciseCompletion: TrainingService.updateExerciseCompletion.bind(TrainingService),
+  bulkResetExerciseCompletion: TrainingService.bulkResetExerciseCompletion.bind(TrainingService),
+  completeDailyTraining: TrainingService.completeDailyTraining.bind(TrainingService),
+  saveDailyTrainingExercises: TrainingService.saveDailyTrainingExercises.bind(TrainingService),
+  reopenDailyTraining: TrainingService.reopenDailyTraining.bind(TrainingService),
+  getExerciseDetails: TrainingService.getExerciseDetails.bind(TrainingService),
+  getTrainingHistory: TrainingService.getTrainingHistory.bind(TrainingService),
+  getTrainingStreak: TrainingService.getTrainingStreak.bind(TrainingService),
+  getWeeklyTrainingCount: TrainingService.getWeeklyTrainingCount.bind(TrainingService),
+  getGoalProgress: TrainingService.getGoalProgress.bind(TrainingService),
+  getTodaysTraining: TrainingService.getTodaysTraining.bind(TrainingService),
+  getRecentActivity: TrainingService.getRecentActivity.bind(TrainingService),
+  submitDailyFeedback: TrainingService.submitDailyFeedback.bind(TrainingService),
+  detectTrainingModifications: TrainingService.detectTrainingModifications.bind(TrainingService),
+  calculateOneRM: TrainingService.calculateOneRM.bind(TrainingService),
+  calculateTrainingProgress: TrainingService.calculateTrainingProgress.bind(TrainingService),
+  calculateWeeklyProgress: TrainingService.calculateWeeklyProgress.bind(TrainingService),
+};
 
 export const getExerciseHistory = async (
   exerciseId: number, 

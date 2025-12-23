@@ -26,6 +26,7 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
   onShowDetail,
   onSwapExercise,
   onRemoveExercise,
+  onReopenEnduranceSession,
   isLocked = false,
   hideCompletionButton = false,
   hideExpandButton = false,
@@ -97,11 +98,23 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
           <ExerciseNumberBadge exerciseNumber={exerciseNumber} />
 
           {!hideCompletionButton && (
-            <ExerciseCompletionStar
-              completed={exercise.completed}
-              isLocked={isLocked}
-              onToggle={onToggle}
-            />
+            isEndurance ? (
+              exercise.completed ? (
+                <ExerciseCompletionStar
+                  completed={true}
+                  isLocked={isLocked}
+                  onToggle={onReopenEnduranceSession && !isLocked ? onReopenEnduranceSession : () => {}}
+                />
+              ) : (
+                <View style={styles.completionPlaceholder} />
+              )
+            ) : (
+              <ExerciseCompletionStar
+                completed={exercise.completed}
+                isLocked={isLocked}
+                onToggle={onToggle}
+              />
+            )
           )}
 
           <ExerciseInfo
@@ -136,13 +149,14 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
                   enduranceSession={exercise.enduranceSession}
                   useMetric={useMetric}
                 />
-                {/* Tracking actions for endurance sessions */}
+                {/* Tracking actions or metrics for endurance sessions */}
                 {exercise.enduranceSession && onStartTracking && onImportFromHealth && (
                   <EnduranceTrackingActions
                     enduranceSession={exercise.enduranceSession}
                     onStartTracking={onStartTracking}
                     onImportFromHealth={onImportFromHealth}
                     isLocked={isLocked}
+                    useMetric={useMetric}
                   />
                 )}
               </>
@@ -241,6 +255,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: createColorWithOpacity(colors.secondary, 0.2),
     gap: 8
+  },
+  completionPlaceholder: {
+    width: 28,
+    height: 28,
   },
 });
 

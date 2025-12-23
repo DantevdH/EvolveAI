@@ -39,8 +39,31 @@ const initialState: TrainingState = {
   error: null,
   showReopenDialog: false,
   showRPEModal: false,
-  pendingCompletionDailyTrainingId: null
+  pendingCompletionDailyTrainingId: null,
+  showReopenEnduranceDialog: false,
+  pendingReopenEnduranceExerciseId: null
 };
+
+/**
+ * Helper function to calculate the actual day index when selectedDayIndex is -1 (auto-select today)
+ * This ensures consistent behavior across all functions that need to find the current day's training
+ */
+function getActualDayIndex(selectedDayIndex: number, dailyTrainings: DailyTraining[]): number {
+  if (selectedDayIndex !== -1) {
+    return selectedDayIndex;
+  }
+
+  // Auto-select today's training
+  const today = new Date();
+  const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  // Convert JavaScript Date.getDay() (0=Sunday) to our Monday-first array (0=Monday)
+  const jsDayIndex = today.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, etc.
+  const mondayFirstIndex = jsDayIndex === 0 ? 6 : jsDayIndex - 1; // Sunday=6, Monday=0, Tuesday=1, etc.
+  const todayName = dayNames[mondayFirstIndex];
+
+  const dayIndex = dailyTrainings.findIndex(training => training.dayOfWeek === todayName);
+  return dayIndex === -1 ? 0 : dayIndex; // Fallback to first day if today not found
+}
 
 export const useTraining = (): UseTrainingReturn => {
   const { state: authState, refreshTrainingPlan: refreshAuthTrainingPlan, setTrainingPlan: setAuthTrainingPlan, setInsightsSummary: setAuthInsightsSummary } = useAuth();
@@ -307,8 +330,9 @@ export const useTraining = (): UseTrainingReturn => {
       const currentWeek = trainingPlan?.weeklySchedules.find(
         week => week.weekNumber === trainingState.currentWeekSelected
       );
-      const dayIndex = trainingState.selectedDayIndex === -1 ? 0 : trainingState.selectedDayIndex;
-      const currentDailyTraining = currentWeek?.dailyTrainings[dayIndex];
+      if (!currentWeek) return;
+      const dayIndex = getActualDayIndex(trainingState.selectedDayIndex, currentWeek.dailyTrainings);
+      const currentDailyTraining = currentWeek.dailyTrainings[dayIndex];
       
       // Check if day is editable based on scheduledDate
       if (currentDailyTraining && !isTrainingDayEditable(currentDailyTraining || null)) {
@@ -510,10 +534,12 @@ export const useTraining = (): UseTrainingReturn => {
       }
 
       // Check if the selected day is editable
-      const currentDay = trainingPlan.weeklySchedules
-        .find(week => week.weekNumber === trainingState.currentWeekSelected)
-        ?.dailyTrainings[trainingState.selectedDayIndex === -1 ? 0 : trainingState.selectedDayIndex];
-      
+      const currentWeekForEdit = trainingPlan.weeklySchedules
+        .find(week => week.weekNumber === trainingState.currentWeekSelected);
+      const currentDay = currentWeekForEdit
+        ? currentWeekForEdit.dailyTrainings[getActualDayIndex(trainingState.selectedDayIndex, currentWeekForEdit.dailyTrainings)]
+        : undefined;
+
       if (currentDay && !isTrainingDayEditable(currentDay)) {
         logger.warn('Cannot edit locked training day', {
           action: 'updateSetDetails',
@@ -754,19 +780,32 @@ export const useTraining = (): UseTrainingReturn => {
 
     try {
       // Mark the training as incomplete to unlock exercises (clear completedAt and sessionRPE)
+      // For endurance sessions, also reset the enduranceSession.completed flag
       const updatedPlan = {
         ...trainingPlan,
         weeklySchedules: trainingPlan.weeklySchedules.map(week => ({
           ...week,
-          dailyTrainings: week.dailyTrainings.map(daily => 
-            daily.id === selectedDayTraining.id 
-              ? { 
-                  ...daily, 
+          dailyTrainings: week.dailyTrainings.map(daily =>
+            daily.id === selectedDayTraining.id
+              ? {
+                  ...daily,
                   completed: false,
                   completedAt: undefined,
                   sessionRPE: undefined, // Clear session RPE when reopening
-                  exercises: resetExercises 
-                    ? daily.exercises.map(exercise => ({ ...exercise, completed: false }))
+                  exercises: resetExercises
+                    ? daily.exercises.map(exercise => {
+                        // Reset exercise completed flag
+                        const updatedExercise = { ...exercise, completed: false };
+                        // For endurance sessions, also reset the nested completed flag
+                        // This ensures the UI shows action buttons instead of metrics
+                        if (updatedExercise.enduranceSession) {
+                          updatedExercise.enduranceSession = {
+                            ...updatedExercise.enduranceSession,
+                            completed: false,
+                          };
+                        }
+                        return updatedExercise;
+                      })
                     : daily.exercises
                 }
               : daily
@@ -924,10 +963,12 @@ export const useTraining = (): UseTrainingReturn => {
     if (!trainingPlan) return;
 
     // Check if the selected day is editable
-    const currentDay = trainingPlan.weeklySchedules
-      .find(week => week.weekNumber === trainingState.currentWeekSelected)
-      ?.dailyTrainings[trainingState.selectedDayIndex === -1 ? 0 : trainingState.selectedDayIndex];
-    
+    const currentWeekForSwap = trainingPlan.weeklySchedules
+      .find(week => week.weekNumber === trainingState.currentWeekSelected);
+    const currentDay = currentWeekForSwap
+      ? currentWeekForSwap.dailyTrainings[getActualDayIndex(trainingState.selectedDayIndex, currentWeekForSwap.dailyTrainings)]
+      : undefined;
+
     if (currentDay && !isTrainingDayEditable(currentDay)) {
       logger.warn('Cannot edit locked training day', {
         action: 'swapExercise',
@@ -1488,6 +1529,122 @@ export const useTraining = (): UseTrainingReturn => {
     }
   }, [trainingPlan, trainingState.currentWeekSelected, updateTrainingPlan]);
 
+  const reopenEnduranceSession = useCallback((exerciseId: string) => {
+    if (!trainingPlan || !selectedDayTraining) return;
+
+    // Check if the selected day is editable
+    if (!isTrainingDayEditable(selectedDayTraining)) {
+      logger.warn('Cannot reopen endurance session - day is locked', {
+        scheduledDate: selectedDayTraining.scheduledDate
+      });
+      setTrainingState(prev => ({
+        ...prev,
+        error: 'This workout is locked. You can only edit today\'s workout.'
+      }));
+      return;
+    }
+
+    // Find the exercise and verify it's an endurance session
+    const exercise = selectedDayTraining.exercises.find(ex => ex.id === exerciseId);
+    if (!exercise || !exercise.enduranceSession) {
+      logger.warn('Cannot reopen - not an endurance session', { exerciseId });
+      return;
+    }
+
+    // Show confirmation dialog instead of directly reopening
+    setTrainingState(prev => ({
+      ...prev,
+      showReopenEnduranceDialog: true,
+      pendingReopenEnduranceExerciseId: exerciseId
+    }));
+  }, [trainingPlan, selectedDayTraining]);
+
+  const confirmReopenEnduranceSession = useCallback(() => {
+    if (!trainingPlan || !selectedDayTraining || !trainingState.pendingReopenEnduranceExerciseId) return;
+
+    const exerciseId = trainingState.pendingReopenEnduranceExerciseId;
+
+    // Find the exercise and verify it's an endurance session
+    const exercise = selectedDayTraining.exercises.find(ex => ex.id === exerciseId);
+    if (!exercise || !exercise.enduranceSession) {
+      logger.warn('Cannot reopen - not an endurance session', { exerciseId });
+      setTrainingState(prev => ({
+        ...prev,
+        showReopenEnduranceDialog: false,
+        pendingReopenEnduranceExerciseId: null
+      }));
+      return;
+    }
+
+    logger.info('Reopening endurance session after confirmation', {
+      exerciseId,
+      sessionName: exercise.enduranceSession.name
+    });
+
+    // Reset the endurance session - clear completed flag and tracked metrics
+    const updatedPlan = {
+      ...trainingPlan,
+      weeklySchedules: trainingPlan.weeklySchedules.map(week => ({
+        ...week,
+        dailyTrainings: week.dailyTrainings.map(daily =>
+          daily.id === selectedDayTraining.id
+            ? {
+                ...daily,
+                // Also mark daily training as incomplete since an exercise is now incomplete
+                completed: false,
+                exercises: daily.exercises.map(ex =>
+                  ex.id === exerciseId
+                    ? {
+                        ...ex,
+                        completed: false,
+                        enduranceSession: {
+                          ...ex.enduranceSession!,
+                          completed: false,
+                          // Clear tracked metrics so user can re-track
+                          actualDuration: undefined,
+                          actualDistance: undefined,
+                          averagePace: undefined,
+                          averageSpeed: undefined,
+                          averageHeartRate: undefined,
+                          maxHeartRate: undefined,
+                          minHeartRate: undefined,
+                          elevationGain: undefined,
+                          elevationLoss: undefined,
+                          calories: undefined,
+                          cadence: undefined,
+                          dataSource: undefined,
+                          healthWorkoutId: undefined,
+                          startedAt: undefined,
+                          completedAt: undefined,
+                        }
+                      }
+                    : ex
+                )
+              }
+            : daily
+        )
+      }))
+    };
+
+    // Update local state - DB will be updated when the day is saved/completed again
+    updateTrainingPlan(updatedPlan);
+
+    // Hide dialog
+    setTrainingState(prev => ({
+      ...prev,
+      showReopenEnduranceDialog: false,
+      pendingReopenEnduranceExerciseId: null
+    }));
+  }, [trainingPlan, selectedDayTraining, trainingState.pendingReopenEnduranceExerciseId, updateTrainingPlan]);
+
+  const cancelReopenEnduranceSession = useCallback(() => {
+    setTrainingState(prev => ({
+      ...prev,
+      showReopenEnduranceDialog: false,
+      pendingReopenEnduranceExerciseId: null
+    }));
+  }, []);
+
   const refreshTrainingPlan = useCallback(async () => {
     if (!authState.userProfile) return;
 
@@ -1588,7 +1745,10 @@ export const useTraining = (): UseTrainingReturn => {
     addExercise,
     addEnduranceSession,
     removeExercise,
-    
+    reopenEnduranceSession,
+    confirmReopenEnduranceSession,
+    cancelReopenEnduranceSession,
+
     // Exercise swap state
     isExerciseSwapModalVisible: showExerciseSwapModalState,
     exerciseToSwap,

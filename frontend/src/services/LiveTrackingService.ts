@@ -161,12 +161,33 @@ class LiveTrackingServiceImpl {
 
   /**
    * Start GPS tracking for a workout session
+   * Idempotent - if called during countdown for same session, allows transition to tracking
    */
   async startTracking(sessionId: string, sportType: string): Promise<void> {
-    if (this.state.status !== 'idle' && this.state.status !== 'countdown') {
+    // Already actively tracking - reject
+    if (
+      this.state.status === 'tracking' ||
+      this.state.status === 'paused' ||
+      this.state.status === 'auto_paused'
+    ) {
+      // If same session, just log and return (idempotent)
+      if (this.state.enduranceSessionId === sessionId) {
+        logger.info('startTracking called for already active session - ignoring', { sessionId });
+        return;
+      }
       throw new Error('Tracking already in progress');
     }
 
+    // In stopping/summary/saving states - reject
+    if (
+      this.state.status === 'stopping' ||
+      this.state.status === 'summary' ||
+      this.state.status === 'saving'
+    ) {
+      throw new Error(`Cannot start tracking from state: ${this.state.status}`);
+    }
+
+    // Valid transitions: idle -> tracking, countdown -> tracking
     try {
       // Reset state
       this.state = {
@@ -356,6 +377,32 @@ class LiveTrackingServiceImpl {
       if (backgroundStatus !== 'granted') {
         logger.warn('Background location not granted - tracking may stop when app is backgrounded');
       }
+    }
+
+    // Get initial location to show GPS status immediately
+    try {
+      const initialLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      this.state.gpsSignal = this.getSignalQuality(initialLocation.coords.accuracy ?? Infinity);
+      this.state.lastLocation = {
+        latitude: initialLocation.coords.latitude,
+        longitude: initialLocation.coords.longitude,
+        altitude: initialLocation.coords.altitude,
+        accuracy: initialLocation.coords.accuracy ?? Infinity,
+        timestamp: initialLocation.timestamp,
+        speed: initialLocation.coords.speed,
+      };
+      this.state.currentAltitudeMeters = initialLocation.coords.altitude;
+      this.previousAltitude = initialLocation.coords.altitude;
+      this.notifySubscribers();
+      logger.info('Initial GPS fix obtained', {
+        accuracy: initialLocation.coords.accuracy,
+        quality: this.state.gpsSignal.quality
+      });
+    } catch (error) {
+      logger.warn('Could not get initial location', error);
+      // Continue anyway - watchPositionAsync will get updates
     }
 
     // Start watching location

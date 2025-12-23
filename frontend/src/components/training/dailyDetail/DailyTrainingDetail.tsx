@@ -24,6 +24,7 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
   onAddExercise,
   onAddEnduranceSession,
   onRemoveExercise,
+  onReopenEnduranceSession,
   onToggleChange,
   isStrengthMode,
   hideDayName = false,
@@ -116,6 +117,10 @@ const DailyTrainingDetail: React.FC<DailyTrainingDetailProps> = ({
                   onRemoveExercise={!isLocked && onRemoveExercise ? () => {
                     onRemoveExercise(exercise.id, isEndurance);
                   } : undefined}
+                  onReopenEnduranceSession={isEndurance && onReopenEnduranceSession
+                    ? () => onReopenEnduranceSession(exercise.id)
+                    : undefined
+                  }
                   isLocked={isLocked}
                   hideCompletionButton={hideExerciseCompletionButton}
                   hideExpandButton={hideExerciseExpandButton}

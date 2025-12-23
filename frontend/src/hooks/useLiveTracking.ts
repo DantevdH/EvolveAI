@@ -149,9 +149,56 @@ export function useLiveTracking(): UseLiveTrackingReturn {
     };
   }, [trackingState, useMetric]);
 
+  // ==================== RESET HELPER ====================
+
+  const resetToIdle = useCallback(async () => {
+    // Clear countdown timer
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    setCountdownSeconds(0);
+    pendingStartRef.current = null;
+
+    // Reset local state
+    setTrackingState((s) => ({
+      ...s,
+      status: 'idle',
+      enduranceSessionId: null,
+      sportType: null,
+      error: null,
+    }));
+
+    // Force service cleanup to ensure consistent state
+    try {
+      await LiveTrackingService.discardTracking();
+    } catch (err) {
+      logger.warn('Failed to discard tracking during reset', err);
+    }
+  }, []);
+
   // ==================== COUNTDOWN ====================
 
   const startCountdown = useCallback((sessionId: string, sportType: string) => {
+    // Guard: If already counting down or tracking, don't start again
+    const currentServiceState = LiveTrackingService.getState();
+    if (
+      currentServiceState.status === 'tracking' ||
+      currentServiceState.status === 'paused' ||
+      currentServiceState.status === 'auto_paused'
+    ) {
+      logger.warn('Cannot start countdown - tracking already in progress', {
+        status: currentServiceState.status,
+      });
+      return;
+    }
+
+    // Guard: If countdown already in progress, don't start again
+    if (countdownIntervalRef.current) {
+      logger.warn('Countdown already in progress');
+      return;
+    }
+
     // Store pending start info
     pendingStartRef.current = { sessionId, sportType };
 
@@ -161,39 +208,54 @@ export function useLiveTracking(): UseLiveTrackingReturn {
       status: 'countdown',
       enduranceSessionId: sessionId,
       sportType,
+      error: null,
     }));
 
     setCountdownSeconds(COUNTDOWN_SECONDS);
 
-    // Start countdown
+    // Start countdown - SINGLE source of truth
+    // Flow: Show 3 for 1s → Show 2 for 1s → Show 1 for 1s → Start tracking
     countdownIntervalRef.current = setInterval(() => {
       setCountdownSeconds((prev) => {
-        if (prev <= 1) {
-          // Countdown complete - start tracking
+        const nextValue = prev - 1;
+
+        if (nextValue <= 0) {
+          // Countdown complete - clear interval
           if (countdownIntervalRef.current) {
             clearInterval(countdownIntervalRef.current);
             countdownIntervalRef.current = null;
           }
 
-          // Start actual tracking
-          if (pendingStartRef.current) {
-            LiveTrackingService.startTracking(
-              pendingStartRef.current.sessionId,
-              pendingStartRef.current.sportType
-            ).catch((error) => {
-              logger.error('Failed to start tracking', error);
-              setTrackingState((s) => ({
-                ...s,
-                status: 'idle',
-                error: error.message,
-              }));
-            });
-            pendingStartRef.current = null;
-          }
+          // Start actual tracking OUTSIDE of state updater to avoid async issues
+          // Use setTimeout(0) to escape the state updater context
+          setTimeout(() => {
+            if (pendingStartRef.current) {
+              const { sessionId: id, sportType: type } = pendingStartRef.current;
+              pendingStartRef.current = null;
+
+              LiveTrackingService.startTracking(id, type).catch(async (error) => {
+                logger.error('Failed to start tracking', error);
+
+                // Reset BOTH local state AND service state on error
+                setTrackingState((s) => ({
+                  ...s,
+                  status: 'idle',
+                  error: error.message,
+                }));
+
+                // Force service cleanup to ensure it's in idle state for retry
+                try {
+                  await LiveTrackingService.discardTracking();
+                } catch (discardError) {
+                  logger.warn('Failed to discard after start error', discardError);
+                }
+              });
+            }
+          }, 0);
 
           return 0;
         }
-        return prev - 1;
+        return nextValue;
       });
     }, 1000);
   }, []);
@@ -274,6 +336,7 @@ export function useLiveTracking(): UseLiveTrackingReturn {
   return {
     trackingState: effectiveState,
     formattedMetrics,
+    countdownSeconds,
     startCountdown,
     cancelCountdown,
     pause,
@@ -281,6 +344,7 @@ export function useLiveTracking(): UseLiveTrackingReturn {
     stop,
     discard,
     checkReadiness,
+    resetToIdle,
   };
 }
 

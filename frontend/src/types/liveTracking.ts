@@ -175,6 +175,7 @@ export interface UseLiveTrackingReturn {
   // State
   trackingState: TrackingState;
   formattedMetrics: FormattedWorkoutMetrics;
+  countdownSeconds: number;
 
   // Actions
   startCountdown: (sessionId: string, sportType: string) => void;
@@ -183,6 +184,7 @@ export interface UseLiveTrackingReturn {
   resume: () => void;
   stop: () => Promise<TrackedWorkoutMetrics>;
   discard: () => void;
+  resetToIdle: () => Promise<void>;
 
   // Pre-checks
   checkReadiness: () => Promise<{

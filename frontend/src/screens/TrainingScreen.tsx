@@ -25,7 +25,6 @@ import { WelcomeHeader } from '../components/home/WelcomeHeader';
 import { ProgressSummary } from '../components/home/ProgressSummary';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { trainingService } from '../services/onboardingService';
-import { trainingService as enduranceTrainingService } from '../services/trainingService';
 import { reverseTransformTrainingPlan, transformUserProfileToPersonalInfo } from '../utils/trainingPlanTransformer';
 import { supabase } from '../config/supabase';
 import { useApiCallWithBanner } from '../hooks/useApiCallWithBanner';
@@ -73,6 +72,9 @@ const TrainingScreenContent: React.FC = () => {
     addExercise: addExerciseHook,
     addEnduranceSession: addEnduranceSessionHook,
     removeExercise: removeExerciseHook,
+    reopenEnduranceSession,
+    confirmReopenEnduranceSession,
+    cancelReopenEnduranceSession,
     SwapExerciseErrorBanner,
     CompleteTrainingErrorBanner
   } = useTraining();
@@ -214,37 +216,86 @@ const TrainingScreenContent: React.FC = () => {
   };
 
   // ========== Live Tracking Handlers ==========
+  // NOTE: Endurance sessions follow the same pattern as strength exercises:
+  // - Update local context immediately when tracking/import completes
+  // - Only persist to DB when the entire daily training is completed
+  // - On reopen, reset completed flag (metrics preserved in DB)
 
   const handleStartTracking = (enduranceSession: EnduranceSession) => {
     setTrackingSession(enduranceSession);
   };
 
+  /**
+   * Update endurance session in local state with tracked metrics
+   * This marks the session as completed locally but does NOT persist to DB yet
+   */
+  const updateEnduranceSessionLocally = (
+    sessionId: string,
+    metrics: TrackedWorkoutMetrics
+  ) => {
+    if (!trainingPlan) return;
+
+    const updatedPlan = {
+      ...trainingPlan,
+      weeklySchedules: trainingPlan.weeklySchedules.map(week => ({
+        ...week,
+        dailyTrainings: week.dailyTrainings.map(daily => ({
+          ...daily,
+          exercises: daily.exercises.map(exercise => {
+            // Check if this is the endurance session we're updating
+            const isTargetSession =
+              exercise.enduranceSession?.id === sessionId ||
+              exercise.id === sessionId ||
+              exercise.id === `endurance_${sessionId}`;
+
+            if (isTargetSession && exercise.enduranceSession) {
+              return {
+                ...exercise,
+                completed: true, // Mark as completed locally
+                enduranceSession: {
+                  ...exercise.enduranceSession,
+                  completed: true,
+                  actualDuration: metrics.actualDuration,
+                  actualDistance: metrics.actualDistance,
+                  averagePace: metrics.averagePace,
+                  averageSpeed: metrics.averageSpeed,
+                  averageHeartRate: metrics.averageHeartRate,
+                  maxHeartRate: metrics.maxHeartRate,
+                  minHeartRate: metrics.minHeartRate,
+                  elevationGain: metrics.elevationGain,
+                  elevationLoss: metrics.elevationLoss,
+                  calories: metrics.calories,
+                  cadence: metrics.cadence,
+                  dataSource: metrics.dataSource,
+                  healthWorkoutId: metrics.healthWorkoutId,
+                  startedAt: metrics.startedAt,
+                  completedAt: metrics.completedAt,
+                },
+              };
+            }
+            return exercise;
+          }),
+        })),
+      })),
+    };
+
+    // Update local context (this will trigger re-render with new state)
+    setTrainingPlan(updatedPlan);
+  };
+
   const handleTrackingComplete = async (metrics: TrackedWorkoutMetrics) => {
     if (!trackingSession) return;
 
-    try {
-      await enduranceTrainingService.updateEnduranceSessionWithTrackedData(
-        trackingSession.id,
-        metrics
-      );
+    // Update local state only - DB persistence happens when daily training is completed
+    updateEnduranceSessionLocally(trackingSession.id, metrics);
 
-      // Refresh training plan to show updated data
-      await refreshTrainingPlan();
+    logger.info('Endurance session updated locally with tracking data', {
+      sessionId: trackingSession.id,
+      duration: metrics.actualDuration,
+      distance: metrics.actualDistance,
+    });
 
-      logger.info('Endurance session updated with tracking data', {
-        sessionId: trackingSession.id,
-        duration: metrics.actualDuration,
-        distance: metrics.actualDistance,
-      });
-    } catch (error) {
-      logger.error('Failed to save tracked workout', error);
-      Alert.alert(
-        'Error Saving Workout',
-        'Your workout data could not be saved. Please try again.'
-      );
-    } finally {
-      setTrackingSession(null);
-    }
+    setTrackingSession(null);
   };
 
   const handleTrackingDismiss = () => {
@@ -258,30 +309,17 @@ const TrainingScreenContent: React.FC = () => {
   const handleHealthImportComplete = async (metrics: TrackedWorkoutMetrics) => {
     if (!healthImportSession) return;
 
-    try {
-      await enduranceTrainingService.updateEnduranceSessionWithTrackedData(
-        healthImportSession.id,
-        metrics
-      );
+    // Update local state only - DB persistence happens when daily training is completed
+    updateEnduranceSessionLocally(healthImportSession.id, metrics);
 
-      // Refresh training plan to show updated data
-      await refreshTrainingPlan();
+    logger.info('Endurance session updated locally with health import data', {
+      sessionId: healthImportSession.id,
+      duration: metrics.actualDuration,
+      distance: metrics.actualDistance,
+      dataSource: metrics.dataSource,
+    });
 
-      logger.info('Endurance session updated with health import data', {
-        sessionId: healthImportSession.id,
-        duration: metrics.actualDuration,
-        distance: metrics.actualDistance,
-        dataSource: metrics.dataSource,
-      });
-    } catch (error) {
-      logger.error('Failed to save imported workout', error);
-      Alert.alert(
-        'Error Saving Workout',
-        'Your workout data could not be saved. Please try again.'
-      );
-    } finally {
-      setHealthImportSession(null);
-    }
+    setHealthImportSession(null);
   };
 
   const handleHealthImportClose = () => {
@@ -529,6 +567,7 @@ const TrainingScreenContent: React.FC = () => {
           onReopenTraining={reopenTraining}
           onAddExercise={handleAddExercise}
           onRemoveExercise={handleRemoveExercise}
+          onReopenEnduranceSession={reopenEnduranceSession}
           onStartTracking={handleStartTracking}
           onImportFromHealth={handleImportFromHealth}
           useMetric={authState.userProfile?.weightUnit !== 'lbs'}
@@ -610,6 +649,19 @@ const TrainingScreenContent: React.FC = () => {
         onCancel={handleCancelRemoveExercise}
         confirmButtonColor={colors.primary}
         icon="trash"
+      />
+
+      {/* Reopen Endurance Session Confirmation Dialog */}
+      <ConfirmationDialog
+        visible={trainingState.showReopenEnduranceDialog}
+        title="Reopen Session"
+        message="Reopening this session will clear all tracked data (distance, duration, pace, heart rate, etc.). You will need to track or import the workout again. Are you sure?"
+        confirmText="Reopen"
+        cancelText="Cancel"
+        onConfirm={confirmReopenEnduranceSession}
+        onCancel={cancelReopenEnduranceSession}
+        confirmButtonColor={colors.primary}
+        icon="refresh"
       />
 
       {/* Live Tracking Modal - Full Screen */}

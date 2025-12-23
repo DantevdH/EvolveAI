@@ -139,7 +139,7 @@ EvolveAI.entitlements:
   </dict>
 </plist>
 
-#### 3. Live Endurance Session Tracking (Strava-like Experience)
+#### 3. Live Endurance Session Tracking (Strava-like Experience) ✅ COMPLETE
 **Complexity: Medium | Impact: Very High**
 
 Transform endurance sessions into a live workout tracking experience similar to Strava. Users can start/stop/pause tracking directly in the app, with GPS automatically recording distance, time, and route. Heart rate data is captured by reading from HealthKit/Google Fit in real-time during live tracking (if watch is actively syncing), or imported from completed workouts in Health/Google Fit. The **recommended approach** (like Strava) is to import completed workouts from Health/Google Fit, which provides the most reliable and complete heart rate data. This eliminates manual data entry and makes endurance tracking as engaging as strength training.
@@ -440,7 +440,10 @@ Support interval workouts by allowing multiple endurance sessions within a singl
 #### 13. Strava Integration (FREE TIER - Rate Limited)
 **Complexity: High | Impact: High**
 
-Connect to Strava API (free tier available with rate limits) to import activities, sync workouts, and optionally export completed sessions back to Strava. This taps into the largest endurance community and provides automatic data sync. Requires OAuth implementation, Strava API integration, activity mapping, and bidirectional sync logic. **Note**: Free tier may have rate limits; evaluate if limits are acceptable before implementation.
+Connect to Strava API (free tier available with rate limits) to import activities, sync workouts, and optionally export completed sessions back to Strava. This taps into the largest endurance community and provides automatic data sync. Requires OAuth implementation, Strava API integration, activity mapping, and bidirectional sync logic. 
+
+**Note**: This would also require to safe the GPS coordinates
+**Note**: Free tier may have rate limits; evaluate if limits are acceptable before implementation.
 
 
 #### 15. Garmin / Polar / Suunto Watch Integration (PAID - DEFERRED)
