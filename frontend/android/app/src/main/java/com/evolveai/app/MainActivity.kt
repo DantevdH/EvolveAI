@@ -1,4 +1,4 @@
-package com.anonymous.frontendexpo2
+package com.evolveai.app
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

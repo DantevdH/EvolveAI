@@ -1,4 +1,4 @@
-package com.anonymous.frontendexpo2
+package com.evolveai.app
 
 import android.app.Application
 import android.content.res.Configuration

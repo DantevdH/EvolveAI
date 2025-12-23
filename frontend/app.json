@@ -1,16 +1,16 @@
 {
   "expo": {
-    "name": "frontend-expo-2",
-    "slug": "frontend-expo-2",
+    "name": "EvolveAI",
+    "slug": "evolveai",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/evolve-logo.png",
-    "scheme": "frontendexpo2",
+    "scheme": "evolveai",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.frontendexpo2",
+      "bundleIdentifier": "com.evolveai.app",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "EvolveAI needs your location to track workouts with GPS.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "EvolveAI needs background location to continue tracking during workouts.",
@@ -25,7 +25,7 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.frontendexpo2",
+      "package": "com.evolveai.app",
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
@@ -60,6 +60,12 @@
           "locationWhenInUsePermission": "EvolveAI needs your location to track workouts.",
           "isAndroidBackgroundLocationEnabled": true,
           "isIosBackgroundLocationEnabled": true
+        }
+      ],
+      [
+        "react-native-health",
+        {
+          "isClinicalDataEnabled": false
         }
       ]
     ],

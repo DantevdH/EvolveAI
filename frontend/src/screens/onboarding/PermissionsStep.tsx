@@ -70,11 +70,25 @@ export const PermissionsStep: React.FC<PermissionsStepProps> = ({
 
   // Get health permission card status
   const getHealthStatus = useCallback((): PermissionStatus => {
-    if (!isHealthAvailable) return 'unavailable';
-    if (isHealthLoading) return 'loading';
-    if (isHealthGranted) return 'granted';
-    if (status.health.deniedAt) return 'requires_settings';
-    return 'not_requested';
+    const healthStatus = !isHealthAvailable 
+      ? 'unavailable' 
+      : isHealthLoading 
+        ? 'loading' 
+        : isHealthGranted 
+          ? 'granted' 
+          : status.health.deniedAt 
+            ? 'requires_settings' 
+            : 'not_requested';
+    
+    console.log('[PermissionsStep] Health status calculation:', {
+      isHealthAvailable,
+      isHealthLoading,
+      isHealthGranted,
+      deniedAt: status.health.deniedAt,
+      result: healthStatus,
+    });
+    
+    return healthStatus;
   }, [isHealthAvailable, isHealthLoading, isHealthGranted, status.health.deniedAt]);
 
   // Get location permission card status
@@ -108,14 +122,42 @@ export const PermissionsStep: React.FC<PermissionsStepProps> = ({
   }, [requestLocation, requestBackgroundLocation]);
 
   // Filter out background location errors - they're optional and often fail on simulators
+  // Also filter out technical developer errors that shouldn't be shown to users
   const shouldShowError = useCallback((errorMsg: string | null | undefined): boolean => {
     if (!errorMsg) return false;
     const lowerError = errorMsg.toLowerCase();
+    
     // Don't show errors about background location - it's optional
     // Check for common background location error patterns
-    return !lowerError.includes('background location') && 
-           !(lowerError.includes('always') && lowerError.includes('access')) &&
-           !(lowerError.includes('always') && lowerError.includes('settings'));
+    if (lowerError.includes('background location') || 
+        (lowerError.includes('always') && lowerError.includes('access')) ||
+        (lowerError.includes('always') && lowerError.includes('settings'))) {
+      return false;
+    }
+    
+    // Filter out technical developer errors that have been sanitized
+    // These should already be converted to user-friendly messages by PermissionsService,
+    // but we add an extra check here as a safety net
+    const technicalErrorPatterns = [
+      'com.apple.developer',
+      'error domain=',
+      'code=4',
+      'missing',
+      'entitlement',
+      'inithealthkit failed: error with healthkit authorization',
+    ];
+    
+    // If error contains technical patterns but hasn't been sanitized, don't show it
+    // (it means sanitization failed, so better to hide it than show technical details)
+    const hasTechnicalPattern = technicalErrorPatterns.some(pattern => 
+      lowerError.includes(pattern)
+    );
+    
+    // Only show if it doesn't have technical patterns (meaning it's user-friendly)
+    // OR if it's a user-friendly message that mentions the technical issue in a friendly way
+    return !hasTechnicalPattern || 
+           lowerError.includes('not available on this device') ||
+           lowerError.includes('please try again after updating');
   }, []);
 
   // Handle continue

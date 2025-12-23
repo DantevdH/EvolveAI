@@ -423,6 +423,33 @@ class HealthImportServiceImpl {
 
   // ==================== INITIALIZATION ====================
 
+  /**
+   * Convert technical HealthKit errors to user-friendly messages
+   */
+  private sanitizeHealthKitError(error: string): string {
+    const lowerError = error.toLowerCase();
+
+    // HealthKit entitlement errors
+    if (lowerError.includes('entitlement') || 
+        lowerError.includes('com.apple.developer.healthkit') ||
+        (lowerError.includes('missing') && lowerError.includes('healthkit'))) {
+      return 'Health data access is not available on this device. Please try again after updating the app.';
+    }
+
+    // HealthKit initialization errors
+    if (lowerError.includes('inithealthkit failed') || 
+        lowerError.includes('healthkit authorization')) {
+      // Check if it's an entitlement error
+      if (lowerError.includes('entitlement') || lowerError.includes('code=4')) {
+        return 'Health data access is not available on this device. Please try again after updating the app.';
+      }
+      return 'Unable to access Health data. Please check your device settings.';
+    }
+
+    // Return original error if no pattern matches
+    return error;
+  }
+
   private async initializeHealthKit(): Promise<void> {
     if (Platform.OS !== 'ios') return;
 
@@ -444,7 +471,8 @@ class HealthImportServiceImpl {
     return new Promise((resolve, reject) => {
       AppleHealthKit.initHealthKit(permissions, (error: string) => {
         if (error) {
-          reject(new Error(`HealthKit init failed: ${error}`));
+          const friendlyError = this.sanitizeHealthKitError(error);
+          reject(new Error(friendlyError));
           return;
         }
         this.isHealthKitInitialized = true;

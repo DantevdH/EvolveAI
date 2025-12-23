@@ -87,9 +87,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.anonymous.frontendexpo2'
+    namespace 'com.evolveai.app'
     defaultConfig {
-        applicationId 'com.anonymous.frontendexpo2'
+        applicationId 'com.evolveai.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

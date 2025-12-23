@@ -62,7 +62,16 @@ export function usePermissions(
 
   // Check health availability on mount
   useEffect(() => {
-    PermissionsService.isHealthAvailable().then(setIsHealthAvailable);
+    console.log('[usePermissions] Checking Health availability on mount...');
+    PermissionsService.isHealthAvailable()
+      .then((available) => {
+        console.log('[usePermissions] Health availability check result:', available);
+        setIsHealthAvailable(available);
+      })
+      .catch((error) => {
+        console.log('[usePermissions] Error checking Health availability:', error);
+        setIsHealthAvailable(false);
+      });
   }, []);
 
   // Always refresh from system on mount to get real permission status
