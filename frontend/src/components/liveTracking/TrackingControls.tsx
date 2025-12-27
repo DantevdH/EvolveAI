@@ -17,11 +17,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TrackingStatus } from '../../types/liveTracking';
+import { TrackingStatus, GPSSignalQuality } from '../../types/liveTracking';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/designSystem';
 
 interface TrackingControlsProps {
   status: TrackingStatus;
+  gpsSignal: GPSSignalQuality;
   onPause: () => void;
   onResume: () => void;
   onStop: () => void;
@@ -30,6 +31,7 @@ interface TrackingControlsProps {
 
 export const TrackingControls: React.FC<TrackingControlsProps> = ({
   status,
+  gpsSignal,
   onPause,
   onResume,
   onStop,
@@ -40,6 +42,14 @@ export const TrackingControls: React.FC<TrackingControlsProps> = ({
   const isPaused = status === 'paused' || status === 'auto_paused';
   const isTracking = status === 'tracking';
   const isStopping = status === 'stopping';
+
+  // Active session check
+  const hasActiveSession = status === 'tracking' || status === 'paused' || status === 'auto_paused';
+  
+  // Disable pause/stop when GPS is unavailable or no active session
+  // Discard is always enabled - user can discard at any time
+  const isGpsAvailable = gpsSignal.quality !== 'none';
+  const canPauseOrStop = hasActiveSession && isGpsAvailable;
 
   const handleStopPress = () => {
     Alert.alert(
@@ -94,23 +104,34 @@ export const TrackingControls: React.FC<TrackingControlsProps> = ({
     <View style={styles.container}>
       {/* Main Controls Row */}
       <View style={styles.mainControls}>
-        {/* Discard Button */}
+        {/* Discard Button - Always enabled */}
         <TouchableOpacity
           style={styles.secondaryButton}
           onPress={handleDiscardPress}
           activeOpacity={0.7}
+          accessible={true}
+          accessibilityLabel="Discard workout"
+          accessibilityHint="Double tap to discard this workout without saving"
+          accessibilityRole="button"
         >
           <Ionicons name="trash-outline" size={24} color={colors.error} />
         </TouchableOpacity>
 
-        {/* Pause/Resume Button (Primary) */}
+        {/* Pause/Resume Button (Primary) - Disabled when GPS unavailable or no active session */}
         <TouchableOpacity
           style={[
             styles.primaryButton,
             isPaused && styles.resumeButton,
+            !canPauseOrStop && styles.disabledButton,
           ]}
           onPress={isPaused ? onResume : onPause}
           activeOpacity={0.8}
+          disabled={!canPauseOrStop}
+          accessible={true}
+          accessibilityLabel={isPaused ? 'Resume workout' : 'Pause workout'}
+          accessibilityHint={isPaused ? 'Double tap to resume tracking' : 'Double tap to pause tracking'}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canPauseOrStop }}
         >
           <Ionicons
             name={isPaused ? 'play' : 'pause'}
@@ -119,15 +140,21 @@ export const TrackingControls: React.FC<TrackingControlsProps> = ({
           />
         </TouchableOpacity>
 
-        {/* Stop Button */}
+        {/* Stop Button - Disabled when GPS unavailable or no active session */}
         <TouchableOpacity
-          style={styles.secondaryButton}
+          style={[styles.secondaryButton, !canPauseOrStop && styles.disabledButton]}
           onPress={handleStopPress}
           onPressIn={() => setIsStopPressed(true)}
           onPressOut={() => setIsStopPressed(false)}
           activeOpacity={0.7}
+          disabled={!canPauseOrStop}
+          accessible={true}
+          accessibilityLabel="Finish workout"
+          accessibilityHint="Double tap to end and save your workout"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canPauseOrStop }}
         >
-          <Ionicons name="stop" size={24} color={colors.text} />
+          <Ionicons name="stop" size={24} color={canPauseOrStop ? colors.text : colors.muted} />
         </TouchableOpacity>
       </View>
 
@@ -186,6 +213,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  disabledButton: {
+    opacity: 0.4,
   },
   labelRow: {
     flexDirection: 'row',

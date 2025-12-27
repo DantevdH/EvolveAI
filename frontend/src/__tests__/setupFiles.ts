@@ -67,6 +67,19 @@ jest.mock('react-native', () => {
         start: jest.fn(),
       })),
     },
+    AppState: {
+      currentState: 'active',
+      addEventListener: jest.fn((event: string, handler: (state: string) => void) => {
+        return {
+          remove: jest.fn(),
+        };
+      }),
+      removeEventListener: jest.fn(),
+    },
+    Alert: {
+      alert: jest.fn(),
+      prompt: jest.fn(),
+    },
   };
 });
 

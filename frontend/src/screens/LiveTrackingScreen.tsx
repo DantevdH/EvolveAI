@@ -55,6 +55,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
     trackingState,
     formattedMetrics,
     countdownSeconds,
+    isCountingDown,
     startCountdown,
     cancelCountdown,
     pause,
@@ -94,11 +95,11 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
   useEffect(() => {
     return () => {
       // If screen unmounts during countdown, cancel it to prevent orphaned timers
-      if (countdownSeconds > 0) {
+      if (isCountingDown) {
         cancelCountdown();
       }
     };
-  }, [countdownSeconds, cancelCountdown]);
+  }, [isCountingDown, cancelCountdown]);
 
   // Auto-start countdown when screen mounts
   useEffect(() => {
@@ -153,7 +154,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
   };
 
   const handleBackPress = () => {
-    if (countdownSeconds > 0) {
+    if (isCountingDown) {
       handleCancelCountdown();
       return;
     }
@@ -276,13 +277,16 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
       }
     : null;
 
-  // Countdown overlay
-  if (countdownSeconds > 0) {
+  // Countdown overlay - use isCountingDown as the authoritative source
+  // This is a dedicated boolean flag that avoids race conditions with service state updates
+  if (isCountingDown) {
+    // Show the current countdown number, or 1 as fallback during transition
+    const displaySeconds = countdownSeconds > 0 ? countdownSeconds : 1;
     return (
       <>
         <StatusBar barStyle="light-content" />
         <CountdownOverlay
-          seconds={countdownSeconds}
+          seconds={displaySeconds}
           sportType={enduranceSession.sportType}
           onCancel={handleCancelCountdown}
         />
@@ -329,6 +333,7 @@ export const LiveTrackingScreen: React.FC<LiveTrackingScreenProps> = ({
       <View style={[styles.controlsContainer, { paddingBottom: insets.bottom }]}>
         <TrackingControls
           status={trackingState.status}
+          gpsSignal={trackingState.gpsSignal}
           onPause={handlePause}
           onResume={handleResume}
           onStop={handleStop}

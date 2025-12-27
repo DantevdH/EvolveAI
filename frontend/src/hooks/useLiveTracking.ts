@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Alert } from 'react-native';
 import * as Battery from 'expo-battery';
 import {
   TrackingState,
@@ -24,100 +25,47 @@ import {
 import { LiveTrackingService } from '../services/LiveTrackingService';
 import { useUserProfile } from './useUserProfile';
 import { logger } from '../utils/logger';
+import {
+  formatDuration,
+  formatDistance,
+  formatSpeed,
+  formatElevation,
+  formatSportSpecificPace,
+  formatStandardPace,
+} from '../utils/sportMetrics';
 
 // ==================== CONSTANTS ====================
 
 const COUNTDOWN_SECONDS = 3;
 
-// ==================== UNIT CONVERSION ====================
-
-/**
- * Format duration in seconds to "MM:SS" or "H:MM:SS"
- */
-function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${minutes}:${secs.toString().padStart(2, '0')}`;
-}
-
-/**
- * Format pace in seconds per km to "M:SS /km" or "/mi"
- */
-function formatPace(secondsPerKm: number | null, useMetric: boolean): string {
-  if (secondsPerKm === null || secondsPerKm <= 0 || !isFinite(secondsPerKm)) {
-    return '--:-- ' + (useMetric ? '/km' : '/mi');
-  }
-
-  // Convert to seconds per mile if imperial
-  const paceSeconds = useMetric ? secondsPerKm : secondsPerKm * 1.60934;
-  const minutes = Math.floor(paceSeconds / 60);
-  const seconds = Math.floor(paceSeconds % 60);
-
-  return `${minutes}:${seconds.toString().padStart(2, '0')} ${useMetric ? '/km' : '/mi'}`;
-}
-
-/**
- * Format distance in meters to "X.XX km" or "X.XX mi"
- */
-function formatDistance(meters: number, useMetric: boolean): string {
-  if (meters < 0) return useMetric ? '0.00 km' : '0.00 mi';
-
-  if (useMetric) {
-    const km = meters / 1000;
-    return `${km.toFixed(2)} km`;
-  } else {
-    const miles = meters / 1609.34;
-    return `${miles.toFixed(2)} mi`;
-  }
-}
-
-/**
- * Format speed in km/h to "X.X km/h" or "X.X mph"
- */
-function formatSpeed(kmh: number | null, useMetric: boolean): string {
-  if (kmh === null || kmh < 0) return useMetric ? '0.0 km/h' : '0.0 mph';
-
-  if (useMetric) {
-    return `${kmh.toFixed(1)} km/h`;
-  } else {
-    const mph = kmh / 1.60934;
-    return `${mph.toFixed(1)} mph`;
-  }
-}
-
-/**
- * Format elevation in meters to "+X m" or "+X ft"
- */
-function formatElevation(meters: number, useMetric: boolean, prefix: '+' | '-' = '+'): string {
-  if (useMetric) {
-    return `${prefix}${Math.round(meters)} m`;
-  } else {
-    const feet = meters * 3.28084;
-    return `${prefix}${Math.round(feet)} ft`;
-  }
-}
-
 // ==================== HOOK ====================
 
 export function useLiveTracking(): UseLiveTrackingReturn {
-  // Get user's metric preference
-  const { userProfile } = useUserProfile();
-  const useMetric = userProfile?.useMetric ?? true;
+  // Get user's metric preference and profile
+  const { userProfile, useMetric } = useUserProfile();
 
   // Tracking state from service
   const [trackingState, setTrackingState] = useState<TrackingState>(
     LiveTrackingService.getState()
   );
 
-  // Countdown state
+  // Countdown state - completely independent from service state
+  // Using a ref to track if we're in countdown mode to avoid race conditions with service updates
   const [countdownSeconds, setCountdownSeconds] = useState<number>(0);
+  const [isCountingDown, setIsCountingDown] = useState<boolean>(false);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingStartRef = useRef<{ sessionId: string; sportType: string } | null>(null);
+
+  // Set user weight for calorie estimation
+  useEffect(() => {
+    if (userProfile?.weight) {
+      // Convert to kg if weight is in lbs
+      const weightKg = userProfile.weightUnit === 'lbs'
+        ? userProfile.weight / 2.205
+        : userProfile.weight;
+      LiveTrackingService.setUserWeight(weightKg);
+    }
+  }, [userProfile?.weight, userProfile?.weightUnit]);
 
   // Subscribe to service state changes
   useEffect(() => {
@@ -133,18 +81,29 @@ export function useLiveTracking(): UseLiveTrackingReturn {
     };
   }, []);
 
-  // Format metrics based on current state and unit preference
+  // Format metrics based on current state, unit preference, and sport type
   const formattedMetrics: FormattedWorkoutMetrics = useMemo(() => {
+    const sportType = trackingState.sportType || 'other';
+
     return {
       duration: formatDuration(trackingState.elapsedSeconds),
       distance: formatDistance(trackingState.distanceMeters, useMetric),
-      averagePace: formatPace(trackingState.averagePaceSecondsPerKm, useMetric),
-      currentPace: formatPace(trackingState.currentPaceSecondsPerKm, useMetric),
+      // Use sport-specific pace formatting (swimming: /100m, rowing: /500m)
+      averagePace: formatSportSpecificPace(
+        trackingState.averagePaceSecondsPerKm,
+        sportType,
+        useMetric
+      ),
+      currentPace: formatSportSpecificPace(
+        trackingState.currentPaceSecondsPerKm,
+        sportType,
+        useMetric
+      ),
       averageSpeed: formatSpeed(trackingState.averageSpeedKmh, useMetric),
       elevationGain: formatElevation(trackingState.elevationGainMeters, useMetric, '+'),
       elevationLoss: formatElevation(trackingState.elevationLossMeters, useMetric, '-'),
-      heartRate: null, // Not tracked in live mode (per decision)
-      calories: null,  // Will be calculated at end
+      heartRate: null, // Not tracked in live mode (requires health app)
+      calories: null, // Not tracked in live mode (requires health app)
       cadence: null,
     };
   }, [trackingState, useMetric]);
@@ -158,16 +117,8 @@ export function useLiveTracking(): UseLiveTrackingReturn {
       countdownIntervalRef.current = null;
     }
     setCountdownSeconds(0);
+    setIsCountingDown(false);
     pendingStartRef.current = null;
-
-    // Reset local state
-    setTrackingState((s) => ({
-      ...s,
-      status: 'idle',
-      enduranceSessionId: null,
-      sportType: null,
-      error: null,
-    }));
 
     // Force service cleanup to ensure consistent state
     try {
@@ -182,6 +133,7 @@ export function useLiveTracking(): UseLiveTrackingReturn {
   const startCountdown = useCallback((sessionId: string, sportType: string) => {
     // Guard: If already counting down or tracking, don't start again
     const currentServiceState = LiveTrackingService.getState();
+
     if (
       currentServiceState.status === 'tracking' ||
       currentServiceState.status === 'paused' ||
@@ -194,37 +146,34 @@ export function useLiveTracking(): UseLiveTrackingReturn {
     }
 
     // Guard: If countdown already in progress, don't start again
-    if (countdownIntervalRef.current) {
-      logger.warn('Countdown already in progress');
+    if (countdownIntervalRef.current || isCountingDown) {
+      logger.warn('Countdown already in progress - ignoring duplicate call');
       return;
     }
 
     // Store pending start info
     pendingStartRef.current = { sessionId, sportType };
 
-    // Update state to countdown
-    setTrackingState((prev) => ({
-      ...prev,
-      status: 'countdown',
-      enduranceSessionId: sessionId,
-      sportType,
-      error: null,
-    }));
-
+    // Mark countdown as active BEFORE setting the seconds
+    // This ensures the UI knows we're counting down even before React batches the state update
+    setIsCountingDown(true);
     setCountdownSeconds(COUNTDOWN_SECONDS);
 
     // Start countdown - SINGLE source of truth
-    // Flow: Show 3 for 1s → Show 2 for 1s → Show 1 for 1s → Start tracking
+    // Flow: Show 3 for 1s → Show 2 for 1s → Show 1 for 1s → then start tracking
     countdownIntervalRef.current = setInterval(() => {
       setCountdownSeconds((prev) => {
-        const nextValue = prev - 1;
-
-        if (nextValue <= 0) {
+        // When prev is 1, we decrement to 0 and START tracking
+        // This means 1 was shown for a full second before this tick
+        if (prev <= 1) {
           // Countdown complete - clear interval
           if (countdownIntervalRef.current) {
             clearInterval(countdownIntervalRef.current);
             countdownIntervalRef.current = null;
           }
+
+          // Mark countdown as complete
+          setIsCountingDown(false);
 
           // Start actual tracking OUTSIDE of state updater to avoid async issues
           // Use setTimeout(0) to escape the state updater context
@@ -236,12 +185,22 @@ export function useLiveTracking(): UseLiveTrackingReturn {
               LiveTrackingService.startTracking(id, type).catch(async (error) => {
                 logger.error('Failed to start tracking', error);
 
-                // Reset BOTH local state AND service state on error
-                setTrackingState((s) => ({
-                  ...s,
-                  status: 'idle',
-                  error: error.message,
-                }));
+                // Reset state on error
+                setIsCountingDown(false);
+
+                // Show user-friendly error alert
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                let userMessage = 'Unable to start tracking. ';
+
+                if (errorMessage.toLowerCase().includes('permission')) {
+                  userMessage += 'Please enable location permissions in Settings.';
+                } else if (errorMessage.toLowerCase().includes('location')) {
+                  userMessage += 'Please ensure location services are enabled.';
+                } else {
+                  userMessage += 'Please try again.';
+                }
+
+                Alert.alert('Tracking Error', userMessage, [{ text: 'OK' }]);
 
                 // Force service cleanup to ensure it's in idle state for retry
                 try {
@@ -255,10 +214,10 @@ export function useLiveTracking(): UseLiveTrackingReturn {
 
           return 0;
         }
-        return nextValue;
+        return prev - 1;
       });
     }, 1000);
-  }, []);
+  }, [isCountingDown]);
 
   const cancelCountdown = useCallback(() => {
     if (countdownIntervalRef.current) {
@@ -267,12 +226,7 @@ export function useLiveTracking(): UseLiveTrackingReturn {
     }
     pendingStartRef.current = null;
     setCountdownSeconds(0);
-    setTrackingState((prev) => ({
-      ...prev,
-      status: 'idle',
-      enduranceSessionId: null,
-      sportType: null,
-    }));
+    setIsCountingDown(false);
   }, []);
 
   // ==================== TRACKING CONTROLS ====================
@@ -327,16 +281,18 @@ export function useLiveTracking(): UseLiveTrackingReturn {
 
   // ==================== RETURN ====================
 
-  // Override status if in countdown
+  // Override status if in countdown - use isCountingDown as the authoritative source
+  // This avoids race conditions where trackingState might be overwritten by service updates
   const effectiveState: TrackingState = {
     ...trackingState,
-    status: countdownSeconds > 0 ? 'countdown' : trackingState.status,
+    status: isCountingDown ? 'countdown' : trackingState.status,
   };
 
   return {
     trackingState: effectiveState,
     formattedMetrics,
     countdownSeconds,
+    isCountingDown,
     startCountdown,
     cancelCountdown,
     pause,
@@ -349,5 +305,13 @@ export function useLiveTracking(): UseLiveTrackingReturn {
 }
 
 // ==================== UTILITY EXPORTS ====================
+// Re-export formatting functions from sportMetrics utility
 
-export { formatDuration, formatPace, formatDistance, formatSpeed, formatElevation };
+export {
+  formatDuration,
+  formatDistance,
+  formatSpeed,
+  formatElevation,
+  formatStandardPace,
+  formatSportSpecificPace,
+} from '../utils/sportMetrics';

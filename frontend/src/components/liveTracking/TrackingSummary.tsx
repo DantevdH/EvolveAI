@@ -1,8 +1,15 @@
 /**
  * TrackingSummary - Post-workout summary screen
  *
- * Shows workout metrics after tracking ends.
- * Allows user to save or discard the workout.
+ * Sport-specific summary display:
+ * - Main metric: Pace/Speed/Time based on sport type
+ * - Secondary metrics: Sport-relevant metrics + health data if available
+ *
+ * Key features:
+ * - Shows HR and calories only if available (from health app import)
+ * - Shows elevation only for relevant sports (or if imported from health app)
+ * - Swimming shows pace as /100m, Rowing as /500m
+ * - Cycling shows speed instead of pace
  */
 
 import React from 'react';
@@ -18,6 +25,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { TrackedWorkoutMetrics, FormattedWorkoutMetrics } from '../../types/liveTracking';
 import { colors, spacing, typography, borderRadius, shadows } from '../../constants/designSystem';
 import { SPORT_ICONS } from '../../constants/sportIcons';
+import {
+  getMainMetric,
+  getSecondaryMetricsForSummary,
+  formatSportNameShort,
+  getMetricDisplayInfo,
+  MetricKey,
+} from '../../utils/sportMetrics';
 
 interface TrackingSummaryProps {
   metrics: TrackedWorkoutMetrics;
@@ -37,22 +51,21 @@ export const TrackingSummary: React.FC<TrackingSummaryProps> = ({
   isSaving,
 }) => {
   const sportIcon = SPORT_ICONS[sportType] || SPORT_ICONS.other;
+  const mainMetricType = getMainMetric(sportType);
 
-  const formatSportName = (type: string): string => {
-    const names: Record<string, string> = {
-      running: 'Run',
-      cycling: 'Ride',
-      swimming: 'Swim',
-      rowing: 'Row',
-      hiking: 'Hike',
-      walking: 'Walk',
-      elliptical: 'Elliptical Session',
-      stair_climbing: 'Stair Climb',
-      jump_rope: 'Jump Rope Session',
-      other: 'Workout',
-    };
-    return names[type] || 'Workout';
-  };
+  // Determine what data is available
+  const hasHeartRate = metrics.averageHeartRate !== null && metrics.averageHeartRate > 0;
+  const hasCalories = metrics.calories !== null && metrics.calories > 0;
+  const hasElevation =
+    (metrics.elevationGain !== null && metrics.elevationGain > 0) ||
+    (metrics.elevationLoss !== null && Math.abs(metrics.elevationLoss || 0) > 0);
+
+  const secondaryMetrics = getSecondaryMetricsForSummary(
+    sportType,
+    hasHeartRate,
+    hasCalories,
+    hasElevation
+  );
 
   const formatDate = (date: Date): string => {
     return date.toLocaleDateString([], {
@@ -68,6 +81,42 @@ export const TrackingSummary: React.FC<TrackingSummaryProps> = ({
     return `${formatTime(start)} - ${formatTime(end)}`;
   };
 
+  // Get main metric display based on sport type
+  const getMainMetricDisplay = (): { value: string; label: string } => {
+    switch (mainMetricType) {
+      case 'pace':
+        return { value: formattedMetrics.averagePace, label: 'Avg Pace' };
+      case 'speed':
+        return { value: formattedMetrics.averageSpeed, label: 'Avg Speed' };
+      case 'time':
+        return { value: formattedMetrics.duration, label: 'Duration' };
+    }
+  };
+
+  // Get secondary metric value by key
+  const getSecondaryMetricValue = (key: MetricKey): string | null => {
+    switch (key) {
+      case 'duration':
+        return formattedMetrics.duration;
+      case 'distance':
+        return formattedMetrics.distance;
+      case 'elevation':
+        return formattedMetrics.elevationGain;
+      case 'pace':
+        return formattedMetrics.averagePace;
+      case 'speed':
+        return formattedMetrics.averageSpeed;
+      case 'heartRate':
+        return metrics.averageHeartRate ? `${metrics.averageHeartRate} bpm` : null;
+      case 'calories':
+        return metrics.calories ? `${metrics.calories} kcal` : null;
+      default:
+        return null;
+    }
+  };
+
+  const mainMetricDisplay = getMainMetricDisplay();
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -80,61 +129,90 @@ export const TrackingSummary: React.FC<TrackingSummaryProps> = ({
           <View style={styles.iconContainer}>
             <Ionicons name={sportIcon} size={32} color={colors.primary} />
           </View>
-          <Text style={styles.title}>{formatSportName(sportType)}</Text>
+          <Text style={styles.title}>{formatSportNameShort(sportType)}</Text>
           <Text style={styles.date}>{formatDate(metrics.startedAt)}</Text>
           <Text style={styles.timeRange}>
             {formatTimeRange(metrics.startedAt, metrics.completedAt)}
           </Text>
         </View>
 
-        {/* Primary Stats */}
+        {/* Primary Stats - Main Metric + Distance (if applicable) */}
         <View style={styles.primaryStats}>
+          {/* Main metric (pace/speed/time based on sport) */}
           <View style={styles.primaryStatItem}>
-            <Text style={styles.primaryStatValue}>{formattedMetrics.duration}</Text>
-            <Text style={styles.primaryStatLabel}>Duration</Text>
+            <Text style={styles.primaryStatValue}>{mainMetricDisplay.value}</Text>
+            <Text style={styles.primaryStatLabel}>{mainMetricDisplay.label}</Text>
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.primaryStatItem}>
-            <Text style={styles.primaryStatValue}>{formattedMetrics.distance}</Text>
-            <Text style={styles.primaryStatLabel}>Distance</Text>
-          </View>
+
+          {/* Show distance for sports that track it */}
+          {mainMetricType !== 'time' && (
+            <>
+              <View style={styles.statDivider} />
+              <View style={styles.primaryStatItem}>
+                <Text style={styles.primaryStatValue}>{formattedMetrics.distance}</Text>
+                <Text style={styles.primaryStatLabel}>Distance</Text>
+              </View>
+            </>
+          )}
+
+          {/* For time-only sports, show duration prominently (already shown as main) */}
+          {mainMetricType === 'time' && metrics.actualDistance > 0 && (
+            <>
+              <View style={styles.statDivider} />
+              <View style={styles.primaryStatItem}>
+                <Text style={styles.primaryStatValue}>{formattedMetrics.distance}</Text>
+                <Text style={styles.primaryStatLabel}>Distance</Text>
+              </View>
+            </>
+          )}
         </View>
 
         {/* Secondary Stats Grid */}
-        <View style={styles.statsGrid}>
-          <StatCard
-            icon="speedometer-outline"
-            label="Avg Pace"
-            value={formattedMetrics.averagePace}
-          />
-          <StatCard
-            icon="flash-outline"
-            label="Avg Speed"
-            value={formattedMetrics.averageSpeed}
-          />
-          <StatCard
-            icon="trending-up-outline"
-            label="Elevation Gain"
-            value={formattedMetrics.elevationGain}
-          />
-          <StatCard
-            icon="trending-down-outline"
-            label="Elevation Loss"
-            value={formattedMetrics.elevationLoss}
-          />
-          {metrics.calories && (
-            <StatCard
-              icon="flame-outline"
-              label="Calories"
-              value={`${metrics.calories} kcal`}
-            />
-          )}
-        </View>
+        {secondaryMetrics.length > 0 && (
+          <View style={styles.statsGrid}>
+            {secondaryMetrics.map((metricKey) => {
+              // Skip metrics already shown in primary stats
+              if (metricKey === 'distance') return null;
+              if (metricKey === 'duration' && mainMetricType === 'time') return null;
+
+              const value = getSecondaryMetricValue(metricKey);
+              if (!value) return null;
+
+              const info = getMetricDisplayInfo(metricKey);
+
+              return (
+                <StatCard
+                  key={metricKey}
+                  icon={info.icon}
+                  label={info.label}
+                  value={value}
+                />
+              );
+            })}
+
+            {/* Always show elevation loss if we have elevation gain */}
+            {hasElevation && formattedMetrics.elevationLoss && (
+              <StatCard
+                icon="trending-down-outline"
+                label="Elevation Loss"
+                value={formattedMetrics.elevationLoss}
+              />
+            )}
+          </View>
+        )}
 
         {/* Data Source Badge */}
         <View style={styles.sourceBadge}>
           <Ionicons name="location" size={14} color={colors.success} />
-          <Text style={styles.sourceText}>Tracked with GPS</Text>
+          <Text style={styles.sourceText}>
+            {metrics.dataSource === 'live_tracking'
+              ? 'Tracked with GPS'
+              : metrics.dataSource === 'healthkit'
+                ? 'Imported from Apple Health'
+                : metrics.dataSource === 'google_fit'
+                  ? 'Imported from Google Fit'
+                  : 'Manual entry'}
+          </Text>
         </View>
       </ScrollView>
 

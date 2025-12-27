@@ -3,7 +3,7 @@
  * Main orchestrator for individual exercise with sets/reps tracking (Quest-style)
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { colors, createColorWithOpacity } from '../../../constants/colors';
 import { ExerciseRowProps } from '../../../types/training';
@@ -36,7 +36,18 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
   onImportFromHealth,
   useMetric = true,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  // Display helpers
+  const isEndurance = !!exercise.exerciseId?.startsWith('endurance_') || !!exercise.enduranceSession;
+
+  // Endurance sessions are always expanded, strength training starts collapsed
+  const [isExpanded, setIsExpanded] = useState(isEndurance);
+
+  // Ensure endurance sessions stay expanded
+  useEffect(() => {
+    if (isEndurance) {
+      setIsExpanded(true);
+    }
+  }, [isEndurance]);
 
   const handleSetUpdate = async (setIndex: number, reps: number, weight: number) => {
     try {
@@ -75,11 +86,11 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
   };
 
   const toggleExpanded = () => {
-    setIsExpanded(!isExpanded);
+    // Endurance sessions are always expanded, don't allow collapsing
+    if (!isEndurance) {
+      setIsExpanded(!isExpanded);
+    }
   };
-
-  // Display helpers
-  const isEndurance = !!exercise.exerciseId?.startsWith('endurance_');
   const displayName = isEndurance
     ? (exercise.enduranceSession?.name || (exercise as any)?.name || 'Endurance Session')
     : (exercise.exercise?.name || 'Exercise');
@@ -149,8 +160,8 @@ const ExerciseRow: React.FC<ExerciseRowProps> = ({
                   enduranceSession={exercise.enduranceSession}
                   useMetric={useMetric}
                 />
-                {/* Tracking actions or metrics for endurance sessions */}
-                {exercise.enduranceSession && onStartTracking && onImportFromHealth && (
+                {/* Tracking actions or metrics for endurance sessions - always render if session exists */}
+                {exercise.enduranceSession && (
                   <EnduranceTrackingActions
                     enduranceSession={exercise.enduranceSession}
                     onStartTracking={onStartTracking}

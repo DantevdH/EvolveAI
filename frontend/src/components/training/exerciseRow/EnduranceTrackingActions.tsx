@@ -16,8 +16,8 @@ import { getZoneBadgeStyle, getZoneLabel } from '../../../utils/heartRateZoneUti
 
 interface EnduranceTrackingActionsProps {
   enduranceSession: EnduranceSession;
-  onStartTracking: () => void;
-  onImportFromHealth: () => void;
+  onStartTracking?: () => void;
+  onImportFromHealth?: () => void;
   isLocked?: boolean;
   useMetric?: boolean;
 }
@@ -53,7 +53,7 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
 
   // Debounced start tracking handler
   const handleStartTracking = useCallback(() => {
-    if (isStartingTracking) return;
+    if (isStartingTracking || !onStartTracking) return;
     setIsStartingTracking(true);
     onStartTracking();
     // Re-enable after 1 second (enough time for modal to open)
@@ -62,7 +62,7 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
 
   // Debounced import handler
   const handleImportFromHealth = useCallback(() => {
-    if (isImporting) return;
+    if (isImporting || !onImportFromHealth) return;
     setIsImporting(true);
     onImportFromHealth();
     // Re-enable after 1 second
@@ -252,12 +252,56 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
     );
   }
 
-  // If not completed and locked, don't show anything
-  if (isLocked) {
-    return null;
+  // Helper function to render read-only planned session info (volume and zone)
+  const renderReadOnlyPlannedInfo = () => {
+    const sportIconName = getSportIcon(enduranceSession.sportType);
+    const zone = enduranceSession.heartRateZone || 1;
+    const zoneStyle = getZoneBadgeStyle(zone);
+    const zoneLabel = getZoneLabel(zone);
+    const trainingVolume = enduranceSession.trainingVolume;
+    const unit = enduranceSession.unit || '';
+
+    return (
+      <View style={styles.container}>
+        {/* Sport Icon */}
+        <View style={styles.sportIconContainer}>
+          <View style={styles.sportIconCircle}>
+            <Ionicons name={sportIconName as any} size={28} color={colors.primary} />
+          </View>
+        </View>
+
+        {/* Volume and Zone Row */}
+        <View style={styles.volumeZoneRow}>
+          {/* Volume */}
+          <View style={styles.volumeContainer}>
+            <View style={styles.volumeIconContainer}>
+              <Ionicons name="bar-chart-outline" size={16} color={colors.primary} />
+            </View>
+            <View style={styles.volumeTextContainer}>
+              <Text style={styles.volumeLabel}>VOLUME</Text>
+              <Text style={styles.volumeValue}>
+                {trainingVolume !== undefined && trainingVolume !== null
+                  ? `${trainingVolume} ${unit}`
+                  : 'N/A'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Zone Badge */}
+          <View style={[styles.zoneBadge, { backgroundColor: zoneStyle.backgroundColor }]}>
+            <Text style={[styles.zoneLabel, { color: zoneStyle.color }]}>{zoneLabel}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  // If not completed and (locked OR missing callbacks), show read-only planned session info
+  if (!enduranceSession.completed && (isLocked || !onStartTracking || !onImportFromHealth)) {
+    return renderReadOnlyPlannedInfo();
   }
 
-  // If not completed, show sport logo, volume, zone, and action buttons
+  // If not completed and has callbacks, show sport logo, volume, zone, and action buttons
   const sportIconName = getSportIcon(enduranceSession.sportType);
   const zone = enduranceSession.heartRateZone || 1;
   const zoneStyle = getZoneBadgeStyle(zone);

@@ -148,11 +148,14 @@ class HealthImportServiceImpl {
       const options: HealthActivityOptions = {
         startDate: start.toISOString(),
         endDate: end.toISOString(),
-        type: 'Workout',
+        // Use string literal 'Workout' as HealthActivity enum may not be properly exported
+        type: 'Workout' as any,
       };
 
+      // Type assertion needed: getSamples expects HealthInputOptions, but HealthActivityOptions
+      // is what we need for workout queries. The runtime API accepts this.
       AppleHealthKit.getSamples(
-        options,
+        options as any,
         (error: any, results: HealthValue[]) => {
           if (error) {
             reject(new Error(`HealthKit query failed: ${error}`));

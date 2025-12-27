@@ -42,11 +42,11 @@ const LOCATION_CONFIG = {
   },
 };
 
-// Auto-pause settings
+// Auto-pause settings (tuned for real-world use)
 const AUTO_PAUSE = {
-  speedThreshold: 0.5,       // m/s - below this speed, consider stopped
+  speedThreshold: 0.8,       // m/s (~2.9 km/h) - below this speed, consider stopped
   durationThreshold: 5000,   // ms - must be below speed for this long to auto-pause
-  resumeSpeedThreshold: 1.0, // m/s - above this speed, auto-resume
+  resumeSpeedThreshold: 1.2, // m/s (~4.3 km/h) - above this speed, auto-resume
 };
 
 // GPS signal quality thresholds (meters)
@@ -61,7 +61,13 @@ const GPS_QUALITY = {
 const MIN_DISTANCE_THRESHOLD = 2; // meters
 
 // Pace smoothing window (number of recent segments to average)
-const PACE_SMOOTHING_WINDOW = 5;
+const PACE_SMOOTHING_WINDOW = 10; // ~10 seconds of data for smoother pace
+
+// Elevation filter threshold (GPS altitude noise is typically ±5-20m)
+const ELEVATION_THRESHOLD = 3; // meters - only count changes >= 3m
+
+// Minimum speed for pace calculation to avoid division issues
+const MIN_SPEED_FOR_PACE = 0.1; // m/s
 
 // ==================== HAVERSINE FORMULA ====================
 
@@ -107,9 +113,20 @@ class LiveTrackingServiceImpl {
   private recentSpeeds: number[] = [];     // For pace smoothing
   private lastMovementTime: number = 0;    // For auto-pause detection
   private previousAltitude: number | null = null;
+  private userWeightKg: number = 70;       // Default weight, can be updated
 
   constructor() {
     this.state = this.getInitialState();
+  }
+
+  /**
+   * Set user weight for more accurate calorie estimation
+   * @param weightKg Weight in kilograms
+   */
+  setUserWeight(weightKg: number): void {
+    if (weightKg > 0 && weightKg < 500) {
+      this.userWeightKg = weightKg;
+    }
   }
 
   private getInitialState(): TrackingState {
@@ -152,7 +169,7 @@ class LiveTrackingServiceImpl {
         accuracy: Location.Accuracy.High,
       });
 
-      return this.getSignalQuality(location.coords.accuracy);
+      return this.getSignalQuality(location.coords.accuracy ?? Infinity);
     } catch (error) {
       logger.error('GPS availability check failed', error);
       return { accuracy: Infinity, quality: 'none' };
@@ -282,6 +299,9 @@ class LiveTrackingServiceImpl {
     await this.cleanup();
 
     const completedAt = new Date();
+    // Use startedAt if available, otherwise fall back to calculating from elapsed time
+    const startedAt = this.state.startedAt ?? new Date(completedAt.getTime() - (this.state.elapsedSeconds * 1000));
+
     const metrics: TrackedWorkoutMetrics = {
       actualDuration: this.state.elapsedSeconds,
       actualDistance: this.state.distanceMeters,
@@ -296,7 +316,7 @@ class LiveTrackingServiceImpl {
       cadence: null,  // Would require accelerometer
       dataSource: 'live_tracking',
       healthWorkoutId: null,
-      startedAt: this.state.startedAt!,
+      startedAt,
       completedAt,
     };
 
@@ -515,16 +535,19 @@ class LiveTrackingServiceImpl {
     // Calculate smoothed current speed
     const smoothedSpeed = this.recentSpeeds.reduce((a, b) => a + b, 0) / this.recentSpeeds.length;
 
-    // Convert to pace (seconds per km) - only if moving
-    if (smoothedSpeed > 0.5) {
+    // Convert to pace (seconds per km) - only if moving fast enough to calculate
+    if (smoothedSpeed > MIN_SPEED_FOR_PACE) {
       this.state.currentPaceSecondsPerKm = Math.round(1000 / smoothedSpeed);
     }
 
     // Calculate average speed/pace from total distance and time
     if (this.state.elapsedSeconds > 0 && this.state.distanceMeters > 0) {
       const avgSpeedMps = this.state.distanceMeters / this.state.elapsedSeconds;
-      this.state.averageSpeedKmh = (avgSpeedMps * 3600) / 1000;
-      this.state.averagePaceSecondsPerKm = Math.round(1000 / avgSpeedMps);
+      // Only calculate pace if moving fast enough (avoid Infinity/huge numbers)
+      if (avgSpeedMps > MIN_SPEED_FOR_PACE) {
+        this.state.averageSpeedKmh = (avgSpeedMps * 3600) / 1000;
+        this.state.averagePaceSecondsPerKm = Math.round(1000 / avgSpeedMps);
+      }
     }
   }
 
@@ -536,8 +559,8 @@ class LiveTrackingServiceImpl {
 
     const elevationChange = altitude - this.previousAltitude;
 
-    // Only count significant changes (filter noise)
-    if (Math.abs(elevationChange) >= 1) {
+    // Only count significant changes (filter GPS noise which is typically ±5-20m)
+    if (Math.abs(elevationChange) >= ELEVATION_THRESHOLD) {
       if (elevationChange > 0) {
         this.state.elevationGainMeters += elevationChange;
       } else {
@@ -606,14 +629,13 @@ class LiveTrackingServiceImpl {
   }
 
   private estimateCalories(): number | null {
-    // Basic calorie estimation based on duration and sport type
-    // This is a rough estimate - more accurate would use HR and user weight
+    // Basic calorie estimation based on duration, sport type, and user weight
+    // Uses MET (Metabolic Equivalent of Task) formula
     if (this.state.elapsedSeconds < 60) return null;
 
     const minutes = this.state.elapsedSeconds / 60;
-    const distanceKm = this.state.distanceMeters / 1000;
 
-    // MET values by sport type (approximate)
+    // MET values by sport type (approximate, based on Compendium of Physical Activities)
     const metValues: Record<string, number> = {
       running: 10,
       cycling: 8,
@@ -628,10 +650,10 @@ class LiveTrackingServiceImpl {
     };
 
     const met = metValues[this.state.sportType || 'other'] || 6;
-    const assumedWeightKg = 70; // Would be better with actual user weight
 
     // Calories = MET × weight(kg) × time(hours)
-    const calories = met * assumedWeightKg * (minutes / 60);
+    // Uses actual user weight if set via setUserWeight()
+    const calories = met * this.userWeightKg * (minutes / 60);
 
     return Math.round(calories);
   }
@@ -686,12 +708,19 @@ export function defineBackgroundLocationTask(): void {
     if (data) {
       const { locations } = data as { locations: Location.LocationObject[] };
       if (locations && locations.length > 0) {
-        // Process the most recent location
-        const location = locations[locations.length - 1];
-
-        // The service handles this via the subscription,
-        // but in background mode we may need to process directly
-        // This is handled by the foreground service keeping the process alive
+        // Process each location update in background mode
+        // The service singleton persists across foreground/background transitions
+        for (const location of locations) {
+          // Only process if we're actively tracking
+          const currentState = LiveTrackingService.getState();
+          if (currentState.status === 'tracking') {
+            // The handleLocationUpdate method is private, so we trigger via the subscription
+            // by updating the location directly through the service's location handler
+            // Note: The foreground subscription handles this, but in pure background mode
+            // we need to manually trigger the update
+            (LiveTrackingService as any).handleLocationUpdate(location);
+          }
+        }
       }
     }
   });

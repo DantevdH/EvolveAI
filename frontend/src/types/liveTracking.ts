@@ -176,6 +176,7 @@ export interface UseLiveTrackingReturn {
   trackingState: TrackingState;
   formattedMetrics: FormattedWorkoutMetrics;
   countdownSeconds: number;
+  isCountingDown: boolean;
 
   // Actions
   startCountdown: (sessionId: string, sportType: string) => void;
@@ -209,6 +210,31 @@ export interface UseHealthImportReturn {
   isAvailable: boolean;
 }
 
+// ==================== SPORT METRIC TYPES ====================
+
+export type SportType =
+  | 'running'
+  | 'cycling'
+  | 'swimming'
+  | 'rowing'
+  | 'hiking'
+  | 'walking'
+  | 'elliptical'
+  | 'stair_climbing'
+  | 'jump_rope'
+  | 'other';
+
+export type MainMetricType = 'pace' | 'speed' | 'time';
+
+export type MetricKey =
+  | 'duration'
+  | 'distance'
+  | 'pace'
+  | 'speed'
+  | 'elevation'
+  | 'heartRate'
+  | 'calories';
+
 // ==================== COMPONENT PROPS ====================
 
 export interface LiveTrackingScreenProps {
@@ -220,11 +246,13 @@ export interface LiveTrackingScreenProps {
 export interface TrackingMetricsProps {
   metrics: FormattedWorkoutMetrics;
   sportType: string;
-  isTracking: boolean;
+  gpsSignal: GPSSignalQuality;
+  isPaused: boolean;
 }
 
 export interface TrackingControlsProps {
   status: TrackingStatus;
+  gpsSignal: GPSSignalQuality;
   onPause: () => void;
   onResume: () => void;
   onStop: () => void;

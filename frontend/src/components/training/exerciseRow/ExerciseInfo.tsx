@@ -40,7 +40,8 @@ const ExerciseInfo: React.FC<ExerciseInfoProps> = ({
           </Text>
         )}
         
-        {!hideExpandButton && (
+        {/* Hide expand button for endurance sessions (always expanded) and when explicitly hidden */}
+        {!hideExpandButton && !isEndurance && (
           <TouchableOpacity
             style={[styles.expandButton, isLocked && styles.expandButtonLocked]}
             onPress={isLocked ? undefined : onToggleExpand}
