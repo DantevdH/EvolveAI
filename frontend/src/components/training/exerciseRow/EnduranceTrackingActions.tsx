@@ -3,16 +3,18 @@
  *
  * When completed=false: Shows "Start Tracking" and "Import from Health" buttons
  * When completed=true: Shows sport-specific tracked metrics
+ * Supports multi-segment sessions (intervals) with segment list display
  */
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { EnduranceSession } from '../../../types/training';
+import { EnduranceSession, formatSegmentTarget, calculateSessionTotals, expandSegmentsForTracking } from '../../../types/training';
 import { colors, spacing, typography, borderRadius } from '../../../constants/designSystem';
 import { createColorWithOpacity } from '../../../constants/colors';
 import { getSportIcon } from '../../../constants/sportIcons';
 import { getZoneBadgeStyle, getZoneLabel } from '../../../utils/heartRateZoneUtils';
+import { EnduranceSegmentCard } from './EnduranceSegmentCard';
 
 interface EnduranceTrackingActionsProps {
   enduranceSession: EnduranceSession;
@@ -252,14 +254,30 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
     );
   }
 
-  // Helper function to render read-only planned session info (volume and zone)
+  // Helper function to render read-only planned session info (segments display)
   const renderReadOnlyPlannedInfo = () => {
     const sportIconName = getSportIcon(enduranceSession.sportType);
-    const zone = enduranceSession.heartRateZone || 1;
-    const zoneStyle = getZoneBadgeStyle(zone);
-    const zoneLabel = getZoneLabel(zone);
-    const trainingVolume = enduranceSession.trainingVolume;
-    const unit = enduranceSession.unit || '';
+    const segments = enduranceSession.segments || [];
+    const expandedSegments = expandSegmentsForTracking(segments);
+    const isMultiSegment = expandedSegments.length > 1;
+    const { totalDuration, totalDistance } = calculateSessionTotals(segments);
+    // Check if there are repeating segments (expanded count differs from raw count)
+    const hasRepeats = expandedSegments.length > segments.length;
+
+    // For single segment, get zone from segment
+    const singleSegmentZone = segments.length === 1 ? segments[0].targetHeartRateZone : null;
+    const zoneStyle = singleSegmentZone ? getZoneBadgeStyle(singleSegmentZone) : null;
+    const zoneLabel = singleSegmentZone ? getZoneLabel(singleSegmentZone) : null;
+
+    // Format total duration for display
+    const formatTotalDuration = (seconds: number): string => {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      if (hours > 0) {
+        return `${hours}h ${minutes}m`;
+      }
+      return `${minutes} min`;
+    };
 
     return (
       <View style={styles.container}>
@@ -270,28 +288,66 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
           </View>
         </View>
 
-        {/* Volume and Zone Row */}
-        <View style={styles.volumeZoneRow}>
-          {/* Volume */}
-          <View style={styles.volumeContainer}>
-            <View style={styles.volumeIconContainer}>
-              <Ionicons name="bar-chart-outline" size={16} color={colors.primary} />
+        {/* For single segment: show volume and zone inline */}
+        {!isMultiSegment && segments.length === 1 && (
+          <View style={styles.volumeZoneRow}>
+            {/* Volume */}
+            <View style={styles.volumeContainer}>
+              <View style={styles.volumeIconContainer}>
+                <Ionicons name="bar-chart-outline" size={16} color={colors.primary} />
+              </View>
+              <View style={styles.volumeTextContainer}>
+                <Text style={styles.volumeLabel}>TARGET</Text>
+                <Text style={styles.volumeValue}>
+                  {formatSegmentTarget(segments[0], useMetric)}
+                </Text>
+              </View>
             </View>
-            <View style={styles.volumeTextContainer}>
-              <Text style={styles.volumeLabel}>VOLUME</Text>
-              <Text style={styles.volumeValue}>
-                {trainingVolume !== undefined && trainingVolume !== null
-                  ? `${trainingVolume} ${unit}`
-                  : 'N/A'}
-              </Text>
-            </View>
-          </View>
 
-          {/* Zone Badge */}
-          <View style={[styles.zoneBadge, { backgroundColor: zoneStyle.backgroundColor }]}>
-            <Text style={[styles.zoneLabel, { color: zoneStyle.color }]}>{zoneLabel}</Text>
+            {/* Zone Badge */}
+            {zoneStyle && zoneLabel && (
+              <View style={[styles.zoneBadge, { backgroundColor: zoneStyle.backgroundColor }]}>
+                <Text style={[styles.zoneLabel, { color: zoneStyle.color }]}>{zoneLabel}</Text>
+              </View>
+            )}
           </View>
-        </View>
+        )}
+
+        {/* For multi-segment: show segment count and total, then segment list */}
+        {isMultiSegment && (
+          <View style={styles.multiSegmentContainer}>
+            {/* Summary row */}
+            <View style={styles.segmentSummaryRow}>
+              <Text style={styles.segmentCount}>
+                {expandedSegments.length} segments
+                {hasRepeats && <Text style={styles.repeatIndicator}> (×{Math.max(...segments.map(s => s.repeatCount || 1))})</Text>}
+              </Text>
+              {totalDuration > 0 && (
+                <Text style={styles.totalDuration}>~{formatTotalDuration(totalDuration)}</Text>
+              )}
+              {totalDistance > 0 && (
+                <Text style={styles.totalDistance}>
+                  {useMetric
+                    ? `${(totalDistance / 1000).toFixed(1)} km`
+                    : `${(totalDistance / 1609.34).toFixed(1)} mi`}
+                </Text>
+              )}
+            </View>
+
+            {/* Segment list - show compact view (unexpanded) */}
+            <View style={styles.segmentListContainer}>
+              {segments.map((segment) => (
+                <EnduranceSegmentCard
+                  key={segment.id}
+                  segment={segment}
+                  allSegments={segments}
+                  useMetric={useMetric}
+                  isCompleted={false}
+                />
+              ))}
+            </View>
+          </View>
+        )}
       </View>
     );
   };
@@ -301,13 +357,28 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
     return renderReadOnlyPlannedInfo();
   }
 
-  // If not completed and has callbacks, show sport logo, volume, zone, and action buttons
+  // If not completed and has callbacks, show sport logo, segments/volume, and action buttons
   const sportIconName = getSportIcon(enduranceSession.sportType);
-  const zone = enduranceSession.heartRateZone || 1;
-  const zoneStyle = getZoneBadgeStyle(zone);
-  const zoneLabel = getZoneLabel(zone);
-  const trainingVolume = enduranceSession.trainingVolume;
-  const unit = enduranceSession.unit || '';
+  const segments = enduranceSession.segments || [];
+  const expandedSegments = expandSegmentsForTracking(segments);
+  const isMultiSegment = expandedSegments.length > 1;
+  const { totalDuration, totalDistance } = calculateSessionTotals(segments);
+  const hasRepeats = expandedSegments.length > segments.length;
+
+  // For single segment, get zone from segment
+  const singleSegmentZone = segments.length === 1 ? segments[0].targetHeartRateZone : null;
+  const zoneStyle = singleSegmentZone ? getZoneBadgeStyle(singleSegmentZone) : null;
+  const zoneLabel = singleSegmentZone ? getZoneLabel(singleSegmentZone) : null;
+
+  // Format total duration for display
+  const formatTotalDuration = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes} min`;
+  };
 
   return (
     <View style={styles.container}>
@@ -318,28 +389,66 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
         </View>
       </View>
 
-      {/* Volume and Zone Row */}
-      <View style={styles.volumeZoneRow}>
-        {/* Volume */}
-        <View style={styles.volumeContainer}>
-          <View style={styles.volumeIconContainer}>
-            <Ionicons name="bar-chart-outline" size={16} color={colors.primary} />
+      {/* For single segment: show target and zone inline */}
+      {!isMultiSegment && segments.length === 1 && (
+        <View style={styles.volumeZoneRow}>
+          {/* Target */}
+          <View style={styles.volumeContainer}>
+            <View style={styles.volumeIconContainer}>
+              <Ionicons name="bar-chart-outline" size={16} color={colors.primary} />
+            </View>
+            <View style={styles.volumeTextContainer}>
+              <Text style={styles.volumeLabel}>TARGET</Text>
+              <Text style={styles.volumeValue}>
+                {formatSegmentTarget(segments[0], useMetric)}
+              </Text>
+            </View>
           </View>
-          <View style={styles.volumeTextContainer}>
-            <Text style={styles.volumeLabel}>VOLUME</Text>
-            <Text style={styles.volumeValue}>
-              {trainingVolume !== undefined && trainingVolume !== null
-                ? `${trainingVolume} ${unit}`
-                : 'N/A'}
-            </Text>
-          </View>
-        </View>
 
-        {/* Zone Badge */}
-        <View style={[styles.zoneBadge, { backgroundColor: zoneStyle.backgroundColor }]}>
-          <Text style={[styles.zoneLabel, { color: zoneStyle.color }]}>{zoneLabel}</Text>
+          {/* Zone Badge */}
+          {zoneStyle && zoneLabel && (
+            <View style={[styles.zoneBadge, { backgroundColor: zoneStyle.backgroundColor }]}>
+              <Text style={[styles.zoneLabel, { color: zoneStyle.color }]}>{zoneLabel}</Text>
+            </View>
+          )}
         </View>
-      </View>
+      )}
+
+      {/* For multi-segment: show segment count, total, and segment list */}
+      {isMultiSegment && (
+        <View style={styles.multiSegmentContainer}>
+          {/* Summary row */}
+          <View style={styles.segmentSummaryRow}>
+            <Text style={styles.segmentCount}>
+              {expandedSegments.length} segments
+              {hasRepeats && <Text style={styles.repeatIndicator}> (×{Math.max(...segments.map(s => s.repeatCount || 1))})</Text>}
+            </Text>
+            {totalDuration > 0 && (
+              <Text style={styles.totalDuration}>~{formatTotalDuration(totalDuration)}</Text>
+            )}
+            {totalDistance > 0 && (
+              <Text style={styles.totalDistance}>
+                {useMetric
+                  ? `${(totalDistance / 1000).toFixed(1)} km`
+                  : `${(totalDistance / 1609.34).toFixed(1)} mi`}
+              </Text>
+            )}
+          </View>
+
+          {/* Segment list - show compact view (unexpanded) */}
+          <View style={styles.segmentListContainer}>
+            {segments.map((segment) => (
+              <EnduranceSegmentCard
+                key={segment.id}
+                segment={segment}
+                allSegments={segments}
+                useMetric={useMetric}
+                isCompleted={false}
+              />
+            ))}
+          </View>
+        </View>
+      )}
 
       {/* Action Buttons */}
       <View style={styles.buttonsContainer}>
@@ -536,6 +645,43 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeights.semibold as any,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  // Multi-segment styles
+  multiSegmentContainer: {
+    width: '100%',
+    gap: spacing.sm,
+  },
+  segmentSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  segmentCount: {
+    fontSize: typography.fontSizes.sm,
+    fontWeight: typography.fontWeights.semibold as any,
+    color: colors.text,
+  },
+  repeatIndicator: {
+    fontSize: typography.fontSizes.xs,
+    fontWeight: typography.fontWeights.medium as any,
+    color: colors.primary,
+  },
+  totalDuration: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.muted,
+    fontVariant: ['tabular-nums'],
+  },
+  totalDistance: {
+    fontSize: typography.fontSizes.xs,
+    color: colors.muted,
+    fontVariant: ['tabular-nums'],
+  },
+  segmentListContainer: {
+    width: '100%',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
   },
 });
 

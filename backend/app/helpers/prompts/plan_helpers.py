@@ -126,17 +126,86 @@ def get_modality_instructions(
     if include_endurance:
         sections.append(
             """
-        **ENDURANCE days:** Sessions with name, description (MAX 15 words), sport_type, training_volume, unit, execution_order, heart_rate_zone
-        • Schema enforces: sport_type and unit must be valid Enum values, heart_rate_zone is required (1-5), execution_order is required
-        • Heart rate zones:
-          - Zone 1: Very Easy (50-60% max HR) - Recovery/warm-up
-          - Zone 2: Easy (60-70% max HR) - Aerobic base building
-          - Zone 3: Moderate (70-80% max HR) - Aerobic endurance
-          - Zone 4: Hard (80-90% max HR) - Threshold/tempo
-          - Zone 5: Very Hard (90-100% max HR) - Maximum effort/intervals
-        • Vary session types (easy, tempo, intervals, recovery)
-        • Interval sessions can be created by making several endurance sessions with different heart rate zones
+        **ENDURANCE days:** Sessions with segment-based structure for interval workouts
+        • Schema enforces: sport_type must be valid Enum, segments array required (min 1 segment)
+        • Each session contains one or more SEGMENTS (not multiple endurance_sessions for intervals)
+        • All segments within a session share the same sport_type
+
+        **SEGMENT STRUCTURE:**
+        • segment_order: Sequence within session (1, 2, 3...)
+        • segment_type: warmup, work, recovery, rest, cooldown (for auto-naming and visual distinction)
+        • target_type: 'time' (seconds), 'distance' (meters), or 'open' (manual advance)
+        • target_value: Duration in seconds OR distance in meters (null for 'open')
+        • target_heart_rate_zone: 1-5 (optional per segment)
+        • target_pace: seconds per km (optional)
+
+        **SEGMENT TYPES:**
+        - warmup: Low-intensity preparation (typically Zone 1-2)
+        - work: Active effort intervals (Zone 3-5 depending on intensity)
+        - recovery: Active recovery between work intervals (Zone 1-2)
+        - rest: Standing/walking rest between hard sets (Zone 1)
+        - cooldown: Low-intensity wind-down (Zone 1-2)
+
+        **HEART RATE ZONES:**
+        - Zone 1: Very Easy (50-60% max HR) - Recovery/warm-up
+        - Zone 2: Easy (60-70% max HR) - Aerobic base building
+        - Zone 3: Moderate (70-80% max HR) - Aerobic endurance
+        - Zone 4: Hard (80-90% max HR) - Threshold/tempo
+        - Zone 5: Very Hard (90-100% max HR) - Maximum effort/intervals
+
+        **REPEAT_COUNT FOR INTERVALS:**
+        • Use `repeat_count` to avoid repetitive segment definitions
+        • Consecutive segments with the same repeat_count are grouped and repeated together
+        • Default is 1 (no repetition), max is 20
+        • Example: work + recovery with repeat_count: 4 creates 4 work/recovery pairs
+
+        **EXAMPLES:**
+
+        Simple session (single segment):
+        ```json
+        {
+          "name": "Easy Run",
+          "sport_type": "running",
+          "segments": [
+            {"segment_order": 1, "segment_type": "work", "target_type": "time", "target_value": 1800, "target_heart_rate_zone": 2}
+          ]
+        }
+        ```
+
+        Interval session using repeat_count (PREFERRED - compact):
+        ```json
+        {
+          "name": "4x1km Intervals",
+          "sport_type": "running",
+          "segments": [
+            {"segment_order": 1, "segment_type": "warmup", "target_type": "time", "target_value": 300, "target_heart_rate_zone": 2},
+            {"segment_order": 2, "segment_type": "work", "target_type": "distance", "target_value": 1000, "target_heart_rate_zone": 5, "repeat_count": 4},
+            {"segment_order": 3, "segment_type": "recovery", "target_type": "time", "target_value": 90, "target_heart_rate_zone": 2, "repeat_count": 4},
+            {"segment_order": 4, "segment_type": "cooldown", "target_type": "time", "target_value": 300, "target_heart_rate_zone": 2}
+          ]
+        }
+        ```
+        This creates: warmup → (work + recovery) × 4 → cooldown = 10 segments during tracking
+
+        Pyramid intervals (varied repeat counts):
+        ```json
+        {
+          "name": "Pyramid Intervals",
+          "sport_type": "running",
+          "segments": [
+            {"segment_order": 1, "segment_type": "warmup", "target_type": "time", "target_value": 600, "target_heart_rate_zone": 2},
+            {"segment_order": 2, "segment_type": "work", "target_type": "distance", "target_value": 400, "target_heart_rate_zone": 4, "repeat_count": 2},
+            {"segment_order": 3, "segment_type": "recovery", "target_type": "time", "target_value": 60, "target_heart_rate_zone": 2, "repeat_count": 2},
+            {"segment_order": 4, "segment_type": "work", "target_type": "distance", "target_value": 800, "target_heart_rate_zone": 5},
+            {"segment_order": 5, "segment_type": "recovery", "target_type": "time", "target_value": 120, "target_heart_rate_zone": 2},
+            {"segment_order": 6, "segment_type": "cooldown", "target_type": "time", "target_value": 300, "target_heart_rate_zone": 2}
+          ]
+        }
+        ```
+
+        • Vary session complexity (simple for easy days, multi-segment for structured workouts)
         • Choose sport_type based on user's goal, equipment, and preferences
+        • Use repeat_count to keep interval definitions compact and readable
         """
         )
 

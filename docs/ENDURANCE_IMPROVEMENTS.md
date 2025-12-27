@@ -565,92 +565,343 @@ SessionLoadResult = {
 
 Support interval workouts by allowing multiple endurance segments within a single endurance session (e.g., "5min warm-up + 4x 1km intervals + 5min cool-down"). Each segment can have different zones, paces, or distances, but **all segments must share the same sport_type as their parent endurance_session**. For example, a running session can contain multiple running segments (warm-up, intervals, cool-down), but if you want to do running → cycling → running, these must be 3 separate endurance_sessions (one running session with segments, one cycling session, another running session). This is essential for serious endurance training and currently requires manual session creation. Requires UI for interval builder and backend logic for segment grouping within sessions.
 
+**Industry Best Practices Applied:**
+- **Per-segment actuals**: Garmin and Strava store per-lap/segment data for post-workout analysis
+- **Explicit rest segments**: Garmin and TrainingPeaks use explicit "Recovery" and "Rest" step types
+- **Auto-advance**: Standard behavior is auto-advance on time/distance targets with audio/haptic alerts
+- **Segment types**: Industry uses warmup, work, recovery, rest, cooldown as standard types
+
 **Implementation Details:**
 
-**Database Schema:**
-- **Simplify `endurance_session` table**: Remove duplicate fields that move to segments:
-  - Remove: `training_volume`, `unit`, `heart_rate_zone` (these move to segments)
-  - Keep: `id`, `daily_training_id`, `sport_type`, `name`, `description`, `execution_order`, `completed`, `created_at`, `updated_at`
-  - Keep all actual tracking fields: `actual_duration`, `actual_distance`, `average_pace`, `average_speed`, `average_heart_rate`, `max_heart_rate`, `min_heart_rate`, `elevation_gain`, `elevation_loss`, `calories`, `cadence`, `data_source`, `health_workout_id`, `started_at`, `completed_at` (actuals stored at session level since you track the whole session)
-- Add new `endurance_segment` table:
-  - `id` (SERIAL PRIMARY KEY)
-  - `endurance_session_id` (INTEGER, foreign key to `endurance_session.id` with CASCADE delete)
-  - `segment_order` (INTEGER) - Order within the session (1, 2, 3...)
-  - `training_volume` (NUMERIC) - Duration or distance for this segment
-  - `unit` (TEXT) - Unit for training_volume (minutes, km, miles, meters)
-  - `heart_rate_zone` (INTEGER, 1-5) - Target zone for this segment
-  - `name` (TEXT, nullable) - Optional segment name (e.g., "Warm-up", "Interval 1", "Cool-down")
-  - `description` (TEXT, nullable) - Optional segment description
-  - `created_at`, `updated_at` (TIMESTAMP)
-- **Always require at least 1 segment**: Every `endurance_session` must have at least 1 `endurance_segment`
-- **Simple case**: If 1 segment, it equals the session (single segment represents the whole session)
-- **Interval case**: If multiple segments, they represent intervals within the session (warm-up, intervals, cool-down)
-- All segments inherit `sport_type` from parent session (enforced constraint)
+---
 
-**AI Generation:**
-- Update `EnduranceSession` schema to always require `segments` array (minimum 1 segment):
-  ```python
-  class EnduranceSegment(BaseModel):
-      segment_order: int
-      training_volume: float
-      unit: VolumeUnitLiteral
-      heart_rate_zone: int
-      name: Optional[str] = None  # "Warm-up", "Interval 1", etc.
-      description: Optional[str] = None
+**Database Schema Changes:**
 
-  class EnduranceSession(BaseModel):
-      id: Optional[int] = None
-      name: str
-      sport_type: EnduranceTypeLiteral
-      description: Optional[str] = None
-      execution_order: int
-      completed: bool = False
-      segments: List[EnduranceSegment]  # REQUIRED: always at least 1 segment
-      # Note: training_volume, unit, heart_rate_zone removed (now in segments)
-  ```
-- AI logic:
-  - **Simple sessions**: Generate `EnduranceSession` with 1 segment (segment equals the session)
-  - **Interval sessions**: Generate `EnduranceSession` with multiple segments (warm-up, intervals, cool-down)
-  - **Constraint**: All segments must have the same `sport_type` as parent session (enforced in validation)
-  - Example simple: "Easy Run" session with 1 segment (30 min, Zone 2)
-  - Example interval: "Interval Run" session with 6 segments (warm-up, 4x intervals, cool-down)
-- Update prompt instructions to always generate at least 1 segment per session
+**1. Changes to `endurance_session` table:**
+```sql
+-- REMOVE these columns (moved to segments):
+--   training_volume, unit, heart_rate_zone
+
+-- KEEP these columns:
+--   id, daily_training_id, sport_type, name, description, execution_order, completed
+--   created_at, updated_at
+
+-- KEEP session-level actuals (aggregated totals):
+--   actual_duration (seconds) - Total workout duration
+--   actual_distance (meters) - Total distance
+--   average_pace (seconds/km) - Overall average pace
+--   average_speed (km/h) - Overall average speed
+--   average_heart_rate (bpm) - Overall average HR
+--   max_heart_rate (bpm) - Max HR across entire session
+--   min_heart_rate (bpm) - Min HR across entire session
+--   elevation_gain (meters) - Total elevation gain
+--   elevation_loss (meters) - Total elevation loss
+--   calories (integer) - Total calories burned
+--   cadence (integer) - Overall average cadence
+--   data_source, health_workout_id, started_at, completed_at
+```
+
+**2. New `endurance_segment` table:**
+```sql
+CREATE TABLE IF NOT EXISTS public.endurance_segment (
+  id SERIAL PRIMARY KEY,
+  endurance_session_id INTEGER NOT NULL REFERENCES endurance_session(id) ON DELETE CASCADE,
+  segment_order INTEGER NOT NULL,  -- Order within session (1, 2, 3...)
+
+  -- Segment type (industry standard)
+  segment_type TEXT NOT NULL DEFAULT 'work',  -- warmup, work, recovery, rest, cooldown
+  name TEXT,  -- Optional custom name, auto-generated from type if null
+  description TEXT,
+
+  -- Target (planned values)
+  target_type TEXT NOT NULL,  -- 'time', 'distance', 'open'
+  target_value NUMERIC,  -- Duration in seconds OR distance in meters (null for 'open')
+  target_heart_rate_zone INTEGER CHECK (target_heart_rate_zone >= 1 AND target_heart_rate_zone <= 5),
+  target_pace INTEGER,  -- Target pace in seconds per km (nullable)
+
+  -- Actuals (recorded during/after tracking) - enables per-segment analysis
+  actual_duration INTEGER,  -- Actual duration in seconds
+  actual_distance NUMERIC,  -- Actual distance in meters
+  actual_avg_pace INTEGER,  -- Actual average pace in seconds per km
+  actual_avg_heart_rate INTEGER CHECK (actual_avg_heart_rate IS NULL OR (actual_avg_heart_rate >= 30 AND actual_avg_heart_rate <= 250)),
+  actual_max_heart_rate INTEGER CHECK (actual_max_heart_rate IS NULL OR (actual_max_heart_rate >= 30 AND actual_max_heart_rate <= 250)),
+  started_at TIMESTAMP WITH TIME ZONE,
+  completed_at TIMESTAMP WITH TIME ZONE,
+
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+  CONSTRAINT segment_type_check CHECK (segment_type IN ('warmup', 'work', 'recovery', 'rest', 'cooldown')),
+  CONSTRAINT target_type_check CHECK (target_type IN ('time', 'distance', 'open')),
+  CONSTRAINT unique_segment_order UNIQUE (endurance_session_id, segment_order)
+);
+
+-- Index for efficient segment lookups
+CREATE INDEX idx_endurance_segment_session_id ON endurance_segment(endurance_session_id);
+```
+
+**Key Design Decisions:**
+- **Session-level actuals**: Aggregated totals (total distance, overall avg pace, max HR, etc.)
+- **Segment-level actuals**: Per-segment metrics for interval analysis ("Did I hit target on each interval?")
+- **No duplication**: `training_volume`, `unit`, `heart_rate_zone` only exist in segments
+- **Segment types**: Enables auto-naming and visual distinction (warmup vs work vs recovery)
+- **Target types**: `time`, `distance`, or `open` (manual advance) per segment
+- **All values in metric**: Seconds for time, meters for distance, seconds/km for pace
+
+---
+
+**Segment Type Definitions:**
+
+| Type | Description | Typical Use | Auto-Name |
+|------|-------------|-------------|-----------|
+| `warmup` | Low-intensity preparation | Start of workout | "Warm Up" |
+| `work` | Active effort interval | Main intervals | "Interval 1", "Interval 2"... |
+| `recovery` | Active recovery (easy jog/spin) | Between work intervals | "Recovery" |
+| `rest` | Standing/walking rest | Between hard sets | "Rest" |
+| `cooldown` | Low-intensity wind-down | End of workout | "Cool Down" |
+
+**Auto-Naming Logic:**
+```javascript
+function getSegmentDisplayName(segment, index, allSegments) {
+  if (segment.name) return segment.name;  // Custom name takes priority
+
+  switch (segment.segment_type) {
+    case 'warmup': return 'Warm Up';
+    case 'cooldown': return 'Cool Down';
+    case 'recovery': return 'Recovery';
+    case 'rest': return 'Rest';
+    case 'work':
+      // Count work segments to number them
+      const workIndex = allSegments
+        .slice(0, index + 1)
+        .filter(s => s.segment_type === 'work').length;
+      return `Interval ${workIndex}`;
+  }
+}
+```
+
+---
+
+**Migration Strategy:**
+
+```sql
+-- Step 1: Create new endurance_segment table (see above)
+
+-- Step 2: Migrate existing sessions to have 1 segment each
+INSERT INTO endurance_segment (
+  endurance_session_id,
+  segment_order,
+  segment_type,
+  target_type,
+  target_value,
+  target_heart_rate_zone
+)
+SELECT
+  es.id,
+  1,  -- segment_order
+  'work',  -- segment_type (default for simple sessions)
+  CASE
+    WHEN es.unit IN ('minutes', 'seconds') THEN 'time'
+    WHEN es.unit IN ('km', 'miles', 'meters') THEN 'distance'
+    ELSE 'time'
+  END,
+  CASE
+    WHEN es.unit = 'minutes' THEN es.training_volume * 60  -- Convert to seconds
+    WHEN es.unit = 'seconds' THEN es.training_volume
+    WHEN es.unit = 'km' THEN es.training_volume * 1000  -- Convert to meters
+    WHEN es.unit = 'miles' THEN es.training_volume * 1609.34  -- Convert to meters
+    WHEN es.unit = 'meters' THEN es.training_volume
+    ELSE es.training_volume * 60  -- Default: assume minutes
+  END,
+  es.heart_rate_zone
+FROM endurance_session es;
+
+-- Step 3: Remove old columns from endurance_session (after verifying migration)
+ALTER TABLE endurance_session
+  DROP COLUMN IF EXISTS training_volume,
+  DROP COLUMN IF EXISTS unit,
+  DROP COLUMN IF EXISTS heart_rate_zone;
+```
+
+---
+
+**AI Generation Schema:**
+
+```python
+from pydantic import BaseModel
+from typing import List, Optional, Literal
+
+SegmentTypeLiteral = Literal['warmup', 'work', 'recovery', 'rest', 'cooldown']
+TargetTypeLiteral = Literal['time', 'distance', 'open']
+
+class EnduranceSegment(BaseModel):
+    segment_order: int
+    segment_type: SegmentTypeLiteral = 'work'
+    name: Optional[str] = None  # Optional custom name
+    description: Optional[str] = None
+    target_type: TargetTypeLiteral  # 'time', 'distance', or 'open'
+    target_value: Optional[float] = None  # Seconds for time, meters for distance, null for open
+    target_heart_rate_zone: Optional[int] = None  # 1-5
+    target_pace: Optional[int] = None  # Seconds per km
+
+class EnduranceSession(BaseModel):
+    id: Optional[int] = None
+    name: str
+    sport_type: EnduranceTypeLiteral
+    description: Optional[str] = None
+    execution_order: int
+    completed: bool = False
+    segments: List[EnduranceSegment]  # REQUIRED: always at least 1 segment
+```
+
+**AI Generation Examples:**
+
+**Simple Session (1 segment):**
+```json
+{
+  "name": "Easy Run",
+  "sport_type": "running",
+  "segments": [
+    {
+      "segment_order": 1,
+      "segment_type": "work",
+      "target_type": "time",
+      "target_value": 1800,
+      "target_heart_rate_zone": 2
+    }
+  ]
+}
+```
+
+**Interval Session (with recovery):**
+```json
+{
+  "name": "4x1km Intervals",
+  "sport_type": "running",
+  "segments": [
+    { "segment_order": 1, "segment_type": "warmup", "target_type": "time", "target_value": 300, "target_heart_rate_zone": 2 },
+    { "segment_order": 2, "segment_type": "work", "target_type": "distance", "target_value": 1000, "target_heart_rate_zone": 5 },
+    { "segment_order": 3, "segment_type": "recovery", "target_type": "time", "target_value": 90, "target_heart_rate_zone": 2 },
+    { "segment_order": 4, "segment_type": "work", "target_type": "distance", "target_value": 1000, "target_heart_rate_zone": 5 },
+    { "segment_order": 5, "segment_type": "recovery", "target_type": "time", "target_value": 90, "target_heart_rate_zone": 2 },
+    { "segment_order": 6, "segment_type": "work", "target_type": "distance", "target_value": 1000, "target_heart_rate_zone": 5 },
+    { "segment_order": 7, "segment_type": "recovery", "target_type": "time", "target_value": 90, "target_heart_rate_zone": 2 },
+    { "segment_order": 8, "segment_type": "work", "target_type": "distance", "target_value": 1000, "target_heart_rate_zone": 5 },
+    { "segment_order": 9, "segment_type": "cooldown", "target_type": "time", "target_value": 300, "target_heart_rate_zone": 2 }
+  ]
+}
+```
+
+---
+
+**Live Tracking with Segments:**
+
+**Auto-Advance Behavior:**
+1. **Time-based segments**: Auto-advance when `target_value` seconds elapsed
+2. **Distance-based segments**: Auto-advance when `target_value` meters reached
+3. **Open segments**: Manual "Next" button required
+4. **Audio/haptic alerts**: 3-2-1 countdown before auto-advance, beep on segment change
+5. **Manual override**: "Skip to Next" button always visible
+
+**Live Tracking UI:**
+```
+┌─────────────────────────────────────────────┐
+│  INTERVAL 2 of 4                   ⏸️ PAUSE │
+│  ████████████░░░░░░░░  720m / 1000m         │
+├─────────────────────────────────────────────┤
+│                                             │
+│            15:42          │     2:34        │
+│         Total Time        │  Segment Time   │
+│                                             │
+├─────────────────────────────────────────────┤
+│    4:12/km   │   162 bpm   │   Zone 5 ✓     │
+│  Current Pace │  Heart Rate │  Target: 5    │
+├─────────────────────────────────────────────┤
+│  ▶ NEXT: Recovery • 1:30 • Zone 2           │
+└─────────────────────────────────────────────┘
+         [  PAUSE  ]     [  SKIP →  ]
+```
+
+**Segment Progress Visualization:**
+```
+┌────────────────────────────────────────────┐
+│ Warm Up │ Int 1 │ Rec │ Int 2 │ Rec │ ...  │
+│   ✓     │  ███  │     │       │     │      │
+│ 5:00    │ 2:34  │     │       │     │      │
+└────────────────────────────────────────────┘
+```
+
+**Recording Per-Segment Actuals:**
+- When segment completes (auto-advance or manual):
+  1. Record `completed_at` timestamp
+  2. Calculate and store `actual_duration`, `actual_distance`, `actual_avg_pace`, `actual_avg_heart_rate`, `actual_max_heart_rate`
+  3. Start next segment: set `started_at` timestamp
+- On session complete: Aggregate all segment actuals into session-level totals
+
+---
 
 **Frontend Visualization:**
-- **Single segment (simple session)**: Display as before (single card with volume/zone from segment)
-  - Show session name, sport type, and segment details (volume, unit, zone)
-  - No need to show "1 segment" - just display the session normally
-- **Multiple segments (interval session)**: Enhanced display:
-  - Show parent session header (name, sport type, total segments count)
-  - Expandable/collapsible list of segments showing:
-    - Segment name (or "Segment 1", "Segment 2" if no name)
-    - Volume + unit + zone for each segment
-    - Visual zone indicators (color-coded bars matching heart rate zone intensity)
-  - Example UI:
-    ```
-    ┌─────────────────────────────────┐
-    │ 🏃 Interval Run                 │
-    │ Running • 6 segments            │
-    ├─────────────────────────────────┤
-    │ 1. Warm-up: 5 min • Zone 2      │
-    │ 2. Interval 1: 1 km • Zone 5    │
-    │ 3. Interval 2: 1 km • Zone 5   │
-    │ 4. Interval 3: 1 km • Zone 5   │
-    │ 5. Interval 4: 1 km • Zone 5    │
-    │ 6. Cool-down: 5 min • Zone 2   │
-    └─────────────────────────────────┘
-    ```
-- Reuse existing `EnduranceDetails` component - extend to handle segments array
-- **Actuals display**: Show tracked data (actual_duration, actual_distance, etc.) at session level (since you track the whole session, not individual segments)
-- Live tracking: Track the entire session (all segments together), not individual segments
-- Completion: Mark entire session complete when finished, not per-segment
+
+**Single Segment (Simple Session):**
+```
+┌─────────────────────────────────┐
+│ 🏃 Easy Run                     │
+│ 30 min • Zone 2                 │
+│                    [▶ START]    │
+└─────────────────────────────────┘
+```
+- No need to show "1 segment" - display as before
+- Shows segment details inline
+
+**Multiple Segments (Interval Session):**
+```
+┌─────────────────────────────────────────────┐
+│ 🏃 4x1km Intervals                          │
+│ Running • 9 segments • ~35 min              │
+├─────────────────────────────────────────────┤
+│ ○ Warm Up      │ 5:00    │ Zone 2           │
+│ ○ Interval 1   │ 1.0 km  │ Zone 5           │
+│ ○ Recovery     │ 1:30    │ Zone 2           │
+│ ○ Interval 2   │ 1.0 km  │ Zone 5           │
+│ ○ Recovery     │ 1:30    │ Zone 2           │
+│ ○ Interval 3   │ 1.0 km  │ Zone 5           │
+│ ○ Recovery     │ 1:30    │ Zone 2           │
+│ ○ Interval 4   │ 1.0 km  │ Zone 5           │
+│ ○ Cool Down    │ 5:00    │ Zone 2           │
+├─────────────────────────────────────────────┤
+│                              [▶ START]      │
+└─────────────────────────────────────────────┘
+```
+
+**Completed Session with Per-Segment Analysis:**
+```
+┌─────────────────────────────────────────────┐
+│ 🏃 4x1km Intervals              ✓ COMPLETE  │
+│ Total: 6.2 km • 34:21 • Avg 152 bpm         │
+├─────────────────────────────────────────────┤
+│ ✓ Warm Up      │ 5:02    │ Avg 128 bpm      │
+│ ✓ Interval 1   │ 4:12/km │ Avg 168 bpm  ✓   │ ← Hit zone target
+│ ✓ Recovery     │ 1:28    │ Avg 142 bpm      │
+│ ✓ Interval 2   │ 4:08/km │ Avg 172 bpm  ✓   │
+│ ✓ Recovery     │ 1:32    │ Avg 145 bpm      │
+│ ✓ Interval 3   │ 4:22/km │ Avg 164 bpm  ⚠   │ ← Missed zone target
+│ ✓ Recovery     │ 1:35    │ Avg 148 bpm      │
+│ ✓ Interval 4   │ 4:05/km │ Avg 175 bpm  ✓   │
+│ ✓ Cool Down    │ 5:15    │ Avg 125 bpm      │
+└─────────────────────────────────────────────┘
+```
+
+---
 
 **Benefits:**
-- **Simplified structure**: Always 1 segment minimum, no optional segments to handle
-- **No duplicate data**: Volume/unit/zone only in segments, not duplicated in session
-- **Actuals at session level**: Makes sense since you track the whole workout, not each interval separately
-- **Clear model**: 1 segment = simple session, multiple segments = interval session
-- **Same sport constraint**: All segments must share parent session's sport_type
+- **Per-segment analysis**: See which intervals you hit/missed targets on
+- **Industry-standard segment types**: warmup/work/recovery/rest/cooldown matches Garmin/TrainingPeaks
+- **Explicit rest segments**: Rest and recovery are first-class segments, not implicit gaps
+- **Auto-advance**: Time and distance targets auto-advance with alerts (like Garmin)
+- **Open segments**: Manual advance for unstructured portions
+- **No duplicate columns**: Session has aggregates, segments have targets + per-segment actuals
+- **Live tracking visibility**: See current segment, progress, and what's next
+- **Meaningful post-workout data**: "I hit 3 of 4 intervals at target pace"
 
 ---
 

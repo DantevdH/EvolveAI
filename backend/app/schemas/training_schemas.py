@@ -212,25 +212,77 @@ DayOfWeekLiteral = Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday
 TrainingTypeLiteral = Literal["strength", "endurance", "mixed", "rest"]
 EnduranceTypeLiteral = Literal["running", "cycling", "swimming", "rowing", "hiking", "walking", "elliptical", "stair_climbing", "jump_rope", "other"]
 VolumeUnitLiteral = Literal["minutes", "km", "miles", "meters"]
+SegmentTypeLiteral = Literal["warmup", "work", "recovery", "rest", "cooldown"]
+TargetTypeLiteral = Literal["time", "distance", "open"]
+
+
+class EnduranceSegment(BaseModel):
+    """
+    Schema for individual segments within an endurance session (for interval workouts).
+
+    This schema is used during AI plan generation only. Actual tracking data
+    (actual_duration, actual_distance, etc.) is populated by the frontend during
+    live GPS tracking or health app import, not by AI generation.
+
+    Supports repeat_count for interval blocks (e.g., work+recovery repeated 4 times).
+    """
+
+    segment_order: int = Field(
+        ..., description="Order within session (1, 2, 3...)"
+    )
+    segment_type: SegmentTypeLiteral = Field(
+        default="work",
+        description="Type of segment: warmup, work, recovery, rest, cooldown. Used for auto-naming and visual distinction."
+    )
+    name: Optional[str] = Field(
+        default=None,
+        description="Optional custom name. If null, auto-generated from segment_type (e.g., 'Warm Up', 'Interval 1')."
+    )
+    description: Optional[str] = Field(
+        default=None, description="Description of the segment"
+    )
+    target_type: TargetTypeLiteral = Field(
+        ...,
+        description="How to measure segment completion: 'time' (seconds), 'distance' (meters), or 'open' (manual advance)."
+    )
+    target_value: Optional[float] = Field(
+        default=None,
+        description="Target value in seconds (time) or meters (distance). Null for 'open' segments."
+    )
+    target_heart_rate_zone: Optional[int] = Field(
+        default=None,
+        description="Target heart rate zone (1-5) for this segment."
+    )
+    target_pace: Optional[int] = Field(
+        default=None,
+        description="Target pace in seconds per km (optional)."
+    )
+    repeat_count: int = Field(
+        default=1,
+        ge=1,
+        le=20,
+        description="Number of times to repeat this segment (default 1). Use for interval blocks like '4x1km intervals'."
+    )
+
+    # Note: Actual tracking data fields (actual_duration, actual_distance, etc.)
+    # are stored in Supabase but not included in this schema since they're populated
+    # by the frontend during live GPS tracking or health app import, not by AI generation.
 
 
 class EnduranceSession(BaseModel):
-    """Schema for individual endurance training sessions."""
+    """
+    Schema for endurance training sessions with segment-based structure for intervals.
+
+    This schema is used during AI plan generation only. Actual tracking data
+    (actual_duration, actual_distance, etc.) is populated by the frontend during
+    live GPS tracking or health app import, not by AI generation.
+    """
 
     id: Optional[int] = Field(default=None, description="Database ID")
     name: str = Field(..., description="Concise name of the endurance session with 2 words")
     sport_type: EnduranceTypeLiteral = Field(
         ...,
-        description="Endurance activity type (running, cycling, swimming, rowing, hiking, walking, elliptical, stair_climbing, jump_rope, or other)"
-    )
-    training_volume: float = Field(
-        ..., description="Duration (minutes) or distance (km/miles)"
-    )
-    unit: VolumeUnitLiteral = Field(
-        ..., description="Unit for training_volume (minutes, km, miles, meters)"
-    )
-    heart_rate_zone: int = Field(
-        ..., description="Target heart rate zone (1-5)"
+        description="Endurance activity type (running, cycling, swimming, rowing, hiking, walking, elliptical, stair_climbing, jump_rope, or other). All segments within this session share this sport type."
     )
     description: Optional[str] = Field(
         default=None, description="Description of the context of the endurance session"
@@ -242,9 +294,17 @@ class EnduranceSession(BaseModel):
         default=False, description="Whether the session was completed"
     )
 
-    # Note: Tracked workout data fields (actual_duration, actual_distance, etc.)
-    # are stored in Supabase but not included in this schema since they're populated
-    # by the frontend during live GPS tracking or health app import, not by AI generation.
+    # Segments - required, at least 1 segment per session
+    segments: List[EnduranceSegment] = Field(
+        ...,
+        description="Segments within this session. Simple sessions have 1 segment, interval sessions have multiple. All segments share the same sport_type.",
+        min_length=1
+    )
+
+    # Note: Session-level actual tracking data fields (actual_duration, actual_distance,
+    # average_pace, average_heart_rate, etc.) are stored in Supabase but not included
+    # in this schema since they're populated by the frontend during live GPS tracking
+    # or health app import, not by AI generation.
 
     created_at: Optional[datetime] = Field(
         default=None, description="Creation timestamp"

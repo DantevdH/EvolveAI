@@ -3,9 +3,10 @@
  *
  * Type definitions for live GPS workout tracking and health app imports.
  * All distance/pace values are stored in metric internally and converted for display.
+ * Supports multi-segment workouts (intervals) with auto-advance.
  */
 
-import { EnduranceSession } from './training';
+import { EnduranceSession, EnduranceSegment, SegmentType, TargetType } from './training';
 
 // ==================== TRACKING STATE ====================
 
@@ -15,11 +16,47 @@ export type TrackingStatus =
   | 'tracking'       // Actively tracking
   | 'paused'         // Manually paused
   | 'auto_paused'    // Auto-paused due to no movement
+  | 'segment_transition' // Brief pause between segments with countdown
   | 'stopping'       // Processing stop request
   | 'summary'        // Showing post-workout summary
   | 'saving';        // Saving to database
 
 export type DataSource = 'manual' | 'live_tracking' | 'healthkit' | 'google_fit';
+
+// ==================== SEGMENT TRACKING ====================
+
+/**
+ * Tracked metrics for a single segment during live tracking
+ */
+export interface SegmentTrackingMetrics {
+  segmentId: string;
+  segmentOrder: number;
+  segmentType: SegmentType;
+  targetType: TargetType;
+  targetValue: number | null;
+  targetHeartRateZone: number | null;
+
+  // Actuals (updated in real-time during tracking)
+  actualDuration: number;      // Seconds
+  actualDistance: number;      // Meters
+  actualAvgPace: number | null;     // Seconds per km
+  actualAvgHeartRate: number | null;
+  actualMaxHeartRate: number | null;
+
+  // Timestamps
+  startedAt: Date | null;
+  completedAt: Date | null;
+}
+
+/**
+ * State for segment-based tracking
+ */
+export interface SegmentTrackingState {
+  segments: SegmentTrackingMetrics[];
+  currentSegmentIndex: number;
+  isAutoAdvanceEnabled: boolean;
+  transitionCountdown: number; // 3-2-1 countdown before next segment
+}
 
 export interface GPSSignalQuality {
   accuracy: number;      // Meters
@@ -33,21 +70,24 @@ export interface TrackingState {
   enduranceSessionId: string | null;
   sportType: string | null;
 
-  // Timing
+  // Segment tracking (for multi-segment/interval workouts)
+  segmentTracking: SegmentTrackingState | null;
+
+  // Timing (session-level totals)
   startedAt: Date | null;
   elapsedSeconds: number;        // Total elapsed time (excluding pauses)
   pausedAt: Date | null;
   totalPausedSeconds: number;    // Total time spent paused
 
-  // Distance (always in meters internally)
+  // Distance (always in meters internally) - session-level total
   distanceMeters: number;
 
-  // Pace/Speed (metric internally)
+  // Pace/Speed (metric internally) - session-level averages
   currentPaceSecondsPerKm: number | null;  // Current pace
   averagePaceSecondsPerKm: number | null;  // Average pace
   averageSpeedKmh: number | null;          // Average speed
 
-  // Elevation (meters)
+  // Elevation (meters) - session-level totals
   elevationGainMeters: number;
   elevationLossMeters: number;
   currentAltitudeMeters: number | null;
@@ -178,14 +218,24 @@ export interface UseLiveTrackingReturn {
   countdownSeconds: number;
   isCountingDown: boolean;
 
+  // Segment state (convenience accessors)
+  currentSegment: SegmentTrackingMetrics | null;
+  currentSegmentIndex: number;
+  totalSegments: number;
+  isMultiSegment: boolean;
+
   // Actions
-  startCountdown: (sessionId: string, sportType: string) => void;
+  startCountdown: (sessionId: string, sportType: string, segments?: EnduranceSegment[]) => void;
   cancelCountdown: () => void;
   pause: () => void;
   resume: () => void;
   stop: () => Promise<TrackedWorkoutMetrics>;
   discard: () => void;
   resetToIdle: () => Promise<void>;
+
+  // Segment actions
+  skipToNextSegment: () => void;  // Manual advance to next segment
+  toggleAutoAdvance: () => void;  // Toggle auto-advance on/off
 
   // Pre-checks
   checkReadiness: () => Promise<{

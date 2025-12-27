@@ -1,87 +1,220 @@
 # Prompt Engineering Best Practices
 
-Concise guide for creating effective AI prompts based on industry best practices and patterns used in this codebase.
+Comprehensive guide for creating effective AI prompts based on industry best practices and patterns used in this codebase.
 
-## Core Structure
+## State-of-the-Art Prompt Structure
 
-### Essential Sections (In Order)
-- **WHO YOU ARE / ROLE**: Define the AI's identity and purpose
-- **YOUR TASK / TASK**: Clearly state what needs to be accomplished
-- **CONTEXT**: Provide background information and constraints
-- **INPUT DATA**: Specify what data is being provided
-- **CONSTRAINTS & REQUIREMENTS**: List rules, limitations, and must-follow guidelines
-- **STEP-BY-STEP PROCESS**: Break down complex tasks into clear steps
-- **OUTPUT REQUIREMENTS**: Define exact format, schema, and structure expected
-- **EXAMPLES**: Include few-shot examples showing correct output
-- **VALIDATION CHECKLIST**: List items to verify before finalizing
+The optimal prompt follows six essential components:
 
-## Best Practices
+### 1. **Persona (Who)**
+Define the AI's role with specific expertise, experience level, and domain knowledge.
 
-### 1. **Clarity & Specificity**
-- ✅ Use clear, direct language—avoid ambiguity
-- ✅ Be specific about what you want (not "generate questions" but "generate 7-10 structured questions covering equipment, schedule, and goals")
-- ✅ Define technical terms and acronyms
-- ✅ Use concrete examples over abstract descriptions
+**Best Practices:**
+- ✅ Be specific, not generic: "Senior analyst with 15 years" > "expert"
+- ✅ Include domain specialization and relevant experience
+- ✅ Define the AI's identity and purpose clearly
 
-### 2. **Structure & Organization**
-- ✅ Use markdown headers (`**BOLD**`, `##`, `-`) for visual hierarchy
-- ✅ Group related information together
-- ✅ Use numbered lists for sequential steps
-- ✅ Use bullet points for options, constraints, or features
-- ✅ Separate sections with clear headers
+**Examples:**
+- ❌ **Weak**: "You are an expert..."
+- ✅ **Strong**: "You are a senior product data analyst specializing in medical device documentation with 15 years of experience in ESG compliance reporting."
 
-### 3. **Context & Constraints**
+### 2. **Context (Why & Where)**
+Explain the business purpose, stakeholders, and use case to ground the model and prevent hallucinations.
+
+**Best Practices:**
+- ✅ Ground the model: Always explain WHY (prevents hallucinations)
 - ✅ Provide sufficient context about the domain and use case
 - ✅ Explicitly state what is IN scope and what is OUT of scope
-- ✅ List constraints early (schema requirements, length limits, format rules)
-- ✅ Include edge cases and special handling requirements
+- ✅ Include business purpose, stakeholders, and importance
 - ✅ Specify validation rules clearly
 
-### 4. **Output Format Specification**
+**Examples:**
+- ❌ **Weak**: "Extract product information."
+- ✅ **Strong**: "We are conducting product data enrichment for CSRD compliance. This data will be used for sustainability assessments and regulatory audits. Accuracy and traceability are critical."
+
+**Format:**
+```markdown
+**CONTEXT:**
+• [Relevant background information]
+• [System constraints or limitations]
+• [What this prompt is part of]
+• ✅ Scope: [What is included]
+• ❌ NOT included: [What is excluded]
+```
+
+### 3. **Task (What)**
+Use direct, active commands. Avoid polite language or ambiguity.
+
+**Best Practices:**
+- ✅ Use direct commands: "Extract" not "Can you help extract"
+- ✅ Be specific about what you want (not "generate questions" but "generate 7-10 structured questions covering equipment, schedule, and goals")
+- ✅ Clearly state what needs to be accomplished with success criteria
+- ✅ Break complex tasks into numbered steps when needed
+- ✅ Make each step actionable and specific
+- ✅ Order steps logically (prerequisites first)
+
+**Examples:**
+- ❌ **Weak**: "Can you help extract...?"
+- ✅ **Strong**: "Extract comprehensive product information from the provided sources and return a structured ProductCharacteristics object."
+
+**Step-by-Step Process Format:**
+```markdown
+**STEP-BY-STEP PROCESS:**
+
+Step 1: [Action]
+- [Sub-action]
+- [Sub-action]
+
+Step 2: [Action]
+- [Sub-action]
+```
+
+### 4. **Constraints (Guardrails)**
+Explicitly state what NOT to do and set boundaries.
+
+**Best Practices:**
+- ✅ Organize constraints: Group by category for clarity
+- ✅ List constraints early (schema requirements, length limits, format rules)
+- ✅ Use "DO NOT" statements for critical restrictions
+- ✅ Include edge cases and special handling requirements
+- ✅ Anticipate common mistakes and explicitly prevent them
+- ✅ Specify what to do in ambiguous cases
+- ✅ Provide fallback instructions
+
+**Examples:**
+- "Do NOT calculate or estimate percentages"
+- "Extract ONLY if explicitly stated"
+- "If percentage sum exceeds 100%, note this in reasoning"
+
+**Format:**
+```markdown
+**CONSTRAINTS:**
+1. **Schema Compliance**
+   - [Specific rule]
+   - [Another rule]
+   
+2. **Content Requirements**
+   - [Content rule]
+   - [Quality standard]
+```
+
+### 5. **Examples (Few-Shot Prompting)**
+Provide 2-3 complete input→output demonstrations showing the exact pattern.
+
+**Best Practices:**
+- ✅ Show, don't just tell: Few-shot examples > descriptions
+- ✅ Include 2-3 concrete examples showing input → output
+- ✅ Cover different scenarios (simple, complex, edge cases)
+- ✅ Show full examples: Source text → Complete structured output
+- ✅ Include edge cases: conflicting sources, incomplete data, ambiguous information
+- ✅ Show both correct and incorrect examples when helpful
+- ✅ Use realistic, domain-specific examples
+- ✅ Explain why examples are correct
+
+**Format:**
+```markdown
+**EXAMPLES:**
+
+Example 1: [Scenario]
+Input: [Input data]
+Output: [Expected output]
+Note: [Why this is correct]
+```
+
+### 6. **Format (How)**
+Specify exact output structure. Reference schemas rather than re-explaining fields.
+
+**Best Practices:**
+- ✅ Trust your schemas: Don't duplicate field documentation
 - ✅ Define exact schema/structure required (JSON, list format, etc.)
 - ✅ Specify data types (string, number, array, boolean)
 - ✅ Include field names exactly as expected
 - ✅ Show example output structure
 - ✅ Clarify required vs. optional fields
 
-### 5. **Few-Shot Examples**
-- ✅ Include 2-3 concrete examples showing input → output
-- ✅ Cover different scenarios (simple, complex, edge cases)
-- ✅ Show both correct and incorrect examples when helpful
-- ✅ Use realistic, domain-specific examples
-- ✅ Explain why examples are correct
+**Examples:**
+- ❌ **Weak**: Re-describing all schema fields
+- ✅ **Strong**: "Return a valid ProductCharacteristics object following the Pydantic schema. Refer to schema definitions for field-level specifications."
 
-### 6. **Personalization**
+**Format:**
+```markdown
+**OUTPUT FORMAT:**
+Return [structure] with:
+- field_name: [description and type]
+- field_name: [description and type]
+
+**EXAMPLE OUTPUT:**
+{
+  "field_name": "example_value",
+  "field_name": 123
+}
+```
+
+## Additional Best Practices
+
+### 7. **Clarity & Specificity**
+- ✅ Use clear, direct language—avoid ambiguity
+- ✅ Define technical terms and acronyms
+- ✅ Use concrete examples over abstract descriptions
+
+### 8. **Structure & Organization**
+- ✅ Use markdown headers (`**BOLD**`, `##`, `-`) for visual hierarchy
+- ✅ Group related information together
+- ✅ Use numbered lists for sequential steps
+- ✅ Use bullet points for options, constraints, or features
+- ✅ Separate sections with clear headers
+
+### 9. **Personalization**
 - ✅ Include user-specific information (age, experience, goals)
 - ✅ Adapt language complexity to user level
 - ✅ Reference user context throughout the prompt
 - ✅ Make questions/recommendations relevant to the user
 
-### 7. **Error Prevention**
-- ✅ Anticipate common mistakes and explicitly prevent them
-- ✅ Use "DO NOT" statements for critical restrictions
-- ✅ Include validation checklist at the end
-- ✅ Specify what to do in ambiguous cases
-- ✅ Provide fallback instructions
-
-### 8. **Task Decomposition**
-- ✅ Break complex tasks into numbered steps
-- ✅ Make each step actionable and specific
-- ✅ Order steps logically (prerequisites first)
-- ✅ Include decision points and branching logic when needed
-
-### 9. **Language & Tone**
+### 10. **Language & Tone**
 - ✅ Match the tone to the use case (professional, friendly, technical)
 - ✅ Use consistent terminology throughout
 - ✅ Avoid jargon unless necessary (and define it)
 - ✅ Write in active voice when possible
 
-### 10. **Testing & Iteration**
+### 11. **Testing & Iteration**
 - ✅ Test prompts with edge cases
 - ✅ Verify output matches schema requirements
 - ✅ Check that examples are actually achievable
 - ✅ Iterate based on actual AI outputs
 - ✅ Document prompt versions for comparison
+
+## Recommended Prompt Structure
+
+```markdown
+## PERSONA
+[Specific role with domain expertise and experience level]
+
+## CONTEXT
+[Business purpose, stakeholders, use case, importance]
+• ✅ Scope: [What is included]
+• ❌ NOT included: [What is excluded]
+
+## TASK
+[Direct command: Extract X and return Y]
+
+## INPUT DATA
+[What data is provided to the AI]
+
+## CONSTRAINTS
+[Organized by category: Material Extraction, Nutritional Info, Weight/Volume, etc.]
+
+## STEP-BY-STEP PROCESS
+[For complex tasks, break down into numbered steps]
+
+## EXAMPLES
+[2-3 complete input→output demonstrations]
+
+## FORMAT
+[Reference schema, don't re-explain fields]
+
+## VALIDATION CHECKLIST
+[Items to verify before finalizing]
+```
 
 ## Common Patterns
 
@@ -114,18 +247,6 @@ You are an AI assistant that [specific role and purpose].
 2. **Content Requirements**
    - [Content rule]
    - [Quality standard]
-```
-
-### Step-by-Step Process
-```markdown
-**STEP-BY-STEP PROCESS:**
-
-Step 1: [Action]
-- [Sub-action]
-- [Sub-action]
-
-Step 2: [Action]
-- [Sub-action]
 ```
 
 ### Output Format
@@ -177,24 +298,33 @@ Before finalizing, ensure:
 - Bad: "Make it good" or "Use appropriate values"
 - Good: "Use 1-5 rating scale" or "Include 2-4 options per multiple choice question"
 
-## Prompt Template
+### ❌ Generic Persona
+- Bad: "You are an expert..."
+- Good: "You are a senior product data analyst specializing in medical device documentation with 15 years of experience in ESG compliance reporting."
+
+### ❌ Polite but Vague Commands
+- Bad: "Can you help extract...?"
+- Good: "Extract comprehensive product information from the provided sources and return a structured ProductCharacteristics object."
+
+## Complete Prompt Template
 
 ```markdown
-**WHO YOU ARE:**
-[Role and purpose]
+## PERSONA
+[Specific role with domain expertise and experience level]
 
-**YOUR TASK:**
-[Specific task with success criteria]
-
-**CONTEXT:**
+## CONTEXT
 [Background information]
+• [Business purpose, stakeholders, use case, importance]
 • ✅ Scope: [What's included]
 • ❌ NOT included: [What's excluded]
 
-**INPUT DATA:**
+## TASK
+[Specific task with success criteria - use direct commands]
+
+## INPUT DATA
 [What data is provided to the AI]
 
-**CONSTRAINTS & REQUIREMENTS:**
+## CONSTRAINTS & REQUIREMENTS
 
 1. **Category 1**
    - Rule 1
@@ -204,7 +334,7 @@ Before finalizing, ensure:
    - Rule 1
    - Rule 2
 
-**STEP-BY-STEP PROCESS:**
+## STEP-BY-STEP PROCESS
 
 Step 1: [Action]
 - [Sub-action]
@@ -212,33 +342,51 @@ Step 1: [Action]
 Step 2: [Action]
 - [Sub-action]
 
-**OUTPUT REQUIREMENTS:**
-- Format: [Structure]
-- Fields: [List with types]
-- Validation: [Rules]
-
-**EXAMPLES:**
+## EXAMPLES
 
 Example 1: [Scenario]
 Input: [Input data]
 Output: [Expected output]
 Note: [Why this is correct]
 
-**VALIDATION CHECKLIST:**
+Example 2: [Edge case scenario]
+Input: [Input data]
+Output: [Expected output]
+Note: [How this handles the edge case]
+
+## FORMAT
+- Format: [Structure]
+- Fields: [List with types]
+- Validation: [Rules]
+- Reference: [Schema name if applicable]
+
+## VALIDATION CHECKLIST
+✓ [Requirement]
 ✓ [Requirement]
 ✓ [Requirement]
 ```
+
+## Key Principles Summary
+
+1. **Be specific, not generic**: "Senior analyst with 15 years" > "expert"
+2. **Ground the model**: Always explain WHY (prevents hallucinations)
+3. **Use direct commands**: "Extract" not "Can you help extract"
+4. **Show, don't just tell**: Few-shot examples > descriptions
+5. **Trust your schemas**: Don't duplicate field documentation
+6. **Organize constraints**: Group by category for clarity
+7. **Test and iterate**: Verify with edge cases and refine based on outputs
 
 ## Quality Checklist
 
 Before finalizing a prompt, verify:
 
-- [ ] Role and task are clearly defined
-- [ ] Context provides sufficient background
-- [ ] All constraints are explicitly stated
-- [ ] Output format is precisely specified
-- [ ] At least 2-3 examples are included
-- [ ] Step-by-step process is clear and actionable
+- [ ] Persona is specific with domain expertise and experience level
+- [ ] Context provides sufficient background and explains WHY
+- [ ] Task uses direct, active commands with clear success criteria
+- [ ] All constraints are explicitly stated and organized by category
+- [ ] At least 2-3 examples are included covering different scenarios
+- [ ] Output format is precisely specified (reference schemas when possible)
+- [ ] Step-by-step process is clear and actionable (if needed)
 - [ ] Validation checklist covers critical requirements
 - [ ] Language is clear and unambiguous
 - [ ] Personalization is included where relevant
@@ -254,13 +402,3 @@ Before finalizing a prompt, verify:
 ---
 
 **Note**: Prompts should be iterative—test, refine, and improve based on actual AI outputs. Document changes and version prompts for comparison.
-
-
-
-
-
-
-
-
-
-

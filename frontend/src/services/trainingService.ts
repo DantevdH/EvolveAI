@@ -67,6 +67,7 @@ export class TrainingService {
     try {
       // Use relational query to get training plan with all exercise details
       // Explicitly include main_muscles (jsonb) field to ensure it's loaded
+      // Include endurance_segment for interval workouts
       console.log('📊 TrainingService: Fetching training plan with relational query...');
       const { data, error } = await supabase
         .from('training_plans')
@@ -83,7 +84,10 @@ export class TrainingService {
                   main_muscles
                 )
               ),
-              endurance_session (*)
+              endurance_session (
+                *,
+                endurance_segment (*)
+              )
             )
           )
         `)
@@ -187,9 +191,48 @@ export class TrainingService {
                     force: se.exercises?.force || null
                   })) || [];
 
-                // Map endurance sessions to proper format
+                // Map endurance sessions to proper format with segments
                 const enduranceSessions = daily.endurance_session?.map((es: any) => {
                   const executionOrder = es.execution_order || (strengthExercises.length + 1); // Fallback if missing
+
+                  // Map segments from database
+                  const segments = (es.endurance_segment || [])
+                    .sort((a: any, b: any) => (a.segment_order || 0) - (b.segment_order || 0))
+                    .map((seg: any) => ({
+                      id: seg.id.toString(),
+                      segmentOrder: seg.segment_order,
+                      segmentType: seg.segment_type || 'work',
+                      name: seg.name,
+                      description: seg.description,
+                      targetType: seg.target_type || 'time',
+                      targetValue: seg.target_value,
+                      targetHeartRateZone: seg.target_heart_rate_zone,
+                      targetPace: seg.target_pace,
+                      repeatCount: seg.repeat_count || 1,
+                      actualDuration: seg.actual_duration,
+                      actualDistance: seg.actual_distance,
+                      actualAvgPace: seg.actual_avg_pace,
+                      actualAvgHeartRate: seg.actual_avg_heart_rate,
+                      actualMaxHeartRate: seg.actual_max_heart_rate,
+                      startedAt: seg.started_at ? new Date(seg.started_at) : undefined,
+                      completedAt: seg.completed_at ? new Date(seg.completed_at) : undefined,
+                    }));
+
+                  // Calculate total target duration and distance from segments (accounting for repeat_count)
+                  let totalTargetDuration = 0;
+                  let totalTargetDistance = 0;
+                  for (const seg of segments) {
+                    const repeatCount = seg.repeatCount || 1;
+                    if (seg.targetType === 'time' && seg.targetValue) {
+                      totalTargetDuration += seg.targetValue * repeatCount;
+                    } else if (seg.targetType === 'distance' && seg.targetValue) {
+                      totalTargetDistance += seg.targetValue * repeatCount;
+                    }
+                  }
+
+                  // Generate name from segments if not provided
+                  const generatedName = es.name || this.generateEnduranceSessionName(es.sport_type, segments);
+
                   return {
                     id: es.id.toString(),
                     exerciseId: `endurance_${es.id}`,
@@ -198,14 +241,30 @@ export class TrainingService {
                     executionOrder: executionOrder,
                     enduranceSession: {
                       id: es.id.toString(),
-                      name: es.name || `${es.sport_type} - ${es.training_volume} ${es.unit}`,
+                      name: generatedName,
                       description: es.description || `${es.sport_type} session`,
                       sportType: es.sport_type,
-                      trainingVolume: es.training_volume,
-                      unit: es.unit,
-                      heartRateZone: es.heart_rate_zone,
                       executionOrder: executionOrder,
-                      completed: es.completed || false
+                      completed: es.completed || false,
+                      segments: segments,
+                      totalTargetDuration: totalTargetDuration,
+                      totalTargetDistance: totalTargetDistance,
+                      // Session-level actuals
+                      actualDuration: es.actual_duration,
+                      actualDistance: es.actual_distance,
+                      averagePace: es.average_pace,
+                      averageSpeed: es.average_speed,
+                      averageHeartRate: es.average_heart_rate,
+                      maxHeartRate: es.max_heart_rate,
+                      minHeartRate: es.min_heart_rate,
+                      elevationGain: es.elevation_gain,
+                      elevationLoss: es.elevation_loss,
+                      calories: es.calories,
+                      cadence: es.cadence,
+                      dataSource: es.data_source,
+                      healthWorkoutId: es.health_workout_id,
+                      startedAt: es.started_at ? new Date(es.started_at) : undefined,
+                      completedAt: es.completed_at ? new Date(es.completed_at) : undefined,
                     }
                   };
                 }) || [];
@@ -401,15 +460,12 @@ export class TrainingService {
   ): Promise<{ success: boolean; newId?: number; error?: string }> {
     try {
       if (exercise.enduranceSession) {
-        // Endurance session
-        const { data, error } = await supabase
+        // Endurance session - insert session first, then segments
+        const { data: sessionData, error: sessionError } = await supabase
           .from('endurance_session')
           .insert({
             daily_training_id: dailyTrainingId,
             sport_type: exercise.enduranceSession.sportType,
-            training_volume: exercise.enduranceSession.trainingVolume,
-            unit: exercise.enduranceSession.unit,
-            heart_rate_zone: exercise.enduranceSession.heartRateZone,
             execution_order: exercise.executionOrder,
             completed: exercise.completed || false,
             name: exercise.enduranceSession.name || null,
@@ -420,12 +476,41 @@ export class TrainingService {
           .select()
           .single();
 
-        if (error) {
-          console.error('Error saving temporary endurance session:', error);
-          return { success: false, error: error.message };
+        if (sessionError) {
+          console.error('Error saving temporary endurance session:', sessionError);
+          return { success: false, error: sessionError.message };
         }
 
-        return { success: true, newId: data.id };
+        // Insert segments for this session
+        const segments = exercise.enduranceSession.segments || [];
+        if (segments.length > 0) {
+          const segmentsToInsert = segments.map((seg) => ({
+            endurance_session_id: sessionData.id,
+            segment_order: seg.segmentOrder,
+            segment_type: seg.segmentType || 'work',
+            name: seg.name || null,
+            description: seg.description || null,
+            target_type: seg.targetType || 'time',
+            target_value: seg.targetValue || null,
+            target_heart_rate_zone: seg.targetHeartRateZone || null,
+            target_pace: seg.targetPace || null,
+            repeat_count: seg.repeatCount || 1,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }));
+
+          const { error: segmentsError } = await supabase
+            .from('endurance_segment')
+            .insert(segmentsToInsert);
+
+          if (segmentsError) {
+            console.error('Error saving endurance segments:', segmentsError);
+            // Session was created, but segments failed - return success with warning
+            console.warn('Session created but segments failed to save');
+          }
+        }
+
+        return { success: true, newId: sessionData.id };
       } else if (exercise.exercise) {
         // Strength exercise
         const sets = exercise.sets || [];
@@ -758,26 +843,63 @@ export class TrainingService {
         return { success: false, error: enduranceError.message };
       }
 
-      // 2. Separate exercises into strength exercises and endurance sessions
+      // 2. Separate exercises into strength exercises and endurance sessions (with segments)
       const strengthExercises: any[] = [];
-      const enduranceSessions: any[] = [];
+      const enduranceSessionsData: { session: any; segments: any[] }[] = [];
 
       for (const exercise of exercises) {
         if (exercise.enduranceSession) {
-          // Endurance session
-          enduranceSessions.push({
+          // Endurance session - prepare session and segments separately
+          const sessionData = {
             daily_training_id: dailyTrainingId,
             sport_type: exercise.enduranceSession.sportType,
-            training_volume: exercise.enduranceSession.trainingVolume,
-            unit: exercise.enduranceSession.unit,
-            heart_rate_zone: exercise.enduranceSession.heartRateZone,
             execution_order: exercise.executionOrder,
             completed: true, // ALL exercises are completed when this method is called
             name: exercise.enduranceSession.name || null,
             description: exercise.enduranceSession.description || null,
+            // Include session-level actuals if present
+            actual_duration: exercise.enduranceSession.actualDuration || null,
+            actual_distance: exercise.enduranceSession.actualDistance || null,
+            average_pace: exercise.enduranceSession.averagePace || null,
+            average_speed: exercise.enduranceSession.averageSpeed || null,
+            average_heart_rate: exercise.enduranceSession.averageHeartRate || null,
+            max_heart_rate: exercise.enduranceSession.maxHeartRate || null,
+            min_heart_rate: exercise.enduranceSession.minHeartRate || null,
+            elevation_gain: exercise.enduranceSession.elevationGain || null,
+            elevation_loss: exercise.enduranceSession.elevationLoss || null,
+            calories: exercise.enduranceSession.calories || null,
+            cadence: exercise.enduranceSession.cadence || null,
+            data_source: exercise.enduranceSession.dataSource || null,
+            health_workout_id: exercise.enduranceSession.healthWorkoutId || null,
+            started_at: exercise.enduranceSession.startedAt?.toISOString() || null,
+            completed_at: exercise.enduranceSession.completedAt?.toISOString() || null,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          });
+          };
+
+          // Prepare segments
+          const segments = (exercise.enduranceSession.segments || []).map((seg: any) => ({
+            segment_order: seg.segmentOrder,
+            segment_type: seg.segmentType || 'work',
+            name: seg.name || null,
+            description: seg.description || null,
+            target_type: seg.targetType || 'time',
+            target_value: seg.targetValue || null,
+            target_heart_rate_zone: seg.targetHeartRateZone || null,
+            target_pace: seg.targetPace || null,
+            repeat_count: seg.repeatCount || 1,
+            actual_duration: seg.actualDuration || null,
+            actual_distance: seg.actualDistance || null,
+            actual_avg_pace: seg.actualAvgPace || null,
+            actual_avg_heart_rate: seg.actualAvgHeartRate || null,
+            actual_max_heart_rate: seg.actualMaxHeartRate || null,
+            started_at: seg.startedAt?.toISOString() || null,
+            completed_at: seg.completedAt?.toISOString() || null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }));
+
+          enduranceSessionsData.push({ session: sessionData, segments });
         } else if (exercise.exercise) {
           // Strength exercise
           // Extract reps and weight from TrainingSet[] or use weight array
@@ -820,20 +942,42 @@ export class TrainingService {
         insertedStrengthExercises = strengthData || [];
       }
 
-      // 4. Insert new endurance sessions and get back their IDs
+      // 4. Insert new endurance sessions with their segments
       let insertedEnduranceSessions: any[] = [];
-      if (enduranceSessions.length > 0) {
-        const { data: enduranceData, error: insertEnduranceError } = await supabase
-          .from('endurance_session')
-          .insert(enduranceSessions)
-          .select();
+      if (enduranceSessionsData.length > 0) {
+        // Insert sessions one by one to get IDs for segment linking
+        for (const { session, segments } of enduranceSessionsData) {
+          const { data: sessionData, error: insertSessionError } = await supabase
+            .from('endurance_session')
+            .insert(session)
+            .select()
+            .single();
 
-        if (insertEnduranceError) {
-          console.error('Error inserting endurance sessions:', insertEnduranceError);
-          return { success: false, error: insertEnduranceError.message };
+          if (insertSessionError) {
+            console.error('Error inserting endurance session:', insertSessionError);
+            return { success: false, error: insertSessionError.message };
+          }
+
+          const insertedSession = sessionData;
+          insertedEnduranceSessions.push(insertedSession);
+
+          // Insert segments for this session
+          if (segments.length > 0) {
+            const segmentsWithSessionId = segments.map((seg: any) => ({
+              ...seg,
+              endurance_session_id: insertedSession.id,
+            }));
+
+            const { error: insertSegmentsError } = await supabase
+              .from('endurance_segment')
+              .insert(segmentsWithSessionId);
+
+            if (insertSegmentsError) {
+              console.error('Error inserting endurance segments:', insertSegmentsError);
+              return { success: false, error: insertSegmentsError.message };
+            }
+          }
         }
-
-        insertedEnduranceSessions = enduranceData || [];
       }
 
       // 5. Map new IDs back to exercises (preserve order)
@@ -857,7 +1001,7 @@ export class TrainingService {
         }
       });
 
-      console.log(`✅ Saved ${strengthExercises.length} strength exercises and ${enduranceSessions.length} endurance sessions for daily training ${dailyTrainingId}`);
+      console.log(`✅ Saved ${strengthExercises.length} strength exercises and ${enduranceSessionsData.length} endurance sessions for daily training ${dailyTrainingId}`);
       return { success: true, exerciseIdMap };
     } catch (error) {
       console.error('Error in saveDailyTrainingExercises:', error);
@@ -1394,6 +1538,59 @@ export class TrainingService {
       });
     }
     return sets;
+  }
+
+  /**
+   * Generate a descriptive name for an endurance session based on its segments
+   */
+  private static generateEnduranceSessionName(sportType: string, segments: any[]): string {
+    if (!segments || segments.length === 0) {
+      return `${this.formatSportType(sportType)} Session`;
+    }
+
+    // Single segment: simple format
+    if (segments.length === 1) {
+      const seg = segments[0];
+      if (seg.targetType === 'time' && seg.targetValue) {
+        const minutes = Math.round(seg.targetValue / 60);
+        return `${minutes} min ${this.formatSportType(sportType)}`;
+      } else if (seg.targetType === 'distance' && seg.targetValue) {
+        const km = seg.targetValue / 1000;
+        return km >= 1
+          ? `${km.toFixed(1)} km ${this.formatSportType(sportType)}`
+          : `${Math.round(seg.targetValue)} m ${this.formatSportType(sportType)}`;
+      }
+      return `${this.formatSportType(sportType)} Session`;
+    }
+
+    // Multiple segments: count work intervals
+    const workSegments = segments.filter(s => s.segmentType === 'work');
+    if (workSegments.length > 0) {
+      const firstWork = workSegments[0];
+      if (firstWork.targetType === 'distance' && firstWork.targetValue) {
+        const km = firstWork.targetValue / 1000;
+        const distStr = km >= 1 ? `${km.toFixed(1)}km` : `${Math.round(firstWork.targetValue)}m`;
+        return `${workSegments.length}x${distStr} Intervals`;
+      } else if (firstWork.targetType === 'time' && firstWork.targetValue) {
+        const minutes = Math.round(firstWork.targetValue / 60);
+        const seconds = Math.round(firstWork.targetValue % 60);
+        const timeStr = seconds > 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : `${minutes} min`;
+        return `${workSegments.length}x${timeStr} Intervals`;
+      }
+    }
+
+    return `${segments.length} Segment ${this.formatSportType(sportType)}`;
+  }
+
+  /**
+   * Format sport type for display (capitalize, replace underscores)
+   */
+  private static formatSportType(sportType: string): string {
+    if (!sportType) return 'Endurance';
+    return sportType
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
   }
 
   /**

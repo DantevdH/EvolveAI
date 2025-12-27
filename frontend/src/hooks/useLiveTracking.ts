@@ -12,8 +12,9 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Vibration, Platform } from 'react-native';
 import * as Battery from 'expo-battery';
+import * as Haptics from 'expo-haptics';
 import {
   TrackingState,
   TrackingStatus,
@@ -21,7 +22,9 @@ import {
   TrackedWorkoutMetrics,
   GPSSignalQuality,
   UseLiveTrackingReturn,
+  SegmentTrackingMetrics,
 } from '../types/liveTracking';
+import { EnduranceSegment } from '../types/training';
 import { LiveTrackingService } from '../services/LiveTrackingService';
 import { useUserProfile } from './useUserProfile';
 import { logger } from '../utils/logger';
@@ -54,7 +57,11 @@ export function useLiveTracking(): UseLiveTrackingReturn {
   const [countdownSeconds, setCountdownSeconds] = useState<number>(0);
   const [isCountingDown, setIsCountingDown] = useState<boolean>(false);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pendingStartRef = useRef<{ sessionId: string; sportType: string } | null>(null);
+  const pendingStartRef = useRef<{
+    sessionId: string;
+    sportType: string;
+    segments?: EnduranceSegment[];
+  } | null>(null);
 
   // Set user weight for calorie estimation
   useEffect(() => {
@@ -128,16 +135,42 @@ export function useLiveTracking(): UseLiveTrackingReturn {
     }
   }, []);
 
+  // ==================== SEGMENT ALERT HANDLER ====================
+
+  /**
+   * Handle segment alerts with haptic/vibration feedback
+   */
+  const handleSegmentAlert = useCallback((type: 'approaching' | 'complete', segmentIndex: number) => {
+    logger.info('Segment alert', { type, segmentIndex });
+
+    if (type === 'approaching') {
+      // Short vibration pattern for approaching end
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      } else {
+        Vibration.vibrate([0, 200, 100, 200]); // Two short bursts
+      }
+    } else if (type === 'complete') {
+      // Strong vibration for segment complete
+      if (Platform.OS === 'ios') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Vibration.vibrate([0, 500]); // One longer burst
+      }
+    }
+  }, []);
+
   // ==================== COUNTDOWN ====================
 
-  const startCountdown = useCallback((sessionId: string, sportType: string) => {
+  const startCountdown = useCallback((sessionId: string, sportType: string, segments?: EnduranceSegment[]) => {
     // Guard: If already counting down or tracking, don't start again
     const currentServiceState = LiveTrackingService.getState();
 
     if (
       currentServiceState.status === 'tracking' ||
       currentServiceState.status === 'paused' ||
-      currentServiceState.status === 'auto_paused'
+      currentServiceState.status === 'auto_paused' ||
+      currentServiceState.status === 'segment_transition'
     ) {
       logger.warn('Cannot start countdown - tracking already in progress', {
         status: currentServiceState.status,
@@ -152,7 +185,7 @@ export function useLiveTracking(): UseLiveTrackingReturn {
     }
 
     // Store pending start info
-    pendingStartRef.current = { sessionId, sportType };
+    pendingStartRef.current = { sessionId, sportType, segments };
 
     // Mark countdown as active BEFORE setting the seconds
     // This ensures the UI knows we're counting down even before React batches the state update
@@ -179,10 +212,10 @@ export function useLiveTracking(): UseLiveTrackingReturn {
           // Use setTimeout(0) to escape the state updater context
           setTimeout(() => {
             if (pendingStartRef.current) {
-              const { sessionId: id, sportType: type } = pendingStartRef.current;
+              const { sessionId: id, sportType: type, segments: segs } = pendingStartRef.current;
               pendingStartRef.current = null;
 
-              LiveTrackingService.startTracking(id, type).catch(async (error) => {
+              LiveTrackingService.startTracking(id, type, segs, handleSegmentAlert).catch(async (error) => {
                 logger.error('Failed to start tracking', error);
 
                 // Reset state on error
@@ -217,7 +250,7 @@ export function useLiveTracking(): UseLiveTrackingReturn {
         return prev - 1;
       });
     }, 1000);
-  }, [isCountingDown]);
+  }, [isCountingDown, handleSegmentAlert]);
 
   const cancelCountdown = useCallback(() => {
     if (countdownIntervalRef.current) {
@@ -245,6 +278,16 @@ export function useLiveTracking(): UseLiveTrackingReturn {
 
   const discard = useCallback(async () => {
     await LiveTrackingService.discardTracking();
+  }, []);
+
+  // ==================== SEGMENT CONTROLS ====================
+
+  const skipToNextSegment = useCallback(() => {
+    LiveTrackingService.skipToNextSegment();
+  }, []);
+
+  const toggleAutoAdvance = useCallback(() => {
+    LiveTrackingService.toggleAutoAdvance();
   }, []);
 
   // ==================== READINESS CHECK ====================
@@ -279,6 +322,21 @@ export function useLiveTracking(): UseLiveTrackingReturn {
     };
   }, []);
 
+  // ==================== SEGMENT STATE ACCESSORS ====================
+
+  // Derive segment state for convenience
+  const currentSegment: SegmentTrackingMetrics | null = useMemo(() => {
+    const segTracking = trackingState.segmentTracking;
+    if (!segTracking) return null;
+    const { currentSegmentIndex, segments } = segTracking;
+    if (currentSegmentIndex >= segments.length) return null;
+    return segments[currentSegmentIndex];
+  }, [trackingState.segmentTracking]);
+
+  const currentSegmentIndex = trackingState.segmentTracking?.currentSegmentIndex ?? 0;
+  const totalSegments = trackingState.segmentTracking?.segments.length ?? 0;
+  const isMultiSegment = totalSegments > 1;
+
   // ==================== RETURN ====================
 
   // Override status if in countdown - use isCountingDown as the authoritative source
@@ -293,14 +351,28 @@ export function useLiveTracking(): UseLiveTrackingReturn {
     formattedMetrics,
     countdownSeconds,
     isCountingDown,
+
+    // Segment state (convenience accessors)
+    currentSegment,
+    currentSegmentIndex,
+    totalSegments,
+    isMultiSegment,
+
+    // Actions
     startCountdown,
     cancelCountdown,
     pause,
     resume,
     stop,
     discard,
-    checkReadiness,
     resetToIdle,
+
+    // Segment actions
+    skipToNextSegment,
+    toggleAutoAdvance,
+
+    // Pre-checks
+    checkReadiness,
   };
 }
 

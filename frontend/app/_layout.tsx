@@ -10,7 +10,6 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AppProvider } from '@/src/context/AppContext';
 import { AuthProvider, useAuth } from '@/src/context/AuthContext';
-import { CoachProvider } from '@/src/context/CoachContext';
 import { InsightsProvider } from '@/src/context/InsightsContext';
 import { ErrorBoundary } from '@/src/components/ErrorBoundary';
 import { NetworkStatus } from '@/src/components/NetworkStatus';
@@ -157,13 +156,11 @@ export default function RootLayout() {
     <ErrorBoundary>
       <AuthProvider>
         <InsightsProvider>
-          <CoachProvider>
-            <AppProvider>
-              <NavigationProvider>
-                <RootLayoutNav />
-              </NavigationProvider>
-            </AppProvider>
-          </CoachProvider>
+          <AppProvider>
+            <NavigationProvider>
+              <RootLayoutNav />
+            </NavigationProvider>
+          </AppProvider>
         </InsightsProvider>
       </AuthProvider>
     </ErrorBoundary>
