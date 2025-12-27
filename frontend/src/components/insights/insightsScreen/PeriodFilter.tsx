@@ -16,7 +16,7 @@ export const PeriodFilter: React.FC<PeriodFilterProps> = ({
   selectedPeriod,
   onPeriodChange,
 }) => {
-  const periods: TimePeriod[] = ['1M', '3M', '6M', '1Y', 'ALL'];
+  const periods: TimePeriod[] = ['MTD', 'QTD', 'YTD', 'ALL'];
 
   return (
     <View style={styles.container}>

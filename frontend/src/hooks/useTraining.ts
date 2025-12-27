@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { TrainingService } from '../services/trainingService';
 import { NotificationService } from '../services/NotificationService';
 import { ExerciseSwapService } from '../services/exerciseSwapService';
-import { InsightsAnalyticsService } from '../services/insightsAnalyticsService';
+// InsightsAnalyticsService removed - insights now calculated client-side via InsightsContext
 import { supabase } from '../config/supabase';
 import SessionRPEModal from '../components/training/SessionRPEModal';
 import { colors } from '../constants/colors';
@@ -66,7 +66,7 @@ function getActualDayIndex(selectedDayIndex: number, dailyTrainings: DailyTraini
 }
 
 export const useTraining = (): UseTrainingReturn => {
-  const { state: authState, refreshTrainingPlan: refreshAuthTrainingPlan, setTrainingPlan: setAuthTrainingPlan, setInsightsSummary: setAuthInsightsSummary } = useAuth();
+  const { state: authState, refreshTrainingPlan: refreshAuthTrainingPlan, setTrainingPlan: setAuthTrainingPlan } = useAuth();
   const [trainingState, setTrainingState] = useState<TrainingState>(initialState);
   const [trainingPlan, setTrainingPlan] = useState<TrainingPlan | null>(null);
   const hasInitialized = useRef(false);
@@ -1082,55 +1082,8 @@ export const useTraining = (): UseTrainingReturn => {
           pendingCompletionDailyTrainingId: null
         }));
 
-        // Clear insights cache to ensure fresh data after workout completion
-        try {
-          InsightsAnalyticsService.clearCache();
-          logger.info('Cleared insights cache after workout completion');
-        } catch (error) {
-          logger.warn('Failed to clear insights cache', error);
-        }
-
-        // Fetch fresh insights summary after workout completion (backend handles caching)
-        // This triggers LLM generation, so we set a flag that InsightsScreen can detect
-        // InsightsScreen will show loading spinner and then load the cached result
-        const userProfileId = authState.userProfile?.id;
-        if (userProfileId) {
-          // Generate insights asynchronously (non-blocking)
-          (async () => {
-            try {
-              // Get weak points and top exercises for better AI context
-              const [weakPointsResult, topExercisesResult] = await Promise.all([
-                InsightsAnalyticsService.getWeakPointsAnalysis(
-                  userProfileId,
-                  updatedPlan
-                ),
-                InsightsAnalyticsService.getTopPerformingExercises(
-                  userProfileId,
-                  updatedPlan
-                )
-              ]);
-
-              // Call insights summary API (backend will generate new insights and cache them)
-              const insightsResult = await InsightsAnalyticsService.getInsightsSummary(
-                userProfileId,
-                updatedPlan,
-                weakPointsResult.success ? weakPointsResult.data : undefined,
-                topExercisesResult.success ? topExercisesResult.data : undefined
-              );
-              
-              // Update context with new insights (if generation succeeded)
-              if (insightsResult.success && insightsResult.data) {
-                setAuthInsightsSummary(insightsResult.data);
-                logger.info('Insights summary refreshed and updated in context after workout completion');
-              } else {
-                logger.warn('Failed to generate insights summary', insightsResult.error);
-              }
-            } catch (error) {
-              // Non-blocking - log but don't fail
-              logger.warn('Failed to refresh insights summary', error);
-            }
-          })();
-        }
+        // Note: Insights are now calculated client-side via InsightsContext
+        // The context will automatically recalculate when trainingPlan updates
 
         // Cancel today's training reminder since training is completed
         await NotificationService.cancelTrainingReminder();

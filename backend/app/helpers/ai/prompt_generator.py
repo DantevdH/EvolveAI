@@ -24,9 +24,6 @@ from app.helpers.prompts.plan_prompts import (
     create_new_weekly_schedule_prompt as _create_new_weekly_schedule_prompt,
     generate_future_week_outline_prompt as _generate_future_week_outline_prompt,
 )
-from app.helpers.prompts.insights_prompts import (
-    generate_insights_summary_prompt as _generate_insights_summary_prompt,
-)
 from app.helpers.prompts.formatting_helpers import (
     format_client_information as _format_client_information,
     format_playbook_lessons as _format_playbook_lessons,
@@ -197,12 +194,6 @@ class PromptGenerator:
             start_week_number,
             total_weeks,
         )
-
-    # Insights prompts
-    @staticmethod
-    def generate_insights_summary_prompt(metrics: Dict[str, Any]) -> str:
-        """Generate prompt for AI insights summary."""
-        return _generate_insights_summary_prompt(metrics)
 
     # Formatting helpers (delegated to formatting_helpers module)
     @staticmethod

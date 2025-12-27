@@ -281,117 +281,38 @@ Transform endurance sessions into a live workout tracking experience similar to 
 - GPS tracking provides accurate distance measurement
 - Industry-standard features increase user trust and engagement
 
-#### 4. Unified Sports Analytics Integration
-**Complexity: Low | Impact: High**
+#### 4. Insights: Performance Metrics & Recovery
+**Complexity: Medium | Impact: High**
 
-Integrate all sports (strength, running, cycling, swimming, etc.) into the existing analytics pipeline. Currently, only strength exercises are included in analytics, while endurance sessions and other sport types are skipped in `insightsAnalyticsService.ts`. This improvement extends analytics to all sport types, calculating weekly volume trends, consistency metrics, and performance scores across the user's entire training regimen. This leverages existing analytics infrastructure and provides immediate value to all athletes, regardless of their primary sport focus. Uses the rich data captured from live tracking (#3) to provide meaningful insights across all sports.
+Integrate comprehensive performance metrics and science-based recovery tracking across all sports (strength, running, cycling, swimming, etc.) into a unified insights view. This combines sport-specific performance analytics with recovery status tracking to provide athletes with a holistic view of their training load, progress, and recovery needs. The insights view includes filtered analytics by sport type and recovery status by muscle group, enabling data-driven training decisions and injury prevention.
 
 **Implementation Details:**
 
-**UI Approach: Unified Sports View with Filter Toggle** (Recommended)
-- **Remove AI insights**: Remove the AI insights as they are poorly prompted and implemented and not high priority at this point. Remove all references to it in backend and front-end - make a very clean removal.
+**UI Approach: Unified Insights View**
+- **Remove AI insights**: Remove the AI insights as they are poorly prompted and implemented and not high priority at this point. Remove all references to it in frontend - make a very clean removal.
 - **Sport filter dropdown**: Create a dropdown with all available sports (strength, running, cycling, swimming, rowing, hiking, walking, elliptical, stair_climbing, jump_rope, other) so that a user can filter to specific sports. Only show the sports in the filter that a user has performed. Track this centrally upon app load and update if a plan completion update occurs.
+- **Two main sections**: 4a) Performance Metrics and 4b) Recovery
 - **Filter toggle**: Add segmented control or toggle buttons at top of InsightsContent with all performed sport types. Include "All" option to show combined data across all sports.
 
-**Backend Changes:**
-1. **Frontend Service (`insightsAnalyticsService.ts`)**:
-   - Modify `extractCompletedExercisesFromLocalPlan()`:
-     - Remove the skip logic for endurance sessions (line 58-61)
-     - Extract all exercise data: strength exercises AND endurance sessions (all sport types)
-     - For strength exercises: Extract weight, reps, sets, exercise name, completedAt
-     - For endurance sessions: Extract sportType, trainingVolume, unit, heartRateZone, completedAt
-     - **Priority**: Extract `actualDistance` and `actualTime` when available (from database schema populated by live tracking #3), fallback to `trainingVolume` if not set
-     - Convert all volumes to standardized units (minutes or equivalent volume metric) for unified display
-     - Pass both distance and time arrays to chart components for clustered bar display (for applicable sports)
+---
 
-2. Create unified `extractCompletedActivities()` function:
-   - Extract all activities regardless of type (strength exercises and all endurance sport types)
-   - For strength: Extract exercise name, weight, reps, sets, completed_at
-   - For endurance: Extract sport_type, training_volume, unit, heart_rate_zone, completed_at
-   - **Priority**: Extract `actual_distance` and `actual_time` when available (from live tracking #3 or manual entry), fallback to `training_volume` if not set
-   - Calculate sport-specific metrics: weekly distance/time for applicable sports, zone distribution for endurance sports, volume progression for strength
-   - Group by week and sport type for chart data: aggregate distance and time separately for clustered bar chart (where applicable)
+### 4a. Performance Metrics
 
-3. **Backend Service (`insights_service.py`)**:
-   - Update `_calculate_week_volume()` to handle all sport types:
-     - Calculate strength volume (existing logic: weight × reps × sets)
-     - Calculate endurance volume for each sport type: convert to minutes (or standardized metric)
-     - Return combined total or sport-specific metrics based on filter
-   - Update `extract_volume_progress()` to handle all sports:
-     - Check which sport types exist in user's training data
-     - Generate description based on available sports (e.g., "strength and running", "cycling only", "all sports")
-     - Support filtering by individual sport types
+**Data Extraction (Frontend):**
+- Fetch all exercise data from database via Supabase client: strength exercises AND endurance sessions (all sport types)
+- For strength exercises: Extract weight, reps, sets, exercise name, `target_area` (from `exercises` table via JOIN), completedAt
+- For endurance sessions: Extract sportType, trainingVolume, unit, heartRateZone, completedAt
+- **Priority**: Extract `actualDistance` and `actualTime` when available (from database schema populated by live tracking #3), fallback to `trainingVolume` if not set
+- All calculations performed in frontend service (`insightsAnalyticsService.ts` or similar)
+- Group by week and sport type for chart data: aggregate distance and time separately for clustered bar chart (where applicable)
 
-4. Update analytics calculations:
-   - **Weekly Volume Trends**: Include all sport volumes (convert to common unit or show separately by sport type)
-   - **Consistency Metrics**: Track session frequency for each sport type
-   - **Performance Scores**: Calculate sport-specific scores (volume progression for strength, zone adherence for endurance sports, sport variety across all types)
-   - **Heart Rate Zone Analytics**: If HR data available (from live tracking #3), calculate time-in-zone metrics, average/max HR, and zone distribution across applicable sessions (endurance sports)
-
-**Frontend Changes:**
-
-**UI Layout Order (Top to Bottom):**
-1. **Filter Toggle/Dropdown (At Top)**:
-   - Add segmented control or dropdown with sport filter options
-   - Options: [List of performed sports: "Strength", "Running", "Cycling", "Swimming", etc.]
-   - Only show sports that the user has actually performed
-   - Position: At the top of InsightsContent, above all charts/cards
-   - Filter all data based on selected sport type
-   - Update all charts/cards below to respect filter
-   - Default: first from alphabetical 
-   - Track performed sports centrally and update when plan completion occurs
-
-2. Update chart components:
-   - **VolumeTrendChart Enhancement**: Extend existing `VolumeTrendChart` component to support all sport types
-   - **Clustered Bar Chart for Applicable Sports**:
-     - **Chart Type**: Clustered bar chart with dual y-axes (for sports with distance + time)
-     - **Display Logic**:
-       - For strength: Show volume (weight × reps × sets) as single bar
-       - For sports with both `actual_distance` and `actual_time`: Show two bars per week (clustered)
-         - Distance bar: Left y-axis (km/miles) - primary metric for outdoor activities
-         - Time bar: Right y-axis (minutes) - secondary metric
-         - Use distinct colors (e.g., distance = blue, time = green)
-         - Clear axis labels: "Distance (km)" on left, "Duration (min)" on right
-       - For sports with only distance: Show single distance bar (single y-axis)
-       - For sports with only time: Show single time bar (single y-axis) - handles gym cycle case
-       - When neither exists: Fall back to `training_volume` with unit display
-     - **Benefits**:
-       - Handles all scenarios: strength (volume), outdoor activities (distance + time), indoor activities (time only), live tracking (both)
-       - Shows most relevant metric prominently for each sport type
-       - Space-efficient: one chart that adapts to available data and sport type
-       - Consistent with existing bar chart style in codebase
-     - **Implementation**:
-       - Extend `VolumeTrendChart` props to accept sport type and optional `distance` and `time` arrays
-       - Render appropriate chart type based on sport (strength = volume bar, endurance = distance/time bars)
-       - Render two bars per week when both metrics exist (clustered, side-by-side)
-       - Add left y-axis (distance) and right y-axis (time) when both present
-       - Use distinct colors for each metric with legend
-       - Maintain existing period filter functionality
-   - Add sport-specific visualizations: zone distribution for endurance sports, exercise breakdown for strength
-   - **Progress Charts**: Create line/bar charts showing weekly volume trends for each sport type, distance/time progression for applicable sports, and heart rate zone distribution over time for endurance sports
-   - Reuse existing charting libraries (`react-native-chart-kit` or similar)
-   - Visual progress tracking is crucial for all athletes and provides immediate motivation
-   - **Heart Rate Zone Analytics**: If users have actual heart rate data (from live tracking #3 or Health import), calculate time-in-zone metrics, average HR, max HR, and HR zone distribution across applicable sessions (endurance sports)
-   - Visualize zone distribution with pie charts and show trends over time
-   - Provides valuable training load insights similar to TrainingPeaks' TSS (Training Stress Score)
-
-3. Update metrics display:
-   - Show combined totals when filtered to first sport (aggregate across all sport types)
-   - Show sport-specific metrics when filtered to individual sport
-   - Add sport-specific KPIs based on sport type (see Sport-Specific Metrics section below)
-   - Add HR metrics when available: average HR, max HR, zone distribution (for endurance sports)
-
-**Sport-Specific Metrics and Visual Enhancements:**
-
-Determine which metrics are important for each sport type and display them in contextually relevant formats. These improvements make the app feel purpose-built for each sport type and ensure users see the most relevant data for their activities.
-
-**Metrics per Sport Type** (minimal set, combining where possible):
+**Sport-Specific Metrics Display:**
 
 **Common Metrics** (all sports):
 - Time, Distance (where applicable), Heart Rate (avg/max), Pace/Speed
 
 **Sport-Specific Displays**:
-- **Strength**: Volume (weight × reps × sets), Sets, Reps, Weight progression, RPE (Rate of Perceived Exertion), Muscle groups targeted, Exercise breakdown
+- **Strength**: Volume (weight × reps × sets), Sets, Reps, Weight progression, RPE (Rate of Perceived Exertion), Muscle groups targeted (`target_area`), Exercise breakdown
 - **Running**: Pace (min/km or min/mile), Distance, Time, HR, Elevation
 - **Cycling**: Speed (km/h or mph), Distance, Time, HR, Elevation, Cadence
 - **Swimming**: Pace (min/100m or min/100yd), Distance, Time, HR
@@ -403,76 +324,237 @@ Determine which metrics are important for each sport type and display them in co
 - **Jump Rope**: Time, HR, Jumps (if available)
 - **Other**: Time, Distance (if applicable), HR
 
+**Chart Components:**
+- **VolumeTrendChart Enhancement**: Extend existing `VolumeTrendChart` component to support all sport types
+- **Clustered Bar Chart for Applicable Sports**:
+  - **Chart Type**: Clustered bar chart with dual y-axes (for sports with distance + time)
+  - **Display Logic**:
+    - For strength: Show volume (weight × reps × sets) as single bar
+    - For sports with both `actual_distance` and `actual_time`: Show two bars per week (clustered)
+      - Distance bar: Left y-axis (km/miles) - primary metric for outdoor activities
+      - Time bar: Right y-axis (minutes) - secondary metric
+      - Use distinct colors (e.g., distance = blue, time = green)
+      - Clear axis labels: "Distance (km)" on left, "Duration (min)" on right
+    - For sports with only distance: Show single distance bar (single y-axis)
+    - For sports with only time: Show single time bar (single y-axis) - handles gym cycle case
+    - When neither exists: Fall back to `training_volume` with unit display
+- **Heart Rate Zone Analytics**: If users have actual heart rate data (from live tracking #3 or Health import), calculate time-in-zone metrics, average HR, max HR, and HR zone distribution across applicable sessions (endurance sports)
+- Visualize zone distribution with pie charts and show trends over time
+
 **Visual Enhancements**:
-- Sport-specific color schemes and icons
 - Contextual metric formatting (pace vs speed based on sport, volume for strength)
 - Elevation display for outdoor activities (running, cycling, hiking, stair climbing)
 - Combined metric displays where possible (e.g., pace + distance = speed)
 - Chart types adapt to sport: volume bars for strength, distance/time bars for endurance sports
 
-#### 5. Metrics vs. Recovery
-**Complexity: Medium | Impact: High**
+---
 
-Integrate recovery metrics alongside performance metrics to provide a holistic view of training load and recovery status. This helps athletes understand the relationship between training intensity/volume and their body's recovery state, enabling better training decisions and injury prevention.
+### 4b. Recovery (Science-Based)
 
-**Implementation Details:**
+**Data Source:**
+- **Muscle Group**: Use `exercises.target_area` directly from database (e.g., "Calves", "Upper Arms", "Chest")
+- **Primary Muscle**: `exercises.target_area` receives 100% of volume load (simplified approach)
+- **Endurance Mapping**: Map endurance activities to `target_area` values:
+  - Running → "Legs"
+  - Cycling → "Legs"
+  - Swimming → "Upper Arms" (or "Core" if no arms)
+  - Rowing → "Back"
+  - Hiking → "Legs"
+  - Walking → "Legs"
+  - Other → "None, not in overview" 
 
-**Recovery Metrics for Strength Training:**
-- **Muscle Recovery**: Track recovery status for different muscle groups based on training frequency and volume
-  - Calculate time since last training session for each muscle group
-  - Factor in training volume (weight × reps × sets) to determine recovery needs
-  - Display recovery status indicators (e.g., "Recovered", "Recovering", "Needs Rest")
-  - Consider RPE (Rate of Perceived Exertion) data when available to adjust recovery estimates
-- **Fatigue Indicators**: 
-  - Track session RPE trends over time
-  - Monitor volume progression vs. RPE to detect overreaching
-  - Show fatigue accumulation patterns (weekly/monthly trends)
-  - Alert when RPE is consistently high relative to volume (potential overtraining)
+**Scientific Foundations:**
 
-**Recovery Metrics for Endurance Sports:**
-- **Endurance Muscle Recovery**: Track recovery for endurance-specific muscle groups (more complex than strength)
-  - Consider sport-specific muscle groups (legs for running/cycling, upper body for swimming/rowing)
-  - Factor in training volume (distance/time) and intensity (heart rate zones)
-  - Account for cumulative fatigue from multiple sessions
-  - Display recovery status per muscle group or sport type
-- **Cardiovascular Recovery**:
-  - Track heart rate recovery trends (resting HR, HR variability if available)
-  - Monitor training load vs. recovery time
-  - Consider heart rate zone distribution to assess training stress
-- **General Fatigue**:
-  - Combine RPE data (if collected) with training volume and intensity
-  - Track weekly training load trends
-  - Show recovery recommendations based on training history
+| Component | Backed by |
+|-----------|-----------|
+| Internal load (sRPE × duration) | Foster et al. 2001; Impellizzeri et al. 2004 |
+| Mixed-mode unification via internal load | Impellizzeri et al. 2019 |
+| Strength external load = volume load | McBride 2009; Scott et al. 2016 |
+| Muscle-specific fatigue via volume | Schoenfeld 2010; Haun et al. 2018 |
+| Athlete normalization via rolling baseline | Bannister 1991; Bourdon et al. 2017 |
+| Derived UX score (internal-dominant) | Halson 2014 (applied practice) |
+
+**Core Equations:**
+
+**1. Session Duration Resolution:**
+```
+If totalDurationMinutes is provided:
+  resolvedDuration = totalDurationMinutes
+Else if strength exercises exist:
+  totalSets = Σ(number of sets) for all strength exercises
+  resolvedDuration = totalSets × 2.5 minutes
+Else:
+  resolvedDuration = null
+```
+*Reference: Foster et al. 2001 (strength sessions often estimate or omit time)*  
+*Note: 2-3 min per set (rest + execution) is widely used in applied monitoring practice*
+
+**2. Internal Load (Global Fatigue):**
+```
+internalLoad = resolvedDuration × sessionRPE
+```
+*If resolvedDuration = null: internalLoad = null*  
+*Reference: Foster et al. 2001; Impellizzeri et al. 2004 (sRPE × duration)*
+
+**3. Endurance External Load:**
+```
+enduranceMinutes = Σ(durationMinutes) for all endurance activities
+enduranceDistanceKm = Σ(distanceKm) for all endurance activities (if any have distance)
+```
+*Reference: Impellizzeri et al. 2019 (external vs internal load separation)*
+
+**4. Strength External Load (Volume Load):**
+```
+Volume_kg = Σ(reps[i] × weight_kg[i]) for all sets
+totalStrengthVolume = Σ(Volume_kg) for all exercises
+MuscleVolume[target_area] = Σ(Volume_kg) for all exercises where exercise.target_area = target_area
+```
+*Reference: McBride 2009; Schoenfeld 2010 (volume load calculation)*
+
+**5. Athlete-Normalized Strength Load:**
+
+**Per Muscle Group (for recovery):**
+```
+DaysAvailable = count(days with training data, max 28 days)
+BaselineVolume[target_area] = Σ(MuscleVolume[target_area]) for available days / DaysAvailable
+
+NormalizedLoad[target_area] = MuscleVolume[target_area] / BaselineVolume[target_area]
+```
+*If DaysAvailable < 28: use available data proportionally (e.g., 14 days = 14-day average)*  
+*If BaselineVolume = 0: NormalizedLoad = null (no baseline yet)*  
+*Reference: Bannister 1991; Bourdon et al. 2017 (athlete normalization via rolling baseline)*
+
+**Overall Strength (for UX stress score):**
+```
+athleteBaselineStrengthVolumeKg = Σ(totalStrengthVolume) for available days / DaysAvailable
+normalizedStrengthLoad = totalStrengthVolume / athleteBaselineStrengthVolumeKg
+```
+*If athleteBaselineStrengthVolumeKg = 0: normalizedStrengthLoad = null*
+
+**Interpretation:**
+- ~1.0 → normal
+- >1.3 → unusually high
+- <0.7 → light / recovery
+
+**6. UX Stress Score (Internal-Dominant):**
+```
+uxStressScore = internalLoad × (1 + 0.25 × min(normalizedStrengthLoad, 2))
+```
+*If internalLoad = null: uxStressScore = null*  
+*If normalizedStrengthLoad = null: use 0 in calculation*  
+*Reference: Halson 2014 (applied fatigue monitoring)*
+
+**Principles:**
+- Internal load dominates (primary factor)
+- Strength stress nudges, not overrides (α = 0.25 is conservative)
+- Strength modifier capped at 2.0 (prevents tonnage explosions)
+- No claim of physiology — UX only
+
+**7. Recovery Time:**
+```
+RecoveryHours[target_area] = 48 hours (fixed for all muscles)
+```
+*Reference: Simplified uniform recovery window (Schoenfeld 2010 - applied practice)*
+
+**8. Cumulative Fatigue (ACWR - Adaptive):**
+```
+DaysAvailable = count(days with training data, max 28 days)
+AcuteLoad[target_area] = Σ(MuscleVolume[target_area]) for last 7 days (or available if < 7)
+ChronicLoad[target_area] = Σ(MuscleVolume[target_area]) for last DaysAvailable / DaysAvailable
+
+ACWR[target_area] = AcuteLoad[target_area] / ChronicLoad[target_area]
+```
+*If DaysAvailable < 7: AcuteLoad = total available (proportional)*  
+*If ChronicLoad = 0: ACWR = null (insufficient data)*  
+*Reference: Bourdon et al. 2017 (Acute:Chronic Workload Ratio model)*
+
+**9. Recovery Status:**
+```
+If ACWR > 1.5: "needs_rest" (injury risk)
+If ACWR > 1.2: "recovering" (elevated)
+If 0.8 ≤ ACWR ≤ 1.2: "recovered" (optimal)
+If ACWR < 0.8: "recovered" (detraining risk)
+If ACWR = null: "not_trained_yet" (insufficient data - muscle group not trained yet)
+```
+*Reference: Bourdon et al. 2017 (ACWR thresholds)*
 
 **UI Implementation:**
 - **Recovery Dashboard**: Add recovery status cards/section in Insights view
-  - Show muscle group recovery status (strength)
-  - Show sport-specific recovery status (endurance)
-  - Display fatigue indicators and trends
+  - Show muscle group recovery status by `target_area`
+  - **Display only final results**: Show recovery status (recovered/recovering/needs_rest/not_trained_yet) - hide intermediate calculations
+  - Display ACWR values only when available (not for "not_trained_yet" status)
   - Provide recovery recommendations (e.g., "Rest legs for 2 more days", "Ready for high-intensity training")
-- **Metrics vs. Recovery Charts**:
-  - Side-by-side or overlay views showing training metrics alongside recovery status
-  - Correlation charts: volume vs. RPE, training frequency vs. recovery status
+- **Recovery Charts**:
   - Timeline views showing training load and recovery status over time
-- **Integration with Analytics**:
-  - Include recovery status in performance score calculations
-  - Factor recovery into training recommendations
-  - Show how recovery status correlates with performance improvements
+  - ACWR trends by muscle group (only for trained muscle groups)
+  - Recovery status indicators (color-coded: green = recovered, yellow = recovering, red = needs rest, gray = not trained yet)
 
-**Backend Implementation:**
+**Session Load Output Model:**
+```
+SessionLoadResult = {
+  internalLoad: number | null,                    // sRPE × duration
+  external: {
+    enduranceMinutes: number,
+    enduranceDistanceKm: number | null,
+    strengthVolumeKg: number,                      // Total strength volume
+    muscleVolumesKg: Record<target_area, number>   // Per muscle group volume
+  },
+  normalizedStrengthLoad: number | null,          // Overall strength (total vs baseline)
+  normalizedLoadPerMuscle: Record<target_area, number | null>,  // Per muscle group (for recovery)
+  uxStressScore: number | null                   // Internal-dominant combined score
+}
+```
+
+**Frontend Implementation:**
+- All calculations performed client-side in frontend service (`insightsAnalyticsService.ts` or similar)
+- Calculate session load for each completed training session:
+  - Resolve session duration (use provided or estimate from sets)
+  - Calculate internal load (sRPE × duration)
+  - Calculate external loads (endurance minutes/distance, strength volume by target_area)
+  - Calculate normalized load per target_area (vs. baseline)
+  - Calculate UX stress score (internal load × strength modifier)
 - Calculate recovery status based on:
-  - Time since last session for each muscle group/sport
-  - Training volume and intensity from historical data
-  - RPE data when available
-  - Muscle group mapping (strength exercises → muscle groups, endurance sports → primary muscle groups)
-- Store recovery status in user profile or cache for quick access
-- Update recovery calculations when new training sessions are completed
+  - Training volume by `target_area` from historical data (fetched from database)
+  - Adaptive baseline calculation (use available data, max 28 days)
+  - ACWR calculation with proportional scaling for <28 days of data
+- Cache session load results and recovery status locally for performance
+- Recalculate recovery status when new training sessions are completed
+- **Data Source**: Fetch completed training sessions and exercise data from database (via Supabase client)
+- **No Backend Calculations**: All logic runs in frontend TypeScript/JavaScript
 
 **Benefits:**
 - Prevents overtraining by making recovery status visible
 - Helps athletes optimize training timing (train when recovered, rest when needed)
 - Provides actionable insights (e.g., "Your legs need 2 more days of recovery")
 - Combines performance metrics with recovery status for holistic training view
+- Science-based approach using established research (ACWR, Bannister model)
+
+**Strengths:**
+- **Science-based foundation**: All equations backed by established research with proper references
+- **Simple architecture**: Frontend-only calculations reduce complexity, no backend coordination needed
+- **Adaptive baseline**: Works with <28 days of data (proportional scaling) - handles new users gracefully
+- **Unified approach**: Single system handles all sports (strength + endurance) consistently
+- **Simple muscle mapping**: 100% volume to primary `target_area` - easy to understand and implement
+- **Fixed recovery window**: 48hrs for all muscles - eliminates complexity of variable recovery times
+- **Clear separation**: Performance metrics (4a) and Recovery (4b) are distinct, focused sections
+- **Actionable outputs**: ACWR provides clear recovery status (recovered/recovering/needs_rest)
+- **Progressive enhancement**: Works with minimal data, improves as more data accumulates
+
+**Weaknesses & Considerations:**
+- **Session duration estimation**: 2.5 min/set heuristic may be inaccurate for some users (long rest periods, circuit training)
+- **Recovery time not used**: 48hr recovery window is calculated but not actually used in recovery status (only ACWR is used)
+- **Missing data handling**: Need explicit fallback logic for missing `sessionRPE`, missing `target_area`, or incomplete exercise data (see recommendation #3)
+- **UX stress score visibility**: Calculated but not displayed in UI - may be unused complexity (hidden per recommendation #2)
+- **Dual normalized loads**: Both per-muscle and overall normalized loads calculated - only per-muscle used for recovery, overall used for UX stress score (which is hidden)
+- **Internal load dependency**: Requires `sessionRPE` - if not collected, internal load and UX stress score are null (handled per recommendation #3)
+- **Endurance "Other" mapping**: Mapped to "None, not in overview" - these sessions won't contribute to recovery tracking (intentional - focus on most used muscle)
+
+**Recommendations for Simplification:**
+1. **Focus on ACWR for recovery**: Recovery status should primarily use ACWR (remove or de-emphasize 48hr recovery time if not used)
+2. **Show only final results**: Display only the most important results per `target_area` (recovery status, ACWR when available) - hide intermediate calculation steps from UI. Users don't need to see internal load, normalized loads, or UX stress score unless they drill down.
+3. **Handle missing data explicitly**: Add fallback logic for missing `sessionRPE`, `target_area`, or incomplete sessions. If `sessionRPE` is missing, skip internal load calculation. If `target_area` is missing, skip that exercise from recovery tracking.
+4. **New user experience**: Show "not_trained_yet" instead of "recovered" for ACWR null (muscle groups that haven't been trained yet) - see Recovery Status equation #9
+5. **Progressive disclosure**: Show simple status first (recovered/recovering/needs_rest/not_trained_yet) with color coding. Users can tap/expand to see ACWR values, training volume, and other detailed metrics if desired, but keep the initial view clean and simple
 
 ---
 
@@ -481,7 +563,94 @@ Integrate recovery metrics alongside performance metrics to provide a holistic v
 #### 6. Multi-Session Workouts (Intervals)
 **Complexity: Medium | Impact: Medium-High**
 
-Support interval workouts by allowing multiple endurance sessions within a single training day (e.g., "5min warm-up + 4x 1km intervals + 5min cool-down"). Each interval can have different zones, paces, or distances. This is essential for serious endurance training and currently requires manual session creation. Requires UI for interval builder and backend logic for session grouping.
+Support interval workouts by allowing multiple endurance segments within a single endurance session (e.g., "5min warm-up + 4x 1km intervals + 5min cool-down"). Each segment can have different zones, paces, or distances, but **all segments must share the same sport_type as their parent endurance_session**. For example, a running session can contain multiple running segments (warm-up, intervals, cool-down), but if you want to do running → cycling → running, these must be 3 separate endurance_sessions (one running session with segments, one cycling session, another running session). This is essential for serious endurance training and currently requires manual session creation. Requires UI for interval builder and backend logic for segment grouping within sessions.
+
+**Implementation Details:**
+
+**Database Schema:**
+- **Simplify `endurance_session` table**: Remove duplicate fields that move to segments:
+  - Remove: `training_volume`, `unit`, `heart_rate_zone` (these move to segments)
+  - Keep: `id`, `daily_training_id`, `sport_type`, `name`, `description`, `execution_order`, `completed`, `created_at`, `updated_at`
+  - Keep all actual tracking fields: `actual_duration`, `actual_distance`, `average_pace`, `average_speed`, `average_heart_rate`, `max_heart_rate`, `min_heart_rate`, `elevation_gain`, `elevation_loss`, `calories`, `cadence`, `data_source`, `health_workout_id`, `started_at`, `completed_at` (actuals stored at session level since you track the whole session)
+- Add new `endurance_segment` table:
+  - `id` (SERIAL PRIMARY KEY)
+  - `endurance_session_id` (INTEGER, foreign key to `endurance_session.id` with CASCADE delete)
+  - `segment_order` (INTEGER) - Order within the session (1, 2, 3...)
+  - `training_volume` (NUMERIC) - Duration or distance for this segment
+  - `unit` (TEXT) - Unit for training_volume (minutes, km, miles, meters)
+  - `heart_rate_zone` (INTEGER, 1-5) - Target zone for this segment
+  - `name` (TEXT, nullable) - Optional segment name (e.g., "Warm-up", "Interval 1", "Cool-down")
+  - `description` (TEXT, nullable) - Optional segment description
+  - `created_at`, `updated_at` (TIMESTAMP)
+- **Always require at least 1 segment**: Every `endurance_session` must have at least 1 `endurance_segment`
+- **Simple case**: If 1 segment, it equals the session (single segment represents the whole session)
+- **Interval case**: If multiple segments, they represent intervals within the session (warm-up, intervals, cool-down)
+- All segments inherit `sport_type` from parent session (enforced constraint)
+
+**AI Generation:**
+- Update `EnduranceSession` schema to always require `segments` array (minimum 1 segment):
+  ```python
+  class EnduranceSegment(BaseModel):
+      segment_order: int
+      training_volume: float
+      unit: VolumeUnitLiteral
+      heart_rate_zone: int
+      name: Optional[str] = None  # "Warm-up", "Interval 1", etc.
+      description: Optional[str] = None
+
+  class EnduranceSession(BaseModel):
+      id: Optional[int] = None
+      name: str
+      sport_type: EnduranceTypeLiteral
+      description: Optional[str] = None
+      execution_order: int
+      completed: bool = False
+      segments: List[EnduranceSegment]  # REQUIRED: always at least 1 segment
+      # Note: training_volume, unit, heart_rate_zone removed (now in segments)
+  ```
+- AI logic:
+  - **Simple sessions**: Generate `EnduranceSession` with 1 segment (segment equals the session)
+  - **Interval sessions**: Generate `EnduranceSession` with multiple segments (warm-up, intervals, cool-down)
+  - **Constraint**: All segments must have the same `sport_type` as parent session (enforced in validation)
+  - Example simple: "Easy Run" session with 1 segment (30 min, Zone 2)
+  - Example interval: "Interval Run" session with 6 segments (warm-up, 4x intervals, cool-down)
+- Update prompt instructions to always generate at least 1 segment per session
+
+**Frontend Visualization:**
+- **Single segment (simple session)**: Display as before (single card with volume/zone from segment)
+  - Show session name, sport type, and segment details (volume, unit, zone)
+  - No need to show "1 segment" - just display the session normally
+- **Multiple segments (interval session)**: Enhanced display:
+  - Show parent session header (name, sport type, total segments count)
+  - Expandable/collapsible list of segments showing:
+    - Segment name (or "Segment 1", "Segment 2" if no name)
+    - Volume + unit + zone for each segment
+    - Visual zone indicators (color-coded bars matching heart rate zone intensity)
+  - Example UI:
+    ```
+    ┌─────────────────────────────────┐
+    │ 🏃 Interval Run                 │
+    │ Running • 6 segments            │
+    ├─────────────────────────────────┤
+    │ 1. Warm-up: 5 min • Zone 2      │
+    │ 2. Interval 1: 1 km • Zone 5    │
+    │ 3. Interval 2: 1 km • Zone 5   │
+    │ 4. Interval 3: 1 km • Zone 5   │
+    │ 5. Interval 4: 1 km • Zone 5    │
+    │ 6. Cool-down: 5 min • Zone 2   │
+    └─────────────────────────────────┘
+    ```
+- Reuse existing `EnduranceDetails` component - extend to handle segments array
+- **Actuals display**: Show tracked data (actual_duration, actual_distance, etc.) at session level (since you track the whole session, not individual segments)
+- Live tracking: Track the entire session (all segments together), not individual segments
+- Completion: Mark entire session complete when finished, not per-segment
+
+**Benefits:**
+- **Simplified structure**: Always 1 segment minimum, no optional segments to handle
+- **No duplicate data**: Volume/unit/zone only in segments, not duplicated in session
+- **Actuals at session level**: Makes sense since you track the whole workout, not each interval separately
+- **Clear model**: 1 segment = simple session, multiple segments = interval session
+- **Same sport constraint**: All segments must share parent session's sport_type
 
 ---
 
@@ -537,7 +706,7 @@ Use historical data to predict race times, estimate fitness levels, and model pe
 ### Phase 1 (Quick Wins - 2-4 weeks)
 Focus on Tier 1 improvements (#1) to immediately improve the endurance experience with minimal effort:
 - Enhanced display cards (#1)
-- Note: Sport-specific metrics and visual enhancements are now included in unified sports analytics (#4)
+- Note: Sport-specific metrics and visual enhancements are now included in insights (#4)
 
 ### Phase 1.5 (Onboarding Permissions - Foundation - 1 week)
 **FOUNDATION**: Add permissions step to onboarding flow (#2):
@@ -564,17 +733,24 @@ Focus on Tier 1 improvements (#1) to immediately improve the endurance experienc
   - Import heart rate, pace, distance, elevation
   - Store data source (live_tracking vs healthkit/google_fit)
 
-### Phase 2.5 (Analytics Integration - 2-3 weeks)
-**AFTER LIVE TRACKING**: Implement unified sports analytics integration (#4) using the rich data captured from live tracking:
-- Analytics integration (includes progress charts with clustered bar charts)
-- Unified sports analytics view with filter toggle (all sports: strength, running, cycling, etc.)
-- Sport-specific metrics and visual enhancements (determine which metrics are important for each sport type)
-- Heart rate zone analytics using actual HR data from live tracking
+### Phase 2.5 (Insights Integration - 2-3 weeks)
+**AFTER LIVE TRACKING**: Implement insights (#4) using the rich data captured from live tracking:
+- **Note**: All calculations performed in frontend (no backend calculation logic needed)
+- **4a) Performance Metrics**: Analytics integration (includes progress charts with clustered bar charts)
+  - Unified sports analytics view with filter toggle (all sports: strength, running, cycling, etc.)
+  - Sport-specific metrics and visual enhancements (determine which metrics are important for each sport type)
+  - Heart rate zone analytics using actual HR data from live tracking
+  - Fetch data from database via Supabase client, calculate metrics in frontend service
+- **4b) Recovery**: Science-based recovery tracking (all calculations in frontend)
+  - Volume load calculation by `target_area` (from exercises table via JOIN)
+  - Adaptive baseline calculation (use available data, max 28 days)
+  - ACWR calculation with proportional scaling
+  - Recovery status indicators and recommendations
+  - Session load calculations (internal load, UX stress score) computed client-side
 
 ### Phase 3 (Foundation - 1-2 months)
-Implement Tier 2 improvements (#6, #5) to build core endurance functionality and recovery tracking:
-- Interval workouts (#6)
-- Metrics vs. Recovery integration (#5): Track muscle recovery for strength and endurance sports, fatigue indicators, and recovery recommendations
+Implement Tier 2 improvements (#6) to build core endurance functionality:
+- Interval workouts (#6) for structured endurance training
 
 ### Phase 4 (Additional Integrations - 2-3 months)
 Add remaining Tier 3 integrations (#11, #13-17) based on user demand:
@@ -653,7 +829,7 @@ Evaluate Tier 4 features (#18-20) based on strategic priorities and user feedbac
 ### New Tables Needed
 - `endurance_templates` - Saved session templates
 - `external_integrations` - OAuth tokens and sync status (for free integrations: HealthKit, Google Fit, Strava free tier)
-- `endurance_metrics` - Calculated metrics (TSS, CTL, etc.)
+- **Note**: Calculated metrics (session load, recovery status, ACWR, etc.) are computed in frontend, not stored in database
 - **Note**: GPS routes are not saved - GPS is used only for tracking distance during workouts
 
 ### Frontend Dependencies
@@ -666,9 +842,9 @@ Evaluate Tier 4 features (#18-20) based on strategic priorities and user feedbac
   - `expo-location` or `@react-native-community/geolocation` - **Required for Phase 1.5 (#2) and Phase 2** (for distance tracking only, not route visualization)
 
 ### Backend Dependencies
-- Strava API client (free tier - evaluate rate limits)
-- GPX parsing library (free, e.g., `gpxpy` for Python)
-- Health data normalization logic (custom implementation)
+- Strava API client (free tier - evaluate rate limits) - only if Strava integration implemented
+- GPX parsing library (free, e.g., `gpxpy` for Python) - only if GPS route import implemented
+- **Note**: Insights calculations (session load, recovery, ACWR) are performed in frontend - no backend calculation logic needed
 - **Note**: Garmin/Polar/Suunto APIs require paid accounts - deferred
 
 ---
@@ -700,14 +876,17 @@ The quick wins in Tier 1 can dramatically improve the endurance experience with 
    - Health/Google Fit import provides alternative for users who track elsewhere
    - **Note**: Permissions already granted in Phase 1.5 (#2), so no permission requests needed
    - **Captures rich data** (actual_time, actual_distance, HR, pace, route) that analytics will use
-4. **Phase 2.5**: Implement unified sports analytics integration (#4) using the rich data from live tracking
-   - Analytics now has real data to work with (actual_time, actual_distance, HR metrics)
-   - Clustered bar charts show meaningful trends using tracked data across all sports
-   - Sport-specific metrics and visual enhancements (determine which metrics are important for each sport type)
-   - Heart rate zone analytics use actual HR data from live tracking
-5. **Phase 3**: Build on the foundation with progression tracking, interval workouts, and recovery metrics
+4. **Phase 2.5**: Implement insights (#4) using the rich data from live tracking
+   - **4a) Performance Metrics**: Analytics now has real data to work with (actual_time, actual_distance, HR metrics)
+     - Clustered bar charts show meaningful trends using tracked data across all sports
+     - Sport-specific metrics and visual enhancements (determine which metrics are important for each sport type)
+     - Heart rate zone analytics use actual HR data from live tracking
+   - **4b) Recovery**: Science-based recovery tracking
+     - Volume load calculation by `target_area` from exercises table
+     - Adaptive baseline and ACWR calculations
+     - Recovery status indicators and recommendations
+5. **Phase 3**: Build on the foundation with interval workouts
    - Interval workouts (#6) for structured endurance training
-   - Metrics vs. Recovery integration (#5): Track muscle recovery for strength and endurance sports, fatigue indicators, and recovery recommendations
 
 **Integration Strategy**: Live tracking + Health/Google Fit import is prioritized because:
 - **Live Tracking**: 

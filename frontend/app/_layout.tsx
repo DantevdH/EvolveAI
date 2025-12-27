@@ -11,6 +11,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { AppProvider } from '@/src/context/AppContext';
 import { AuthProvider, useAuth } from '@/src/context/AuthContext';
 import { CoachProvider } from '@/src/context/CoachContext';
+import { InsightsProvider } from '@/src/context/InsightsContext';
 import { ErrorBoundary } from '@/src/components/ErrorBoundary';
 import { NetworkStatus } from '@/src/components/NetworkStatus';
 import { NavigationProvider } from '@/src/navigation/NavigationProvider';
@@ -155,13 +156,15 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <CoachProvider>
-          <AppProvider>
-            <NavigationProvider>
-              <RootLayoutNav />
-            </NavigationProvider>
-          </AppProvider>
-        </CoachProvider>
+        <InsightsProvider>
+          <CoachProvider>
+            <AppProvider>
+              <NavigationProvider>
+                <RootLayoutNav />
+              </NavigationProvider>
+            </AppProvider>
+          </CoachProvider>
+        </InsightsProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

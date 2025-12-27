@@ -1,7 +1,14 @@
 /**
  * Shared types for Insights functionality
- * Used across insights services, components, and API responses
+ *
+ * Note: AI-generated insights (InsightsSummary, InsightsMetrics) have been removed.
+ * Insights are now calculated client-side via InsightsContext using:
+ * - recoveryCalculationService.ts (ACWR-based recovery status)
+ * - performanceMetricsService.ts (sport-specific metrics aggregation)
  */
+
+// Legacy exports preserved for potential backward compatibility
+// These can be removed in a future cleanup if no external dependencies exist
 
 export type IntensityTrend = 'improving' | 'stable' | 'declining';
 
@@ -16,31 +23,3 @@ export interface TopExercise {
   trend: string;
   change?: string;
 }
-
-export interface InsightsMetrics {
-  volume_progress: string;
-  training_frequency: string;
-  training_intensity: string;
-  intensity_trend: IntensityTrend;
-  weak_points: WeakPoint[];
-  top_exercises: TopExercise[];
-}
-
-export interface InsightsSummary {
-  summary: string;
-  findings: string[];
-  recommendations: string[];
-}
-
-export interface InsightsSummaryResponse {
-  success: boolean;
-  summary?: InsightsSummary;
-  metrics?: InsightsMetrics;
-  error?: string;
-}
-
-export interface InsightsSummaryData {
-  summary: InsightsSummary;
-  metrics: InsightsMetrics;
-}
-
