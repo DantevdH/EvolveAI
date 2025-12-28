@@ -218,17 +218,15 @@ TargetTypeLiteral = Literal["time", "distance", "open"]
 
 class EnduranceSegment(BaseModel):
     """
-    Schema for individual segments within an endurance session (for interval workouts).
+    Schema for individual segments within a segment block.
 
     This schema is used during AI plan generation only. Actual tracking data
     (actual_duration, actual_distance, etc.) is populated by the frontend during
     live GPS tracking or health app import, not by AI generation.
-
-    Supports repeat_count for interval blocks (e.g., work+recovery repeated 4 times).
     """
 
     segment_order: int = Field(
-        ..., description="Order within session (1, 2, 3...)"
+        ..., description="Order within the block (1, 2, 3...)"
     )
     segment_type: SegmentTypeLiteral = Field(
         default="work",
@@ -257,25 +255,66 @@ class EnduranceSegment(BaseModel):
         default=None,
         description="Target pace in seconds per km (optional)."
     )
-    repeat_count: int = Field(
-        default=1,
-        ge=1,
-        le=20,
-        description="Number of times to repeat this segment (default 1). Use for interval blocks like '4x1km intervals'."
-    )
 
     # Note: Actual tracking data fields (actual_duration, actual_distance, etc.)
     # are stored in Supabase but not included in this schema since they're populated
     # by the frontend during live GPS tracking or health app import, not by AI generation.
 
 
+class SegmentBlock(BaseModel):
+    """
+    Schema for a block of segments that can be repeated together.
+
+    A block groups segments that should be repeated as a unit. For example,
+    a "4x1km intervals" workout has one block with repeat_count=4 containing
+    a work segment (1km) and a recovery segment (90s jog).
+
+    Structure: EnduranceSession → SegmentBlock[] → EnduranceSegment[]
+    """
+
+    block_order: int = Field(
+        ..., description="Order within session (1, 2, 3...)"
+    )
+    name: Optional[str] = Field(
+        default=None,
+        description="Optional block name (e.g., 'Main Set', 'Warm Up Block'). Auto-generated if null."
+    )
+    description: Optional[str] = Field(
+        default=None, description="Description of the block"
+    )
+    repeat_count: int = Field(
+        default=1,
+        ge=1,
+        le=20,
+        description="Number of times to repeat all segments in this block (default 1, max 20)."
+    )
+    segments: List[EnduranceSegment] = Field(
+        ...,
+        description="Segments within this block. Executed in order, then repeated if repeat_count > 1.",
+        min_length=1
+    )
+
+
 class EnduranceSession(BaseModel):
     """
-    Schema for endurance training sessions with segment-based structure for intervals.
+    Schema for endurance training sessions with block-based structure for intervals.
+
+    Structure: EnduranceSession → SegmentBlock[] → EnduranceSegment[]
 
     This schema is used during AI plan generation only. Actual tracking data
     (actual_duration, actual_distance, etc.) is populated by the frontend during
     live GPS tracking or health app import, not by AI generation.
+
+    Example - 4x1km intervals:
+    {
+        "name": "Interval Run",
+        "sport_type": "running",
+        "blocks": [
+            { "block_order": 1, "repeat_count": 1, "segments": [{ "segment_type": "warmup", ... }] },
+            { "block_order": 2, "repeat_count": 4, "segments": [{ "segment_type": "work", ... }, { "segment_type": "recovery", ... }] },
+            { "block_order": 3, "repeat_count": 1, "segments": [{ "segment_type": "cooldown", ... }] }
+        ]
+    }
     """
 
     id: Optional[int] = Field(default=None, description="Database ID")
@@ -294,10 +333,10 @@ class EnduranceSession(BaseModel):
         default=False, description="Whether the session was completed"
     )
 
-    # Segments - required, at least 1 segment per session
-    segments: List[EnduranceSegment] = Field(
+    # Blocks - required, at least 1 block per session
+    blocks: List[SegmentBlock] = Field(
         ...,
-        description="Segments within this session. Simple sessions have 1 segment, interval sessions have multiple. All segments share the same sport_type.",
+        description="Blocks of segments within this session. Simple sessions have 1 block with 1 segment. Interval sessions have multiple blocks or blocks with repeat_count > 1.",
         min_length=1
     )
 

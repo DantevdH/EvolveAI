@@ -6,15 +6,32 @@
  * Supports multi-segment sessions (intervals) with segment list display
  */
 
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, ScrollView } from 'react-native';
+import React, { memo, useCallback, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { EnduranceSession, formatSegmentTarget, calculateSessionTotals, expandSegmentsForTracking } from '../../../types/training';
+import { EnduranceSession, formatSegmentTarget, calculateSessionTotals, getExpandedSegmentCount, hasRepeatingBlocks, getMaxRepeatCount } from '../../../types/training';
 import { colors, spacing, typography, borderRadius } from '../../../constants/designSystem';
 import { createColorWithOpacity } from '../../../constants/colors';
 import { getSportIcon } from '../../../constants/sportIcons';
 import { getZoneBadgeStyle, getZoneLabel } from '../../../utils/heartRateZoneUtils';
-import { EnduranceSegmentCard } from './EnduranceSegmentCard';
+import { EnduranceBlockCard } from './EnduranceBlockCard';
+import {
+  formatDuration,
+  formatDistance,
+  formatPace,
+  formatSpeed,
+  formatElevation,
+  isValidBlock,
+} from '../../../utils/segmentUtils';
+
+// ==================== CONSTANTS ====================
+
+/**
+ * Debounce delay in milliseconds to prevent double-tap issues
+ */
+const DEBOUNCE_DELAY_MS = 1000;
+
+// ==================== TYPES ====================
 
 interface EnduranceTrackingActionsProps {
   enduranceSession: EnduranceSession;
@@ -40,7 +57,51 @@ const SPORT_METRICS: Record<string, MetricType[]> = {
   other: ['time', 'distance', 'hr'],
 };
 
-export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> = ({
+// Metric icon mapping
+type MetricIconName = 'time-outline' | 'navigate-outline' | 'speedometer-outline' | 'heart-outline' | 'trending-up-outline' | 'analytics-outline';
+
+const METRIC_ICONS: Record<MetricType, MetricIconName> = {
+  time: 'time-outline',
+  distance: 'navigate-outline',
+  pace: 'speedometer-outline',
+  speed: 'speedometer-outline',
+  hr: 'heart-outline',
+  elevation: 'trending-up-outline',
+};
+
+// ==================== HELPER FUNCTIONS ====================
+
+/**
+ * Get data source display info
+ */
+const getDataSourceInfo = (dataSource?: string): { label: string; icon: string; color: string } => {
+  switch (dataSource) {
+    case 'live_tracking':
+      return { label: 'GPS Tracked', icon: 'location', color: colors.success };
+    case 'healthkit':
+      return { label: 'Apple Health', icon: 'fitness', color: colors.info };
+    case 'google_fit':
+      return { label: 'Google Fit', icon: 'fitness', color: colors.info };
+    default:
+      return { label: 'Tracked', icon: 'checkmark-circle', color: colors.success };
+  }
+};
+
+/**
+ * Format total duration for display (e.g., "5 min" or "1h 30m")
+ */
+const formatTotalDuration = (seconds: number): string => {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes} min`;
+};
+
+// ==================== COMPONENT ====================
+
+const EnduranceTrackingActionsComponent: React.FC<EnduranceTrackingActionsProps> = ({
   enduranceSession,
   onStartTracking,
   onImportFromHealth,
@@ -49,113 +110,64 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
 }) => {
   const healthLabel = Platform.OS === 'ios' ? 'Apple Health' : 'Health Connect';
 
-  // Debounce state to prevent double-tap issues
-  const [isStartingTracking, setIsStartingTracking] = useState(false);
-  const [isImporting, setIsImporting] = useState(false);
+  // Use refs for debounce state to avoid stale closure issues
+  const isStartingTrackingRef = useRef(false);
+  const isImportingRef = useRef(false);
+  const startTrackingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const importTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Debounced start tracking handler
+  // Cleanup timeouts on unmount to prevent memory leaks and state updates on unmounted component
+  useEffect(() => {
+    return () => {
+      if (startTrackingTimeoutRef.current) {
+        clearTimeout(startTrackingTimeoutRef.current);
+      }
+      if (importTimeoutRef.current) {
+        clearTimeout(importTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Debounced start tracking handler with cleanup
   const handleStartTracking = useCallback(() => {
-    if (isStartingTracking || !onStartTracking) return;
-    setIsStartingTracking(true);
+    if (isStartingTrackingRef.current || !onStartTracking) return;
+
+    isStartingTrackingRef.current = true;
     onStartTracking();
-    // Re-enable after 1 second (enough time for modal to open)
-    setTimeout(() => setIsStartingTracking(false), 1000);
-  }, [onStartTracking, isStartingTracking]);
 
-  // Debounced import handler
+    // Clear any existing timeout
+    if (startTrackingTimeoutRef.current) {
+      clearTimeout(startTrackingTimeoutRef.current);
+    }
+
+    // Re-enable after delay
+    startTrackingTimeoutRef.current = setTimeout(() => {
+      isStartingTrackingRef.current = false;
+      startTrackingTimeoutRef.current = null;
+    }, DEBOUNCE_DELAY_MS);
+  }, [onStartTracking]);
+
+  // Debounced import handler with cleanup
   const handleImportFromHealth = useCallback(() => {
-    if (isImporting || !onImportFromHealth) return;
-    setIsImporting(true);
+    if (isImportingRef.current || !onImportFromHealth) return;
+
+    isImportingRef.current = true;
     onImportFromHealth();
-    // Re-enable after 1 second
-    setTimeout(() => setIsImporting(false), 1000);
-  }, [onImportFromHealth, isImporting]);
 
-  // Format duration (seconds to HH:MM:SS or MM:SS)
-  const formatDuration = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-
-    if (hours > 0) {
-      return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${minutes}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  // Format distance (meters to km/mi)
-  const formatDistance = (meters: number): string => {
-    if (useMetric) {
-      const km = meters / 1000;
-      return km >= 1 ? `${km.toFixed(2)} km` : `${Math.round(meters)} m`;
-    } else {
-      const miles = meters / 1609.34;
-      return `${miles.toFixed(2)} mi`;
-    }
-  };
-
-  // Format pace (seconds per km to min:sec/km or min:sec/mi)
-  const formatPace = (secondsPerKm: number, sportType: string): string => {
-    if (!secondsPerKm || secondsPerKm <= 0) return '--:--';
-
-    // For swimming, show per 100m; for rowing, show per 500m
-    if (sportType.toLowerCase() === 'swimming') {
-      const per100m = secondsPerKm / 10; // Convert /km to /100m
-      const minutes = Math.floor(per100m / 60);
-      const seconds = Math.floor(per100m % 60);
-      return `${minutes}:${seconds.toString().padStart(2, '0')}/100${useMetric ? 'm' : 'yd'}`;
+    // Clear any existing timeout
+    if (importTimeoutRef.current) {
+      clearTimeout(importTimeoutRef.current);
     }
 
-    if (sportType.toLowerCase() === 'rowing') {
-      const per500m = secondsPerKm / 2; // Convert /km to /500m
-      const minutes = Math.floor(per500m / 60);
-      const seconds = Math.floor(per500m % 60);
-      return `${minutes}:${seconds.toString().padStart(2, '0')}/500m`;
-    }
+    // Re-enable after delay
+    importTimeoutRef.current = setTimeout(() => {
+      isImportingRef.current = false;
+      importTimeoutRef.current = null;
+    }, DEBOUNCE_DELAY_MS);
+  }, [onImportFromHealth]);
 
-    const paceSeconds = useMetric ? secondsPerKm : secondsPerKm * 1.60934;
-    const minutes = Math.floor(paceSeconds / 60);
-    const seconds = Math.floor(paceSeconds % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}/${useMetric ? 'km' : 'mi'}`;
-  };
-
-  // Format speed (km/h or mph)
-  const formatSpeed = (kmh: number): string => {
-    if (!kmh || kmh <= 0) return '--';
-    if (useMetric) {
-      return `${kmh.toFixed(1)} km/h`;
-    } else {
-      const mph = kmh / 1.60934;
-      return `${mph.toFixed(1)} mph`;
-    }
-  };
-
-  // Format elevation (meters or feet)
-  const formatElevation = (meters: number): string => {
-    if (!meters) return '--';
-    if (useMetric) {
-      return `${Math.round(meters)} m`;
-    } else {
-      const feet = meters * 3.28084;
-      return `${Math.round(feet)} ft`;
-    }
-  };
-
-  // Get icon for metric type
-  const getMetricIcon = (metricType: MetricType): string => {
-    switch (metricType) {
-      case 'time': return 'time-outline';
-      case 'distance': return 'navigate-outline';
-      case 'pace': return 'speedometer-outline';
-      case 'speed': return 'speedometer-outline';
-      case 'hr': return 'heart-outline';
-      case 'elevation': return 'trending-up-outline';
-      default: return 'analytics-outline';
-    }
-  };
-
-  // Get metric value
-  const getMetricValue = (metricType: MetricType): string | null => {
+  // Get metric value for display
+  const getMetricValue = useCallback((metricType: MetricType): string | null => {
     const sportType = enduranceSession.sportType?.toLowerCase() || 'other';
 
     switch (metricType) {
@@ -165,15 +177,15 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
           : null;
       case 'distance':
         return enduranceSession.actualDistance && enduranceSession.actualDistance > 0
-          ? formatDistance(enduranceSession.actualDistance)
+          ? formatDistance(enduranceSession.actualDistance, useMetric)
           : null;
       case 'pace':
         return enduranceSession.averagePace && enduranceSession.averagePace > 0
-          ? formatPace(enduranceSession.averagePace, sportType)
+          ? formatPace(enduranceSession.averagePace, sportType, useMetric)
           : null;
       case 'speed':
         return enduranceSession.averageSpeed && enduranceSession.averageSpeed > 0
-          ? formatSpeed(enduranceSession.averageSpeed)
+          ? formatSpeed(enduranceSession.averageSpeed, useMetric)
           : null;
       case 'hr':
         return enduranceSession.averageHeartRate
@@ -181,32 +193,18 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
           : null;
       case 'elevation':
         return enduranceSession.elevationGain
-          ? formatElevation(enduranceSession.elevationGain)
+          ? formatElevation(enduranceSession.elevationGain, useMetric)
           : null;
       default:
         return null;
     }
-  };
-
-  // Get data source info
-  const getDataSourceInfo = (): { label: string; icon: string; color: string } => {
-    switch (enduranceSession.dataSource) {
-      case 'live_tracking':
-        return { label: 'GPS Tracked', icon: 'location', color: colors.success };
-      case 'healthkit':
-        return { label: 'Apple Health', icon: 'fitness', color: colors.info };
-      case 'google_fit':
-        return { label: 'Google Fit', icon: 'fitness', color: colors.info };
-      default:
-        return { label: 'Tracked', icon: 'checkmark-circle', color: colors.success };
-    }
-  };
+  }, [enduranceSession, useMetric]);
 
   // If completed, show sport icon, GPS tracked badge, and metrics display
   if (enduranceSession.completed) {
     const sportType = enduranceSession.sportType?.toLowerCase() || 'other';
     const metricsToShow = SPORT_METRICS[sportType] || SPORT_METRICS.other;
-    const dataSourceInfo = getDataSourceInfo();
+    const dataSourceInfo = getDataSourceInfo(enduranceSession.dataSource);
     const sportIconName = getSportIcon(enduranceSession.sportType);
 
     // Filter to only metrics with actual values
@@ -214,7 +212,7 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
       .map(metricType => ({
         type: metricType,
         value: getMetricValue(metricType),
-        icon: getMetricIcon(metricType),
+        icon: METRIC_ICONS[metricType] || 'analytics-outline',
       }))
       .filter(metric => metric.value !== null);
 
@@ -243,7 +241,7 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
             {availableMetrics.map((metric) => (
               <View key={metric.type} style={styles.metricItem}>
                 <View style={styles.metricIconContainer}>
-                  <Ionicons name={metric.icon as any} size={16} color={colors.primary} />
+                  <Ionicons name={metric.icon} size={16} color={colors.primary} />
                 </View>
                 <Text style={styles.metricValue}>{metric.value}</Text>
               </View>
@@ -254,30 +252,21 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
     );
   }
 
-  // Helper function to render read-only planned session info (segments display)
-  const renderReadOnlyPlannedInfo = () => {
+  // Helper function to render read-only planned session info (blocks display)
+  const renderPlannedInfo = (showButtons: boolean) => {
     const sportIconName = getSportIcon(enduranceSession.sportType);
-    const segments = enduranceSession.segments || [];
-    const expandedSegments = expandSegmentsForTracking(segments);
-    const isMultiSegment = expandedSegments.length > 1;
-    const { totalDuration, totalDistance } = calculateSessionTotals(segments);
-    // Check if there are repeating segments (expanded count differs from raw count)
-    const hasRepeats = expandedSegments.length > segments.length;
+    const blocks = enduranceSession.blocks || [];
+    const expandedSegmentCount = getExpandedSegmentCount(blocks);
+    const { totalDuration, totalDistance } = calculateSessionTotals(blocks);
+    const hasRepeats = hasRepeatingBlocks(blocks);
+    const maxRepeat = getMaxRepeatCount(blocks);
 
-    // For single segment, get zone from segment
-    const singleSegmentZone = segments.length === 1 ? segments[0].targetHeartRateZone : null;
+    // For single segment (1 block with 1 segment), get zone from segment
+    const isSingleSegment = blocks.length === 1 && blocks[0].segments.length === 1 && blocks[0].repeatCount === 1;
+    const singleSegment = isSingleSegment ? blocks[0].segments[0] : null;
+    const singleSegmentZone = singleSegment?.targetHeartRateZone;
     const zoneStyle = singleSegmentZone ? getZoneBadgeStyle(singleSegmentZone) : null;
     const zoneLabel = singleSegmentZone ? getZoneLabel(singleSegmentZone) : null;
-
-    // Format total duration for display
-    const formatTotalDuration = (seconds: number): string => {
-      const hours = Math.floor(seconds / 3600);
-      const minutes = Math.floor((seconds % 3600) / 60);
-      if (hours > 0) {
-        return `${hours}h ${minutes}m`;
-      }
-      return `${minutes} min`;
-    };
 
     return (
       <View style={styles.container}>
@@ -288,10 +277,10 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
           </View>
         </View>
 
-        {/* For single segment: show volume and zone inline */}
-        {!isMultiSegment && segments.length === 1 && (
+        {/* For single segment: show target and zone inline */}
+        {isSingleSegment && singleSegment && (
           <View style={styles.volumeZoneRow}>
-            {/* Volume */}
+            {/* Target */}
             <View style={styles.volumeContainer}>
               <View style={styles.volumeIconContainer}>
                 <Ionicons name="bar-chart-outline" size={16} color={colors.primary} />
@@ -299,7 +288,7 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
               <View style={styles.volumeTextContainer}>
                 <Text style={styles.volumeLabel}>TARGET</Text>
                 <Text style={styles.volumeValue}>
-                  {formatSegmentTarget(segments[0], useMetric)}
+                  {formatSegmentTarget(singleSegment, useMetric)}
                 </Text>
               </View>
             </View>
@@ -313,14 +302,14 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
           </View>
         )}
 
-        {/* For multi-segment: show segment count and total, then segment list */}
-        {isMultiSegment && (
+        {/* For multi-segment: show block count, total, and block list */}
+        {!isSingleSegment && (
           <View style={styles.multiSegmentContainer}>
             {/* Summary row */}
             <View style={styles.segmentSummaryRow}>
               <Text style={styles.segmentCount}>
-                {expandedSegments.length} segments
-                {hasRepeats && <Text style={styles.repeatIndicator}> (×{Math.max(...segments.map(s => s.repeatCount || 1))})</Text>}
+                {expandedSegmentCount} segments
+                {hasRepeats && <Text style={styles.repeatIndicator}> (×{maxRepeat})</Text>}
               </Text>
               {totalDuration > 0 && (
                 <Text style={styles.totalDuration}>~{formatTotalDuration(totalDuration)}</Text>
@@ -334,18 +323,53 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
               )}
             </View>
 
-            {/* Segment list - show compact view (unexpanded) */}
+            {/* Block list - show compact view */}
             <View style={styles.segmentListContainer}>
-              {segments.map((segment) => (
-                <EnduranceSegmentCard
-                  key={segment.id}
-                  segment={segment}
-                  allSegments={segments}
-                  useMetric={useMetric}
-                  isCompleted={false}
-                />
-              ))}
+              {blocks.map((block, index) => {
+                // Validate block before rendering
+                if (!isValidBlock(block)) {
+                  return null;
+                }
+
+                const key = block.id || `block-${index}`;
+                return (
+                  <EnduranceBlockCard
+                    key={key}
+                    block={block}
+                    allBlocks={blocks}
+                    useMetric={useMetric}
+                    isCompleted={false}
+                  />
+                );
+              })}
             </View>
+          </View>
+        )}
+
+        {/* Action Buttons (only if showButtons is true) */}
+        {showButtons && (
+          <View style={styles.buttonsContainer}>
+            {/* Start Tracking Button */}
+            <TouchableOpacity
+              style={styles.primaryButton}
+              onPress={handleStartTracking}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="play" size={18} color={colors.card} />
+              <Text style={styles.primaryButtonText}>Start Tracking</Text>
+            </TouchableOpacity>
+
+            {/* Import from Health Button */}
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={handleImportFromHealth}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="download-outline" size={16} color={colors.primary} />
+              <Text style={styles.secondaryButtonText}>
+                Import from {healthLabel}
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -354,133 +378,14 @@ export const EnduranceTrackingActions: React.FC<EnduranceTrackingActionsProps> =
 
   // If not completed and (locked OR missing callbacks), show read-only planned session info
   if (!enduranceSession.completed && (isLocked || !onStartTracking || !onImportFromHealth)) {
-    return renderReadOnlyPlannedInfo();
+    return renderPlannedInfo(false);
   }
 
-  // If not completed and has callbacks, show sport logo, segments/volume, and action buttons
-  const sportIconName = getSportIcon(enduranceSession.sportType);
-  const segments = enduranceSession.segments || [];
-  const expandedSegments = expandSegmentsForTracking(segments);
-  const isMultiSegment = expandedSegments.length > 1;
-  const { totalDuration, totalDistance } = calculateSessionTotals(segments);
-  const hasRepeats = expandedSegments.length > segments.length;
-
-  // For single segment, get zone from segment
-  const singleSegmentZone = segments.length === 1 ? segments[0].targetHeartRateZone : null;
-  const zoneStyle = singleSegmentZone ? getZoneBadgeStyle(singleSegmentZone) : null;
-  const zoneLabel = singleSegmentZone ? getZoneLabel(singleSegmentZone) : null;
-
-  // Format total duration for display
-  const formatTotalDuration = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    }
-    return `${minutes} min`;
-  };
-
-  return (
-    <View style={styles.container}>
-      {/* Sport Icon */}
-      <View style={styles.sportIconContainer}>
-        <View style={styles.sportIconCircle}>
-          <Ionicons name={sportIconName as any} size={28} color={colors.primary} />
-        </View>
-      </View>
-
-      {/* For single segment: show target and zone inline */}
-      {!isMultiSegment && segments.length === 1 && (
-        <View style={styles.volumeZoneRow}>
-          {/* Target */}
-          <View style={styles.volumeContainer}>
-            <View style={styles.volumeIconContainer}>
-              <Ionicons name="bar-chart-outline" size={16} color={colors.primary} />
-            </View>
-            <View style={styles.volumeTextContainer}>
-              <Text style={styles.volumeLabel}>TARGET</Text>
-              <Text style={styles.volumeValue}>
-                {formatSegmentTarget(segments[0], useMetric)}
-              </Text>
-            </View>
-          </View>
-
-          {/* Zone Badge */}
-          {zoneStyle && zoneLabel && (
-            <View style={[styles.zoneBadge, { backgroundColor: zoneStyle.backgroundColor }]}>
-              <Text style={[styles.zoneLabel, { color: zoneStyle.color }]}>{zoneLabel}</Text>
-            </View>
-          )}
-        </View>
-      )}
-
-      {/* For multi-segment: show segment count, total, and segment list */}
-      {isMultiSegment && (
-        <View style={styles.multiSegmentContainer}>
-          {/* Summary row */}
-          <View style={styles.segmentSummaryRow}>
-            <Text style={styles.segmentCount}>
-              {expandedSegments.length} segments
-              {hasRepeats && <Text style={styles.repeatIndicator}> (×{Math.max(...segments.map(s => s.repeatCount || 1))})</Text>}
-            </Text>
-            {totalDuration > 0 && (
-              <Text style={styles.totalDuration}>~{formatTotalDuration(totalDuration)}</Text>
-            )}
-            {totalDistance > 0 && (
-              <Text style={styles.totalDistance}>
-                {useMetric
-                  ? `${(totalDistance / 1000).toFixed(1)} km`
-                  : `${(totalDistance / 1609.34).toFixed(1)} mi`}
-              </Text>
-            )}
-          </View>
-
-          {/* Segment list - show compact view (unexpanded) */}
-          <View style={styles.segmentListContainer}>
-            {segments.map((segment) => (
-              <EnduranceSegmentCard
-                key={segment.id}
-                segment={segment}
-                allSegments={segments}
-                useMetric={useMetric}
-                isCompleted={false}
-              />
-            ))}
-          </View>
-        </View>
-      )}
-
-      {/* Action Buttons */}
-      <View style={styles.buttonsContainer}>
-        {/* Start Tracking Button */}
-        <TouchableOpacity
-          style={[styles.primaryButton, isStartingTracking && styles.buttonDisabled]}
-          onPress={handleStartTracking}
-          activeOpacity={0.8}
-          disabled={isStartingTracking}
-        >
-          <Ionicons name="play" size={18} color={colors.card} />
-          <Text style={styles.primaryButtonText}>
-            {isStartingTracking ? 'Starting...' : 'Start Tracking'}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Import from Health Button */}
-        <TouchableOpacity
-          style={[styles.secondaryButton, isImporting && styles.secondaryButtonDisabled]}
-          onPress={handleImportFromHealth}
-          activeOpacity={0.7}
-          disabled={isImporting}
-        >
-          <Ionicons name="download-outline" size={16} color={colors.primary} />
-          <Text style={styles.secondaryButtonText}>
-            {isImporting ? 'Importing...' : `Import from ${healthLabel}`}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  // If not completed and has callbacks, show with action buttons
+  return renderPlannedInfo(true);
 };
+
+// ==================== STYLES ====================
 
 const styles = StyleSheet.create({
   container: {
@@ -523,12 +428,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSizes.xs,
     fontWeight: typography.fontWeights.medium as any,
     color: colors.primary,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  secondaryButtonDisabled: {
-    opacity: 0.6,
   },
   // Metrics display styles
   metricsContainer: {
@@ -684,5 +583,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
 });
+
+// ==================== EXPORTS ====================
+
+/**
+ * Memoized EnduranceTrackingActions component
+ * Prevents unnecessary re-renders when parent updates
+ */
+export const EnduranceTrackingActions = memo(EnduranceTrackingActionsComponent);
 
 export default EnduranceTrackingActions;

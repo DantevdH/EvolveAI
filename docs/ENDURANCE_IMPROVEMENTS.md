@@ -560,10 +560,19 @@ SessionLoadResult = {
 
 ### 🟡 Tier 2: Medium Complexity, High Impact
 
-#### 6. Multi-Session Workouts (Intervals)
+#### 6. Multi-Session Workouts (Intervals) ✅ COMPLETE
 **Complexity: Medium | Impact: Medium-High**
 
-Support interval workouts by allowing multiple endurance segments within a single endurance session (e.g., "5min warm-up + 4x 1km intervals + 5min cool-down"). Each segment can have different zones, paces, or distances, but **all segments must share the same sport_type as their parent endurance_session**. For example, a running session can contain multiple running segments (warm-up, intervals, cool-down), but if you want to do running → cycling → running, these must be 3 separate endurance_sessions (one running session with segments, one cycling session, another running session). This is essential for serious endurance training and currently requires manual session creation. Requires UI for interval builder and backend logic for segment grouping within sessions.
+Support interval workouts using a **block-based structure** where blocks of segments can be repeated together. The structure is: `EnduranceSession → SegmentBlock[] → EnduranceSegment[]`. Each block can have a `repeat_count` (1-20) to repeat all its segments as a unit.
+
+**Example**: "5min warm-up + 4x (1km hard + 90s recovery) + 5min cool-down" is defined as:
+- Block 1 (repeat 1×): warmup segment
+- Block 2 (repeat 4×): work segment + recovery segment
+- Block 3 (repeat 1×): cooldown segment
+
+This expands to 10 tracking segments: warmup → work1 → recovery1 → work2 → recovery2 → work3 → recovery3 → work4 → recovery4 → cooldown
+
+All segments within a session share the same `sport_type`. For multi-sport workouts (running → cycling → running), use separate endurance_sessions.
 
 **Industry Best Practices Applied:**
 - **Per-segment actuals**: Garmin and Strava store per-lap/segment data for post-workout analysis
@@ -601,12 +610,36 @@ Support interval workouts by allowing multiple endurance segments within a singl
 --   data_source, health_workout_id, started_at, completed_at
 ```
 
-**2. New `endurance_segment` table:**
+**2. New `segment_block` table:**
+```sql
+CREATE TABLE IF NOT EXISTS public.segment_block (
+  id SERIAL PRIMARY KEY,
+  endurance_session_id INTEGER NOT NULL REFERENCES endurance_session(id) ON DELETE CASCADE,
+  block_order INTEGER NOT NULL,  -- Order within session (1, 2, 3...)
+
+  -- Block metadata
+  name TEXT,  -- Optional block name (e.g., "Main Set", "Warm Up Block")
+  description TEXT,
+
+  -- Repeat configuration
+  repeat_count INTEGER NOT NULL DEFAULT 1 CHECK (repeat_count >= 1 AND repeat_count <= 20),
+
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+  CONSTRAINT unique_block_order UNIQUE (endurance_session_id, block_order)
+);
+
+-- Index for efficient block lookups
+CREATE INDEX idx_segment_block_session_id ON segment_block(endurance_session_id);
+```
+
+**3. Updated `endurance_segment` table (now references block, not session):**
 ```sql
 CREATE TABLE IF NOT EXISTS public.endurance_segment (
   id SERIAL PRIMARY KEY,
-  endurance_session_id INTEGER NOT NULL REFERENCES endurance_session(id) ON DELETE CASCADE,
-  segment_order INTEGER NOT NULL,  -- Order within session (1, 2, 3...)
+  block_id INTEGER NOT NULL REFERENCES segment_block(id) ON DELETE CASCADE,
+  segment_order INTEGER NOT NULL,  -- Order within block (1, 2, 3...)
 
   -- Segment type (industry standard)
   segment_type TEXT NOT NULL DEFAULT 'work',  -- warmup, work, recovery, rest, cooldown
@@ -633,14 +666,16 @@ CREATE TABLE IF NOT EXISTS public.endurance_segment (
 
   CONSTRAINT segment_type_check CHECK (segment_type IN ('warmup', 'work', 'recovery', 'rest', 'cooldown')),
   CONSTRAINT target_type_check CHECK (target_type IN ('time', 'distance', 'open')),
-  CONSTRAINT unique_segment_order UNIQUE (endurance_session_id, segment_order)
+  CONSTRAINT unique_segment_order_in_block UNIQUE (block_id, segment_order)
 );
 
 -- Index for efficient segment lookups
-CREATE INDEX idx_endurance_segment_session_id ON endurance_segment(endurance_session_id);
+CREATE INDEX idx_endurance_segment_block_id ON endurance_segment(block_id);
 ```
 
 **Key Design Decisions:**
+- **Three-level hierarchy**: Session → Block → Segment (cleaner than flat segment list)
+- **Block-level repeat**: `repeat_count` is on the block, enabling clean interval definitions
 - **Session-level actuals**: Aggregated totals (total distance, overall avg pace, max HR, etc.)
 - **Segment-level actuals**: Per-segment metrics for interval analysis ("Did I hit target on each interval?")
 - **No duplication**: `training_volume`, `unit`, `heart_rate_zone` only exist in segments
@@ -728,21 +763,28 @@ ALTER TABLE endurance_session
 **AI Generation Schema:**
 
 ```python
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
 
 SegmentTypeLiteral = Literal['warmup', 'work', 'recovery', 'rest', 'cooldown']
 TargetTypeLiteral = Literal['time', 'distance', 'open']
 
 class EnduranceSegment(BaseModel):
-    segment_order: int
+    segment_order: int  # Order within the block (1, 2, 3...)
     segment_type: SegmentTypeLiteral = 'work'
-    name: Optional[str] = None  # Optional custom name
+    name: Optional[str] = None
     description: Optional[str] = None
     target_type: TargetTypeLiteral  # 'time', 'distance', or 'open'
-    target_value: Optional[float] = None  # Seconds for time, meters for distance, null for open
+    target_value: Optional[float] = None  # Seconds for time, meters for distance
     target_heart_rate_zone: Optional[int] = None  # 1-5
     target_pace: Optional[int] = None  # Seconds per km
+
+class SegmentBlock(BaseModel):
+    block_order: int  # Order within session (1, 2, 3...)
+    name: Optional[str] = None  # Optional block name (e.g., "Main Set")
+    description: Optional[str] = None
+    repeat_count: int = Field(default=1, ge=1, le=20)  # Repeat all segments in this block
+    segments: List[EnduranceSegment]  # REQUIRED: at least 1 segment
 
 class EnduranceSession(BaseModel):
     id: Optional[int] = None
@@ -751,43 +793,180 @@ class EnduranceSession(BaseModel):
     description: Optional[str] = None
     execution_order: int
     completed: bool = False
-    segments: List[EnduranceSegment]  # REQUIRED: always at least 1 segment
+    blocks: List[SegmentBlock]  # REQUIRED: at least 1 block
 ```
+
+**Block-Based Interval Structure:**
+
+The **block-based structure** enables clean interval definitions. Instead of flat segments with repeat counts, segments are grouped into blocks where the entire block can be repeated.
+
+**Structure**: `EnduranceSession → SegmentBlock[] → EnduranceSegment[]`
+
+**How it works:**
+1. AI defines blocks with `repeat_count > 1` for interval patterns
+2. Each block contains one or more segments executed in order
+3. Frontend expands blocks by repeating all segments in the block
+
+**Expansion Logic (frontend `expandBlocksForTracking()`):**
+```
+Input blocks:
+  Block 1 (1x): [warmup]
+  Block 2 (4x): [work, recovery]
+  Block 3 (1x): [cooldown]
+
+Output segments:
+  [warmup, work1, recovery1, work2, recovery2, work3, recovery3, work4, recovery4, cooldown]
+```
+
+**Benefits:**
+- **Cleaner structure** - blocks explicitly group related segments
+- **Fewer AI tokens** - 3 blocks instead of 9 segments
+- **Natural interval notation** - "4× (1km + 90s)" maps to one block with repeat_count=4
+- **Complex patterns** - supports 3× (2× [200m + 30s] + 3min rest) with nested blocks
+- **Block-level metadata** - optional name/description per block
+
+**Visual Display:**
+- Blocks with `repeat_count > 1` show a repeat badge: `×4`
+- Summary shows: "10 segments (×4)" indicating expanded count and max repeat
 
 **AI Generation Examples:**
 
-**Simple Session (1 segment):**
+**Simple Session (1 block, 1 segment):**
 ```json
 {
   "name": "Easy Run",
   "sport_type": "running",
-  "segments": [
+  "blocks": [
     {
-      "segment_order": 1,
-      "segment_type": "work",
-      "target_type": "time",
-      "target_value": 1800,
-      "target_heart_rate_zone": 2
+      "block_order": 1,
+      "repeat_count": 1,
+      "segments": [
+        { "segment_order": 1, "segment_type": "work", "target_type": "time", "target_value": 1800, "target_heart_rate_zone": 2 }
+      ]
     }
   ]
 }
 ```
 
-**Interval Session (with recovery):**
+**Interval Session (block-based - RECOMMENDED):**
 ```json
 {
   "name": "4x1km Intervals",
   "sport_type": "running",
-  "segments": [
-    { "segment_order": 1, "segment_type": "warmup", "target_type": "time", "target_value": 300, "target_heart_rate_zone": 2 },
-    { "segment_order": 2, "segment_type": "work", "target_type": "distance", "target_value": 1000, "target_heart_rate_zone": 5 },
-    { "segment_order": 3, "segment_type": "recovery", "target_type": "time", "target_value": 90, "target_heart_rate_zone": 2 },
-    { "segment_order": 4, "segment_type": "work", "target_type": "distance", "target_value": 1000, "target_heart_rate_zone": 5 },
-    { "segment_order": 5, "segment_type": "recovery", "target_type": "time", "target_value": 90, "target_heart_rate_zone": 2 },
-    { "segment_order": 6, "segment_type": "work", "target_type": "distance", "target_value": 1000, "target_heart_rate_zone": 5 },
-    { "segment_order": 7, "segment_type": "recovery", "target_type": "time", "target_value": 90, "target_heart_rate_zone": 2 },
-    { "segment_order": 8, "segment_type": "work", "target_type": "distance", "target_value": 1000, "target_heart_rate_zone": 5 },
-    { "segment_order": 9, "segment_type": "cooldown", "target_type": "time", "target_value": 300, "target_heart_rate_zone": 2 }
+  "blocks": [
+    {
+      "block_order": 1,
+      "name": "Warm Up",
+      "repeat_count": 1,
+      "segments": [
+        { "segment_order": 1, "segment_type": "warmup", "target_type": "time", "target_value": 300, "target_heart_rate_zone": 2 }
+      ]
+    },
+    {
+      "block_order": 2,
+      "name": "Main Set",
+      "repeat_count": 4,
+      "segments": [
+        { "segment_order": 1, "segment_type": "work", "target_type": "distance", "target_value": 1000, "target_heart_rate_zone": 5 },
+        { "segment_order": 2, "segment_type": "recovery", "target_type": "time", "target_value": 90, "target_heart_rate_zone": 2 }
+      ]
+    },
+    {
+      "block_order": 3,
+      "name": "Cool Down",
+      "repeat_count": 1,
+      "segments": [
+        { "segment_order": 1, "segment_type": "cooldown", "target_type": "time", "target_value": 300, "target_heart_rate_zone": 2 }
+      ]
+    }
+  ]
+}
+```
+
+This compact 3-block definition expands to 10 tracking segments:
+`warmup → work1 → recovery1 → work2 → recovery2 → work3 → recovery3 → work4 → recovery4 → cooldown`
+
+**Pyramid Intervals (multiple blocks with different repeats):**
+```json
+{
+  "name": "Pyramid 200-400-200",
+  "sport_type": "running",
+  "blocks": [
+    {
+      "block_order": 1,
+      "repeat_count": 1,
+      "segments": [
+        { "segment_order": 1, "segment_type": "warmup", "target_type": "time", "target_value": 600, "target_heart_rate_zone": 2 }
+      ]
+    },
+    {
+      "block_order": 2,
+      "name": "200m Set",
+      "repeat_count": 2,
+      "segments": [
+        { "segment_order": 1, "segment_type": "work", "target_type": "distance", "target_value": 200, "target_heart_rate_zone": 5 },
+        { "segment_order": 2, "segment_type": "recovery", "target_type": "time", "target_value": 60, "target_heart_rate_zone": 2 }
+      ]
+    },
+    {
+      "block_order": 3,
+      "name": "400m Peak",
+      "repeat_count": 1,
+      "segments": [
+        { "segment_order": 1, "segment_type": "work", "target_type": "distance", "target_value": 400, "target_heart_rate_zone": 5 },
+        { "segment_order": 2, "segment_type": "recovery", "target_type": "time", "target_value": 90, "target_heart_rate_zone": 2 }
+      ]
+    },
+    {
+      "block_order": 4,
+      "name": "200m Set",
+      "repeat_count": 2,
+      "segments": [
+        { "segment_order": 1, "segment_type": "work", "target_type": "distance", "target_value": 200, "target_heart_rate_zone": 5 },
+        { "segment_order": 2, "segment_type": "recovery", "target_type": "time", "target_value": 60, "target_heart_rate_zone": 2 }
+      ]
+    },
+    {
+      "block_order": 5,
+      "repeat_count": 1,
+      "segments": [
+        { "segment_order": 1, "segment_type": "cooldown", "target_type": "time", "target_value": 600, "target_heart_rate_zone": 2 }
+      ]
+    }
+  ]
+}
+```
+
+**Complex Interval (work + recovery + rest in block):**
+```json
+{
+  "name": "4x1km with Rest",
+  "sport_type": "running",
+  "blocks": [
+    {
+      "block_order": 1,
+      "repeat_count": 1,
+      "segments": [
+        { "segment_order": 1, "segment_type": "warmup", "target_type": "time", "target_value": 300, "target_heart_rate_zone": 2 }
+      ]
+    },
+    {
+      "block_order": 2,
+      "name": "Main Set",
+      "repeat_count": 4,
+      "segments": [
+        { "segment_order": 1, "segment_type": "work", "target_type": "distance", "target_value": 1000, "target_heart_rate_zone": 5 },
+        { "segment_order": 2, "segment_type": "recovery", "target_type": "time", "target_value": 60, "target_heart_rate_zone": 2 },
+        { "segment_order": 3, "segment_type": "rest", "target_type": "time", "target_value": 120, "target_heart_rate_zone": 1 }
+      ]
+    },
+    {
+      "block_order": 3,
+      "repeat_count": 1,
+      "segments": [
+        { "segment_order": 1, "segment_type": "cooldown", "target_type": "time", "target_value": 300, "target_heart_rate_zone": 2 }
+      ]
+    }
   ]
 }
 ```
@@ -850,28 +1029,30 @@ class EnduranceSession(BaseModel):
 │                    [▶ START]    │
 └─────────────────────────────────┘
 ```
-- No need to show "1 segment" - display as before
-- Shows segment details inline
+- No need to show blocks - display segment details inline
+- Shows target and zone directly
 
-**Multiple Segments (Interval Session):**
+**Multiple Blocks (Interval Session - CURRENT IMPLEMENTATION):**
 ```
 ┌─────────────────────────────────────────────┐
 │ 🏃 4x1km Intervals                          │
-│ Running • 9 segments • ~35 min              │
+│ 10 segments (×4) • ~35 min                  │
 ├─────────────────────────────────────────────┤
-│ ○ Warm Up      │ 5:00    │ Zone 2           │
-│ ○ Interval 1   │ 1.0 km  │ Zone 5           │
-│ ○ Recovery     │ 1:30    │ Zone 2           │
-│ ○ Interval 2   │ 1.0 km  │ Zone 5           │
-│ ○ Recovery     │ 1:30    │ Zone 2           │
-│ ○ Interval 3   │ 1.0 km  │ Zone 5           │
-│ ○ Recovery     │ 1:30    │ Zone 2           │
-│ ○ Interval 4   │ 1.0 km  │ Zone 5           │
-│ ○ Cool Down    │ 5:00    │ Zone 2           │
+│ ① Warm Up                                   │
+│   └─ warmup • 5:00 • Zone 2                 │
+│ ② Main Set                          ×4      │
+│   ├─ work • 1.0 km • Zone 5                 │
+│   └─ recovery • 1:30 • Zone 2               │
+│ ③ Cool Down                                 │
+│   └─ cooldown • 5:00 • Zone 2               │
 ├─────────────────────────────────────────────┤
 │                              [▶ START]      │
 └─────────────────────────────────────────────┘
 ```
+- Shows block-based structure with segments nested under each block
+- Repeat badge `×4` shown on blocks with repeat_count > 1
+- Summary shows expanded segment count: "10 segments (×4)"
+- During tracking, blocks are expanded to individual tracking segments
 
 **Completed Session with Per-Segment Analysis:**
 ```
@@ -902,6 +1083,11 @@ class EnduranceSession(BaseModel):
 - **No duplicate columns**: Session has aggregates, segments have targets + per-segment actuals
 - **Live tracking visibility**: See current segment, progress, and what's next
 - **Meaningful post-workout data**: "I hit 3 of 4 intervals at target pace"
+- **Clean block-based structure**: Session → Block → Segment hierarchy is intuitive and scalable
+- **Block-level repeats**: `repeat_count` on blocks enables "4× (1km + 90s)" with just 3 blocks
+- **Complex interval patterns**: Supports multi-segment blocks with work + recovery + rest together
+- **Reduced AI tokens**: 3 blocks instead of 10 segments for a typical interval workout
+- **Block metadata**: Optional name/description per block for better organization
 
 ---
 

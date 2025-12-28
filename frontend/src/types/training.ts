@@ -47,10 +47,10 @@ export interface TrainingSet {
 export type SegmentType = 'warmup' | 'work' | 'recovery' | 'rest' | 'cooldown';
 export type TargetType = 'time' | 'distance' | 'open';
 
-// Individual segment within an endurance session
+// Individual segment within a block
 export interface EnduranceSegment {
   id: string;
-  segmentOrder: number;           // Order within session (1, 2, 3...)
+  segmentOrder: number;           // Order within block (1, 2, 3...)
   segmentType: SegmentType;       // warmup, work, recovery, rest, cooldown
   name?: string;                  // Optional custom name, auto-generated from type if null
   description?: string;
@@ -60,7 +60,6 @@ export interface EnduranceSegment {
   targetValue?: number;           // Duration in seconds OR distance in meters (null for 'open')
   targetHeartRateZone?: number;   // Target heart rate zone (1-5)
   targetPace?: number;            // Target pace in seconds per km (optional)
-  repeatCount?: number;           // Number of times to repeat this segment (default 1, for interval blocks)
 
   // Actuals (recorded during/after tracking) - enables per-segment analysis
   actualDuration?: number;        // Actual duration in seconds
@@ -72,6 +71,16 @@ export interface EnduranceSegment {
   completedAt?: Date;             // When segment tracking completed
 }
 
+// Block of segments that can be repeated together
+export interface SegmentBlock {
+  id: string;
+  blockOrder: number;             // Order within session (1, 2, 3...)
+  name?: string;                  // Optional block name (e.g., "Main Set")
+  description?: string;
+  repeatCount: number;            // Number of times to repeat all segments in this block (default 1)
+  segments: EnduranceSegment[];   // Segments within this block
+}
+
 export interface EnduranceSession {
   id: string;
   name?: string;
@@ -80,10 +89,11 @@ export interface EnduranceSession {
   executionOrder: number; // Order in which to execute this session within the day's training (1-based)
   completed: boolean;
 
-  // Segments - required, at least 1 segment per session
-  segments: EnduranceSegment[];
+  // Blocks - required, at least 1 block per session
+  // Structure: EnduranceSession → SegmentBlock[] → EnduranceSegment[]
+  blocks: SegmentBlock[];
 
-  // Computed properties for display (calculated from segments)
+  // Computed properties for display (calculated from blocks/segments)
   // These are helper properties, not stored in DB
   totalTargetDuration?: number;   // Sum of all segment target durations (seconds)
   totalTargetDistance?: number;   // Sum of all segment target distances (meters)
@@ -126,6 +136,24 @@ export function getSegmentDisplayName(segment: EnduranceSegment, allSegments: En
   }
 }
 
+// Helper function to get display name for a block
+export function getBlockDisplayName(block: SegmentBlock, allBlocks: SegmentBlock[]): string {
+  if (block.name) return block.name;
+
+  // Auto-generate based on content
+  const segmentTypes = block.segments.map(s => s.segmentType);
+  const hasWarmup = segmentTypes.includes('warmup');
+  const hasCooldown = segmentTypes.includes('cooldown');
+  const hasWork = segmentTypes.includes('work');
+
+  if (hasWarmup && !hasWork && !hasCooldown) return 'Warm Up';
+  if (hasCooldown && !hasWork && !hasWarmup) return 'Cool Down';
+  if (block.repeatCount > 1) return `Main Set ×${block.repeatCount}`;
+  if (hasWork) return 'Main Set';
+
+  return `Block ${block.blockOrder}`;
+}
+
 // Helper function to format target value for display
 export function formatSegmentTarget(segment: EnduranceSegment, useMetric: boolean = true): string {
   if (segment.targetType === 'open') {
@@ -163,20 +191,22 @@ export function formatSegmentTarget(segment: EnduranceSegment, useMetric: boolea
   return '--';
 }
 
-// Helper function to calculate total target from segments (accounting for repeat_count)
-export function calculateSessionTotals(segments: EnduranceSegment[]): {
+// Helper function to calculate total target from blocks (accounting for repeat_count)
+export function calculateSessionTotals(blocks: SegmentBlock[]): {
   totalDuration: number;
   totalDistance: number;
 } {
   let totalDuration = 0;
   let totalDistance = 0;
 
-  for (const segment of segments) {
-    const repeatCount = segment.repeatCount ?? 1;
-    if (segment.targetType === 'time' && segment.targetValue) {
-      totalDuration += segment.targetValue * repeatCount;
-    } else if (segment.targetType === 'distance' && segment.targetValue) {
-      totalDistance += segment.targetValue * repeatCount;
+  for (const block of blocks) {
+    const repeatCount = block.repeatCount ?? 1;
+    for (const segment of block.segments) {
+      if (segment.targetType === 'time' && segment.targetValue) {
+        totalDuration += segment.targetValue * repeatCount;
+      } else if (segment.targetType === 'distance' && segment.targetValue) {
+        totalDistance += segment.targetValue * repeatCount;
+      }
     }
   }
 
@@ -184,84 +214,110 @@ export function calculateSessionTotals(segments: EnduranceSegment[]): {
 }
 
 /**
- * Expand segments with repeat_count > 1 into individual segments for tracking.
- * This converts compact interval definitions into individual trackable segments.
+ * Expand blocks into individual segments for tracking.
+ * This converts block-based interval definitions into a flat list of trackable segments.
  *
- * The expansion groups consecutive segments with the same repeat_count and
- * expands them together (interleaved), which creates proper interval patterns.
+ * Blocks with repeat_count > 1 are expanded by repeating all segments in the block.
  *
  * Example:
- * Input:  [warmup (1x), work (4x), recovery (4x), cooldown (1x)]
- * Output: [warmup, work1, recovery1, work2, recovery2, work3, recovery3, work4, recovery4, cooldown]
+ * Input blocks:
+ *   Block 1 (1x): [warmup]
+ *   Block 2 (4x): [work, recovery]
+ *   Block 3 (1x): [cooldown]
+ *
+ * Output segments:
+ *   [warmup, work1, recovery1, work2, recovery2, work3, recovery3, work4, recovery4, cooldown]
  *
  * This allows the AI to define intervals compactly:
- * - warmup: 5 min
- * - work: 1km @ Z5 (repeat 4)
- * - recovery: 90s @ Z2 (repeat 4)
- * - cooldown: 5 min
+ * - Block 1: warmup 5 min (repeat 1)
+ * - Block 2: work 1km + recovery 90s (repeat 4)
+ * - Block 3: cooldown 5 min (repeat 1)
  */
-export function expandSegmentsForTracking(segments: EnduranceSegment[]): EnduranceSegment[] {
-  if (!segments || segments.length === 0) return [];
+export function expandBlocksForTracking(blocks: SegmentBlock[]): EnduranceSegment[] {
+  if (!blocks || blocks.length === 0) return [];
 
-  // Sort by segment_order first
-  const sortedSegments = [...segments].sort((a, b) => a.segmentOrder - b.segmentOrder);
-
-  // Check if any expansion is needed
-  const hasRepeats = sortedSegments.some(s => (s.repeatCount ?? 1) > 1);
-  if (!hasRepeats) {
-    return sortedSegments;
-  }
+  // Sort blocks by block_order
+  const sortedBlocks = [...blocks].sort((a, b) => a.blockOrder - b.blockOrder);
 
   const expandedSegments: EnduranceSegment[] = [];
   let newOrder = 1;
+  let workIterationCounter = 0; // Track work interval numbers across all blocks
 
-  // Group consecutive segments by their repeat_count
-  type SegmentGroup = { repeatCount: number; segments: EnduranceSegment[] };
-  const groups: SegmentGroup[] = [];
+  for (const block of sortedBlocks) {
+    const repeatCount = block.repeatCount ?? 1;
 
-  for (const segment of sortedSegments) {
-    const repeatCount = segment.repeatCount ?? 1;
-    const lastGroup = groups[groups.length - 1];
+    // Sort segments within block
+    const sortedSegments = [...block.segments].sort((a, b) => a.segmentOrder - b.segmentOrder);
 
-    if (lastGroup && lastGroup.repeatCount === repeatCount) {
-      // Add to existing group with same repeat_count
-      lastGroup.segments.push(segment);
-    } else {
-      // Start a new group
-      groups.push({ repeatCount, segments: [segment] });
-    }
-  }
+    // Repeat the block's segments
+    for (let iteration = 1; iteration <= repeatCount; iteration++) {
+      for (const segment of sortedSegments) {
+        // Increment work counter for work segments
+        const isWork = segment.segmentType === 'work';
+        if (isWork) {
+          workIterationCounter++;
+        }
 
-  // Expand each group
-  for (const group of groups) {
-    if (group.repeatCount === 1) {
-      // No repetition - just add segments with updated order
-      for (const segment of group.segments) {
         expandedSegments.push({
           ...segment,
+          id: repeatCount > 1 ? `${segment.id}_${iteration}` : segment.id,
           segmentOrder: newOrder++,
+          // Add iteration number to work segments for clarity
+          name: isWork && repeatCount > 1
+            ? `${segment.name || 'Interval'} ${workIterationCounter}`
+            : segment.name,
         });
-      }
-    } else {
-      // Expand the group: interleave all segments in the group for each iteration
-      for (let iteration = 1; iteration <= group.repeatCount; iteration++) {
-        for (const segment of group.segments) {
-          expandedSegments.push({
-            ...segment,
-            id: `${segment.id}_${iteration}`,
-            segmentOrder: newOrder++,
-            repeatCount: 1, // Reset to 1 since it's now expanded
-            // Add iteration number to work segments for clarity
-            name: segment.segmentType === 'work'
-              ? `${segment.name || 'Interval'} ${iteration}`
-              : segment.name,
-          });
-        }
       }
     }
   }
 
   return expandedSegments;
+}
+
+/**
+ * Get all segments from blocks as a flat array (without expansion).
+ * Useful for displaying the compact block view.
+ */
+export function getAllSegmentsFromBlocks(blocks: SegmentBlock[]): EnduranceSegment[] {
+  if (!blocks || blocks.length === 0) return [];
+
+  const sortedBlocks = [...blocks].sort((a, b) => a.blockOrder - b.blockOrder);
+  const allSegments: EnduranceSegment[] = [];
+
+  for (const block of sortedBlocks) {
+    const sortedSegments = [...block.segments].sort((a, b) => a.segmentOrder - b.segmentOrder);
+    allSegments.push(...sortedSegments);
+  }
+
+  return allSegments;
+}
+
+/**
+ * Calculate the total number of expanded segments (for display purposes).
+ */
+export function getExpandedSegmentCount(blocks: SegmentBlock[]): number {
+  if (!blocks || blocks.length === 0) return 0;
+
+  return blocks.reduce((total, block) => {
+    const repeatCount = block.repeatCount ?? 1;
+    return total + (block.segments.length * repeatCount);
+  }, 0);
+}
+
+/**
+ * Check if session has any repeating blocks.
+ */
+export function hasRepeatingBlocks(blocks: SegmentBlock[]): boolean {
+  if (!blocks || blocks.length === 0) return false;
+  return blocks.some(b => (b.repeatCount ?? 1) > 1);
+}
+
+/**
+ * Get the maximum repeat count across all blocks.
+ */
+export function getMaxRepeatCount(blocks: SegmentBlock[]): number {
+  if (!blocks || blocks.length === 0) return 1;
+  return Math.max(...blocks.map(b => b.repeatCount ?? 1));
 }
 
 export interface TrainingExercise {

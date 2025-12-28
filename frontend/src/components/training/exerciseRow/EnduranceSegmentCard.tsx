@@ -5,13 +5,34 @@
  * with visual indicators for completed vs pending segments.
  */
 
-import React from 'react';
+import React, { memo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { EnduranceSegment, getSegmentDisplayName, formatSegmentTarget } from '../../../types/training';
 import { colors, spacing, typography, borderRadius } from '../../../constants/designSystem';
 import { createColorWithOpacity } from '../../../constants/colors';
-import { getZoneBadgeStyle, getZoneLabel } from '../../../utils/heartRateZoneUtils';
+import { getZoneBadgeStyle } from '../../../utils/heartRateZoneUtils';
+import {
+  getSegmentTypeIcon,
+  getSegmentTypeColor,
+  formatDuration,
+  isValidSegment,
+  SegmentIconName,
+} from '../../../utils/segmentUtils';
+
+// ==================== CONSTANTS ====================
+
+/**
+ * Width of the status indicator circle
+ */
+const STATUS_INDICATOR_SIZE = 20;
+
+/**
+ * Size of the active status dot inside the indicator
+ */
+const STATUS_ACTIVE_DOT_SIZE = 6;
+
+// ==================== TYPES ====================
 
 interface EnduranceSegmentCardProps {
   segment: EnduranceSegment;
@@ -22,53 +43,9 @@ interface EnduranceSegmentCardProps {
   showActuals?: boolean; // Show actual values if available
 }
 
-// Get icon for segment type
-const getSegmentTypeIcon = (segmentType: string): string => {
-  switch (segmentType) {
-    case 'warmup':
-      return 'flame-outline';
-    case 'cooldown':
-      return 'snow-outline';
-    case 'recovery':
-      return 'battery-charging-outline';
-    case 'rest':
-      return 'pause-outline';
-    case 'work':
-    default:
-      return 'flash-outline';
-  }
-};
+// ==================== COMPONENT ====================
 
-// Get color for segment type
-const getSegmentTypeColor = (segmentType: string): string => {
-  switch (segmentType) {
-    case 'warmup':
-      return colors.warning; // Orange
-    case 'cooldown':
-      return colors.info; // Blue
-    case 'recovery':
-      return colors.success; // Green
-    case 'rest':
-      return colors.muted; // Gray
-    case 'work':
-    default:
-      return colors.primary; // Primary
-  }
-};
-
-// Format duration for display
-const formatDuration = (seconds: number): string => {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = Math.floor(seconds % 60);
-
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  }
-  return `${minutes}:${secs.toString().padStart(2, '0')}`;
-};
-
-export const EnduranceSegmentCard: React.FC<EnduranceSegmentCardProps> = ({
+const EnduranceSegmentCardComponent: React.FC<EnduranceSegmentCardProps> = ({
   segment,
   allSegments,
   useMetric = true,
@@ -76,13 +53,17 @@ export const EnduranceSegmentCard: React.FC<EnduranceSegmentCardProps> = ({
   isActive = false,
   showActuals = false,
 }) => {
+  // Validate segment data to prevent crashes
+  if (!isValidSegment(segment)) {
+    return null;
+  }
+
   const displayName = getSegmentDisplayName(segment, allSegments);
   const targetDisplay = formatSegmentTarget(segment, useMetric);
   const segmentTypeColor = getSegmentTypeColor(segment.segmentType);
-  const segmentTypeIcon = getSegmentTypeIcon(segment.segmentType);
+  const segmentTypeIcon: SegmentIconName = getSegmentTypeIcon(segment.segmentType);
   const zone = segment.targetHeartRateZone;
   const zoneStyle = zone ? getZoneBadgeStyle(zone) : null;
-  const repeatCount = segment.repeatCount ?? 1;
 
   // Determine if we have actual values to show
   const hasActuals = showActuals && (segment.actualDuration || segment.actualDistance);
@@ -124,7 +105,7 @@ export const EnduranceSegmentCard: React.FC<EnduranceSegmentCardProps> = ({
         {/* Name and type icon */}
         <View style={styles.nameRow}>
           <Ionicons
-            name={segmentTypeIcon as any}
+            name={segmentTypeIcon}
             size={14}
             color={segmentTypeColor}
             style={styles.typeIcon}
@@ -151,14 +132,6 @@ export const EnduranceSegmentCard: React.FC<EnduranceSegmentCardProps> = ({
         </Text>
       </View>
 
-      {/* Repeat badge (if repeat_count > 1) */}
-      {repeatCount > 1 && (
-        <View style={styles.repeatBadge}>
-          <Ionicons name="repeat" size={10} color={colors.primary} />
-          <Text style={styles.repeatText}>×{repeatCount}</Text>
-        </View>
-      )}
-
       {/* Zone badge (if present) */}
       {zone && zoneStyle && (
         <View style={[styles.zoneBadge, { backgroundColor: zoneStyle.backgroundColor }]}>
@@ -179,6 +152,8 @@ export const EnduranceSegmentCard: React.FC<EnduranceSegmentCardProps> = ({
   );
 };
 
+// ==================== STYLES ====================
+
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
@@ -198,9 +173,9 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   statusIndicator: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: STATUS_INDICATOR_SIZE,
+    height: STATUS_INDICATOR_SIZE,
+    borderRadius: STATUS_INDICATOR_SIZE / 2,
     backgroundColor: createColorWithOpacity(colors.muted, 0.2),
     alignItems: 'center',
     justifyContent: 'center',
@@ -215,9 +190,9 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
   },
   statusActiveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: STATUS_ACTIVE_DOT_SIZE,
+    height: STATUS_ACTIVE_DOT_SIZE,
+    borderRadius: STATUS_ACTIVE_DOT_SIZE / 2,
     backgroundColor: colors.primary,
   },
   statusNumber: {
@@ -254,21 +229,6 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSizes.xs,
     color: createColorWithOpacity(colors.muted, 0.6),
   },
-  repeatBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    marginLeft: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-    borderRadius: borderRadius.xs,
-    backgroundColor: createColorWithOpacity(colors.primary, 0.1),
-  },
-  repeatText: {
-    fontSize: 10,
-    fontWeight: typography.fontWeights.semibold as any,
-    color: colors.primary,
-  },
   zoneBadge: {
     paddingHorizontal: spacing.xs,
     paddingVertical: 2,
@@ -295,5 +255,13 @@ const styles = StyleSheet.create({
     color: colors.danger,
   },
 });
+
+// ==================== EXPORTS ====================
+
+/**
+ * Memoized EnduranceSegmentCard component
+ * Prevents unnecessary re-renders when parent updates
+ */
+export const EnduranceSegmentCard = memo(EnduranceSegmentCardComponent);
 
 export default EnduranceSegmentCard;
